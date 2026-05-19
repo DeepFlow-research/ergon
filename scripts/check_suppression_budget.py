@@ -69,9 +69,60 @@ BUDGET = SuppressionCounts(
     # (_task_mgmt, _task_inspect, _resource_repo) + 3 _for_job kwargs
     # mirror the same typing. PR 11 may collapse some of these once the
     # service modules move out of the core ↔ api cycle.
-    slopcop_ignore=242,
-    noqa=4,
-    type_ignore=64,
+    # +2 (PR 10 Task 0): Criterion ABC → Pydantic BaseModel conversion.
+    # Concrete subclasses (CodeCheck, LLMJudge, ProofVerification,
+    # ResearchRubricsJudge) keep a thin ``__init__(**data: Any)`` shim that
+    # folds the legacy ``max_score`` / ``rubric`` kwargs into ``score_spec``
+    # so call sites stay compatible — Pydantic's underlying ``__init__``
+    # accepts ``Any``, so ``**data`` must match. The base ``Criterion``
+    # also picks up ``description: str = ""`` (slopcop:
+    # no-str-empty-default) which previously lived on the two subclasses
+    # that overrode it; net change is +2 across all touched files.
+    # PR 10 working-tree TODO sweep: +1 (one WIP TODO note appended to a
+    # line that already had a slopcop ignore).
+    # PR 10a (SWEBench vertical migration): +4 slopcop_ignore covering the
+    # new SWEBenchToolkit/_tools.py + _legacy_workers.py modules — each
+    # carries `no-typing-any` on the sandbox/task tool-builder kwargs and
+    # `no-broad-except` on the catch-all in `str_replace_editor` (tool
+    # functions must return error responses, not propagate). +2 noqa: C901
+    # on the closure-heavy tool builders (`build_tools` and
+    # `_legacy_swebench_tools`) — structural complexity, same shape as
+    # PR 6's MiniF2F `build_tools` noqa. -2 type_ignore is the implementer's
+    # net cleanup elsewhere in the SWEBench migration.
+    # PR 10b (ResearchRubrics vertical migration): +5 slopcop_ignore.
+    # New `benchmarks/researchrubrics/_tools.py` mirrors PR 10a's pattern
+    # exactly — 2×`no-typing-any` on the `sandbox`/`task` tool-builder
+    # kwargs (genuinely heterogeneous Sandbox/Task surfaces, typed `Any`)
+    # plus 2×`no-broad-except` on the tool functions' catch-all (they must
+    # return structured error responses rather than propagate). The new
+    # `benchmarks/researchrubrics/toolkit.py` `tools()` method adds one
+    # more `no-typing-any` (same kwargs reason).  `judge_criterion.py`
+    # picks up one `no-str-empty-default` for the new `rubric_text: str
+    # = ""` field — the criterion's __init__ shim populates it from
+    # `rubric.criterion` when omitted, but the JSON round-trip path
+    # validates the bare default first.
+    # PR 10c (GDPEval vertical migration): +5 slopcop_ignore, +1 noqa.
+    # New `benchmarks/gdpeval/_tools.py` mirrors PR 10a/10b exactly —
+    # 2×`no-typing-any` on the `sandbox`/`task` tool-builder kwargs and
+    # 2×`no-broad-except` on the tool functions' catch-all (they must
+    # return structured error responses rather than propagate). The new
+    # `benchmarks/gdpeval/toolkit.py` `tools()` method adds one more
+    # `no-typing-any` (same kwargs reason). `benchmark.py`'s metadata
+    # kwarg is typed `Mapping[str, Any]` matching the SWE-Bench /
+    # ResearchRubrics constructor surface — but net total includes a
+    # corresponding reduction in `worker_factory.py` (deleted) so the
+    # arithmetic balances at +5. `noqa: C901` on `build_tools` is the
+    # same structural-complexity exemption as the prior two verticals.
+    # PR 10d-f net +20 slopcop_ignore. The late PR 10 stack adds the
+    # shared Toolkit serializer, object-bound WorkerContext/resource
+    # facades, public API rehydration bridges, and smoke/runtime protocol
+    # adapters. Most are temporary bridge suppressions around dynamic
+    # `_type` dispatch, Pydantic serializer handler shapes, and runtime
+    # protocol probing that PR 11 is explicitly scoped to delete or
+    # collapse once legacy TaskSpec/manager paths are gone.
+    slopcop_ignore=279,
+    noqa=7,
+    type_ignore=62,
 )
 
 _SLOPCOP_IGNORE = re.compile(r"\bslopcop:\s*ignore\b")

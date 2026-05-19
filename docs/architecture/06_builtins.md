@@ -63,7 +63,8 @@ runnable — not a catalog of registered implementations.
     serializable Pydantic construction contract. **v2 (object-bound):**
     `ReActWorker(name=..., model=..., system_prompt=..., max_iterations=...,
     toolkit=<Toolkit instance>)`. The `toolkit` field is a serializable
-    `BaseModel` (e.g. `MiniF2FToolkit`) that carries only config; live
+    `Toolkit` subclass (e.g. `MiniF2FToolkit`, `SWEBenchToolkit`,
+    `ResearchRubricsToolkit`, `GDPEvalToolkit`) that carries only config; live
     `pydantic_ai.Tool` instances are built lazily at `execute()` time via
     `toolkit.tools(sandbox, task)`. This makes `ReActWorker` fully
     round-trippable through task JSON without holding non-serializable state.

@@ -6,7 +6,7 @@ from typing import Any, ClassVar, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
-from ergon_core.api._serialization import TaskDefinitionJson, import_component
+from ergon_core.api._serialization import TaskDefinitionJson, import_component_subclass
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.criterion.criterion import Criterion
 from ergon_core.api.criterion.results import CriterionOutcome
@@ -68,7 +68,7 @@ class Evaluator(BaseModel, ABC):
                 f"(got {type(evaluator_type).__name__}). Every persisted evaluator "
                 f"must carry `_type`."
             )
-        EvaluatorCls = import_component(evaluator_type)
+        EvaluatorCls = import_component_subclass(evaluator_type, Evaluator, kind="Evaluator")
         return cast("Evaluator", EvaluatorCls.model_validate(evaluator_json))
 
     # TODO: check if this is ever actually used, if not delete it

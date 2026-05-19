@@ -63,6 +63,7 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
             session,
             run_id=payload.run_id,
             task_id=payload.task_id or payload.node_id,
+            sandbox_id=payload.sandbox_id,
         )
     task = view.task
 
@@ -85,6 +86,14 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
         )
 
         worker = legacy_worker_from_payload(payload)
+    elif task.sandbox is None or not task.sandbox.is_live:
+        raise ContractViolationError(
+            "worker-execute object-bound task requires a live sandbox attached via sandbox_id",
+            run_id=payload.run_id,
+            task_id=payload.task_id,
+            execution_id=payload.execution_id,
+            sandbox_id=payload.sandbox_id,
+        )
     worker.validate_runtime_deps()
 
     worker_context = WorkerContext._for_job(
@@ -97,6 +106,7 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
         task_mgmt=TaskManagementService(),
         task_inspect=TaskInspectionService(),
         resource_repo=RunResourceRepository(),
+        session_factory=get_session,
     )
 
     context_event_repo = ContextEventService()

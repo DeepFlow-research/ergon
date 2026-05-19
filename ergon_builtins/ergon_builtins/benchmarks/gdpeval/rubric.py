@@ -9,13 +9,20 @@ falls below ``min_score_to_pass`` triggers the configured failure action
 
 import logging
 from collections.abc import Iterable
-from typing import ClassVar, Literal
+from typing import Any, ClassVar, Literal
 
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.benchmark import Task
 from ergon_core.api.criterion import CriterionOutcome
 from ergon_core.api.rubric import Rubric, TaskEvaluationResult
-from pydantic import BaseModel, Field, PrivateAttr, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    PrivateAttr,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +78,17 @@ class EvaluationStage(BaseModel):
         default=0.0,
         description="Score substituted when on_failure_action='zero_category'",
     )
+
+    @field_serializer("criteria")
+    def _serialize_criteria(self, criteria: list[Criterion]) -> list[dict[str, Any]]:
+        return [criterion.model_dump(mode="json") for criterion in criteria]
+
+    @field_validator("criteria", mode="before")
+    @classmethod
+    def _rehydrate_criteria(cls, value: Any) -> list[Criterion]:  # slopcop: ignore[no-typing-any]
+        return [
+            Criterion.from_definition(item) if isinstance(item, dict) else item for item in value
+        ]
 
     @model_validator(mode="after")
     def _validate_min_score(self) -> "EvaluationStage":
@@ -202,6 +220,7 @@ class StagedRubric(Rubric):
             metadata=metadata,
         )
 
+    # TODO: check if this is ever actually used now the CLI has had validate removed; think we can delete the validate logic from this, rubric, evaluator and criterion potentially?
     def validate_runtime_deps(self) -> None:
         super().validate_runtime_deps()
         if not self.stages:

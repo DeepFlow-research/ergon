@@ -16,6 +16,7 @@ from sqlmodel import Session, select
 ComponentKind = Literal["worker", "benchmark", "evaluator", "sandbox_manager", "model_backend"]
 
 
+# TODO: move into models.py; add unit-test coverage.
 class ComponentRef(BaseModel):
     """Importable reference for a registered component."""
 
@@ -92,9 +93,13 @@ class ComponentCatalogService:
             metadata=ref.metadata,
         )
 
-    def resolve_benchmark(self, session: Session, slug: str) -> type[Benchmark]:
+    # TODO: this method is completely dead from what I can see atm. after PR 11, we should write an ast parser to catch all dead methods to figure out what to do with them all.
+    def resolve_benchmark(
+        self, session: Session, slug: str
+    ) -> type[Benchmark]:  # TODO: consider if this should be a classmethod
         component = self.load_ref(self.require(session, kind="benchmark", slug=slug))
         if not isinstance(component, type) or not issubclass(component, Benchmark):
+            # TODO: consider if we should have a more specific error type for this or if typeerror is fine
             raise TypeError(
                 f"Benchmark component {slug!r} resolved to {component!r}, "
                 "expected a Benchmark subclass"
@@ -104,6 +109,7 @@ class ComponentCatalogService:
     def resolve_evaluator(self, session: Session, slug: str) -> type[Evaluator]:
         component = self.load_ref(self.require(session, kind="evaluator", slug=slug))
         if not isinstance(component, type) or not issubclass(component, Evaluator):
+            # TODO: consider if we should have a more specific error type for this or if typeerror is fine
             raise TypeError(
                 f"Evaluator component {slug!r} resolved to {component!r}, "
                 "expected an Evaluator subclass"
@@ -113,6 +119,7 @@ class ComponentCatalogService:
     def resolve_sandbox_manager(self, session: Session, slug: str) -> type[BaseSandboxManager]:
         component = self.load_ref(self.require(session, kind="sandbox_manager", slug=slug))
         if not isinstance(component, type) or not issubclass(component, BaseSandboxManager):
+            # TODO: consider if we should have a more specific error type for this or if typeerror is fine
             raise TypeError(
                 f"Sandbox manager component {slug!r} resolved to {component!r}, "
                 "expected a BaseSandboxManager subclass"
@@ -120,6 +127,7 @@ class ComponentCatalogService:
         return component
 
 
+# TODO: just inline this logic on the class
 def import_component_ref(ref: ComponentRef) -> Any:  # slopcop: ignore[no-typing-any]
     """Import the Python object referenced by a catalog row."""
 
@@ -129,6 +137,7 @@ def import_component_ref(ref: ComponentRef) -> Any:  # slopcop: ignore[no-typing
     return target
 
 
+# TODO: just inline this logic on the class
 def _row_to_ref(row: ComponentCatalogEntry) -> ComponentRef:
     return ComponentRef(
         kind=row.kind,  # type: ignore[arg-type]

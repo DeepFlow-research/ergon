@@ -145,7 +145,7 @@ async def mark_task_failed_by_node(
     node_id: UUID,
     error: str,
     *,
-    execution_id: UUID | None = None,
+    execution_id: UUID | None = None,  # TODO: dead param
     graph_repo: WorkflowGraphRepository,
 ) -> None:
     await graph_repo.update_node_status(
@@ -160,6 +160,7 @@ async def mark_task_failed_by_node(
     )
 
 
+# TODO: as per the experiments design comment, feels like alot of this would benefit from being a service or repository method?
 async def _block_successors_bfs(
     session: Session,
     run_id: UUID,

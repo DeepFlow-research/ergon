@@ -30,6 +30,7 @@ from ergon_core.core.persistence.telemetry.models import (
 )
 
 
+# TODO: this file / logic almost certainly duplicates the run benchmarks logic? if not it needs to be moved, renamed and laid out cleaner.
 def _build_task_map(
     nodes: list[RunGraphNode],
     edges: list[RunGraphEdge],

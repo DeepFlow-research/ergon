@@ -4,16 +4,39 @@ Uses deep research tasks with weighted evaluation criteria to study
 whether agents know when and what to ask stakeholders.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, ClassVar
 
 from datasets import load_dataset
-from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, TaskSpec
+from ergon_core.api import Benchmark, BenchmarkRequirements, Task
+from ergon_core.api.rubric import Evaluator
+from ergon_core.api.sandbox import Sandbox
+from ergon_core.api.worker import Worker
 
+from ergon_builtins.benchmarks.researchrubrics.sandbox import ResearchE2BSandbox
+from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
     ResearchRubricsTaskPayload,
     RubricCriterion,
 )
+from ergon_builtins.benchmarks.researchrubrics.workers import (
+    make_research_rubric,
+    make_research_worker,
+)
+
+
+def _default_research_sandbox() -> Sandbox:
+    return ResearchE2BSandbox()
+
+
+class ResearchRubricsTask(Task[ResearchRubricsTaskPayload]):
+    """Concrete Task subclass for ResearchRubrics instances.
+
+    Named so ``Task.from_definition`` can resolve the ``_type``
+    discriminator as a plain module attribute.  The parameterized
+    generic ``Task[ResearchRubricsTaskPayload]`` cannot be looked up that
+    way — its ``__qualname__`` includes ``[...]``.
+    """
 
 
 class ResearchRubricsBenchmark(Benchmark):
@@ -42,6 +65,9 @@ class ResearchRubricsBenchmark(Benchmark):
         name: str | None = None,
         description: str | None = None,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
+        worker_factory: Callable[[], Worker] = make_research_worker,
+        sandbox_factory: Callable[[], Sandbox] = _default_research_sandbox,
+        evaluator_factory: Callable[[], Evaluator] = make_research_rubric,
     ) -> None:
         super().__init__(
             name=name or "researchrubrics",
@@ -49,26 +75,38 @@ class ResearchRubricsBenchmark(Benchmark):
             metadata=metadata,
         )
         self.limit = limit
+        self._worker_factory = worker_factory
+        self._sandbox_factory = sandbox_factory
+        self._evaluator_factory = evaluator_factory
 
     # ------------------------------------------------------------------
 
-    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[ResearchRubricsTaskPayload]]]:
+    def build_instances(self) -> Mapping[str, Sequence[Task[ResearchRubricsTaskPayload]]]:
         payloads = self._load_rows()
-        tasks: list[TaskSpec[ResearchRubricsTaskPayload]] = []
+        tasks: list[Task[ResearchRubricsTaskPayload]] = []
         for payload in payloads:
+            evaluator = self._evaluator_factory()
+            if isinstance(evaluator, ResearchRubricsRubric) and not evaluator.rubric_criteria:
+                evaluator = ResearchRubricsRubric(
+                    name=evaluator.name,
+                    metadata=evaluator.metadata,
+                    rubric_criteria=tuple(payload.rubrics),
+                )
             tasks.append(
-                TaskSpec[ResearchRubricsTaskPayload](
+                ResearchRubricsTask(
                     task_slug=payload.sample_id,
                     instance_key="default",
                     description=payload.prompt,
-                    evaluator_binding_keys=("default",),
                     task_payload=payload,
+                    worker=self._worker_factory(),
+                    sandbox=self._sandbox_factory(),
+                    evaluators=(evaluator,),
                 )
             )
         return {"default": tasks}
 
     def evaluator_requirements(self) -> Sequence[str]:
-        return ("default",)
+        return ()
 
     # ------------------------------------------------------------------
 

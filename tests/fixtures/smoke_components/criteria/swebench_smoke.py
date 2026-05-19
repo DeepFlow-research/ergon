@@ -78,16 +78,13 @@ class SweBenchSmokeCriterion(SmokeCriterionBase):
 
     async def _verify_sandbox_setup(self, context: CriterionContext) -> None:
         """Python 3.10+ present + pytest importable."""
-        if not context.has_runtime:
-            raise CriterionCheckError(
-                "swebench sandbox health: CriterionRuntime not injected",
-            )
-        await context.ensure_sandbox()
-        await context.write_file(
+        await self._write_sandbox_file(
+            context,
             "/tmp/smoke_health.py",
             HEALTH_PY.encode("utf-8"),
         )
-        result = await context.run_command(
+        result = await self._run_sandbox_command(
+            context,
             "python /tmp/smoke_health.py && python -c 'import pytest; print(pytest.__version__)'",
             timeout=15,
         )

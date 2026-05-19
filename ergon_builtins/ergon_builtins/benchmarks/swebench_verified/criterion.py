@@ -118,13 +118,7 @@ class SWEBenchTestCriterion(Criterion):
 
     type_slug: ClassVar[str] = "swebench-test-resolution"
 
-    def __init__(
-        self,
-        *,
-        slug: str = "swebench-test-resolution",
-        weight: float = 1.0,
-    ) -> None:
-        super().__init__(slug=slug, weight=weight)
+    slug: str = "swebench-test-resolution"
 
     async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         patch_text = await _extract_patch_via_runtime(context)

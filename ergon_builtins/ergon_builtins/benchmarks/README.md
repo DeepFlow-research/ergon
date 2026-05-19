@@ -11,6 +11,9 @@ PR 8).
 | Benchmark | Module | Worker factories | Default sandbox |
 |---|---|---|---|
 | MiniF2F | `ergon_builtins.benchmarks.minif2f` | `make_minif2f_worker` (ReAct) | `LeanSandbox` |
+| SWE-Bench Verified | `ergon_builtins.benchmarks.swebench_verified` | `make_swebench_worker` (ReAct) | `SWEBenchSandbox` |
+| ResearchRubrics | `ergon_builtins.benchmarks.researchrubrics` | `make_research_worker` (ReAct) | `ResearchE2BSandbox` |
+| GDPEval | `ergon_builtins.benchmarks.gdpeval` | `make_gdpeval_worker` (ReAct) | `GDPEvalSandbox` |
 
 Adding a new benchmark = a new subdirectory containing:
 

@@ -28,7 +28,7 @@ from typing import ClassVar, Literal, Protocol, cast, get_args, get_type_hints
 from pydantic import BaseModel
 from pydantic_ai import Agent
 
-from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
+from ergon_builtins.benchmarks.researchrubrics.toolkit import (
     DocumentResponse,
     QAResponse,
     ReportReadResponse,

@@ -25,6 +25,8 @@ from ergon_core.core.shared.utils import utcnow
 from sqlmodel import select
 
 
+# TODO: this should not be a dataclass, it should be a Pydantic model
+# TODO: now that experiments / cohorts have been thinned down, this mwhole file / repo needs a double check to see if it still earns its keep
 @dataclass(frozen=True)
 class RubricStatusSummary:
     status: str

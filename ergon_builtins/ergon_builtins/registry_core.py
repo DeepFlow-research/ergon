@@ -13,7 +13,7 @@ from ergon_core.api.rubric import Evaluator
 from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
 
 from ergon_builtins.benchmarks.gdpeval.rubric import StagedRubric
-from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
+from ergon_builtins.benchmarks.gdpeval.sandbox_manager import GDPEvalSandboxManager
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
 from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
@@ -23,7 +23,7 @@ from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
     SWEBenchSandboxManager,
 )
 from ergon_builtins.benchmarks.swebench_verified.rubric import SWEBenchRubric
-from ergon_builtins.benchmarks.swebench_verified.worker_factory import SWEBenchReactWorker
+from ergon_builtins.benchmarks.swebench_verified._legacy_workers import SWEBenchReactWorker
 from ergon_builtins.models.cloud_passthrough import resolve_cloud
 from ergon_builtins.models.openrouter_backend import resolve_openrouter
 from ergon_builtins.models.openrouter_responses_backend import resolve_openrouter_responses
@@ -59,7 +59,7 @@ SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {
 
 SANDBOX_TEMPLATES: dict[str, Path] = {
     "minif2f": Path(__file__).parent / "benchmarks/minif2f/sandbox_template",
-    "swebench-verified": Path(__file__).parent / "benchmarks/swebench_verified/sandbox",
+    "swebench-verified": Path(__file__).parent / "benchmarks/swebench_verified/sandbox_template",
 }
 
 MODEL_BACKENDS: dict[str, Callable[..., ResolvedModel]] = {

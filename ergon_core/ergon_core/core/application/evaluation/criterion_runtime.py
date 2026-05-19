@@ -28,10 +28,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# TODO: this should live in errors.py
 class ResourceNotFoundError(LookupError):
     """Raised by ``read_resource`` when no ``RunResource`` row matches the name."""
 
 
+# TODO: this should live in models.py
 class CriterionRuntimeOptions(BaseModel):
     """Optional runtime context for criterion execution."""
 

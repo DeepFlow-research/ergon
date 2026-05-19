@@ -75,12 +75,8 @@ class ResearchRubricsSmokeCriterion(SmokeCriterionBase):
 
     async def _verify_sandbox_setup(self, context: CriterionContext) -> None:
         """Trivial env probe: bash + coreutils + /tmp writable."""
-        if not context.has_runtime:
-            raise CriterionCheckError(
-                "researchrubrics sandbox health: CriterionRuntime not injected",
-            )
-        await context.ensure_sandbox()
-        result = await context.run_command(
+        result = await self._run_sandbox_command(
+            context,
             "set -e; "
             "echo '# hello world' > /tmp/smoke_health.md && "
             "test \"$(wc -l < /tmp/smoke_health.md)\" = '1' && "

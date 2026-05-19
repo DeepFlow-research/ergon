@@ -9,7 +9,7 @@ from ergon_core.api.rubric import Evaluator
 from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
 
 from ergon_builtins.benchmarks.gdpeval.benchmark import GDPEvalBenchmark
-from ergon_builtins.benchmarks.gdpeval.worker_factory import GDPEvalReactWorker
+from ergon_builtins.benchmarks.gdpeval.workers import GDPEvalReactWorker
 from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
 from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
 from ergon_builtins.benchmarks.researchrubrics.sandbox_manager import (
@@ -18,10 +18,10 @@ from ergon_builtins.benchmarks.researchrubrics.sandbox_manager import (
 from ergon_builtins.benchmarks.researchrubrics.vanilla import (
     ResearchRubricsVanillaBenchmark,
 )
-from ergon_builtins.benchmarks.researchrubrics.worker_factory import (
+from ergon_builtins.benchmarks.researchrubrics.workers import (
     ResearchRubricsResearcherWorker,
 )
-from ergon_builtins.benchmarks.researchrubrics.worker_factory import (
+from ergon_builtins.benchmarks.researchrubrics.workers import (
     ResearchRubricsWorkflowCliReActWorker,
 )
 

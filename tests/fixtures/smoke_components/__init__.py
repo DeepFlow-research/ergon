@@ -2,6 +2,7 @@
 
 from ergon_core.api.registry import ComponentRegistry, registry
 from tests.fixtures.smoke_components.benchmarks import (
+    GDPEvalSmokeBenchmark,
     MiniF2FSmokeBenchmark,
     ResearchRubricsSmokeBenchmark,
     SweBenchSmokeBenchmark,
@@ -46,6 +47,7 @@ def register_smoke_fixtures(target: ComponentRegistry = registry) -> None:
         ResearchRubricsSmokeBenchmark,
         MiniF2FSmokeBenchmark,
         SweBenchSmokeBenchmark,
+        GDPEvalSmokeBenchmark,
     ):
         target.deregister("benchmark", benchmark_cls.type_slug)
         target.register_benchmark(benchmark_cls)

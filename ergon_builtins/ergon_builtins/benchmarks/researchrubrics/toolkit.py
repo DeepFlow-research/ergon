@@ -1,13 +1,50 @@
-"""Discriminated-union response DTOs for ResearchRubrics toolkit skills.
+"""Serializable ResearchRubrics toolkit config (v2 authoring shape).
 
-Each Exa tool and report-drafting tool returns a ``kind``-tagged union so
-the training loop can distinguish success from failure without inspecting
-free-text fields.  Latency is populated by the sandbox skill handler.
+Carries only config (judge model selection, search-call budget, network
+toggle).  Runtime tool handles are built lazily via
+``tools(sandbox, task)``; they are not serializable and never round-trip
+through JSON.
+
+This module also defines the discriminated-union response DTOs the
+toolkit's skill handlers return.  Each Exa tool and report-drafting tool
+returns a ``kind``-tagged union so the training loop can distinguish
+success from failure without inspecting free-text fields.  Latency is
+populated by the sandbox skill handler.
 """
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from ergon_builtins.workers.baselines.toolkit import Toolkit
+
+
+# ---------------------------------------------------------------------------
+# ResearchRubricsToolkit — v2 authoring config
+# ---------------------------------------------------------------------------
+
+
+class ResearchRubricsToolkit(Toolkit):
+    """Serializable ResearchRubrics toolkit config.
+
+    The ``_type`` discriminator serializer is inherited from ``Toolkit``,
+    so the toolkit round-trips through ``task_json`` snapshots alongside
+    the worker without any extra boilerplate here.
+    """
+
+    judge_model: str = "openai:gpt-4o"
+    max_search_calls: int = 12
+    enable_web_browse: bool = True
+    workspace_root: str = "/workspace"
+
+    def tools(self, sandbox: Any, task: Any) -> list:  # slopcop: ignore[no-typing-any]
+        """Build live pydantic_ai Tool instances bound to the v2 sandbox."""
+        # reason: circular import — benchmarks/researchrubrics/toolkit.py →
+        # benchmarks/researchrubrics/_tools.py → benchmarks/researchrubrics/toolkit.py
+        from ergon_builtins.benchmarks.researchrubrics._tools import build_tools
+
+        return build_tools(self, sandbox=sandbox, task=task)
+
 
 # ---------------------------------------------------------------------------
 # Exa search

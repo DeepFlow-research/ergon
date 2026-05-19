@@ -3,9 +3,10 @@
 Namespace package only.  Concrete classes live in submodules and must
 be imported via explicit submodule paths:
 
-    from ergon_builtins.benchmarks.gdpeval.benchmark import GDPEvalBenchmark
-    from ergon_builtins.benchmarks.gdpeval.rubric   import StagedRubric
-    from ergon_builtins.benchmarks.gdpeval.sandbox  import GDPEvalSandboxManager
+    from ergon_builtins.benchmarks.gdpeval.benchmark        import GDPEvalBenchmark
+    from ergon_builtins.benchmarks.gdpeval.rubric           import StagedRubric
+    from ergon_builtins.benchmarks.gdpeval.sandbox          import GDPEvalSandbox
+    from ergon_builtins.benchmarks.gdpeval.sandbox_manager  import GDPEvalSandboxManager
 
 This package previously eagerly imported the benchmark class in
 ``__init__.py``, which transitively loaded ``pandas`` via

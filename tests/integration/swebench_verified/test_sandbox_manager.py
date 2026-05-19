@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from ergon_builtins.benchmarks.swebench_verified.sandbox.utils import resolve_template
+from ergon_builtins.benchmarks.swebench_verified.sandbox_template.utils import resolve_template
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
     SWEBenchSandboxManager,
 )
@@ -42,7 +42,7 @@ def test_resolve_template_falls_back_to_name_when_registry_missing(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(
-        "ergon_builtins.benchmarks.swebench_verified.sandbox.utils.REGISTRY_PATH",
+        "ergon_builtins.benchmarks.swebench_verified.sandbox_template.utils.REGISTRY_PATH",
         tmp_path / "does_not_exist.json",
     )
     assert resolve_template() == "ergon-swebench-v1"
@@ -63,7 +63,7 @@ def test_resolve_template_prefers_registry_template_id(
         )
     )
     monkeypatch.setattr(
-        "ergon_builtins.benchmarks.swebench_verified.sandbox.utils.REGISTRY_PATH",
+        "ergon_builtins.benchmarks.swebench_verified.sandbox_template.utils.REGISTRY_PATH",
         registry,
     )
     assert resolve_template() == "tmpl_sw123"
@@ -75,7 +75,7 @@ def test_resolve_template_falls_back_on_malformed_registry(
     registry = tmp_path / "sandbox_templates.json"
     registry.write_text("{not valid json")
     monkeypatch.setattr(
-        "ergon_builtins.benchmarks.swebench_verified.sandbox.utils.REGISTRY_PATH",
+        "ergon_builtins.benchmarks.swebench_verified.sandbox_template.utils.REGISTRY_PATH",
         registry,
     )
     assert resolve_template() == "ergon-swebench-v1"
@@ -96,7 +96,7 @@ async def test_create_threads_template_kwarg_to_e2b_sdk(
     registry = tmp_path / "sandbox_templates.json"
     registry.write_text(json.dumps({"swebench-verified": {"template_id": "tmpl_pin_sw"}}))
     monkeypatch.setattr(
-        "ergon_builtins.benchmarks.swebench_verified.sandbox.utils.REGISTRY_PATH",
+        "ergon_builtins.benchmarks.swebench_verified.sandbox_template.utils.REGISTRY_PATH",
         registry,
     )
 
@@ -157,7 +157,7 @@ async def test_verify_setup_raises_when_git_missing(
     execution_id, run_id = swebench_execution
 
     monkeypatch.setattr(
-        "ergon_builtins.benchmarks.swebench_verified.sandbox.utils.REGISTRY_PATH",
+        "ergon_builtins.benchmarks.swebench_verified.sandbox_template.utils.REGISTRY_PATH",
         tmp_path / "missing.json",
     )
 

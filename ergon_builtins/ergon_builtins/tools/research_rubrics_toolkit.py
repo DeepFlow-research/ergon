@@ -21,7 +21,7 @@ from typing import cast
 from pydantic_ai import RunContext
 from pydantic_ai.tools import Tool
 
-from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
+from ergon_builtins.benchmarks.researchrubrics.toolkit import (
     DocumentResponse,
     QAResponse,
     ReportReadResponse,

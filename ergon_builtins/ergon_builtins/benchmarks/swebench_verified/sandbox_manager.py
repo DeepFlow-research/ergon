@@ -18,7 +18,7 @@ from ergon_core.core.infrastructure.sandbox.errors import SandboxSetupError
 from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
 
 from ergon_builtins.benchmarks.swebench_verified.criterion import make_test_spec
-from ergon_builtins.benchmarks.swebench_verified.sandbox.utils import resolve_template
+from ergon_builtins.benchmarks.swebench_verified.sandbox_template.utils import resolve_template
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager_support import (
     payload_to_swebench_row,
 )

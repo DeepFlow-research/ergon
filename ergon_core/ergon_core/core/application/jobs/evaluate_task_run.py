@@ -19,13 +19,10 @@ The Inngest retry unit is now the whole evaluator, because the
 orchestrator already gives one ``step.invoke`` per evaluator via
 the synchronous-fanout boundary in `execute_task`.
 
-Sandbox lifetime: this function **never** terminates or detaches a
-sandbox. `execute_task`'s `try/finally` owns external sandbox
-lifetime end-to-end (release happens after every fan-out invoke
-returns). PR 5 (Task 4c § Step 1) adds an eval-side
-``await task.sandbox.detach()`` once `Sandbox` exists as a real ABC,
-to release the *local* `_runtime` handle — the external sandbox stays
-owned by the orchestrator.
+Sandbox lifetime: this function detaches its local runtime handle after
+evaluation, but it never terminates the external sandbox. The external
+sandbox is terminated exactly once by the sibling ``sandbox_cleanup``
+function after ``execute_task`` emits a terminal task event.
 """
 
 import logging

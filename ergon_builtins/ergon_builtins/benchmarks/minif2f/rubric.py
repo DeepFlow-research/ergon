@@ -28,7 +28,7 @@ class MiniF2FRubric(Rubric):
     partial_credit_for_syntax: float = 0.2
     problem_statement: str | None = None
     ground_truth_proof: str | None = None
-    criteria: tuple[Criterion, ...] = Field(default_factory=tuple, exclude=True)
+    criteria: tuple[Criterion, ...] = Field(default_factory=tuple)
 
     @model_validator(mode="after")
     def _build_criterion(self) -> "MiniF2FRubric":

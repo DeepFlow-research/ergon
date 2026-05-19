@@ -8,7 +8,6 @@ from types import NoneType
 from typing import Any, ClassVar, cast
 from uuid import UUID
 
-from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
 from ergon_core.api import Task, Worker, WorkerContext, WorkerOutput, WorkerStreamItem
 from ergon_core.core.domain.generation.context_parts import (
     AssistantTextPart,
@@ -16,7 +15,7 @@ from ergon_core.core.domain.generation.context_parts import (
     ToolCallPart,
 )
 from ergon_core.core.application.context.events import ContextEventService
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, SerializeAsAny
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
 from pydantic_ai.tools import Tool
@@ -28,6 +27,7 @@ from ergon_builtins.common.llm_context.adapters.pydantic_ai import (
 )
 from ergon_builtins.models.resolution import resolve_model_target
 from ergon_builtins.observability.pydantic_ai_logfire import configure_pydantic_ai_logfire
+from ergon_builtins.workers.baselines.toolkit import Toolkit
 
 logger = logging.getLogger(__name__)
 
@@ -63,13 +63,7 @@ class ReActWorker(Worker):
     # execute() builds live tools from toolkit.tools(task.sandbox, task)
     # rather than relying on a subclass to populate _tools before calling
     # super().execute().
-    # TODO(PR 10a/10b/10c): extend this union as SWEBenchToolkit /
-    # ResearchRubricsToolkit / GDPEvalToolkit land:
-    #   toolkit: MiniF2FToolkit | SWEBenchToolkit | ... | None
-    # TODO(PR 11): once three+ toolkits exist, replace the union with a
-    # `Toolkit` protocol (BaseModel + `tools(sandbox, task)` method) and
-    # type this field as `Toolkit | None`.
-    toolkit: MiniF2FToolkit | None = None
+    toolkit: SerializeAsAny[Toolkit] | None = None
     # `_tools` and `_seed_messages` are runtime-only state — they hold
     # references to callables/pydantic-ai SDK objects that are not
     # round-trippable through model_dump/model_validate. PrivateAttr
@@ -83,9 +77,6 @@ class ReActWorker(Worker):
         *,
         context: WorkerContext,
     ) -> AsyncGenerator[WorkerStreamItem, None]:
-        # TODO(PR 11): drop the `task.sandbox is not None` guard.  PR 11
-        # makes `Task.sandbox` non-nullable on the object-bound path, so
-        # the only condition left is `self.toolkit is not None`.
         if self.toolkit is not None and task.sandbox is not None:
             self._tools = list(self.toolkit.tools(task.sandbox, task))
         async for chunk in self._run_agent(task, context):

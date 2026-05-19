@@ -26,6 +26,7 @@ from ergon_core.core.application.experiments.definition_writer import persist_be
 from ergon_core.api.rubric import Evaluator, Rubric, TaskEvaluationResult
 from ergon_core.api.sandbox import Sandbox, SandboxRuntime
 from ergon_core.api.worker import (
+    AwaitCompletionNotSupportedError,
     SpawnedTaskHandle,
     Worker,
     WorkerContext,
@@ -45,6 +46,7 @@ Task.model_rebuild()
 __all__ = [
     "Benchmark",
     "BenchmarkRequirements",
+    "AwaitCompletionNotSupportedError",
     "ComponentRegistry",
     "ContainmentViolation",
     "Criterion",

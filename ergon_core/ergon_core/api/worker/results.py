@@ -12,7 +12,13 @@ class SpawnedTaskHandle(BaseModel):
     task_id: UUID
 
     async def wait(self) -> None:
-        raise NotImplementedError("await_completion is deferred in v2")
+        raise AwaitCompletionNotSupportedError(
+            "SpawnedTaskHandle.wait() is deferred in v2; spawned tasks run asynchronously."
+        )
+
+
+class AwaitCompletionNotSupportedError(RuntimeError):
+    """Raised when a worker tries to synchronously wait for a spawned task."""
 
 
 class WorkerOutput(BaseModel):

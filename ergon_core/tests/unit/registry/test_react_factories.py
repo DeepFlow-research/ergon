@@ -54,7 +54,7 @@ def test_benchmark_react_workers_live_with_benchmarks() -> None:
     """Benchmark-specific ReAct workers should not live in the global registry module."""
     from ergon_builtins import registry_core
     from ergon_builtins.benchmarks.minif2f._legacy_workers import MiniF2FReactWorker
-    from ergon_builtins.benchmarks.swebench_verified.worker_factory import SWEBenchReactWorker
+    from ergon_builtins.benchmarks.swebench_verified._legacy_workers import SWEBenchReactWorker
     from ergon_builtins.benchmarks.swebench_verified.rubric import SWEBenchRubric
     from ergon_builtins.evaluators.rubrics.swebench_rubric import (
         SWEBenchRubric as LegacySWEBenchRubric,
@@ -69,10 +69,10 @@ def test_benchmark_react_workers_live_with_benchmarks() -> None:
 def test_gdpeval_react_worker_lives_with_benchmark() -> None:
     """GDPEval should expose a benchmark-owned ReAct worker through registry_data."""
     pytest.importorskip("datasets", reason="ergon-builtins[data] not installed")
-    from ergon_builtins.benchmarks.gdpeval import worker_factory
+    from ergon_builtins.benchmarks.gdpeval import workers as gdpeval_workers
     from ergon_builtins.registry_data import WORKERS as DATA_WORKERS
 
-    assert DATA_WORKERS["gdpeval-react"] is worker_factory.GDPEvalReactWorker
+    assert DATA_WORKERS["gdpeval-react"] is gdpeval_workers.GDPEvalReactWorker
 
     worker = DATA_WORKERS["gdpeval-react"](name="gdpeval-test", model="openai:gpt-4o")
     assert worker.max_iterations == 40
@@ -81,7 +81,7 @@ def test_gdpeval_react_worker_lives_with_benchmark() -> None:
 def test_researchrubrics_workers_are_reexported_from_benchmark_factory() -> None:
     """ResearchRubrics worker registry entries should come from the benchmark package."""
     pytest.importorskip("datasets", reason="ergon-builtins[data] not installed")
-    from ergon_builtins.benchmarks.researchrubrics.worker_factory import (
+    from ergon_builtins.benchmarks.researchrubrics.workers import (
         ResearchRubricsResearcherWorker,
         ResearchRubricsWorkflowCliReActWorker,
     )

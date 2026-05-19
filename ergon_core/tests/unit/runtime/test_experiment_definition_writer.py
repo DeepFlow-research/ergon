@@ -3,6 +3,7 @@ from uuid import uuid4
 
 import pytest
 
+from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FTask
 from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FTaskPayload
 from ergon_builtins.benchmarks.minif2f.workers import (
     make_minif2f_rubric,
@@ -66,7 +67,7 @@ def test_task_to_definition_json_object_bound_shape() -> None:
 
 def test_minif2f_definition_json_has_v2_object_bound_shape() -> None:
     """MiniF2F tasks persist with inline worker/sandbox/evaluators after PR 6."""
-    task = Task[MiniF2FTaskPayload](
+    task = MiniF2FTask(
         task_slug="prove",
         instance_key="sample-1",
         description="Prove theorem sample-1.",

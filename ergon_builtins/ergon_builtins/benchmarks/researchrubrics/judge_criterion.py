@@ -1,4 +1,4 @@
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from ergon_core.api.criterion import (
     Criterion,
@@ -32,26 +32,60 @@ class ResearchRubricsVerdict(BaseModel):
 
 
 class ResearchRubricsJudgeCriterion(Criterion):
-    """ResearchRubrics-specific LLM judge for one dataset rubric item."""
+    """ResearchRubrics-specific LLM judge for one dataset rubric item.
+
+    PR 10b: ``judge_model`` and ``rubric_text`` are first-class Pydantic
+    fields so they survive a ``task_json`` round trip alongside the
+    object-bound rubric.  ``rubric_text`` mirrors ``rubric.criterion`` for
+    snapshots that need the prompt body without re-walking the rubric
+    structure (e.g. the v2 definition JSON test).  Legacy callers that
+    construct the criterion with positional/keyword ``model=`` still work
+    through the ``__init__`` shim below.
+    """
 
     type_slug: ClassVar[str] = "researchrubrics-llm-judge"
 
-    def __init__(
-        self,
-        *,
-        slug: str,
-        rubric: RubricCriterion,
-        model: str = "openai:gpt-4o",
-    ) -> None:
-        super().__init__(
-            slug=slug,
-            description=rubric.criterion,
-            weight=rubric.weight,
-            score_spec=ScoreScale(max_score=abs(rubric.weight)),
-        )
-        self.rubric = rubric
-        self.model = model
-        self.system_prompt = self._build_system_prompt(rubric)
+    rubric: RubricCriterion
+    judge_model: str = "openai:gpt-4o"
+    rubric_text: str = ""  # slopcop: ignore[no-str-empty-default]
+
+    def __init__(self, **data: Any) -> None:  # slopcop: ignore[no-typing-any]
+        rubric = data.get("rubric")
+        if isinstance(rubric, RubricCriterion):
+            if "description" not in data:
+                data["description"] = rubric.criterion
+            if "weight" not in data:
+                data["weight"] = rubric.weight
+            if "score_spec" not in data:
+                data["score_spec"] = ScoreScale(max_score=abs(rubric.weight))
+            if "rubric_text" not in data:
+                data["rubric_text"] = rubric.criterion
+        # PR 10b: accept the legacy ``model=`` kwarg for one release while
+        # call sites migrate to ``judge_model=``.  Round-trip JSON already
+        # carries ``judge_model``; this only catches in-process callers.
+        if "model" in data and "judge_model" not in data:
+            data["judge_model"] = data.pop("model")
+        super().__init__(**data)
+
+    @property
+    def model(self) -> str:
+        """Alias for ``judge_model`` (legacy callsite compatibility).
+
+        Used by callers that read ``criterion.model`` (the v1 attribute
+        name) — most notably the in-tree judge-call helpers.  PR 11
+        deletes those callsites along with the legacy worker chain.
+        """
+        return self.judge_model
+
+    @property
+    def system_prompt(self) -> str:
+        """Rendered system prompt for this rubric criterion.
+
+        Derived lazily from ``self.rubric`` so the criterion remains
+        round-trippable through ``task_json`` — only the persisted fields
+        (``rubric``, ``model``, ``slug``, ...) need to survive serialization.
+        """
+        return self._build_system_prompt(self.rubric)
 
     async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         final_outputs, scratch_outputs = await self._load_researchrubrics_evidence(context)
@@ -60,8 +94,9 @@ class ResearchRubricsJudgeCriterion(Criterion):
             final_outputs=final_outputs,
             scratch_outputs=scratch_outputs,
         )
+        system_prompt = self.system_prompt
         verdict = await self._call_judge(
-            system_prompt=self.system_prompt,
+            system_prompt=system_prompt,
             user_prompt=user_prompt,
         )
         evaluated_resource_ids = [
@@ -79,7 +114,7 @@ class ResearchRubricsJudgeCriterion(Criterion):
             evaluation_input=user_prompt,
             evaluated_resource_ids=evaluated_resource_ids,
             observation=self._build_observation(
-                system_prompt=self.system_prompt,
+                system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 verdict=verdict,
                 evaluated_resource_ids=evaluated_resource_ids,

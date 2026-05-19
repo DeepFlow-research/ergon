@@ -12,6 +12,7 @@ from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.application.context.events import ContextEventService
 
 
+# TODO: it looks like alot of this code might just be dead. consider if it can be deleted post PR 11
 def extract_assistant_text(events: Iterable[RunContextEvent]) -> str:
     """Return the last assistant text part from context events in iteration order."""
     text_events: list[str] = []

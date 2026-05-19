@@ -193,6 +193,10 @@ def _minimal_context() -> WorkerContext:
         execution_id=UUID(int=5),
         sandbox_id="test-sandbox",
         node_id=UUID(int=6),
+        task_mgmt=object(),
+        task_inspect=object(),
+        resource_repo=object(),
+        session_factory=lambda: None,
     )
 
 

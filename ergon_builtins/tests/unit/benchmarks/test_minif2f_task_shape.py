@@ -39,10 +39,10 @@ def test_make_minif2f_rubric_serializes_with_type_discriminator() -> None:
 
 def test_minif2f_task_json_has_correct_shape() -> None:
     """A MiniF2F Task serializes to the v2 object-bound shape."""
-    from ergon_core.api import Task
+    from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FTask
     from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FTaskPayload
 
-    task = Task[MiniF2FTaskPayload](
+    task = MiniF2FTask(
         task_slug="prove",
         instance_key="sample-1",
         description="Prove theorem sample-1.",

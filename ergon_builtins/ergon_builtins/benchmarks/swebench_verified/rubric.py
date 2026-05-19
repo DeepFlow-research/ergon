@@ -19,5 +19,4 @@ class SWEBenchRubric(Rubric):
     name: str = "swebench-rubric"
     criteria: tuple[Criterion, ...] = Field(
         default_factory=lambda: (SWEBenchTestCriterion(slug="test-resolution", weight=1.0),),
-        exclude=True,
     )

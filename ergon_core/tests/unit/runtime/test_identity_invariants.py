@@ -13,7 +13,8 @@ xfailed until their landing PRs.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -299,6 +300,17 @@ def _patch_get_session_identity(monkeypatch: pytest.MonkeyPatch, session: Sessio
 
 
 def _seed_identity_parent(session: Session, *, run_id: UUID) -> RunGraphNode:
+    session.add(
+        RunRecord(
+            id=run_id,
+            experiment_id=uuid4(),
+            workflow_definition_id=uuid4(),
+            benchmark_type="test",
+            instance_key="sample-1",
+            worker_team_json={},
+            status=RunStatus.EXECUTING,
+        )
+    )
     node = RunGraphNode(
         run_id=run_id,
         instance_key="sample-1",
@@ -335,7 +347,8 @@ async def test_dynamic_task_id_has_no_definition_row(
 
     _patch_get_session_identity(monkeypatch, session)
 
-    task_mgmt = TaskManagementService(dashboard_emitter=MagicMock())
+    task_mgmt = TaskManagementService(dashboard_emitter=SimpleNamespace(graph_mutation=AsyncMock()))
+    monkeypatch.setattr(task_mgmt, "_dispatch_task_ready", AsyncMock())
     task_inspect = TaskInspectionService()
     context = WorkerContext._for_job(
         run_id=run_id,
@@ -346,7 +359,8 @@ async def test_dynamic_task_id_has_no_definition_row(
         node_id=parent.id,
         task_mgmt=task_mgmt,
         task_inspect=task_inspect,
-        resource_repo=None,
+        resource_repo=object(),
+        session_factory=management_module.get_session,
     )
 
     # Spawn a dynamic child task.

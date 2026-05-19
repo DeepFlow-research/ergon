@@ -9,7 +9,8 @@ Verifies the dynamic-spawn write path:
 - Returned SpawnedTaskHandle.task_id matches the inserted node's id.
 """
 
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -19,6 +20,8 @@ from ergon_core.core.application.tasks import management as management_module
 from ergon_core.core.application.tasks.management import TaskManagementService
 from ergon_core.core.persistence.definitions.models import ExperimentDefinitionTask
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
+from ergon_core.core.persistence.shared.enums import RunStatus
+from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -58,6 +61,17 @@ def _make_session() -> Session:
 
 
 def _seed_parent(session: Session, *, run_id: UUID) -> RunGraphNode:
+    session.add(
+        RunRecord(
+            id=run_id,
+            experiment_id=uuid4(),
+            workflow_definition_id=uuid4(),
+            benchmark_type="test",
+            instance_key="sample-1",
+            worker_team_json={},
+            status=RunStatus.EXECUTING,
+        )
+    )
     parent = RunGraphNode(
         run_id=run_id,
         instance_key="sample-1",
@@ -107,7 +121,9 @@ def _service(session: Session, monkeypatch: pytest.MonkeyPatch) -> TaskManagemen
         "get_session",
         lambda: _SessionContext(session),
     )
-    return TaskManagementService(dashboard_emitter=MagicMock())
+    svc = TaskManagementService(dashboard_emitter=SimpleNamespace(graph_mutation=AsyncMock()))
+    monkeypatch.setattr(svc, "_dispatch_task_ready", AsyncMock())
+    return svc
 
 
 # ---------------------------------------------------------------------------

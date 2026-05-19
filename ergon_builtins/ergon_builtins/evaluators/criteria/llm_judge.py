@@ -6,7 +6,7 @@ but it owns its provider call directly instead of reaching through
 criterion classes with their own prompts and evidence formatting.
 """
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome, ScoreScale
 from pydantic import BaseModel
@@ -33,24 +33,15 @@ class LLMJudgeCriterion(Criterion):
 
     type_slug: ClassVar[str] = "llm-judge"
 
-    def __init__(
-        self,
-        *,
-        slug: str,
-        prompt_template: str,
-        description: str = "",  # slopcop: ignore[no-str-empty-default]
-        weight: float = 1.0,
-        max_score: float = 1.0,
-        model: str = "gpt-4o",
+    prompt_template: str
+    model: str = "gpt-4o"
+
+    def __init__(  # slopcop: ignore[no-typing-any]
+        self, *, max_score: float | None = None, **data: Any
     ) -> None:
-        super().__init__(
-            slug=slug,
-            description=description or slug,
-            weight=weight,
-            score_spec=ScoreScale(max_score=max_score),
-        )
-        self.prompt_template = prompt_template
-        self.model = model
+        if max_score is not None and "score_spec" not in data:
+            data["score_spec"] = ScoreScale(max_score=max_score)
+        super().__init__(**data)
 
     async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         messages = [

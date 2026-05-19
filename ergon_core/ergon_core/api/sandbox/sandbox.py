@@ -36,7 +36,7 @@ from typing import Any, cast
 
 from pydantic import BaseModel, Field, PrivateAttr, model_serializer
 
-from ergon_core.api._serialization import TaskDefinitionJson, import_component
+from ergon_core.api._serialization import TaskDefinitionJson, import_component_subclass
 from ergon_core.api.errors import SandboxNotLiveError
 from ergon_core.api.sandbox.runtime import CommandResult, SandboxRuntime
 
@@ -53,6 +53,7 @@ class Sandbox(BaseModel, ABC):
 
     _runtime: SandboxRuntime | None = PrivateAttr(default=None)
 
+    # TODO: I'd quite like to find some way to kill these serializer methods, they are a bit of a hack and dont really fit in with the rest of the api
     @model_serializer(mode="wrap")
     def _serialize_with_type_discriminator(
         self,
@@ -113,7 +114,7 @@ class Sandbox(BaseModel, ABC):
                 f"(got {type(sandbox_type).__name__}). Every persisted sandbox "
                 f"must carry `_type`."
             )
-        SandboxCls = import_component(sandbox_type)
+        SandboxCls = import_component_subclass(sandbox_type, Sandbox, kind="Sandbox")
         instance = cast("Sandbox", SandboxCls.model_validate(sandbox_json))
         if sandbox_id is not None:
             await instance._bind_runtime(sandbox_id)

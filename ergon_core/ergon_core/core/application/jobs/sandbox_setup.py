@@ -1,7 +1,9 @@
 """Inngest child function: sandbox setup.
 
-Creates and configures a sandbox for task execution.
-Resolves the sandbox manager from the core component registry.
+The child step remains the acquisition retry boundary. For object-bound
+snapshots it provisions the public ``Task.sandbox`` and returns that
+sandbox's identity/output path. A manager-backed fallback remains only
+for legacy TaskSpec snapshots until PR 11.
 """
 
 import logging
@@ -11,6 +13,7 @@ from pathlib import Path
 from uuid import UUID
 
 from ergon_core.api.registry import registry
+from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource
 from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
@@ -44,27 +47,41 @@ async def run_sandbox_setup_job(ctx: Any, payload: SandboxSetupRequest) -> Sandb
         manager_slug,
     )
 
-    # Resolve from the explicit sandbox slug when present. Older payloads
-    # fall back to benchmark_type for compatibility.
-    manager_cls = registry.sandbox_managers.get(manager_slug, DefaultSandboxManager)
-    sandbox_manager = manager_cls()
+    with get_session() as session:
+        view = await WorkflowGraphRepository().node(
+            session,
+            run_id=run_id,
+            task_id=task_id,
+        )
 
-    output_dir = settings.runs_dir / str(run_id) / "tasks" / str(task_id)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if view.task.sandbox is not None:
+        result = await ctx.step.run(
+            "provision-public-sandbox",
+            partial(_provision_public_sandbox, view.task.sandbox),
+            output_type=SandboxReadyResult,
+        )
+    else:
+        # TODO(PR 11): delete manager fallback once TaskSpec snapshots no
+        # longer reach runtime jobs.
+        manager_cls = registry.sandbox_managers.get(manager_slug, DefaultSandboxManager)
+        sandbox_manager = manager_cls()
 
-    result = await ctx.step.run(
-        "create-sandbox",
-        partial(
-            _create_sandbox,
-            run_id,
-            task_id,
-            sandbox_manager,
-            output_dir,
-            payload.input_resource_ids,
-            payload.envs,
-        ),
-        output_type=SandboxReadyResult,
-    )
+        output_dir = settings.runs_dir / str(run_id) / "tasks" / str(task_id)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        result = await ctx.step.run(
+            "create-sandbox",
+            partial(
+                _create_sandbox,
+                run_id,
+                task_id,
+                sandbox_manager,
+                output_dir,
+                payload.input_resource_ids,
+                payload.envs,
+            ),
+            output_type=SandboxReadyResult,
+        )
 
     get_trace_sink().emit_span(
         CompletedSpan(
@@ -83,6 +100,14 @@ async def run_sandbox_setup_job(ctx: Any, payload: SandboxSetupRequest) -> Sandb
         )
     )
     return result
+
+
+async def _provision_public_sandbox(sandbox: Any) -> SandboxReadyResult:
+    await sandbox.provision()
+    return SandboxReadyResult(
+        sandbox_id=sandbox.sandbox_id,
+        output_dir=sandbox.output_path,
+    )
 
 
 def _sandbox_manager_slug(payload: SandboxSetupRequest) -> str:

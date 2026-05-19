@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
-from ergon_core.api._serialization import TaskDefinitionJson, import_component
+from ergon_core.api._serialization import TaskDefinitionJson, import_component_subclass
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.sandbox.sandbox import Sandbox
@@ -82,7 +82,7 @@ class Worker(BaseModel, ABC):
                 f"(got {type(worker_type).__name__}). Every persisted worker must "
                 f"carry `_type`."
             )
-        WorkerCls = import_component(worker_type)
+        WorkerCls = import_component_subclass(worker_type, Worker, kind="Worker")
         return cast("Worker", WorkerCls.model_validate(worker_json))
 
     def validate_runtime_deps(self) -> None:
@@ -103,6 +103,7 @@ class Worker(BaseModel, ABC):
                 parts.append(f"Install with: {self.install_hint}")
             raise DependencyError("\n".join(parts))
 
+    # TODO: I'd quite like to find some way to kill these serializer methods, they are a bit of a hack and dont really fit in with the rest of the api
     @model_serializer(mode="wrap")
     def _serialize_with_type_discriminator(
         self,

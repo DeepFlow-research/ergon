@@ -198,7 +198,7 @@ FINAL_STATE_ASSERTIONS: tuple[FinalStateAssertion, ...] = (
         name="terminate_sandbox_by_id_is_removed",
         landing_pr="PR 11",
         check=_assert_terminate_sandbox_by_id_is_gone,
-        reason="Δ.7: cleanup path subsumed by worker_execute.finally",
+        reason="Δ.7: cleanup helper is deleted or replaced after sandbox_cleanup is canonical",
     ),
 )
 

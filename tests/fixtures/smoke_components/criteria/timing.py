@@ -1,7 +1,8 @@
 """Lightweight timing evaluator for smoke root tasks."""
 
-from collections.abc import Mapping
-from typing import Any, ClassVar
+from typing import ClassVar
+
+from pydantic import Field, model_validator
 
 from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome
 from ergon_core.api.rubric import Rubric
@@ -24,20 +25,20 @@ class SmokePostRootTimingCriterion(Criterion):
 
 
 class SmokePostRootTimingRubric(Rubric):
-    """Evaluator wrapper for the smoke timing criterion."""
+    """Evaluator wrapper for the smoke timing criterion.
+
+    PR 10a: migrated from custom ``__init__`` to pure-Pydantic
+    ``Field(default_factory=tuple, exclude=True)`` + ``@model_validator``
+    so the rubric round-trips through ``Evaluator.from_definition`` (the
+    object-bound code path used by ``SweBenchSmokeTask.evaluators``).
+    """
 
     type_slug: ClassVar[str] = "smoke-post-root-timing-criterion"
+    name: str = "smoke-post-root-timing-criterion"
+    criteria: tuple[Criterion, ...] = Field(default_factory=tuple, exclude=True)
 
-    def __init__(
-        self,
-        *,
-        name: str,
-        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
-    ) -> None:
-        # PR 5: Rubric is now a Pydantic BaseModel; `metadata` is a
-        # non-nullable `dict[str, Any]` field, so normalize None to {}.
-        super().__init__(
-            name=name,
-            criteria=(SmokePostRootTimingCriterion(slug="smoke-post-root-timing"),),
-            metadata=dict(metadata) if metadata else {},
-        )
+    @model_validator(mode="after")
+    def _build_criterion(self) -> "SmokePostRootTimingRubric":
+        if not self.criteria:
+            self.criteria = (SmokePostRootTimingCriterion(slug="smoke-post-root-timing"),)
+        return self
