@@ -81,7 +81,7 @@ still allowed or has become forbidden.
 
 - Create: `ergon_core/tests/unit/architecture/test_v2_transition_ledger.py`
 
-- [ ] **Step 1: Write the guard file**
+- [x] **Step 1: Write the guard file**
 
 ```python
 from __future__ import annotations
@@ -154,6 +154,15 @@ TRANSITIONAL_SYMBOLS = (
             "Protocol kept compiling during PR 4 reshape; the reshaped "
             "evaluate_task_run calls criterion.evaluate(...) directly so "
             "no executor indirection remains in production code paths."
+        ),
+    ),
+    TransitionalSymbol(
+        name="InngestCriterionExecutor",
+        owner_pr="PR 4",
+        deletion_pr="PR 11",
+        allowed_reason=(
+            "Concrete impl of the Protocol; survives alongside "
+            "CriterionExecutor until PR 11 deletes both."
         ),
     ),
     TransitionalSymbol(
@@ -263,7 +272,7 @@ def test_no_unledgered_legacy_term_appears_in_production_code() -> None:
     assert offenders == [], "\n".join(offenders)
 ```
 
-- [ ] **Step 2: Run the guard**
+- [x] **Step 2: Run the guard**
 
 Run:
 
@@ -273,7 +282,7 @@ uv run pytest ergon_core/tests/unit/architecture/test_v2_transition_ledger.py -q
 
 Expected: pass while old symbols are still present.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit** *(deferred to Task 5 combined commit)*
 
 ```bash
 git add ergon_core/tests/unit/architecture/test_v2_transition_ledger.py \
@@ -281,7 +290,7 @@ git add ergon_core/tests/unit/architecture/test_v2_transition_ledger.py \
 git commit -m "test: add v2 transition ledger guard"
 ```
 
-## Task 2: Add Final-State Ledger (xfail invariants)
+## Task 2: Add Final-State Ledger (xfail invariants) ✅
 
 **Files:**
 
@@ -299,7 +308,7 @@ ledger entries below are the load-bearing v2 invariants from
 [`02-persistence-layer.md`](../02-persistence-layer.md) §4 and
 [`00-readme.md`](../00-readme.md) Δ.4 / Δ.7.
 
-- [ ] **Step 1: Write the guard file**
+- [x] **Step 1: Write the guard file**
 
 ```python
 """Executable spec of the v2 final state.
@@ -497,8 +506,10 @@ _XFAIL_BY_NAME: dict[str, str] = {
     "worker_execute_imports_only_run_tier": "PR 3 flips worker_execute to run-tier",
     "evaluate_task_run_uses_thin_payload": "PR 4 reshapes evaluate_task_run",
     "check_evaluators_is_unregistered": "PR 4 removes check_evaluators dispatch",
-    "task_has_no_model_post_init": "PR 5 introduces object-bound Task",
-    "materialize_dynamic_subtask_definition_is_gone": "PR 9 makes dynamic subtasks graph-native",
+    # task_has_no_model_post_init: already holds in v1 (no `model_post_init`
+    # on Task today). Asserted every run; PR 5's v2 Task must preserve it.
+    # materialize_dynamic_subtask_definition_is_gone: the v1 codebase doesn't
+    # use this exact name. Asserted every run; PR 9 must not reintroduce it.
     "prepare_definition_helper_is_removed": "PR 11 deletes legacy prepare path",
     "criterion_executor_is_removed": "PR 11 deletes Protocol pair",
     "saved_specs_package_is_removed": "PR 11 deletes write-only package",
@@ -540,7 +551,7 @@ uv run pytest ergon_core/tests/unit/architecture/test_v2_final_state_ledger.py -
 Expected: every case is XFAIL on PR 0 (none of the v2 cutovers have
 landed yet). No XPASS, no FAIL.
 
-## Task 3: Add Dead-Path Audit
+## Task 3: Add Dead-Path Audit ✅
 
 **Files:**
 
@@ -552,7 +563,7 @@ is the textual grep counterpart to the deletion list in
 [`00-program.md`](00-program.md) "Final Deleted Symbols". Each case is
 xfail until the symbol's last production caller is gone.
 
-- [ ] **Step 1: Write the guard file**
+- [x] **Step 1: Write the guard file**
 
 ```python
 """Dead-path audit: v1 helpers that were wired up to nothing must stay
@@ -745,18 +756,19 @@ DEAD_PATHS: tuple[DeadPath, ...] = (
 )
 
 
+# Only symbols that have at least one production caller TODAY appear
+# here. Currently-callerless symbols listed in `DEAD_PATHS` (e.g. names
+# not yet present in v1, names a later PR introduces, or names already
+# cleaned up) are still asserted every run — they just pass without
+# xfail. When a transitional symbol is *introduced* by a later PR
+# (e.g. `_DetachableSandboxBridge` in PR 4), that PR's flip step adds
+# the corresponding entry; the deletion PR removes it.
 _XFAIL_BY_SYMBOL: dict[str, str] = {
-    "saved_specs": "PR 11: package deleted",
-    "Worker.from_buffer": "PR 11: dead constructor deleted",
     "CriterionExecutor": "PR 11: Protocol pair deleted",
     "InngestCriterionExecutor": "PR 11: Protocol pair deleted",
     "_prepare_definition": "PR 3: renamed to _prepare_legacy_definition",
-    "_prepare_legacy_definition": "PR 11: legacy prep deleted",
-    "materialize_dynamic_subtask_definition": "PR 9: graph-native dynamic spawn",
     "terminate_sandbox_by_id": "PR 11: orchestrator owns release",
     "_persist_single_sample_workflow_definition": "PR 8: CLI uses persist_definition",
-    "_worker_from_payload_bridge": "PR 5: task.worker replaces the bridge",
-    "_DetachableSandboxBridge": "PR 5: lifted into Sandbox.detach()",
     # Inngest jobs absorbed into worker_execute by PR 4; deleted by PR 11
     "execute_task": "PR 11: worker_execute is the orchestrator",
     "sandbox_setup": "PR 11: worker_execute acquires inline",
@@ -764,13 +776,6 @@ _XFAIL_BY_SYMBOL: dict[str, str] = {
     # Registry/definition layer retired by PR 11
     "ComponentCatalogService": "PR 11: object-bound task replaces registry resolution",
     "DefinitionRepository": "PR 11: runtime reads run-tier only",
-    "Worker.validate": "PR 11: renamed to validate_runtime_deps in PR 5",
-    "ergon_core.core.domain.experiments.Experiment": "PR 11: public Experiment replaces it",
-    # PreparedTaskExecution transitional fields
-    "PreparedTaskExecution.node_id": "PR 11: identity collapses to task_id",
-    "PreparedTaskExecution.definition_task_id": "PR 11: identity collapses to task_id",
-    "PreparedTaskExecution.worker_type": "PR 11: worker comes from task.worker",
-    "PreparedTaskExecution.assigned_worker_slug": "PR 11: worker comes from task.worker",
     # Schema column renames
     "parent_node_id": "PR 11: renamed to parent_task_id",
     "source_node_id": "PR 11: renamed to source_task_id",
@@ -809,7 +814,7 @@ Expected: every case is XFAIL on PR 0. As later PRs delete the last
 caller of each symbol, they remove that symbol's entry from
 `_XFAIL_BY_SYMBOL` in the same commit.
 
-## Task 4: Add No-Type-Circumventors Guard
+## Task 4: Add No-Type-Circumventors Guard ✅
 
 **Files:**
 
@@ -850,7 +855,15 @@ EXEMPT_PARTS: frozenset[str] = frozenset({"tests", "migrations", "__pycache__"})
 
 _GETATTR_RE = re.compile(r"\bgetattr\s*\(")
 _HASATTR_RE = re.compile(r"\bhasattr\s*\(")
-_TYPING_EXEMPTION_RE = re.compile(r"#\s*typing:")
+# Two exemption forms coexist:
+#   - `# typing: <category>` — the v2 convention introduced in § 0.6.
+#     New code should use this.
+#   - `# slopcop: ignore[no-hasattr-getattr]` — the existing project
+#     convention. Recognized so this guard composes with the broader
+#     slopcop linter without forcing a tree-wide retrofit.
+_EXEMPTION_RE = re.compile(
+    r"#\s*(?:typing:|slopcop:\s*ignore\[no-hasattr-getattr\])"
+)
 
 
 @dataclass(frozen=True)
@@ -869,10 +882,10 @@ def _scan_file(path: Path) -> list[Violation]:
             if not pat.search(line):
                 continue
             # Same-line typing: comment exempts it.
-            if _TYPING_EXEMPTION_RE.search(line):
+            if _EXEMPTION_RE.search(line):
                 continue
             # Previous-line typing: comment exempts it too.
-            if i > 0 and _TYPING_EXEMPTION_RE.search(lines[i - 1]):
+            if i > 0 and _EXEMPTION_RE.search(lines[i - 1]):
                 continue
             violations.append(
                 Violation(
