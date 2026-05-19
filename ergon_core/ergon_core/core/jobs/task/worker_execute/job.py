@@ -10,12 +10,13 @@ import logging
 import traceback
 from collections.abc import AsyncIterable, Awaitable, Callable
 from datetime import UTC, datetime
+from typing import Any, cast
 from uuid import UUID
 
-import inngest
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
 from ergon_core.api.worker.results import SpawnedTaskHandle
+from ergon_core.core.jobs._events import send_job_step_event
 from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 from ergon_core.core.application.ports.dashboard import get_dashboard_event_publisher
@@ -28,10 +29,10 @@ from ergon_core.core.application.tasks.repository import (
     WorkerOutputRepository,
 )
 from ergon_core.core.shared.context_parts import ContextPartChunk
-from ergon_core.core.infrastructure.inngest.client import InngestEvent
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.application.context.events import ContextEventService
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
+from ergon_core.core.persistence.context.models import RunContextEvent
 from .contract import WorkerExecuteJobRequest
 from .contract import WorkerExecuteJobResult
 from ergon_core.core.infrastructure.tracing import (
@@ -50,7 +51,7 @@ logger = logging.getLogger(__name__)
 async def run_worker_execute_job(
     payload: WorkerExecuteJobRequest,
     *,
-    ctx: inngest.Context | None = None,
+    ctx: object | None = None,
 ) -> WorkerExecuteJobResult:
     logger.info(
         "worker-execute run_id=%s task_id=%s worker_type=%s",
@@ -115,7 +116,7 @@ async def run_worker_execute_job(
     chunk_count = 0
     try:
         output, chunk_count = await _consume_worker_stream(
-            worker.execute(task, context=worker_context),
+            cast(AsyncIterable[WorkerStreamItem], worker.execute(task, context=worker_context)),
             lambda chunk, count: _persist_context_events(
                 context_event_repo,
                 payload,
@@ -201,7 +202,7 @@ async def run_worker_execute_job(
     )
 
 
-def _task_management_service_for_context(ctx: inngest.Context | None) -> TaskManagementService:
+def _task_management_service_for_context(ctx: Any | None) -> TaskManagementService:
     if ctx is None:
         return TaskManagementService()
     return _StepAwareTaskManagementService(ctx)
@@ -237,7 +238,7 @@ class _StepAwareTaskManagementService(TaskManagementService):
     interrupts and replays the worker function, re-running the DB mutation.
     """
 
-    def __init__(self, ctx: inngest.Context) -> None:
+    def __init__(self, ctx: Any) -> None:
         self._ctx = ctx
         self._plan_subtasks_call_index = 0
         self._spawn_task_call_index = 0
@@ -338,12 +339,11 @@ class _StepAwareTaskManagementService(TaskManagementService):
                 definition_id=dispatch.definition_id,
                 task_id=dispatch.task_id,
             )
-            await self._ctx.step.send_event(
+            await send_job_step_event(
+                self._ctx,
                 f"{parent_step_id}-dispatch-task-ready-{dispatch.task_id}",
-                InngestEvent(
-                    name=TaskReadyEvent.name,
-                    data=event.model_dump(mode="json"),
-                ),
+                TaskReadyEvent.name,
+                event.model_dump(mode="json"),
             )
 
 

@@ -13,7 +13,8 @@ from ergon_core.core.persistence.shared.db import get_session
 from .contract import TaskCancelledEvent
 from ergon_core.core.application.tasks.models import CleanupResult
 from ergon_core.core.application.tasks.cleanup import TaskCleanupService
-from ergon_core.core.infrastructure.sandbox.lifecycle import terminate_external_sandbox
+from ergon_core.core.jobs.sandbox._lifecycle import terminate_external_sandbox
+from ergon_core.core.persistence.shared.types import NodeId, RunId
 from ergon_core.core.shared.utils import utcnow
 from ergon_core.core.views.dashboard_events.contracts import DashboardTaskStatusChangedEvent
 from typing import Any
@@ -32,8 +33,8 @@ async def run_cleanup_cancelled_task_job(ctx: Any, payload: TaskCancelledEvent) 
 
     if payload.execution_id is None:
         return CleanupResult(
-            run_id=payload.run_id,
-            task_id=payload.task_id,
+            run_id=RunId(payload.run_id),
+            task_id=NodeId(payload.task_id),
             execution_id=None,
             sandbox_id=None,
             sandbox_released=False,

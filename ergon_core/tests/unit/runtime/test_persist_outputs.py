@@ -45,13 +45,14 @@ class _FakePublishService:
 async def test_persist_outputs_publishes_public_sandbox_through_resource_service(
     monkeypatch,
 ) -> None:
+    from ergon_core.core.jobs.resources.persist_outputs import composition
     from ergon_core.core.jobs.resources.persist_outputs import job as module
 
     seen_sandbox_ids: list[str | None] = []
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(object()))
     monkeypatch.setattr(module, "WorkflowGraphRepository", lambda: _FakeGraphRepo(seen_sandbox_ids))
-    monkeypatch.setattr(module, "SandboxResourcePublisher", _FakePublisher)
-    monkeypatch.setattr(module, "RunResourcePublishService", _FakePublishService)
+    monkeypatch.setattr(composition, "SandboxResourcePublisher", _FakePublisher)
+    monkeypatch.setattr(composition, "RunResourcePublishService", _FakePublishService)
 
     result = await run_persist_outputs_job(
         PersistOutputsRequest(

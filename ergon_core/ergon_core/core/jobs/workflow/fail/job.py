@@ -9,7 +9,7 @@ from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.infrastructure.inngest.errors import DataIntegrityError
 from ergon_core.core.jobs.run.cleanup.contract import RunCleanupEvent
 from .contract import WorkflowFailedEvent, WorkflowFailedResult
-from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
+from ergon_core.core.jobs._events import send_job_event
 from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     get_trace_sink,
@@ -36,15 +36,13 @@ async def run_fail_workflow_job(payload: WorkflowFailedEvent) -> WorkflowFailedR
         session.add(run_record)
         session.commit()
 
-    await inngest_client.send(
-        InngestEvent(
-            name=RunCleanupEvent.name,
-            data=RunCleanupEvent(
-                run_id=payload.run_id,
-                status="failed",
-                error_message=payload.error,
-            ).model_dump(mode="json"),
-        )
+    await send_job_event(
+        RunCleanupEvent.name,
+        RunCleanupEvent(
+            run_id=payload.run_id,
+            status="failed",
+            error_message=payload.error,
+        ).model_dump(mode="json"),
     )
 
     result = WorkflowFailedResult(

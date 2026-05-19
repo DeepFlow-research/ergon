@@ -2,7 +2,7 @@ from uuid import uuid4
 from types import SimpleNamespace
 
 import pytest
-from ergon_core.core.jobs.resources.persist_outputs import job as persist_outputs
+from ergon_core.core.jobs.resources.persist_outputs import composition as persist_outputs
 from ergon_core.core.jobs.resources.persist_outputs.contract import PersistOutputsRequest
 
 
@@ -33,7 +33,7 @@ async def test_worker_final_message_is_not_published_as_run_resource(monkeypatch
     monkeypatch.setattr(persist_outputs, "SandboxResourcePublisher", _Publisher)
     monkeypatch.setattr(persist_outputs, "RunResourcePublishService", _PublishService)
 
-    count = await persist_outputs._publish_public_sandbox_resources(
+    count = await persist_outputs.publish_public_sandbox_resources(
         _Manager().get_sandbox(uuid4()),
         PersistOutputsRequest.model_validate(
             {

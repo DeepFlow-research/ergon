@@ -12,7 +12,7 @@ from ergon_core.core.application.workflows.orchestration import (
     WorkflowTerminalState,
 )
 from ergon_core.core.application.workflows.service import WorkflowService
-from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
+from ergon_core.core.jobs._events import JobEvent, send_job_events
 from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.core.jobs.workflow.complete.contract import WorkflowCompletedEvent
 from ergon_core.core.jobs.workflow.fail.contract import WorkflowFailedEvent
@@ -39,10 +39,10 @@ async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateRe
         )
     )
 
-    events: list[InngestEvent] = [
-        InngestEvent(
-            name=TaskReadyEvent.name,
-            data=TaskReadyEvent(
+    events: list[JobEvent] = [
+        (
+            TaskReadyEvent.name,
+            TaskReadyEvent(
                 run_id=payload.run_id,
                 definition_id=payload.definition_id,
                 task_id=td.task_id,
@@ -53,9 +53,9 @@ async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateRe
 
     if propagation.workflow_terminal_state == WorkflowTerminalState.COMPLETED:
         events.append(
-            InngestEvent(
-                name=WorkflowCompletedEvent.name,
-                data=WorkflowCompletedEvent(
+            (
+                WorkflowCompletedEvent.name,
+                WorkflowCompletedEvent(
                     run_id=payload.run_id,
                     definition_id=payload.definition_id,
                 ).model_dump(mode="json"),
@@ -63,9 +63,9 @@ async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateRe
         )
     elif propagation.workflow_terminal_state == WorkflowTerminalState.FAILED:
         events.append(
-            InngestEvent(
-                name=WorkflowFailedEvent.name,
-                data=WorkflowFailedEvent(
+            (
+                WorkflowFailedEvent.name,
+                WorkflowFailedEvent(
                     run_id=payload.run_id,
                     definition_id=payload.definition_id,
                     error="Workflow failed during task propagation",
@@ -73,8 +73,7 @@ async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateRe
             )
         )
 
-    if events:
-        await inngest_client.send(events)
+    await send_job_events(events)
 
     result = TaskPropagateResult(
         run_id=payload.run_id,
@@ -121,13 +120,13 @@ async def run_propagate_task_failure_job(payload: TaskFailedEvent) -> TaskPropag
     )
 
     # BLOCKED successors are a DB write only — no task/cancelled events.
-    failure_events: list[InngestEvent] = []
+    failure_events: list[JobEvent] = []
 
     if propagation.workflow_terminal_state == WorkflowTerminalState.FAILED:
         failure_events.append(
-            InngestEvent(
-                name=WorkflowFailedEvent.name,
-                data=WorkflowFailedEvent(
+            (
+                WorkflowFailedEvent.name,
+                WorkflowFailedEvent(
                     run_id=payload.run_id,
                     definition_id=payload.definition_id,
                     error=payload.error,
@@ -135,8 +134,7 @@ async def run_propagate_task_failure_job(payload: TaskFailedEvent) -> TaskPropag
             )
         )
 
-    if failure_events:
-        await inngest_client.send(failure_events)
+    await send_job_events(failure_events)
 
     result = TaskPropagateResult(
         run_id=payload.run_id,

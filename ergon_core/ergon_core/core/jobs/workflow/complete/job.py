@@ -7,10 +7,10 @@ from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.jobs.run.cleanup.contract import RunCleanupEvent
 from .contract import WorkflowCompletedEvent, WorkflowCompleteResult
-from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
 from ergon_core.core.application.ports.dashboard import get_dashboard_event_publisher
 from ergon_core.core.application.workflows.orchestration import FinalizeWorkflowCommand
 from ergon_core.core.application.workflows.service import WorkflowService
+from ergon_core.core.jobs._events import send_job_event
 from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     get_trace_sink,
@@ -52,14 +52,12 @@ async def run_complete_workflow_job(payload: WorkflowCompletedEvent) -> Workflow
         )
     )
 
-    await inngest_client.send(
-        InngestEvent(
-            name=RunCleanupEvent.name,
-            data=RunCleanupEvent(
-                run_id=payload.run_id,
-                status="completed",
-            ).model_dump(mode="json"),
-        )
+    await send_job_event(
+        RunCleanupEvent.name,
+        RunCleanupEvent(
+            run_id=payload.run_id,
+            status="completed",
+        ).model_dump(mode="json"),
     )
 
     result = WorkflowCompleteResult(

@@ -25,17 +25,16 @@ while evaluator workers are still running.
 """
 
 import logging
-
-import inngest
+from typing import Any
 
 from .contract import TaskCompletedEvent, TaskFailedEvent
-from ergon_core.core.infrastructure.sandbox.lifecycle import terminate_external_sandbox
+from ergon_core.core.jobs.sandbox._lifecycle import terminate_external_sandbox
 
 logger = logging.getLogger(__name__)
 
 
 async def run_sandbox_cleanup_on_completed(
-    ctx: inngest.Context,
+    ctx: Any,
     payload: TaskCompletedEvent,
 ) -> str:
     """Terminate the sandbox after a successful task.
@@ -55,7 +54,7 @@ async def run_sandbox_cleanup_on_completed(
 
 
 async def run_sandbox_cleanup_on_failed(
-    ctx: inngest.Context,
+    ctx: Any,
     payload: TaskFailedEvent,
 ) -> str:
     """Terminate the sandbox after a failed task.

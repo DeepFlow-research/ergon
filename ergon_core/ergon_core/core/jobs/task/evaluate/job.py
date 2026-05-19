@@ -25,10 +25,8 @@ function after ``execute_task`` emits a terminal task event.
 
 import logging
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
-
-import inngest
 
 from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.core.application.evaluation.service import EvaluationService
@@ -59,7 +57,7 @@ def _evaluator_binding_key(evaluator: "Evaluator", evaluator_index: int) -> str:
 
 
 async def run_evaluate_task_run_job(
-    ctx: inngest.Context,
+    ctx: Any,
     payload: TaskEvaluateRequest,
 ) -> EvaluateTaskRunResult:
     """Per-evaluator fanout target. Thin id-only payload."""

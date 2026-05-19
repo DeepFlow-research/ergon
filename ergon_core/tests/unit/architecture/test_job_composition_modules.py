@@ -71,23 +71,42 @@ def test_job_contracts_do_not_import_runtime_or_infrastructure_layers() -> None:
 
 
 def test_job_modules_do_not_import_concrete_infrastructure_adapters() -> None:
-    allowed_inngest_imports = {
-        "ergon_core.core.infrastructure.inngest.client",
+    # PR10 leaves direct persistence access in a few jobs until PR11 moves
+    # runtime data access behind services. The boundary enforced here is the
+    # narrower one this slice can own: job.py may orchestrate application
+    # services and persistence, but concrete framework/client/adapter wiring
+    # belongs in inngest.py or job-local composition helpers.
+    allowed_infrastructure_imports = {
         "ergon_core.core.infrastructure.inngest.errors",
+        "ergon_core.core.infrastructure.tracing",
     }
     forbidden = (
         "ergon_core.core.infrastructure.dashboard",
         "ergon_core.core.infrastructure.http",
+        "ergon_core.core.infrastructure.inngest.client",
+        "ergon_core.core.infrastructure.sandbox",
     )
     offenders: list[str] = []
 
     for path in JOBS_ROOT.rglob("job.py"):
+        text = path.read_text()
+        for snippet in ("send_event(", "from inngest", "import inngest"):
+            if snippet in text:
+                offenders.append(f"{path.relative_to(ROOT)} contains {snippet!r}")
+        tree = ast.parse(text, filename=str(path))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "inngest"
+            ):
+                offenders.append(f"{path.relative_to(ROOT)} contains direct inngest.{node.attr}")
         for module in _imports(path):
             if module.startswith(forbidden):
                 offenders.append(f"{path.relative_to(ROOT)} imports {module}")
-            if (
-                module.startswith("ergon_core.core.infrastructure.inngest")
-                and module not in allowed_inngest_imports
+            if module.startswith("ergon_core.core.infrastructure") and not any(
+                module == allowed or module.startswith(f"{allowed}.")
+                for allowed in allowed_infrastructure_imports
             ):
                 offenders.append(f"{path.relative_to(ROOT)} imports {module}")
 

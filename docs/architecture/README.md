@@ -97,6 +97,11 @@ This doc tree was bootstrapped in a Q&A session with the system owner on
 are drafted in full; others are skeletons marked `[Q&A pending]`. Skeletons
 will be filled in as the remaining Q&A sessions land.
 
+PR10 note: durable runtime jobs now live under `core/jobs/**` as colocated
+`contract.py`, `job.py`, and `inngest.py` modules. `02_runtime_lifecycle.md`
+documents the ownership split and the temporary direct-persistence exception
+that remains until PR11 runtime consolidation.
+
 ## Related trees
 
 - [`../rfcs/`](../rfcs/) — feature proposals and fix designs, grouped by status.

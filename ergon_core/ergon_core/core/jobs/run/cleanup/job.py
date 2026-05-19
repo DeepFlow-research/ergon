@@ -10,8 +10,8 @@ from uuid import UUID
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.infrastructure.sandbox.lifecycle import terminate_external_sandbox
 from ergon_core.core.infrastructure.inngest.errors import ConfigurationError, DataIntegrityError
+from ergon_core.core.jobs.sandbox._lifecycle import terminate_external_sandbox
 from .contract import RunCleanupEvent, RunCleanupResult
 from typing import Any
 

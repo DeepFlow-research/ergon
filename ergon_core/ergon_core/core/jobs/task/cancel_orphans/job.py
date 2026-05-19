@@ -12,24 +12,23 @@ Each function uses two durable steps:
 """
 
 import logging
+from typing import Any
 from uuid import UUID
-import inngest
-
 from ergon_core.core.application.tasks.management import TaskManagementService
-from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
+from ergon_core.core.jobs._events import send_job_events
 from ergon_core.core.persistence.shared.db import get_session
-from .contract import CancelCause, TaskCancelledEvent, TaskFailedEvent
+from .contract import PropagationCancelCause, TaskCancelledEvent, TaskFailedEvent
 
 logger = logging.getLogger(__name__)
 
 
 async def _cancel_orphans_for(
-    ctx: inngest.Context,
+    ctx: Any,
     *,
     run_id: UUID,
     definition_id: UUID,
     parent_task_id: UUID,
-    cause: CancelCause,
+    cause: PropagationCancelCause,
 ) -> int:
     """Two durable steps: scan-and-cancel, then emit events."""
     svc = TaskManagementService()
@@ -54,9 +53,7 @@ async def _cancel_orphans_for(
     if scan_result["events"]:
 
         async def _emit_events() -> None:
-            await inngest_client.send(
-                [InngestEvent(name="task/cancelled", data=e) for e in scan_result["events"]]
-            )
+            await send_job_events(("task/cancelled", e) for e in scan_result["events"])
 
         await ctx.step.run("emit-cancelled-events", _emit_events)
 
@@ -64,7 +61,7 @@ async def _cancel_orphans_for(
 
 
 async def run_block_descendants_on_failed_job(
-    ctx: inngest.Context, payload: TaskFailedEvent
+    ctx: Any, payload: TaskFailedEvent
 ) -> int:
     """When a parent fails, PENDING/READY containment descendants become BLOCKED.
 
@@ -90,7 +87,7 @@ async def run_block_descendants_on_failed_job(
 
 
 async def run_cancel_orphans_on_cancelled_job(
-    ctx: inngest.Context, payload: TaskCancelledEvent
+    ctx: Any, payload: TaskCancelledEvent
 ) -> int:
     logger.info("cancel-orphans parent=%s cause=parent_terminal", payload.task_id)
     return await _cancel_orphans_for(

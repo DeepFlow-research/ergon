@@ -5,10 +5,10 @@ from datetime import UTC, datetime
 
 from .contract import WorkflowStartedEvent, WorkflowStartResult
 from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
-from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
 from ergon_core.core.application.ports.dashboard import get_dashboard_event_publisher
 from ergon_core.core.application.workflows.orchestration import InitializeWorkflowCommand
 from ergon_core.core.application.workflows.service import WorkflowService
+from ergon_core.core.jobs._events import send_job_events
 from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     get_trace_sink,
@@ -34,9 +34,9 @@ async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStart
     )
 
     events = [
-        InngestEvent(
-            name=TaskReadyEvent.name,
-            data=TaskReadyEvent(
+        (
+            TaskReadyEvent.name,
+            TaskReadyEvent(
                 run_id=payload.run_id,
                 definition_id=payload.definition_id,
                 task_id=td.task_id,
@@ -45,8 +45,7 @@ async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStart
         for td in initialized.initial_ready_tasks
     ]
 
-    if events:
-        await inngest_client.send(events)
+    await send_job_events(events)
 
     snapshot = RunReadService().build_run_snapshot(payload.run_id)
     if snapshot is None:

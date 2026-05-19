@@ -50,9 +50,8 @@ import logging
 import traceback
 from datetime import UTC, datetime
 from functools import partial
+from typing import Any
 from uuid import UUID
-
-import inngest
 
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 from .contract import TaskExecuteResult, TaskReadyEvent
@@ -74,8 +73,8 @@ from ergon_core.core.application.workflows.orchestration import (
     PreparedTaskExecution,
     PrepareTaskExecutionCommand,
 )
-from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError, NonRetriableError
+from ergon_core.core.jobs._events import send_job_event
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.infrastructure.tracing import (
@@ -89,7 +88,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _prepare_execution(
-    ctx: inngest.Context,
+    ctx: Any,
     svc: TaskExecutionService,
     payload: TaskReadyEvent,
 ) -> PreparedTaskExecution:
@@ -106,10 +105,10 @@ async def _prepare_execution(
 
 
 async def _invoke_sandbox_setup(
-    ctx: inngest.Context,
+    ctx: Any,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
-    sandbox_setup_function: inngest.Function,
+    sandbox_setup_function: Any,
 ) -> SandboxReadyResult:
     return await ctx.step.invoke(
         "sandbox-setup",
@@ -134,12 +133,18 @@ def _load_sandbox_slug(run_id: UUID) -> str | None:
 
 
 async def _invoke_worker_execute(
-    ctx: inngest.Context,
+    ctx: Any,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
     sandbox_result: SandboxReadyResult,
-    worker_execute_function: inngest.Function,
+    worker_execute_function: Any,
 ) -> WorkerExecuteJobResult:
+    if prepared.assigned_worker_slug is None or prepared.worker_type is None:
+        raise ContractViolationError(
+            "prepared task execution is missing worker identity",
+            run_id=payload.run_id,
+            task_id=payload.task_id,
+        )
     return await ctx.step.invoke(
         "worker-execute",
         function=worker_execute_function,
@@ -160,10 +165,10 @@ async def _invoke_worker_execute(
 
 
 async def _fan_out_evaluators(
-    ctx: inngest.Context,
+    ctx: Any,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
-    evaluate_task_run_function: inngest.Function,
+    evaluate_task_run_function: Any,
 ) -> None:
     """Synchronously fan out per-evaluator Inngest invocations.
 
@@ -208,11 +213,11 @@ async def _fan_out_evaluators(
 
 
 async def _invoke_persist_outputs(
-    ctx: inngest.Context,
+    ctx: Any,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
     sandbox_result: SandboxReadyResult,
-    persist_outputs_function: inngest.Function,
+    persist_outputs_function: Any,
 ) -> PersistOutputsResult:
     return await ctx.step.invoke(
         "persist-outputs",
@@ -235,17 +240,15 @@ async def _emit_task_completed(
     prepared: PreparedTaskExecution,
     sandbox_id: str,
 ) -> None:
-    await inngest_client.send(
-        InngestEvent(
-            name=TaskCompletedEvent.name,
-            data=TaskCompletedEvent(
-                run_id=payload.run_id,
-                definition_id=payload.definition_id,
-                task_id=payload.task_id,
-                execution_id=prepared.execution_id,
-                sandbox_id=sandbox_id,
-            ).model_dump(mode="json"),
-        )
+    await send_job_event(
+        TaskCompletedEvent.name,
+        TaskCompletedEvent(
+            run_id=payload.run_id,
+            definition_id=payload.definition_id,
+            task_id=payload.task_id,
+            execution_id=prepared.execution_id,
+            sandbox_id=sandbox_id,
+        ).model_dump(mode="json"),
     )
 
 
@@ -255,18 +258,16 @@ async def _emit_task_failed(
     error_message: str,
     sandbox_id: str | None,
 ) -> None:
-    await inngest_client.send(
-        InngestEvent(
-            name=TaskFailedEvent.name,
-            data=TaskFailedEvent(
-                run_id=payload.run_id,
-                definition_id=payload.definition_id,
-                task_id=payload.task_id,
-                execution_id=prepared.execution_id,
-                error=error_message,
-                sandbox_id=sandbox_id,
-            ).model_dump(mode="json"),
-        )
+    await send_job_event(
+        TaskFailedEvent.name,
+        TaskFailedEvent(
+            run_id=payload.run_id,
+            definition_id=payload.definition_id,
+            task_id=payload.task_id,
+            execution_id=prepared.execution_id,
+            error=error_message,
+            sandbox_id=sandbox_id,
+        ).model_dump(mode="json"),
     )
 
 
@@ -274,13 +275,13 @@ async def _emit_task_failed(
 # would duplicate on retry. Failure propagates via TaskFailedEvent.
 # Concurrency bounded by E2B sandbox quota and Postgres connection pool.
 async def run_execute_task_job(
-    ctx: inngest.Context,
+    ctx: Any,
     payload: TaskReadyEvent,
     *,
-    sandbox_setup_function: inngest.Function,
-    worker_execute_function: inngest.Function,
-    persist_outputs_function: inngest.Function,
-    evaluate_task_run_function: inngest.Function,
+    sandbox_setup_function: Any,
+    worker_execute_function: Any,
+    persist_outputs_function: Any,
+    evaluate_task_run_function: Any,
 ) -> TaskExecuteResult:
     logger.info("task-execute run_id=%s task_id=%s", payload.run_id, payload.task_id)
     span_start = datetime.now(UTC)

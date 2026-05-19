@@ -10,12 +10,10 @@ import logging
 from datetime import UTC, datetime
 
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
-from ergon_core.core.application.resources.publishing import RunResourcePublishService
-from ergon_core.core.infrastructure.sandbox.resource_publisher import SandboxResourcePublisher
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from .contract import PersistOutputsRequest, PersistOutputsResult
+from .composition import publish_public_sandbox_resources
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.enums import RunResourceKind
 from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     get_trace_sink,
@@ -55,7 +53,7 @@ async def run_persist_outputs_job(payload: PersistOutputsRequest) -> PersistOutp
             sandbox_id=sandbox_id,
         )
 
-    outputs_count = await _publish_public_sandbox_resources(view.task.sandbox, payload)
+    outputs_count = await publish_public_sandbox_resources(view.task.sandbox, payload)
 
     get_trace_sink().emit_span(
         CompletedSpan(
@@ -72,29 +70,10 @@ async def run_persist_outputs_job(payload: PersistOutputsRequest) -> PersistOutp
         )
     )
 
-    return PersistOutputsResult(outputs_count=outputs_count)
-
-
-async def _publish_public_sandbox_resources(sandbox: object, payload: PersistOutputsRequest) -> int:
-    publish_dir = payload.output_dir or sandbox.output_path
-    publisher = SandboxResourcePublisher.from_public_sandbox(
-        sandbox=sandbox,
-        run_id=payload.run_id,
-        task_execution_id=payload.execution_id,
-        publish_dirs=((publish_dir, RunResourceKind.REPORT),),
-    )
-    synced = await RunResourcePublishService().publish_sandbox_files(
-        reader=publisher,
-        blob_store=publisher,
-        run_id=payload.run_id,
-        task_execution_id=payload.execution_id,
-        publish_dirs=((publish_dir, RunResourceKind.REPORT),),
-    )
-    count = len(synced)
-    if synced:
+    if outputs_count:
         logger.info(
             "persist-outputs: public sandbox publisher created %d resource(s) for run_id=%s",
-            count,
+            outputs_count,
             payload.run_id,
         )
-    return count
+    return PersistOutputsResult(outputs_count=outputs_count)

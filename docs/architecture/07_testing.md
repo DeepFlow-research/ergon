@@ -171,6 +171,8 @@ This job runs `docker compose up -d --wait postgres api inngest-dev`, then `pnpm
 5. **Sandbox outlives the task until all criteria finish.** RFC `sandbox-lifetime-covers-criteria`. Smoke is the living regression test for this.
 6. **Experiment grouping parallelism exercised on every PR.** 2-run happy/sad experiment groups prove concurrent workflow submission and run aggregation at the scale smoke uses.
 7. **Partial work persists on FAILED leaves.** Sad-path `AlwaysFailSubworker` writes a file + runs a probe command, then raises. Driver asserts the partial artifact and pre-failure WAL entry survive.
+8. **Job-module boundaries are architecture-tested.** `tests/unit/architecture/test_job_composition_modules.py` enforces the PR10 `core/jobs` ownership split: `contract.py` stays DTO-only, `job.py` may orchestrate application services and current persistence reads/writes but may not import concrete Inngest clients or sandbox adapters, and `inngest.py` stays a framework adapter without SQLModel queries or business service construction. Direct job persistence is a documented PR10 limit until PR11 runtime consolidation.
+9. **Inngest serving order and metadata are pinned.** `tests/unit/registry/test_inngest_job_registry.py` checks decorator triggers plus `ALL_FUNCTIONS` membership/order and SDK-exposed retry, cancel, concurrency, and output metadata. Changing any of those is an architecture change, not a harmless import shuffle.
 
 ## 9. Budget
 
