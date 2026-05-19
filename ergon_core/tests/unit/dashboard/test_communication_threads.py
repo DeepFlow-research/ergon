@@ -1,7 +1,7 @@
 from uuid import uuid4
 
 from ergon_core.core.persistence.telemetry.models import Thread, ThreadMessage
-from ergon_core.core.application.read_models.run_snapshot import _build_communication_threads
+from ergon_core.core.views.runs.snapshot import _build_communication_threads
 
 
 def test_build_communication_threads_populates_summary_and_task_anchors() -> None:

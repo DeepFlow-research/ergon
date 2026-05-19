@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from ergon_core.core.application.read_models.models import RunContextEventDto
+from ergon_core.core.views.runs.models import RunContextEventDto
 from ergon_core.core.infrastructure.dashboard.event_contracts import DashboardContextEventEvent
 from ergon_core.core.shared.context_parts import AssistantTextPart, ContextPartChunkLog
 

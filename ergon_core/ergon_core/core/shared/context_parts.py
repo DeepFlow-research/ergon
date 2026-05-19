@@ -141,6 +141,7 @@ class ContextPartChunkLog(ContextPartChunk):
         description="Optional worker or policy version that produced the part.",
     )
 
+
 ContextEventType = Literal[
     "system_prompt",
     "user_message",

@@ -2,12 +2,12 @@
 
 from uuid import UUID
 
-from ergon_core.core.application.read_models.models import (
+from ergon_core.core.views.runs.models import (
     RunSnapshotDto,
 )
 from ergon_core.core.application.graph.models import GraphMutationRecordDto
-from ergon_core.core.application.read_models.errors import ResourceTooLargeError
-from ergon_core.core.application.read_models.runs import RunReadService
+from ergon_core.core.views.errors import ResourceTooLargeError
+from ergon_core.core.views.runs.service import RunReadService
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 

@@ -389,7 +389,6 @@ const GraphMutationRecordDto = z
     created_at: z.string().datetime({ offset: true }),
   })
   .passthrough();
-const definition_id = z.union([z.string(), z.null()]).optional();
 const CohortStatusCountsDto = z
   .object({
     pending: z.number().int().default(0),
@@ -712,7 +711,6 @@ export const schemas = {
   AnnotationSetMutation,
   AnnotationDeletedMutation,
   GraphMutationRecordDto,
-  definition_id,
   CohortStatusCountsDto,
   CohortSummaryDto,
   CohortExperimentRowDto,

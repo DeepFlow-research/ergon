@@ -16,7 +16,7 @@ from ergon_core.core.application.evaluation.summary import (
     CriterionOutcomeEntry,
     EvaluationSummary,
 )
-from ergon_core.core.application.read_models.models import RunTaskEvaluationDto
+from ergon_core.core.views.runs.models import RunTaskEvaluationDto
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.persistence.definitions.models import ExperimentDefinitionEvaluator
 from ergon_core.core.persistence.shared.db import get_session
@@ -191,8 +191,7 @@ class EvaluationService:
             )
         evaluator_def = session.exec(
             select(ExperimentDefinitionEvaluator).where(
-                ExperimentDefinitionEvaluator.experiment_definition_id
-                == run.definition_id,
+                ExperimentDefinitionEvaluator.experiment_definition_id == run.definition_id,
                 ExperimentDefinitionEvaluator.binding_key == binding_key,
             )
         ).first()
