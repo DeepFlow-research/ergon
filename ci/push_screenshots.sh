@@ -53,23 +53,45 @@ else
 fi
 
 cd "$worktree_dir"
-rm -rf "${env}"
-mkdir -p "${env}"
-if compgen -G "${source_dir}/${env}/*.png" > /dev/null; then
-  cp -r "${source_dir}/${env}"/*.png "${env}/"
-else
-  # No screenshots captured (e.g., Playwright failed before first
-  # page.screenshot).  Emit a placeholder so the PR comment can still
-  # link a path and the absence becomes visible.
-  printf "No screenshots captured for %s on this run.\n" "$env" \
-    > "${env}/EMPTY.txt"
-fi
 
-echo "screenshot upload source: ${source_dir}/${env}"
-find "${env}" -maxdepth 1 -type f | sort
+stage_env_screenshots() {
+  rm -rf "${env}"
+  mkdir -p "${env}"
+  if compgen -G "${source_dir}/${env}/*.png" > /dev/null; then
+    cp -r "${source_dir}/${env}"/*.png "${env}/"
+  else
+    # No screenshots captured (e.g., Playwright failed before first
+    # page.screenshot).  Emit a placeholder so the PR comment can still
+    # link a path and the absence becomes visible.
+    printf "No screenshots captured for %s on this run.\n" "$env" \
+      > "${env}/EMPTY.txt"
+  fi
 
-git add "${env}/"
-if ! git diff --cached --quiet; then
-  git commit -m "ci: screenshots ${env} $(date -u +%Y%m%dT%H%M%SZ)"
-fi
-git push origin "HEAD:${branch}"
+  echo "screenshot upload source: ${source_dir}/${env}"
+  find "${env}" -maxdepth 1 -type f | sort
+
+  git add "${env}/"
+  if ! git diff --cached --quiet; then
+    git commit -m "ci: screenshots ${env} $(date -u +%Y%m%dT%H%M%SZ)"
+  fi
+}
+
+stage_env_screenshots
+for attempt in 1 2 3; do
+  if git push origin "HEAD:${branch}"; then
+    exit 0
+  fi
+  if [ "$attempt" -eq 3 ]; then
+    echo "failed to push screenshots after ${attempt} attempts" >&2
+    exit 1
+  fi
+
+  # Matrix legs can race when they all create/update the same
+  # screenshots branch. Refresh from the remote branch, restage this
+  # leg's screenshots, and retry so an upload race does not fail an
+  # otherwise successful smoke.
+  sleep "$attempt"
+  git fetch origin "$branch"
+  git reset --hard FETCH_HEAD
+  stage_env_screenshots
+done
