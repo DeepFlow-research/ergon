@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from ergon_cli.commands import experiment as experiment_cmd
 from ergon_cli.main import build_parser
-from ergon_core.core.application.read_models.experiments import (
+from ergon_core.core.views.experiments.models import (
     ExperimentDetailDto,
     ExperimentRunRowDto,
     ExperimentSummaryDto,

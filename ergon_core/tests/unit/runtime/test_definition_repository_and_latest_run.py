@@ -95,7 +95,7 @@ def test_latest_run_for_definition_ignores_other_definitions(monkeypatch, sessio
     definition_id = uuid4()
 
     now = datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
-    run_a = _run(definition_id=def_a, definition_id=def_a, created_at=now)
+    run_a = _run(definition_id=def_a, created_at=now)
     run_b = _run(
         definition_id=def_b,
         created_at=now + timedelta(hours=1),

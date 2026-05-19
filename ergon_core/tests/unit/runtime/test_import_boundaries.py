@@ -56,11 +56,9 @@ def test_context_models_import_without_worker_cycle() -> None:
     assert RunContextEvent.__tablename__ == "run_context_events"
 
 
-def test_context_event_payloads_use_shared_logprob_type_without_api_cycle() -> None:
-    from ergon_core.core.domain.generation.context_parts import ContextPartChunkLog, TokenLogprob
-    from ergon_core.core.persistence.context.event_payloads import ContextEventPayload
+def test_context_part_logs_use_shared_logprob_type_without_api_cycle() -> None:
+    from ergon_core.core.shared.context_parts import ContextPartChunkLog, TokenLogprob
 
-    assert ContextEventPayload is ContextPartChunkLog
     assert ContextPartChunkLog.model_fields["logprobs"].annotation == list[TokenLogprob] | None
 
 

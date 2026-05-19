@@ -10,8 +10,8 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.application.read_models import experiments as module
-from ergon_core.core.application.read_models.experiments import ExperimentReadService
+from ergon_core.core.views.experiments import service as module
+from ergon_core.core.views.experiments.service import ExperimentReadService
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 

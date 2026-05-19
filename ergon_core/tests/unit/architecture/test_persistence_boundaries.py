@@ -1,5 +1,6 @@
 """Architecture guards for persistence boundaries."""
 
+from importlib import import_module
 from pathlib import Path
 
 from sqlmodel import SQLModel
@@ -64,10 +65,13 @@ def test_telemetry_models_do_not_define_application_command_dtos() -> None:
 
 
 def test_persistence_foreign_keys_reference_existing_columns() -> None:
-    import ergon_core.core.persistence.context.models  # noqa: F401
-    import ergon_core.core.persistence.definitions.models  # noqa: F401
-    import ergon_core.core.persistence.graph.models  # noqa: F401
-    import ergon_core.core.persistence.telemetry.models  # noqa: F401
+    for module_name in (
+        "ergon_core.core.persistence.context.models",
+        "ergon_core.core.persistence.definitions.models",
+        "ergon_core.core.persistence.graph.models",
+        "ergon_core.core.persistence.telemetry.models",
+    ):
+        import_module(module_name)
 
     missing_targets: list[str] = []
     for table in SQLModel.metadata.tables.values():

@@ -3,7 +3,7 @@
 import json
 from typing import Any
 
-from ergon_core.core.domain.generation.context_parts import (
+from ergon_core.core.shared.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
     ContextPartChunkLog,
