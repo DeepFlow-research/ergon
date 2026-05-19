@@ -22,6 +22,11 @@ def test_model_field_has_no_default() -> None:
     )
 
 
+def test_model_field_is_str_not_nullable() -> None:
+    field = Worker.model_fields["model"]
+    assert field.annotation is str
+
+
 def test_name_field_has_no_default() -> None:
     """Mirror of the `model` invariant: `name` also has no default on the base.
 

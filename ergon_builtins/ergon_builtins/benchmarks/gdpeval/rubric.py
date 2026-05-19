@@ -237,7 +237,7 @@ class StagedRubric(Rubric):
             stage_criteria = [
                 cr
                 for cr in criterion_results
-                if self._criterion_stage_map.get(cr.name) == stage_idx
+                if self._criterion_stage_map.get(cr.slug) == stage_idx
             ]
             score = min(sum(cr.score for cr in stage_criteria), stage.max_points)
             stage_results.append(

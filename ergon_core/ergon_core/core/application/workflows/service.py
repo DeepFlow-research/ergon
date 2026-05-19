@@ -284,9 +284,7 @@ class WorkflowService:
     ) -> list[TaskDescriptor]:
         descriptors: list[TaskDescriptor] = []
         for node_id in node_ids:
-            node = session.exec(
-                select(RunGraphNode).where(RunGraphNode.task_id == node_id)
-            ).first()
+            node = session.exec(select(RunGraphNode).where(RunGraphNode.task_id == node_id)).first()
             if node is not None:
                 descriptors.append(
                     TaskDescriptor(

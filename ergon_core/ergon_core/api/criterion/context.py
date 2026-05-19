@@ -18,4 +18,4 @@ class CriterionContext(BaseModel):
     execution_id: UUID
     task: Task
     worker_result: WorkerOutput
-    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
+    metadata: dict[str, Any] = Field(default_factory=dict)

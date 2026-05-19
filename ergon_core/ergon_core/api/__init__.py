@@ -17,6 +17,7 @@ from ergon_core.api.criterion import (
 from ergon_core.api.errors import (
     ContainmentViolation,
     CriterionCheckError,
+    DependencyError,
     SandboxKindMismatch,
     SandboxNotLiveError,
 )
@@ -51,6 +52,7 @@ __all__ = [
     "CriterionContext",
     "CriterionEvidence",
     "CriterionOutcome",
+    "DependencyError",
     "EmptyTaskPayload",
     "Evaluator",
     "EvidenceMessage",

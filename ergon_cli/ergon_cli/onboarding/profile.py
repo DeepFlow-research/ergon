@@ -1,6 +1,7 @@
 """OnboardProfile: user choices -> required keys and pip extras."""
 
 from enum import Enum
+from typing import ClassVar, Protocol, cast
 
 from ergon_core.api.benchmark import BenchmarkRequirements
 from pydantic import BaseModel, Field
@@ -33,6 +34,11 @@ GPU_PROVIDER_KEY_MAP: dict[GPUProvider, str] = {
     GPUProvider.RUNPOD: "RUNPOD_API_KEY",
 }
 
+
+class _BenchmarkOnboardingDeps(Protocol):
+    onboarding_deps: ClassVar[BenchmarkRequirements]
+
+
 BUILTIN_BENCHMARK_REQUIREMENTS: dict[str, BenchmarkRequirements] = {
     "gdpeval": BenchmarkRequirements(e2b=True, extras=("ergon-builtins[data]",)),
     "minif2f": BenchmarkRequirements(e2b=True),
@@ -43,10 +49,20 @@ BUILTIN_BENCHMARK_REQUIREMENTS: dict[str, BenchmarkRequirements] = {
     "researchrubrics-vanilla": BenchmarkRequirements(),
     "swebench-verified": BenchmarkRequirements(e2b=True, extras=("ergon-builtins[data]",)),
 }
+BUILTIN_BENCHMARKS: dict[str, type[_BenchmarkOnboardingDeps]] = {}
+
+
+def _benchmark_requirements() -> dict[str, BenchmarkRequirements]:
+    if BUILTIN_BENCHMARKS:
+        return {
+            slug: cast("BenchmarkRequirements", benchmark.onboarding_deps)
+            for slug, benchmark in BUILTIN_BENCHMARKS.items()
+        }
+    return BUILTIN_BENCHMARK_REQUIREMENTS
 
 
 def available_benchmark_slugs() -> list[str]:
-    return sorted(BUILTIN_BENCHMARK_REQUIREMENTS)
+    return sorted(_benchmark_requirements())
 
 
 class OnboardProfile(BaseModel):
@@ -61,7 +77,7 @@ class OnboardProfile(BaseModel):
 
     def required_keys(self) -> dict[str, str]:
         """Return {env_var: human_reason} derived purely from user choices."""
-        benchmarks = BUILTIN_BENCHMARK_REQUIREMENTS
+        benchmarks = _benchmark_requirements()
 
         result: dict[str, str] = {}
 
@@ -85,7 +101,7 @@ class OnboardProfile(BaseModel):
 
     def required_extras(self) -> list[str]:
         """Pip extras to install based on choices."""
-        benchmarks = BUILTIN_BENCHMARK_REQUIREMENTS
+        benchmarks = _benchmark_requirements()
 
         extras: set[str] = set()
         for b in self.benchmarks:

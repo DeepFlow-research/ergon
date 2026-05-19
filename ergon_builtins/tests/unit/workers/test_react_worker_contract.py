@@ -56,13 +56,13 @@ def test_construct_with_minimal_explicit_kwargs() -> None:
     # never dereferenced (execute() isn't called).
     worker = ReActWorker(
         name="unit",
-        model=None,
+        model="test:none",
         tools=[],
         system_prompt=None,
         max_iterations=1,
     )
     assert worker.name == "unit"
-    assert worker.model is None
+    assert worker.model == "test:none"
     assert worker.tools == []
     assert worker.system_prompt is None
     assert worker.max_iterations == 1
@@ -192,7 +192,7 @@ def _minimal_context() -> WorkerContext:
         definition_id=UUID(int=4),
         execution_id=UUID(int=5),
         sandbox_id="test-sandbox",
-        node_id=UUID(int=6),
+        task_id=UUID(int=6),
         task_mgmt=object(),
         task_inspect=object(),
         resource_repo=object(),
@@ -217,7 +217,7 @@ async def test_react_worker_yields_partial_chunk_before_reraising_agent_iter_fai
 
     worker = ReActWorker(
         name="unit",
-        model=None,
+        model="test:none",
         tools=[],
         system_prompt=None,
         max_iterations=10,
@@ -249,7 +249,7 @@ async def test_react_worker_passes_agent_deps_to_pydantic_ai(monkeypatch) -> Non
 
     worker = _DepsWorker(
         name="unit",
-        model=None,
+        model="test:none",
         tools=[],
         system_prompt=None,
         max_iterations=10,

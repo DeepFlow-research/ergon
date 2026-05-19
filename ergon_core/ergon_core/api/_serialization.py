@@ -8,8 +8,6 @@ machinery. Re-exported through each component class via
 here directly.
 """
 
-from __future__ import annotations
-
 from importlib import import_module
 from typing import Any, TypeVar, cast
 
@@ -28,9 +26,35 @@ time. The alias is the named boundary every ``from_definition``
 classmethod accepts."""
 
 
-def import_component(
-    path: str,
-) -> type[Any]:  # TODO: check if "Any" is correct, maybe we should be more specific?
+ComponentClass = type[object]
+
+
+def component_type_path(component: object) -> str:
+    """Return the importable ``module:qualname`` discriminator for a component."""
+
+    component_type = type(component)
+    qualname = component_type.__qualname__
+    if "[" in qualname or "]" in qualname:
+        component_name = component_type.__name__.split("[", 1)[0]
+        raise ValueError(
+            f"{component_name} snapshot cannot be persisted from a parametrized generic; "
+            f"got {qualname!r}. Persisted {component_name} snapshots must use a "
+            f"concrete {component_name} subclass."
+        )
+    return f"{component_type.__module__}:{qualname}"
+
+
+def inject_type_discriminator(
+    payload: dict[str, Any],
+    component: object,
+) -> dict[str, Any]:
+    """Add ``_type`` to an existing serialized payload and return it."""
+
+    payload["_type"] = component_type_path(component)
+    return payload
+
+
+def import_component(path: str) -> ComponentClass:
     """Resolve a ``module:qualname`` string to a class.
 
     Used by every ``<Component>.from_definition`` classmethod to
@@ -45,10 +69,10 @@ def import_component(
     obj: Any = import_module(module_name)
     for part in qualname.split("."):
         # typing: dynamic qualname walk — `part` is a user-controlled discriminator component.
-        obj = getattr(obj, part)  # slopcop: ignore[no-hasattr-getattr]
+        obj = getattr(obj, part)
     if not isinstance(obj, type):
         raise TypeError(f"Component _type {path!r} did not resolve to a class")
-    return obj
+    return cast("ComponentClass", obj)
 
 
 T = TypeVar("T")

@@ -174,7 +174,7 @@ class SubtaskLifecycleToolkit:
                     node_id=NodeId(handle.task_id),
                     task_slug=TaskSlug(task.task_slug),
                     status="pending",
-                    )
+                )
             except Exception as exc:  # slopcop: ignore[no-broad-except]
                 return ToolFailure(error=str(exc))
 

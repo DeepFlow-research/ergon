@@ -9,7 +9,7 @@ import pytest
 from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
 from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.api.criterion.criterion import Criterion
-from ergon_core.api.criterion.results import CriterionOutcome
+from ergon_core.api.criterion import CriterionOutcome
 from ergon_core.api.rubric.rubric import Rubric
 from ergon_core.api.sandbox.runtime import CommandResult
 from ergon_core.api.sandbox.sandbox import Sandbox
@@ -82,7 +82,7 @@ async def test_object_bound_task_definition_round_trips_concrete_nested_componen
         task_slug="fake",
         instance_key="sample-1",
         description="Fake object-bound task.",
-        worker=FakeWorker(name="worker", model=None),
+        worker=FakeWorker(name="worker", model="test:none"),
         sandbox=FakeSandbox(image="fake:v2"),
         evaluators=(
             Rubric(
@@ -113,7 +113,7 @@ def test_worker_from_definition_does_not_pass_type_to_custom_init() -> None:
                 "ergon_core.tests.unit.api.test_public_api_definition_roundtrip:LegacyInitWorker"
             ),
             "name": "worker",
-            "model": None,
+            "model": "test:none",
             "label": "roundtrip",
         }
     )
@@ -137,7 +137,7 @@ def test_parametrized_generic_task_type_is_rejected_when_persisting() -> None:
         task_slug="generic",
         instance_key="sample-1",
         description="Should use a concrete subclass before persistence.",
-        worker=FakeWorker(name="worker", model=None),
+        worker=FakeWorker(name="worker", model="test:none"),
         sandbox=FakeSandbox(),
     )
 

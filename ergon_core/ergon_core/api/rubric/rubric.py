@@ -7,15 +7,18 @@ from pydantic import Field, field_serializer, field_validator
 
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.criterion.criterion import Criterion
-from ergon_core.api.criterion.results import CriterionOutcome
+from ergon_core.api.criterion.outcome import CriterionOutcome
 from ergon_core.api.rubric.evaluator import Evaluator
 from ergon_core.api.rubric.results import TaskEvaluationResult
 
-# TODO: consider if this should actually live in the public api or should be moved to ergon builtins (I imagine probs it needs to be moved?)
-
 
 class Rubric(Evaluator):
-    """Concrete evaluator with a fixed criteria list."""
+    """Core public API generic fixed-criteria Evaluator.
+
+    Rubric intentionally lives in ``ergon_core.api`` rather than builtins:
+    it is the reusable author-facing Evaluator for benchmarks whose criteria
+    are known up front, while builtins own only benchmark-specific criteria.
+    """
 
     type_slug: ClassVar[str] = "rubric"
 
@@ -27,9 +30,7 @@ class Rubric(Evaluator):
 
     @field_validator("criteria", mode="before")
     @classmethod
-    def _rehydrate_criteria(
-        cls, value: Any
-    ) -> tuple[Criterion, ...]:  # slopcop: ignore[no-typing-any]
+    def _rehydrate_criteria(cls, value: Any) -> tuple[Criterion, ...]:
         if value is None:
             return ()
         return tuple(

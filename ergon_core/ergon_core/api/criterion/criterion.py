@@ -6,9 +6,14 @@ from typing import Any, ClassVar, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
-from ergon_core.api._serialization import TaskDefinitionJson, import_component_subclass
+from ergon_core.api._serialization import (
+    TaskDefinitionJson,
+    import_component_subclass,
+    inject_type_discriminator,
+)
 from ergon_core.api.criterion.context import CriterionContext
-from ergon_core.api.criterion.results import CriterionOutcome, ScoreScale
+from ergon_core.api.criterion.outcome import CriterionOutcome
+from ergon_core.api.criterion.score import ScoreScale
 from ergon_core.api.errors import DependencyError
 from ergon_core.core.infrastructure.dependencies import check_packages
 
@@ -32,13 +37,13 @@ class Criterion(BaseModel, ABC):
 
     type_slug: ClassVar[str]
     required_packages: ClassVar[list[str]] = []
-    install_hint: ClassVar[str] = ""
+    install_hint: ClassVar[str | None] = None
 
     slug: str
-    description: str = ""  # slopcop: ignore[no-str-empty-default]
+    description: str = ""
     weight: float = 1.0
     score_spec: ScoreScale = Field(default_factory=ScoreScale)
-    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _default_description_to_slug(self) -> "Criterion":
@@ -50,12 +55,10 @@ class Criterion(BaseModel, ABC):
     @model_serializer(mode="wrap")
     def _serialize_with_type_discriminator(
         self,
-        handler: Callable[["Criterion"], dict[str, Any]],  # slopcop: ignore[no-typing-any]
-    ) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+        handler: Callable[["Criterion"], dict[str, Any]],
+    ) -> dict[str, Any]:
         """Inject ``_type`` so criterion snapshots can round-trip."""
-        payload = handler(self)
-        payload["_type"] = f"{type(self).__module__}:{type(self).__qualname__}"
-        return payload
+        return inject_type_discriminator(handler(self), self)
 
     @classmethod
     def from_definition(cls, criterion_json: TaskDefinitionJson) -> "Criterion":

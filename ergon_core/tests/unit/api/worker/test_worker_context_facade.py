@@ -30,6 +30,7 @@ from ergon_core.core.persistence.telemetry.models import (
     RunTaskExecution,
 )
 from ergon_core.core.shared.utils import utcnow
+from ergon_core.test_support import task_factory
 
 
 class _FacadeTask(Task[EmptyTaskPayload]):
@@ -185,6 +186,36 @@ async def test_facade_mutations_call_current_service_command_signatures() -> Non
     assert mgmt.calls[1][2].new_description == "new description"
     assert isinstance(mgmt.calls[2][2], RestartTaskCommand)
     assert restarted.task_id == child_id
+
+
+@pytest.mark.asyncio
+async def test_spawn_task_uses_empty_tuple_dependency_default() -> None:
+    run_id = uuid4()
+    root_id = uuid4()
+    mgmt = _FakeTaskManagement()
+    context = WorkerContext._for_job(
+        run_id=run_id,
+        task_id=root_id,
+        execution_id=uuid4(),
+        definition_id=uuid4(),
+        sandbox_id="sbx",
+        task_mgmt=mgmt,
+        task_inspect=_FakeInspection(),
+        resource_repo=SimpleNamespace(),
+        session_factory=_session_factory,
+    )
+
+    await context.spawn_task(
+        _FacadeTask(
+            task_slug="child",
+            instance_key="sample-1",
+            description="spawned child",
+            worker=task_factory.TestWorker(name="worker", model="test:none"),
+            sandbox=task_factory.TestSandbox(),
+        )
+    )
+
+    assert mgmt.calls[0][4] == ()
 
 
 @pytest.mark.asyncio
@@ -371,6 +402,18 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
 def test_context_requires_facade_services_at_construction() -> None:
     with pytest.raises(ValidationError, match="task_mgmt"):
         WorkerContext(run_id=uuid4(), task_id=uuid4(), execution_id=uuid4(), sandbox_id="sbx")
+
+    with pytest.raises(ValidationError, match="injected dependencies"):
+        WorkerContext(
+            run_id=uuid4(),
+            task_id=uuid4(),
+            execution_id=uuid4(),
+            sandbox_id="sbx",
+            task_mgmt=None,
+            task_inspect=_FakeInspection(),
+            resource_repo=SimpleNamespace(),
+            session_factory=_session_factory,
+        )
 
 
 @pytest.mark.asyncio

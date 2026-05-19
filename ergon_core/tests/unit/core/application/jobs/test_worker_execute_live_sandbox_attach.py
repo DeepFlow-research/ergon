@@ -147,7 +147,7 @@ async def test_step_aware_task_management_sends_collected_ready_events(monkeypat
     service = module._StepAwareTaskManagementService(SimpleNamespace(step=_Step()))
     await service._dispatch_collected_ready_events(
         "plan-subtasks-test",
-        [module._ReadyDispatch(run_id=run_id, definition_id=definition_id, node_id=node_id)],
+        [module._ReadyDispatch(run_id=run_id, definition_id=definition_id, task_id=node_id)],
     )
 
     assert len(sent) == 1
@@ -157,5 +157,4 @@ async def test_step_aware_task_management_sends_collected_ready_events(monkeypat
     assert event.name == TaskReadyEvent.name
     assert payload.run_id == run_id
     assert payload.definition_id == definition_id
-    assert payload.task_id is None
-    assert payload.node_id == node_id
+    assert payload.task_id == node_id

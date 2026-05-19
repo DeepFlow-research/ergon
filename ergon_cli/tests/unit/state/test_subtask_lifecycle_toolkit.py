@@ -85,7 +85,7 @@ async def test_add_subtask_accepts_object_bound_task() -> None:
         instance_key="sample",
         description="Object-bound child",
         task_payload=EmptyTaskPayload(),
-        worker=_NoopWorker(name="noop", model=None),
+        worker=_NoopWorker(name="noop", model="test:none"),
         sandbox=_NoopSandbox(),
         evaluators=(),
     )

@@ -43,7 +43,6 @@ class CriterionOutcomeEntry(BaseModel):
     @classmethod
     def _populate_criterion_slug(cls, data: Any) -> Any:  # slopcop: ignore[no-typing-any]
         # TODO: normalise slug name to remov this hack
-        # See note on `_populate_slug_name` in api/criterion/results.py:
         # Pydantic `before` validators are typed as `Any` by Pydantic itself.
         if isinstance(data, dict) and "criterion_slug" not in data:
             name = data.get("criterion_name")

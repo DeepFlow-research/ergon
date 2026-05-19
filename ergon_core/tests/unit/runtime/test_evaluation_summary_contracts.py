@@ -27,7 +27,7 @@ class _Criterion(Criterion):
     type_slug = "test-criterion"
 
     async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
-        return CriterionOutcome(name=self.slug, score=1.0, passed=True)
+        return CriterionOutcome(slug=self.slug, name=self.slug, score=1.0, passed=True)
 
 
 def _service_result(
@@ -59,6 +59,7 @@ def _service_result(
             evaluator_name="rubric",
             criterion_results=[
                 CriterionOutcome(
+                    slug="criterion result",
                     name="criterion result",
                     score=criterion_score,
                     passed=passed,

@@ -33,7 +33,7 @@ def test_task_to_definition_json_object_bound_shape() -> None:
         task_slug="object",
         instance_key="sample-1",
         description="object-bound task",
-        worker=EchoWorker(name="echo", model=None),
+        worker=EchoWorker(name="echo", model="test:none"),
         sandbox=EchoSandbox(),
         evaluators=(),
     )
@@ -82,7 +82,7 @@ async def test_object_bound_task_json_round_trips_through_from_definition() -> N
         task_slug="object",
         instance_key="sample-1",
         description="object-bound task",
-        worker=EchoWorker(name="echo", model=None),
+        worker=EchoWorker(name="echo", model="test:none"),
         sandbox=EchoSandbox(),
         evaluators=(),
     )

@@ -1,9 +1,13 @@
-"""Public API error types."""
+"""Public API error types.
+
+Author-facing exceptions live here so benchmark, worker, criterion, and
+rubric authors can catch stable API errors without importing runtime/core
+implementation packages.
+"""
 
 from uuid import UUID
 
 
-# TODO: consider if these should be moved to the core package, they are not really errors in the public api sense? need to follow wider core convention for where we put errors (and enforce in unit tests)
 class DependencyError(Exception):
     """A component's required package is not installed."""
 

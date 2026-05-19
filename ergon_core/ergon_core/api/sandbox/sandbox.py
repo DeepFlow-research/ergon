@@ -36,7 +36,11 @@ from typing import Any, cast
 
 from pydantic import BaseModel, Field, PrivateAttr, model_serializer
 
-from ergon_core.api._serialization import TaskDefinitionJson, import_component_subclass
+from ergon_core.api._serialization import (
+    TaskDefinitionJson,
+    import_component_subclass,
+    inject_type_discriminator,
+)
 from ergon_core.api.errors import SandboxNotLiveError
 from ergon_core.api.sandbox.runtime import CommandResult, SandboxRuntime
 
@@ -53,17 +57,14 @@ class Sandbox(BaseModel, ABC):
 
     _runtime: SandboxRuntime | None = PrivateAttr(default=None)
 
-    # TODO: I'd quite like to find some way to kill these serializer methods, they are a bit of a hack and dont really fit in with the rest of the api
     @model_serializer(mode="wrap")
     def _serialize_with_type_discriminator(
         self,
-        handler: Callable[["Sandbox"], dict[str, Any]],  # slopcop: ignore[no-typing-any]
-    ) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+        handler: Callable[["Sandbox"], dict[str, Any]],
+    ) -> dict[str, Any]:
         """Inject ``_type`` discriminator so the snapshot can round-trip through
         ``Sandbox.from_definition`` without losing the concrete subclass."""
-        payload = handler(self)
-        payload["_type"] = f"{type(self).__module__}:{type(self).__qualname__}"
-        return payload
+        return inject_type_discriminator(handler(self), self)
 
     # ── Author-implemented lifecycle hooks ─────────────────────────────
 

@@ -64,7 +64,7 @@ def _seed_definition(session: Session, *, task_slug: str, payload: dict) -> tupl
         instance_key="sample-1",
         description=f"{task_slug} task",
         task_payload=_EmptyPayload.model_validate(payload),
-        worker=TestWorker(name="worker", model=None),
+        worker=TestWorker(name="worker", model="test:none"),
         sandbox=TestSandbox(),
     ).model_dump(mode="json")
     session.add_all(

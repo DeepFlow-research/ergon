@@ -4,7 +4,11 @@ _BENCHMARK_ROWS = (
     ("gdpeval", "gdpeval", "Benchmark for GDP document-processing evaluation tasks."),
     ("minif2f", "minif2f", "Benchmark backed by MiniF2F theorem-proving tasks."),
     ("researchrubrics", "researchrubrics", "Benchmark backed by ScaleAI ResearchRubrics samples."),
-    ("researchrubrics-vanilla", "researchrubrics-vanilla", "Vanilla ResearchRubrics baseline benchmark."),
+    (
+        "researchrubrics-vanilla",
+        "researchrubrics-vanilla",
+        "Vanilla ResearchRubrics baseline benchmark.",
+    ),
     ("swebench-verified", "swebench-verified", "Benchmark backed by SWE-Bench Verified."),
 )
 _WORKER_ROWS = (

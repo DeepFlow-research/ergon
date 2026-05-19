@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_serializer
 
 from ergon_core.api._serialization import (
     TaskDefinitionJson,
+    component_type_path,
     import_component,
     import_component_subclass,
 )
@@ -65,8 +66,8 @@ class Task(BaseModel, Generic[PayloadT]):
     @model_serializer(mode="wrap")
     def _serialize_with_type_discriminator(
         self,
-        handler: Callable[..., dict[str, Any]],  # slopcop: ignore[no-typing-any]
-    ) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+        handler: Callable[..., dict[str, Any]],
+    ) -> dict[str, Any]:
         """Inject ``_type`` discriminator so the snapshot can round-trip through
         ``Task.from_definition`` without losing which Task subclass was used.
 
@@ -76,15 +77,8 @@ class Task(BaseModel, Generic[PayloadT]):
         re-serialize those three fields directly via the runtime objects'
         own ``model_dump`` so their full subclass schemas are used.
         """
-        qualname = type(self).__qualname__
-        if "[" in qualname or "]" in qualname:
-            raise ValueError(
-                "Task snapshot cannot be persisted from a parametrized generic; "
-                f"got {qualname!r}. Persisted Task snapshots must use a "
-                "concrete Task subclass."
-            )
         payload = handler(self)
-        payload["_type"] = f"{type(self).__module__}:{qualname}"
+        payload["_type"] = component_type_path(self)
         payload["worker"] = self.worker.model_dump(mode="json")
         payload["sandbox"] = self.sandbox.model_dump(mode="json")
         if self.evaluators:
@@ -133,7 +127,11 @@ class Task(BaseModel, Generic[PayloadT]):
         # the api/ import graph).
         # reason: avoid circular import — Worker/Sandbox/Evaluator import Task.
         from ergon_core.api.rubric.evaluator import Evaluator
+
+        # reason: avoid circular import — Worker/Sandbox/Evaluator import Task.
         from ergon_core.api.sandbox.sandbox import Sandbox
+
+        # reason: avoid circular import — Worker/Sandbox/Evaluator import Task.
         from ergon_core.api.worker.worker import Worker
 
         task_type = task_json.get("_type")
