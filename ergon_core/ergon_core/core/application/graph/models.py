@@ -3,7 +3,7 @@
 Frozen Pydantic models. Callers never receive raw SQLModel rows.
 
 UUID fields use NewType aliases (RunId, NodeId, etc.) so that type
-checkers catch cross-field swaps — e.g. passing a node_id where a
+checkers catch cross-field swaps — e.g. passing a task id where a
 run_id is expected. The aliases are erased at runtime (zero
 serialization cost).
 """
@@ -12,7 +12,8 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from ergon_core.core.persistence.graph.status_conventions import NodeStatus
+from ergon_core.api.benchmark import Task
+from ergon_core.core.application.runtime.status import NodeStatus
 from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.graph.models import GraphTargetType, MutationType
 from ergon_core.core.persistence.shared.types import (
@@ -22,6 +23,8 @@ from ergon_core.core.persistence.shared.types import (
     RunId,
 )
 from pydantic import BaseModel, Field
+
+# TODO: this file def needs a deduplication pass vs other DTOs and schemas in different modules / files
 
 
 class MutationMeta(BaseModel):
@@ -41,20 +44,19 @@ class MutationMeta(BaseModel):
 class GraphNodeDto(BaseModel):
     model_config = {"frozen": True}
 
-    id: NodeId
+    task_id: NodeId
     run_id: RunId
-    definition_task_id: DefinitionId | None
     instance_key: str
     task_slug: str
     description: str
     status: str = Field(
         description=(
             "Domain-specific node lifecycle status stored as a string because the database "
-            "allows experiment-specific statuses; see status_conventions."
+            "allows experiment-specific statuses; see application/runtime/status.py."
         )
     )
     assigned_worker_slug: str | None
-    parent_node_id: NodeId | None
+    parent_task_id: NodeId | None
     level: int
 
 
@@ -63,11 +65,11 @@ class GraphTaskRef(BaseModel):
 
     model_config = {"frozen": True}
 
-    node_id: NodeId
+    task_id: NodeId
     task_slug: str
     status: NodeStatus
     level: int
-    parent_node_id: NodeId | None = None
+    parent_task_id: NodeId | None = None
     assigned_worker_slug: str | None = None
     description: str | None = None
 
@@ -78,8 +80,8 @@ class GraphEdgeDto(BaseModel):
     id: EdgeId
     run_id: RunId
     definition_dependency_id: DefinitionId | None
-    source_node_id: NodeId
-    target_node_id: NodeId
+    source_task_id: NodeId
+    target_task_id: NodeId
     status: str = Field(
         description=(
             "Domain-specific edge lifecycle status stored as a string because the database "
@@ -194,8 +196,8 @@ class EdgeAddedMutation(BaseModel):
     model_config = {"frozen": True}
 
     mutation_type: Literal["edge.added"] = "edge.added"
-    source_node_id: NodeId
-    target_node_id: NodeId
+    source_task_id: NodeId
+    target_task_id: NodeId
     status: str
 
 
@@ -205,8 +207,8 @@ class EdgeRemovedMutation(BaseModel):
     model_config = {"frozen": True}
 
     mutation_type: Literal["edge.removed"] = "edge.removed"
-    source_node_id: NodeId
-    target_node_id: NodeId
+    source_task_id: NodeId
+    target_task_id: NodeId
     status: str
 
 
@@ -251,3 +253,25 @@ GraphMutationValue = Annotated[
     | AnnotationDeletedMutation,
     Field(discriminator="mutation_type"),
 ]
+
+
+class RunGraphNodeView(BaseModel):
+    """Typed view of one ``run_graph_nodes`` row + its inflated Task.
+
+    The job body receives this view from ``WorkflowGraphRepository.node``
+    instead of raw JSON. The Task is already inflated via
+    ``Task.from_definition`` so callers downstream of the repo never see
+    ``dict[str, Any]``.
+
+    ``task_id`` is the runtime identity. Static definition ids are not
+    part of the runtime identity.
+    """
+
+    model_config = {"frozen": True, "arbitrary_types_allowed": True}
+
+    run_id: RunId
+    task_id: UUID
+    parent_task_id: NodeId | None
+    status: str
+    task: Task
+    is_dynamic: bool = False

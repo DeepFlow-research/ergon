@@ -8,9 +8,11 @@ import logging
 from uuid import UUID
 
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import COMPLETED, FAILED
+from ergon_core.core.application.runtime.status import COMPLETED, FAILED
+from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 from ergon_core.core.application.tasks.models import SubtaskInfo
 from ergon_core.core.application.tasks.repository import TaskExecutionRepository
+from ergon_core.core.persistence.shared.db import get_session
 from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
@@ -25,17 +27,18 @@ class TaskInspectionService:
     to decide which subtasks to cancel, refine, or wait on.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, graph_repo: WorkflowGraphRepository | None = None) -> None:
         self._task_execution_repo = TaskExecutionRepository()
+        self._graph_repo = graph_repo or WorkflowGraphRepository()
 
     def list_subtasks(
         self,
         session: Session,
         *,
         run_id: UUID,
-        parent_node_id: UUID,
+        parent_task_id: UUID,
     ) -> list[SubtaskInfo]:
-        """Direct children of parent_node_id, ordered by task_slug.
+        """Direct children of parent_task_id, ordered by task_slug.
 
         Deterministic ordering lets the LLM refer to subtasks by
         position across turns without node_id confusion.
@@ -44,9 +47,9 @@ class TaskInspectionService:
             select(RunGraphNode)
             .where(
                 RunGraphNode.run_id == run_id,
-                RunGraphNode.parent_node_id == parent_node_id,
+                RunGraphNode.parent_task_id == parent_task_id,
             )
-            .order_by(RunGraphNode.task_slug, RunGraphNode.id)
+            .order_by(RunGraphNode.task_slug, RunGraphNode.task_id)
         ).all()
         return [self._hydrate(session, n) for n in nodes]
 
@@ -61,16 +64,33 @@ class TaskInspectionService:
         node = session.exec(
             select(RunGraphNode).where(
                 RunGraphNode.run_id == run_id,
-                RunGraphNode.id == node_id,
+                RunGraphNode.task_id == node_id,
             )
         ).one()
         return self._hydrate(session, node)
 
+    async def descendant_ids(
+        self,
+        *,
+        run_id: UUID,
+        root_task_id: UUID,
+    ) -> frozenset[UUID]:
+        """Return all task_ids reachable as children/grandchildren of root_task_id."""
+
+        with get_session() as session:
+            rows = self._graph_repo.descendants_by_parent(
+                session,
+                run_id=run_id,
+                root_task_id=root_task_id,
+            )
+            # Collect IDs inside the session scope to avoid DetachedInstanceError.
+            return frozenset(row.task_id for row in rows)
+
     def _hydrate(self, session: Session, node: RunGraphNode) -> SubtaskInfo:
         """Build a SubtaskInfo from a RunGraphNode, attaching deps and output/error."""
         deps = session.exec(
-            select(RunGraphEdge.source_node_id).where(
-                RunGraphEdge.target_node_id == node.id,
+            select(RunGraphEdge.source_task_id).where(
+                RunGraphEdge.target_task_id == node.task_id,
                 RunGraphEdge.run_id == node.run_id,
             )
         ).all()
@@ -79,12 +99,12 @@ class TaskInspectionService:
         error: str | None = None
 
         if node.status == COMPLETED:
-            output = self._latest_output(session, node.id)
+            output = self._latest_output(session, node.task_id)
         elif node.status == FAILED:
-            error = self._latest_error(session, node.id)
+            error = self._latest_error(session, node.task_id)
 
         return SubtaskInfo(
-            node_id=node.id,
+            task_id=node.task_id,
             task_slug=node.task_slug,
             description=node.description,
             status=node.status,  # type: ignore[arg-type]

@@ -32,9 +32,97 @@ class SuppressionCounts(NamedTuple):
 # Keep this baseline equal to the current repository count. Lower it as cleanup
 # lands; raise it only when a new suppression is explicitly reviewed.
 BUDGET = SuppressionCounts(
-    slopcop_ignore=222,
-    noqa=2,
-    type_ignore=64,
+    # +1 for ergon_core/api/benchmark/task.py:_import_component qualname
+    # walk introduced by PR 2 of the v2 authoring redesign. The getattr
+    # is genuinely dynamic (resolves a class from a user-controlled
+    # discriminator string); no static alternative exists.
+    # +3 for MiniF2FToolkit.__init__ parameters (sandbox, sandbox_run_skill,
+    # ask_stakeholder_fn): the v1 benchmark surface deliberately accepts
+    # heterogeneous sandbox/skill types — typed as `Any` matching the
+    # existing `_minif2f_run_skill` pattern. Reviewed in PR 4.5.
+    # +13 (PR 6): MiniF2FToolkit.tools sandbox/task args typed Any (genuine
+    # circular import prevents static types); benchmarks/minif2f/_tools.py
+    # build_tools sandbox/task Any + 4×no-broad-except (tool fns must return
+    # error responses, not propagate); benchmarks/minif2f/_legacy_workers.py
+    # _minif2f_run_skill / MiniF2FReactWorker Any args (v1 legacy surface);
+    # ReActWorker.execute return Any + no-broad-except (pydantic_ai agent
+    # output is dynamic).
+    # +1 noqa: C901 for build_tools: closure-heavy tool builder, complexity
+    # is structural not incidental; refactoring into sub-functions would
+    # obscure the sandbox binding.
+    # TODO(PR 11): when `_minif2f_run_skill` and `MiniF2FReactWorker` are
+    # deleted with `_legacy_workers.py`, decrement `slopcop_ignore` by ~3
+    # (the v1 legacy `Any` annotations) and update this comment to reflect
+    # the post-PR-11 baseline.
+    # PR 6.5 net: persist_benchmark module-level function adds 1×no-typing-any
+    # (resolved_metadata dict[str,Any]) in definition_writer.py. The
+    # ExperimentService façade is gone (deleted persist_benchmark method
+    # contributed 1×no-typing-any + 1×guarded-function-import; the surviving
+    # module-level run_experiment hoists the launch import to top-level so
+    # no guarded-function-import is needed). api/experiment.py deletion
+    # contributed -1.
+    # +1 noqa (PR 6.5): noqa: C901 on persist_benchmark (complex by design,
+    # same as the persist_definition it supplements).
+    # +6 (PR 9 Task 2): WorkerContext injected services typed as ``Any``
+    # to break the api → core → api import cycle (TaskManagementService
+    # imports from ergon_core.api.registry). 3 PrivateAttr fields
+    # (_task_mgmt, _task_inspect, _resource_repo) + 3 _for_job kwargs
+    # mirror the same typing. PR 11 may collapse some of these once the
+    # service modules move out of the core ↔ api cycle.
+    # +2 (PR 10 Task 0): Criterion ABC → Pydantic BaseModel conversion.
+    # Concrete subclasses (CodeCheck, LLMJudge, ProofVerification,
+    # ResearchRubricsJudge) keep a thin ``__init__(**data: Any)`` shim that
+    # folds the legacy ``max_score`` / ``rubric`` kwargs into ``score_spec``
+    # so call sites stay compatible — Pydantic's underlying ``__init__``
+    # accepts ``Any``, so ``**data`` must match. The base ``Criterion``
+    # also picks up ``description: str = ""`` (slopcop:
+    # no-str-empty-default) which previously lived on the two subclasses
+    # that overrode it; net change is +2 across all touched files.
+    # PR 10 working-tree TODO sweep: +1 (one WIP TODO note appended to a
+    # line that already had a slopcop ignore).
+    # PR 10a (SWEBench vertical migration): +4 slopcop_ignore covering the
+    # new SWEBenchToolkit/_tools.py + _legacy_workers.py modules — each
+    # carries `no-typing-any` on the sandbox/task tool-builder kwargs and
+    # `no-broad-except` on the catch-all in `str_replace_editor` (tool
+    # functions must return error responses, not propagate). +2 noqa: C901
+    # on the closure-heavy tool builders (`build_tools` and
+    # `_legacy_swebench_tools`) — structural complexity, same shape as
+    # PR 6's MiniF2F `build_tools` noqa. -2 type_ignore is the implementer's
+    # net cleanup elsewhere in the SWEBench migration.
+    # PR 10b (ResearchRubrics vertical migration): +5 slopcop_ignore.
+    # New `benchmarks/researchrubrics/_tools.py` mirrors PR 10a's pattern
+    # exactly — 2×`no-typing-any` on the `sandbox`/`task` tool-builder
+    # kwargs (genuinely heterogeneous Sandbox/Task surfaces, typed `Any`)
+    # plus 2×`no-broad-except` on the tool functions' catch-all (they must
+    # return structured error responses rather than propagate). The new
+    # `benchmarks/researchrubrics/toolkit.py` `tools()` method adds one
+    # more `no-typing-any` (same kwargs reason).  `judge_criterion.py`
+    # picks up one `no-str-empty-default` for the new `rubric_text: str
+    # = ""` field — the criterion's __init__ shim populates it from
+    # `rubric.criterion` when omitted, but the JSON round-trip path
+    # validates the bare default first.
+    # PR 10c (GDPEval vertical migration): +5 slopcop_ignore, +1 noqa.
+    # New `benchmarks/gdpeval/_tools.py` mirrors PR 10a/10b exactly —
+    # 2×`no-typing-any` on the `sandbox`/`task` tool-builder kwargs and
+    # 2×`no-broad-except` on the tool functions' catch-all (they must
+    # return structured error responses rather than propagate). The new
+    # `benchmarks/gdpeval/toolkit.py` `tools()` method adds one more
+    # `no-typing-any` (same kwargs reason). `benchmark.py`'s metadata
+    # kwarg is typed `Mapping[str, Any]` matching the SWE-Bench /
+    # ResearchRubrics constructor surface — but net total includes a
+    # corresponding reduction in `worker_factory.py` (deleted) so the
+    # arithmetic balances at +5. `noqa: C901` on `build_tools` is the
+    # same structural-complexity exemption as the prior two verticals.
+    # PR 10d-f net +20 slopcop_ignore. The late PR 10 stack adds the
+    # shared Toolkit serializer, object-bound WorkerContext/resource
+    # facades, public API rehydration bridges, and smoke/runtime protocol
+    # adapters. Most are temporary bridge suppressions around dynamic
+    # `_type` dispatch, Pydantic serializer handler shapes, and runtime
+    # protocol probing that PR 11 is explicitly scoped to delete or
+    # collapse once legacy TaskSpec/manager paths are gone.
+    slopcop_ignore=279,
+    noqa=7,
+    type_ignore=62,
 )
 
 _SLOPCOP_IGNORE = re.compile(r"\bslopcop:\s*ignore\b")

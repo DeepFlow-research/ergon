@@ -20,7 +20,6 @@ from ergon_core.core.persistence.shared.enums import (
 )
 from ergon_core.core.persistence.shared.ids import new_id
 from ergon_core.core.persistence.telemetry.models import (
-    ExperimentRecord,
     RolloutBatch,
     RolloutBatchRun,
     RunRecord,
@@ -42,7 +41,6 @@ from ergon_core.core.rl.rollout_types import (
 )
 from ergon_core.core.application.events.task_events import WorkflowStartedEvent
 from sqlmodel import Session, select
-from transformers import AutoTokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +72,8 @@ class RolloutService:
 
     def _get_tokenizer(self) -> Tokenizer:
         if self._tokenizer is None:
+            from transformers import AutoTokenizer
+
             logger.info("Loading tokenizer: %s", self._tokenizer_name)
             self._tokenizer = AutoTokenizer.from_pretrained(self._tokenizer_name)
         return self._tokenizer
@@ -86,24 +86,6 @@ class RolloutService:
         with self._session_factory() as session:
             definition = session.get(ExperimentDefinition, request.definition_id)
             benchmark_type = definition.benchmark_type if definition else "rl-rollout"
-            experiment = ExperimentRecord(
-                name=f"RL rollout batch {batch_id}",
-                benchmark_type=benchmark_type,
-                sample_count=request.num_episodes,
-                sample_selection_json={
-                    "instance_keys": [f"episode-{index}" for index in range(request.num_episodes)]
-                },
-                default_worker_team_json={"primary": "rl-rollout"},
-                default_model_target=request.model_target_override,
-                design_json={},
-                metadata_json={
-                    "source": "rollout_service",
-                    "batch_id": str(batch_id),
-                    "definition_id": str(request.definition_id),
-                },
-                status="running",
-            )
-            session.add(experiment)
             session.add(
                 RolloutBatch(
                     id=batch_id,
@@ -117,8 +99,7 @@ class RolloutService:
                 session.add(
                     RunRecord(
                         id=run_id,
-                        experiment_id=experiment.id,
-                        workflow_definition_id=request.definition_id,
+                        definition_id=request.definition_id,
                         benchmark_type=benchmark_type,
                         instance_key=f"episode-{index}",
                         worker_team_json={"primary": "rl-rollout"},
@@ -299,11 +280,11 @@ class RolloutService:
         evals_by_run: dict[UUID, dict[str, float]] = defaultdict(dict)
         for ev in all_evals:
             if ev.score is not None:
-                evals_by_run[ev.run_id][str(ev.definition_task_id)] = ev.score
+                evals_by_run[ev.run_id][str(ev.task_id)] = ev.score
 
         exec_to_def_task: dict[str, str] = {}
         for ex in all_execs:
-            exec_to_def_task[str(ex.id)] = str(ex.definition_task_id)
+            exec_to_def_task[str(ex.id)] = str(ex.task_id)
 
         evals_remapped: dict[UUID, dict[str, float]] = defaultdict(dict)
         for run_id, scores in evals_by_run.items():

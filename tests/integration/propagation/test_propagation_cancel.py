@@ -11,7 +11,7 @@ it would need xfail; but the simple node-level cancel works today.
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import CANCELLED
+from ergon_core.core.application.runtime.status import CANCELLED
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
@@ -73,7 +73,7 @@ async def test_6_manager_decision_cancel_pending_node() -> None:
         node_a = make_node(session, run.id, task_slug="cancel-target", status="pending")
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
+        node_a_id = node_a.task_id
         session.commit()
 
     try:
@@ -137,7 +137,7 @@ async def test_6b_cancel_does_not_affect_already_terminal_node() -> None:
         node_a = make_node(session, run.id, task_slug="already-completed", status="completed")
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
+        node_a_id = node_a.task_id
         session.commit()
 
     try:

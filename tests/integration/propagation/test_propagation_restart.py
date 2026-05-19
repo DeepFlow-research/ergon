@@ -11,7 +11,7 @@ perspective on the same feature.
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from ergon_core.core.persistence.graph.status_conventions import BLOCKED
+from ergon_core.core.application.runtime.status import BLOCKED
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.application.tasks.errors import TaskNotTerminalError
@@ -48,10 +48,10 @@ async def test_8_blocked_node_cannot_be_restarted() -> None:
         run = make_run(session, defn.id)
         node_a = make_node(session, run.id, task_slug="task-a-failed", status="failed")
         node_b = make_node(session, run.id, task_slug="task-b-blocked", status=BLOCKED)
-        make_edge(session, run.id, source_node_id=node_a.id, target_node_id=node_b.id)
+        make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_b.task_id)
         run_id = run.id
         defn_id = defn.id
-        node_b_id = node_b.id
+        node_b_id = node_b.task_id
         session.commit()
 
     try:
@@ -63,7 +63,7 @@ async def test_8_blocked_node_cannot_be_restarted() -> None:
                 with pytest.raises(TaskNotTerminalError):
                     await svc.restart_task(
                         session,
-                        RestartTaskCommand(run_id=run_id, node_id=node_b_id),
+                        RestartTaskCommand(run_id=run_id, task_id=node_b_id),
                     )
     finally:
         cleanup_run(run_id, defn_id)
@@ -82,7 +82,7 @@ async def test_8b_restart_failed_node_re_enters_pending() -> None:
         node_a = make_node(session, run.id, task_slug="task-a-to-restart", status="failed")
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
+        node_a_id = node_a.task_id
         session.commit()
 
     try:
@@ -93,7 +93,7 @@ async def test_8b_restart_failed_node_re_enters_pending() -> None:
             with get_session() as session:
                 result = await svc.restart_task(
                     session,
-                    RestartTaskCommand(run_id=run_id, node_id=node_a_id),
+                    RestartTaskCommand(run_id=run_id, task_id=node_a_id),
                 )
 
         assert result.old_status == TaskExecutionStatus.FAILED

@@ -5,10 +5,10 @@ from uuid import UUID
 
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
+from ergon_core.core.application.runtime.status import TERMINAL_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord
+from ergon_core.core.persistence.telemetry.models import RunRecord
 from sqlmodel import Session, select
 
 
@@ -21,14 +21,14 @@ def poll_until(condition, *, timeout: float = 30, interval: float = 0.5) -> None
     raise TimeoutError("poll_until timed out")
 
 
-def get_node(session: Session, node_id: UUID) -> RunGraphNode:
-    node = session.get(RunGraphNode, node_id)
+def get_node(session: Session, task_id: UUID) -> RunGraphNode:
+    node = session.exec(select(RunGraphNode).where(RunGraphNode.task_id == task_id)).one()
     session.refresh(node)
     return node
 
 
-def get_node_status(session: Session, node_id: UUID) -> str:
-    node = session.get(RunGraphNode, node_id)
+def get_node_status(session: Session, task_id: UUID) -> str:
+    node = get_node(session, task_id)
     session.refresh(node)
     return node.status
 
@@ -63,8 +63,8 @@ def assert_cross_cutting_invariants(session: Session, run_id: UUID) -> None:
     nodes = list(session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all())
     for node in nodes:
         session.refresh(node)
-        entries = get_wal_entries(session, node.id)
-        assert entries, f"Node {node.id} ({node.task_slug}) has no WAL entries"
+        entries = get_wal_entries(session, node.task_id)
+        assert entries, f"Node {node.task_id} ({node.task_slug}) has no WAL entries"
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +74,7 @@ def assert_cross_cutting_invariants(session: Session, run_id: UUID) -> None:
 
 def make_experiment_definition(session: Session) -> ExperimentDefinition:
     """Create a minimal ExperimentDefinition row for test scaffolding."""
-    defn = ExperimentDefinition(benchmark_type="ci-propagation-test")
+    defn = ExperimentDefinition(benchmark_type="ci-propagation-test", name="ci-propagation-test")
     session.add(defn)
     session.flush()
     session.refresh(defn)
@@ -83,15 +83,8 @@ def make_experiment_definition(session: Session) -> ExperimentDefinition:
 
 def make_run(session: Session, definition_id: UUID) -> RunRecord:
     """Create a minimal RunRecord row for test scaffolding."""
-    experiment = ExperimentRecord(
-        name="ci propagation test",
-        benchmark_type="ci-propagation-test",
-        sample_count=1,
-    )
-    session.add(experiment)
-    session.flush()
     run = RunRecord(
-        experiment_id=experiment.id,
+        definition_id=definition_id,
         workflow_definition_id=definition_id,
         benchmark_type="ci-propagation-test",
         instance_key="test",
@@ -109,7 +102,7 @@ def make_node(
     *,
     task_slug: str,
     status: str = "pending",
-    parent_node_id: UUID | None = None,
+    parent_task_id: UUID | None = None,
     level: int = 0,
 ) -> RunGraphNode:
     """Create a RunGraphNode row for test scaffolding."""
@@ -119,7 +112,7 @@ def make_node(
         task_slug=task_slug,
         description=f"Test node: {task_slug}",
         status=status,
-        parent_node_id=parent_node_id,
+        parent_task_id=parent_task_id,
         level=level,
     )
     session.add(node)
@@ -132,15 +125,15 @@ def make_edge(
     session: Session,
     run_id: UUID,
     *,
-    source_node_id: UUID,
-    target_node_id: UUID,
+    source_task_id: UUID,
+    target_task_id: UUID,
     status: str = "pending",
 ) -> RunGraphEdge:
     """Create a RunGraphEdge row for test scaffolding."""
     edge = RunGraphEdge(
         run_id=run_id,
-        source_node_id=source_node_id,
-        target_node_id=target_node_id,
+        source_task_id=source_task_id,
+        target_task_id=target_task_id,
         status=status,
     )
     session.add(edge)
@@ -169,7 +162,12 @@ def seed_linear_chain(
         nodes.append(node)
 
     for i in range(len(nodes) - 1):
-        make_edge(session, run_id, source_node_id=nodes[i].id, target_node_id=nodes[i + 1].id)
+        make_edge(
+            session,
+            run_id,
+            source_task_id=nodes[i].task_id,
+            target_task_id=nodes[i + 1].task_id,
+        )
 
     session.commit()
     return nodes

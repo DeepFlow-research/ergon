@@ -3,7 +3,7 @@
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import BLOCKED, CANCELLED
+from ergon_core.core.application.runtime.status import BLOCKED, CANCELLED
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
@@ -78,9 +78,9 @@ async def test_3_failure_cascade_successor_blocked() -> None:
         )
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
-        node_b_id = node_b.id
-        node_c_id = node_c.id
+        node_a_id = node_a.task_id
+        node_b_id = node_b.task_id
+        node_c_id = node_c.task_id
         session.commit()
 
     try:
@@ -149,7 +149,7 @@ async def test_7_parent_failure_children_blocked() -> None:
     """Parent task fails. Its PENDING child successors become BLOCKED, not CANCELLED or FAILED.
 
     Uses a 2-level structure: parent_node → [child_a, child_b] via edges.
-    parent_node is a static (parent_node_id=None) node so the propagation
+    parent_node is a static (parent_task_id=None) node so the propagation
     logic treats its successors as static workflow nodes that should be
     auto-managed (not left pending for a manager).
     """
@@ -163,17 +163,25 @@ async def test_7_parent_failure_children_blocked() -> None:
         child_c = make_node(session, run.id, task_slug="child-c", status="running")
         # child_d is already COMPLETED — it is terminal and must not be overwritten
         child_d = make_node(session, run.id, task_slug="child-d", status="completed")
-        make_edge(session, run.id, source_node_id=parent_node.id, target_node_id=child_a.id)
-        make_edge(session, run.id, source_node_id=parent_node.id, target_node_id=child_b.id)
-        make_edge(session, run.id, source_node_id=parent_node.id, target_node_id=child_c.id)
-        make_edge(session, run.id, source_node_id=parent_node.id, target_node_id=child_d.id)
+        make_edge(
+            session, run.id, source_task_id=parent_node.task_id, target_task_id=child_a.task_id
+        )
+        make_edge(
+            session, run.id, source_task_id=parent_node.task_id, target_task_id=child_b.task_id
+        )
+        make_edge(
+            session, run.id, source_task_id=parent_node.task_id, target_task_id=child_c.task_id
+        )
+        make_edge(
+            session, run.id, source_task_id=parent_node.task_id, target_task_id=child_d.task_id
+        )
         run_id = run.id
         defn_id = defn.id
-        parent_node_id = parent_node.id
-        child_a_id = child_a.id
-        child_b_id = child_b.id
-        child_c_id = child_c.id
-        child_d_id = child_d.id
+        parent_task_id = parent_node.task_id
+        child_a_id = child_a.task_id
+        child_b_id = child_b.task_id
+        child_c_id = child_c.task_id
+        child_d_id = child_d.task_id
         session.commit()
 
     try:
@@ -182,7 +190,7 @@ async def test_7_parent_failure_children_blocked() -> None:
             await graph_repo.update_node_status(
                 session,
                 run_id=run_id,
-                node_id=parent_node_id,
+                node_id=parent_task_id,
                 new_status=TaskExecutionStatus.FAILED,
                 meta=MutationMeta(actor="test:setup", reason="test: parent failed"),
             )
@@ -207,9 +215,9 @@ async def test_7_parent_failure_children_blocked() -> None:
             PropagateTaskCompletionCommand(
                 run_id=run_id,
                 definition_id=defn_id,
-                task_id=parent_node_id,
-                execution_id=parent_node_id,
-                node_id=parent_node_id,
+                task_id=parent_task_id,
+                execution_id=parent_task_id,
+                node_id=parent_task_id,
             )
         )
 
@@ -275,9 +283,9 @@ async def test_10_blocked_propagates_transitively() -> None:
         )
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
-        node_b_id = node_b.id
-        node_c_id = node_c.id
+        node_a_id = node_a.task_id
+        node_b_id = node_b.task_id
+        node_c_id = node_c.task_id
         session.commit()
 
     try:
@@ -349,11 +357,11 @@ async def test_12_running_successor_not_interrupted() -> None:
         run = make_run(session, defn.id)
         node_a = make_node(session, run.id, task_slug="task-a", status="failed")
         node_b = make_node(session, run.id, task_slug="task-b", status="running")
-        make_edge(session, run.id, source_node_id=node_a.id, target_node_id=node_b.id)
+        make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_b.task_id)
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
-        node_b_id = node_b.id
+        node_a_id = node_a.task_id
+        node_b_id = node_b.task_id
         session.commit()
 
     try:

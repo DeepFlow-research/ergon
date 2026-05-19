@@ -2,19 +2,24 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from ergon_core.core.persistence.definitions.models import ExperimentDefinitionTask
+from ergon_core.core.persistence.definitions.models import (
+    ExperimentDefinition,
+    ExperimentDefinitionInstance,
+    ExperimentDefinitionTask,
+)
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord
-from ergon_core.core.application.read_models import experiments as module
-from ergon_core.core.application.read_models.experiments import ExperimentReadService
+from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.views.experiments import service as module
+from ergon_core.core.views.experiments.service import ExperimentReadService
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
 
 @pytest.fixture()
 def session_factory():
-    _ = ExperimentRecord
+    _ = ExperimentDefinition
+    _ = ExperimentDefinitionInstance
     _ = ExperimentDefinitionTask
     _ = RunGraphNode
     engine = create_engine(
@@ -32,7 +37,6 @@ def session_factory():
 
 def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory) -> None:
     now = datetime(2026, 4, 27, 12, 0, tzinfo=UTC)
-    experiment_id = uuid4()
     definition_id = uuid4()
     run_a_id = uuid4()
     run_b_id = uuid4()
@@ -40,21 +44,26 @@ def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory
 
     with session_factory() as session:
         session.add(
-            ExperimentRecord(
-                id=experiment_id,
+            ExperimentDefinition(
+                id=definition_id,
                 name="ci experiment",
                 benchmark_type="ci-benchmark",
-                sample_count=3,
-                sample_selection_json={"instance_keys": ["a", "b", "c"]},
-                default_worker_team_json={"primary": "ci-worker"},
-                default_evaluator_slug="ci-evaluator",
-                default_model_target="openai:gpt-4o",
-                design_json={},
-                metadata_json={},
-                status="running",
+                metadata_json={
+                    "default_worker_team": {"primary": "ci-worker"},
+                    "default_evaluator_slug": "ci-evaluator",
+                    "default_model_target": "openai:gpt-4o",
+                    "status": "running",
+                },
                 created_at=now,
             )
         )
+        for instance_key in ("a", "b", "c"):
+            session.add(
+                ExperimentDefinitionInstance(
+                    experiment_definition_id=definition_id,
+                    instance_key=instance_key,
+                )
+            )
         for run_id, instance_key, status, started, completed, score, cost in [
             (run_a_id, "a", RunStatus.COMPLETED, now, now + timedelta(seconds=10), 1.0, 0.2),
             (run_b_id, "b", RunStatus.FAILED, now, now + timedelta(seconds=20), 0.0, 0.3),
@@ -63,8 +72,7 @@ def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory
             session.add(
                 RunRecord(
                     id=run_id,
-                    experiment_id=experiment_id,
-                    workflow_definition_id=definition_id,
+                    definition_id=definition_id,
                     benchmark_type="ci-benchmark",
                     instance_key=instance_key,
                     worker_team_json={"primary": "ci-worker"},
@@ -96,7 +104,7 @@ def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory
 
     monkeypatch.setattr(module, "get_session", session_factory)
 
-    detail = ExperimentReadService().get_experiment(experiment_id)
+    detail = ExperimentReadService().get_experiment(definition_id)
 
     assert detail is not None
     assert detail.analytics.total_runs == 3
@@ -109,3 +117,62 @@ def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory
     assert detail.analytics.total_cost_usd == 0.5
     assert detail.runs[0].running_time_ms == 10_000
     assert detail.runs[0].total_tasks == 2
+
+
+def test_read_service_returns_definition_metadata_without_benchmark_definition_record(
+    monkeypatch, session_factory
+) -> None:
+    """``get_experiment`` resolves directly from ``ExperimentDefinition``."""
+
+    definition_id = uuid4()
+    with session_factory() as session:
+        session.add(
+            ExperimentDefinition(
+                id=definition_id,
+                benchmark_type="mini",
+                name="mini-experiment",
+                description="smoke for read model",
+                metadata_json={"created_by": "test"},
+            )
+        )
+        session.commit()
+
+    monkeypatch.setattr(module, "get_session", session_factory)
+
+    detail = ExperimentReadService().get_experiment(definition_id)
+
+    assert detail is not None
+    assert detail.definition_id == definition_id
+    assert detail.name == "mini-experiment"
+    assert detail.description == "smoke for read model"
+    assert detail.benchmark_type == "mini"
+    assert detail.metadata.get("created_by") == "test"
+
+
+def test_read_service_returns_none_for_unknown_definition(monkeypatch, session_factory) -> None:
+    monkeypatch.setattr(module, "get_session", session_factory)
+
+    detail = ExperimentReadService().get_experiment(uuid4())
+    assert detail is None
+
+
+def test_list_experiments_reads_definition_rows(monkeypatch, session_factory) -> None:
+    definition_id = uuid4()
+    with session_factory() as session:
+        session.add(
+            ExperimentDefinition(
+                id=definition_id,
+                name="definition-name",
+                benchmark_type="definition-type",
+                metadata_json={},
+            )
+        )
+        session.commit()
+
+    monkeypatch.setattr(module, "get_session", session_factory)
+
+    summaries = ExperimentReadService().list_experiments(limit=10)
+    matching = [s for s in summaries if s.definition_id == definition_id]
+    assert len(matching) == 1
+    assert matching[0].name == "definition-name"
+    assert matching[0].benchmark_type == "definition-type"

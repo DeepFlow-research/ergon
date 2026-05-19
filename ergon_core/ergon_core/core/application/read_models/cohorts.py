@@ -2,29 +2,103 @@
 
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime
 from uuid import UUID
 
+from ergon_core.core.application.compat.cohorts import (
+    cohort_id_from_metadata,
+    optional_str_metadata,
+)
+from ergon_core.core.persistence.definitions.models import (
+    ExperimentDefinition,
+    ExperimentDefinitionInstance,
+)
+from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.evaluation_summary import EvaluationSummary
+from ergon_core.core.application.evaluation.summary import EvaluationSummary
 from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohort,
     ExperimentCohortStats,
     ExperimentCohortStatus,
-    ExperimentRecord,
     RunRecord,
 )
-from ergon_core.core.application.read_models.models import (
-    CohortDetailDto,
-    CohortExperimentRowDto,
-    CohortStatusCountsDto,
-    CohortSummaryDto,
-    UpdateCohortRequest,
-)
 from ergon_core.core.shared.utils import utcnow
-from sqlmodel import select
+from pydantic import BaseModel, Field
+from sqlmodel import Session, select
 
 
+class CohortStatusCountsDto(BaseModel):
+    """Aggregate run counts by lifecycle status."""
+
+    pending: int = 0
+    executing: int = 0
+    evaluating: int = 0
+    completed: int = 0
+    failed: int = 0
+
+
+class CohortSummaryDto(BaseModel):
+    """Summary row for cohort list and live updates."""
+
+    cohort_id: UUID
+    name: str
+    description: str | None = None
+    created_by: str | None = None
+    created_at: datetime
+    status: str
+    total_runs: int = 0
+    status_counts: CohortStatusCountsDto = Field(default_factory=CohortStatusCountsDto)
+    average_score: float | None = None
+    best_score: float | None = None
+    worst_score: float | None = None
+    average_duration_ms: int | None = None
+    failure_rate: float = 0.0
+    stats_updated_at: datetime | None = None
+
+
+class CohortExperimentRowDto(BaseModel):
+    """One experiment inside a cohort detail view."""
+
+    definition_id: UUID
+    name: str
+    benchmark_type: str
+    sample_count: int
+    total_runs: int = 0
+    status_counts: CohortStatusCountsDto = Field(default_factory=CohortStatusCountsDto)
+    status: str
+    created_at: datetime
+    default_model_target: str | None = None
+    default_evaluator_slug: str | None = None
+    final_score: float | None = None
+    total_cost_usd: float | None = None
+    error_message: str | None = None
+
+
+class CohortDetailDto(BaseModel):
+    """Full payload for a single cohort detail page."""
+
+    summary: CohortSummaryDto
+    experiments: list[CohortExperimentRowDto] = Field(default_factory=list)
+
+
+class UpdateCohortRequest(BaseModel):
+    """Mutable cohort fields exposed through the operator API."""
+
+    status: ExperimentCohortStatus
+
+
+class ResolveCohortRequest(BaseModel):
+    """Request to resolve or create a cohort by name."""
+
+    name: str
+    description: str | None = None
+    created_by: str | None = None
+    metadata: JsonObject = Field(default_factory=dict)
+
+
+# TODO: this should not be a dataclass, it should be a Pydantic model
+# TODO: now that experiments / cohorts have been thinned down, this mwhole file / repo needs a double check to see if it still earns its keep
 @dataclass(frozen=True)
 class RubricStatusSummary:
     status: str
@@ -93,21 +167,18 @@ class ExperimentCohortService:
             ).first()
             summary = self._build_summary(cohort, stats)
 
-            experiments = list(
-                session.exec(
-                    select(ExperimentRecord).where(ExperimentRecord.cohort_id == cohort_id)
-                ).all()
-            )
+            definitions = _definitions_for_cohort(session, cohort_id)
             experiment_rows = [
                 self._build_experiment_row(
-                    experiment,
+                    definition,
+                    _instance_count(session, definition.id),
                     list(
                         session.exec(
-                            select(RunRecord).where(RunRecord.experiment_id == experiment.id)
+                            select(RunRecord).where(RunRecord.definition_id == definition.id)
                         ).all()
                     ),
                 )
-                for experiment in experiments
+                for definition in definitions
             ]
             return CohortDetailDto(summary=summary, experiments=experiment_rows)
 
@@ -126,10 +197,12 @@ class ExperimentCohortService:
         """Return the owning cohort for a run, if one exists."""
         with get_session() as session:
             run = session.get(RunRecord, run_id)
-            if run is None or run.experiment_id is None:
+            if run is None:
                 return None
-            experiment = session.get(ExperimentRecord, run.experiment_id)
-            return experiment.cohort_id if experiment is not None else None
+            definition = session.get(ExperimentDefinition, run.definition_id)
+            if definition is None:
+                return None
+            return cohort_id_from_metadata(definition.parsed_metadata())
 
     def update_cohort(
         self, cohort_id: UUID, request: UpdateCohortRequest
@@ -154,12 +227,19 @@ class ExperimentCohortService:
     def recompute(self, cohort_id: UUID) -> None:
         """Recompute and persist aggregate stats for one cohort."""
         with get_session() as session:
-            runs = list(
-                session.exec(
-                    select(RunRecord)
-                    .join(ExperimentRecord)
-                    .where(ExperimentRecord.cohort_id == cohort_id)
-                ).all()
+            definition_ids = [
+                definition.id for definition in _definitions_for_cohort(session, cohort_id)
+            ]
+            runs = (
+                list(
+                    session.exec(
+                        select(RunRecord).where(
+                            RunRecord.definition_id.in_(definition_ids)  # type: ignore[attr-defined]
+                        )
+                    ).all()
+                )
+                if definition_ids
+                else []
             )
             status_counts = Counter(run.status for run in runs)
             scored_values = [s for s in (_score_value(run) for run in runs) if s is not None]
@@ -222,9 +302,11 @@ class ExperimentCohortService:
 
     @staticmethod
     def _build_experiment_row(
-        experiment: ExperimentRecord,
+        definition: ExperimentDefinition,
+        sample_count: int,
         runs: list[RunRecord],
     ) -> CohortExperimentRowDto:
+        metadata = definition.parsed_metadata()
         score: float | None = None
         total_cost_usd: float | None = None
         for run in runs:
@@ -243,16 +325,20 @@ class ExperimentCohortService:
             _increment_status_count(status_counts, str(run.status))
 
         return CohortExperimentRowDto(
-            experiment_id=experiment.id,
-            name=experiment.name,
-            benchmark_type=experiment.benchmark_type,
-            sample_count=experiment.sample_count,
+            definition_id=definition.id,
+            name=definition.name,
+            benchmark_type=definition.benchmark_type,
+            sample_count=sample_count,
             total_runs=len(runs),
             status_counts=status_counts,
-            status=_experiment_row_status(experiment.status, status_counts, len(runs)),
-            created_at=experiment.created_at,
-            default_model_target=experiment.default_model_target,
-            default_evaluator_slug=experiment.default_evaluator_slug,
+            status=_experiment_row_status(
+                str(metadata.get("status", "defined")),
+                status_counts,
+                len(runs),
+            ),
+            created_at=definition.created_at,
+            default_model_target=optional_str_metadata(metadata, "default_model_target"),
+            default_evaluator_slug=optional_str_metadata(metadata, "default_evaluator_slug"),
             final_score=score,
             total_cost_usd=total_cost_usd,
             error_message=None,
@@ -285,6 +371,26 @@ def _score_value(run: RunRecord) -> float | None:
     if final is not None:
         return float(final)
     return None
+
+
+def _definitions_for_cohort(session: Session, cohort_id: UUID) -> list[ExperimentDefinition]:
+    return [
+        definition
+        for definition in session.exec(select(ExperimentDefinition)).all()
+        if cohort_id_from_metadata(definition.parsed_metadata()) == cohort_id
+    ]
+
+
+def _instance_count(session: Session, definition_id: UUID) -> int:
+    return len(
+        list(
+            session.exec(
+                select(ExperimentDefinitionInstance.id).where(
+                    ExperimentDefinitionInstance.experiment_definition_id == definition_id
+                )
+            )
+        )
+    )
 
 
 def _rubric_status_summary(summaries: list[EvaluationSummary]) -> RubricStatusSummary:

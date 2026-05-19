@@ -18,7 +18,7 @@ async def test_finalize_failure_preserves_structured_error_json(monkeypatch) -> 
         id=execution_id,
         run_id=run_id,
         node_id=node_id,
-        definition_task_id=None,
+        task_id=None,
     )
 
     class Session:

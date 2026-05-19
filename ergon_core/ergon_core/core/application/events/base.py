@@ -5,6 +5,7 @@ from typing import ClassVar
 from pydantic import BaseModel
 
 
+# TODO: consider if this file is the best place for this? also not convinced / sure we're subclassing this consistently? we should check and consider a unit test to enforce its use
 class InngestEventContract(BaseModel):
     """Subclasses define name: ClassVar[str] and Pydantic payload fields.
 

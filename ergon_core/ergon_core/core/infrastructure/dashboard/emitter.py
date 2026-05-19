@@ -13,20 +13,20 @@ from ergon_core.core.application.communication.models import (
     RunCommunicationMessageDto,
     RunCommunicationThreadDto,
 )
-from ergon_core.core.application.read_models.models import (
+from ergon_core.core.views.runs.models import (
     RunTaskEvaluationDto,
 )
-from ergon_core.core.persistence.context.event_payloads import ContextEventType
+from ergon_core.core.shared.context_parts import ContextEventType
 from ergon_core.core.persistence.graph.models import (
     GraphTargetType,
     MutationType,
     RunGraphMutation,
 )
 from ergon_core.core.persistence.shared.types import RunId
-from ergon_core.core.persistence.graph.status_conventions import NodeStatus
+from ergon_core.core.application.runtime.status import NodeStatus
 from ergon_core.core.application.events.task_events import TaskCancelledEvent
 from ergon_core.core.infrastructure.inngest.client import inngest_client
-from ergon_core.core.application.read_models.models import CohortSummaryDto
+from ergon_core.core.application.read_models.cohorts import CohortSummaryDto
 from ergon_core.core.application.read_models.cohorts import experiment_cohort_service
 from ergon_core.core.application.graph.models import GraphMutationRecordDto, GraphMutationValue
 from ergon_core.core.shared.utils import utcnow
@@ -75,7 +75,7 @@ class DashboardEmitter:
     async def workflow_started(
         self,
         run_id: UUID,
-        experiment_id: UUID,
+        definition_id: UUID,
         workflow_name: str,
         task_tree: TaskTreeNode,
         total_tasks: int,
@@ -86,7 +86,7 @@ class DashboardEmitter:
         try:
             evt = DashboardWorkflowStartedEvent(
                 run_id=run_id,
-                experiment_id=experiment_id,
+                definition_id=definition_id,
                 workflow_name=workflow_name,
                 task_tree=task_tree,
                 started_at=utcnow(),
@@ -193,7 +193,7 @@ class DashboardEmitter:
         try:
             evt = DashboardTaskStatusChangedEvent(
                 run_id=event.run_id,
-                task_id=event.node_id,
+                task_id=event.task_id,
                 task_name="",
                 parent_task_id=None,
                 old_status=None,
@@ -387,21 +387,21 @@ class DashboardEmitter:
     # Context events (repository listener)
     # ------------------------------------------------------------------
 
-    def register_execution(self, execution_id: UUID, task_node_id: UUID) -> None:
-        """Register execution_id → task graph node_id mapping.
+    def register_execution(self, execution_id: UUID, task_id: UUID) -> None:
+        """Register execution_id → task_id mapping.
         Called from worker_execute.py before persist_turn so that on_context_event
-        can resolve task_node_id without a DB lookup."""
-        self._execution_task_map[execution_id] = task_node_id
+        can resolve task_id without a DB lookup."""
+        self._execution_task_map[execution_id] = task_id
 
     async def on_context_event(self, event: "RunContextEvent") -> None:
         """Called by ContextEventService after each event is committed."""
         if not self._enabled:
             return
         try:
-            task_node_id = self._execution_task_map.get(event.task_execution_id)
-            if task_node_id is None:
+            task_id = self._execution_task_map.get(event.task_execution_id)
+            if task_id is None:
                 logger.warning(
-                    "on_context_event: no task_node_id for execution %s",
+                    "on_context_event: no task_id for execution %s",
                     event.task_execution_id,
                 )
                 return
@@ -409,7 +409,7 @@ class DashboardEmitter:
                 id=event.id,
                 run_id=event.run_id,
                 task_execution_id=event.task_execution_id,
-                task_node_id=task_node_id,
+                task_id=task_id,
                 worker_binding_key=event.worker_binding_key,
                 sequence=event.sequence,
                 event_type=cast(ContextEventType, event.event_type),

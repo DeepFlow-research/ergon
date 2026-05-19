@@ -15,16 +15,13 @@ from ergon_core.core.application.communication.models import (
     RunCommunicationMessageDto,
     RunCommunicationThreadDto,
 )
-from ergon_core.core.application.read_models.models import (
+from ergon_core.core.views.runs.models import (
     RunTaskEvaluationDto,
 )
-from ergon_core.core.persistence.context.event_payloads import (
-    ContextEventPayload,
-    ContextEventType,
-)
-from ergon_core.core.persistence.graph.status_conventions import NodeStatus
+from ergon_core.core.shared.context_parts import ContextEventType, ContextPartChunkLog
+from ergon_core.core.application.runtime.status import NodeStatus
 from ergon_core.core.application.events.base import InngestEventContract
-from ergon_core.core.application.read_models.models import CohortSummaryDto
+from ergon_core.core.application.read_models.cohorts import CohortSummaryDto
 from ergon_core.core.application.graph.models import GraphMutationRecordDto
 from pydantic import BaseModel, Field
 
@@ -79,7 +76,7 @@ class DashboardWorkflowStartedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/workflow.started"
 
     run_id: UUID
-    experiment_id: UUID
+    definition_id: UUID
     workflow_name: str
     task_tree: TaskTreeNode
     started_at: datetime
@@ -234,16 +231,16 @@ class DashboardContextEventEvent(InngestEventContract):
     )
     run_id: UUID
     task_execution_id: UUID
-    task_node_id: UUID = Field(
+    task_id: UUID = Field(
         description=(
-            "Graph task node resolved from the task execution by the dashboard emitter at "
+            "Graph task id resolved from the task execution by the dashboard emitter at "
             "event emission time."
         )
     )
     worker_binding_key: str
     sequence: int
     event_type: ContextEventType
-    payload: ContextEventPayload = Field(
+    payload: ContextPartChunkLog = Field(
         description=(
             "Typed context event payload serialized with model_dump(mode='json') before "
             "being sent through Inngest."

@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from ergon_core.core.domain.experiments import DefinitionHandle
+from ergon_core.core.application.experiments.handles import DefinitionHandle
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.application.workflows import runs as run_service
 
@@ -25,12 +25,11 @@ class _FakeSession:
         return None
 
 
-def test_create_run_requires_experiment_identity_and_records_workflow_assignment(monkeypatch):
+def test_create_run_requires_definition_identity_and_records_assignment(monkeypatch):
     session = _FakeSession()
-    experiment_id = uuid4()
-    workflow_definition_id = uuid4()
+    definition_id = uuid4()
     definition = DefinitionHandle(
-        definition_id=workflow_definition_id,
+        definition_id=definition_id,
         benchmark_type="ci-benchmark",
         worker_bindings={"primary": "test-worker"},
         evaluator_bindings={"primary": "test-evaluator"},
@@ -40,8 +39,7 @@ def test_create_run_requires_experiment_identity_and_records_workflow_assignment
 
     run = run_service.create_run(
         definition,
-        experiment_id=experiment_id,
-        workflow_definition_id=workflow_definition_id,
+        definition_id=definition_id,
         instance_key="sample-1",
         worker_team_json={"primary": "test-worker"},
         evaluator_slug="test-evaluator",
@@ -51,8 +49,7 @@ def test_create_run_requires_experiment_identity_and_records_workflow_assignment
     )
 
     assert session.added == [run]
-    assert run.experiment_id == experiment_id
-    assert run.workflow_definition_id == workflow_definition_id
+    assert run.definition_id == definition_id
     assert run.benchmark_type == "ci-benchmark"
     assert run.instance_key == "sample-1"
     assert run.worker_team_json == {"primary": "test-worker"}

@@ -38,7 +38,7 @@ class TransformersModel(_models.Model):
         torch_dtype: str = "float32",
         max_new_tokens: int = 512,
         policy_version: str | None = None,
-    ):
+    ) -> None:
         super().__init__()
         self._model_id = model_id
         self._device = device

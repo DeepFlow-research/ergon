@@ -1,0 +1,194 @@
+"""Executable spec of the v2 final state."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[4]
+PRODUCTION_ROOTS = (
+    ROOT / "ergon_core" / "ergon_core",
+    ROOT / "ergon_builtins" / "ergon_builtins",
+    ROOT / "ergon_cli" / "ergon_cli",
+)
+EXEMPT_PARTS: frozenset[str] = frozenset({"tests", "migrations", "__pycache__"})
+
+
+def _read(relpath: str) -> str:
+    return (ROOT / relpath).read_text()
+
+
+def _grep_production(symbol: str) -> list[str]:
+    hits: list[str] = []
+    for root in PRODUCTION_ROOTS:
+        for path in root.rglob("*.py"):
+            if EXEMPT_PARTS.intersection(path.parts):
+                continue
+            if symbol in path.read_text():
+                hits.append(str(path.relative_to(ROOT)))
+    return sorted(hits)
+
+
+@dataclass(frozen=True)
+class FinalStateAssertion:
+    name: str
+    check: Callable[[], None]
+    reason: str
+
+
+def _assert_no_definition_repository_in_worker_execute() -> None:
+    text = _read("ergon_core/ergon_core/core/application/jobs/worker_execute.py")
+    assert "DefinitionRepository" not in text
+    assert "task_with_instance" not in text
+    assert "ExperimentDefinitionTask" not in text
+
+
+def _assert_no_prepare_definition_method() -> None:
+    text = _read("ergon_core/ergon_core/core/application/tasks/execution.py")
+    assert "_prepare_definition" not in text
+    assert "_prepare_legacy_definition" not in text
+
+
+def _assert_no_materialize_dynamic_subtask_definition() -> None:
+    assert _grep_production("materialize_dynamic_subtask_definition") == []
+
+
+def _assert_no_criterion_executor() -> None:
+    assert _grep_production("CriterionExecutor") == []
+    assert _grep_production("InngestCriterionExecutor") == []
+
+
+def _assert_no_saved_specs_package() -> None:
+    assert not (ROOT / "ergon_core/ergon_core/core/persistence/saved_specs").exists()
+
+
+def _assert_evaluate_task_run_takes_thin_payload() -> None:
+    """Δ.4: evaluate_task_run survives reshaped with TaskEvaluateRequest."""
+
+    import inspect
+
+    from ergon_core.core.application.jobs.evaluate_task_run import (
+        run_evaluate_task_run_job,
+    )
+
+    sig = inspect.signature(run_evaluate_task_run_job)
+    assert "TaskEvaluateRequest" in repr(sig), (
+        "run_evaluate_task_run_job must take TaskEvaluateRequest after PR 4's reshape"
+    )
+
+
+def _assert_run_graph_node_uses_task_id_primary_key() -> None:
+    from ergon_core.core.persistence.graph.models import RunGraphNode
+
+    assert "task_id" in RunGraphNode.model_fields
+    assert "id" not in RunGraphNode.model_fields
+
+
+def _assert_task_has_no_model_post_init() -> None:
+    """CLAUDE.md guardrail: no *user-defined* `model_post_init` in core
+    public API objects.
+
+    Pydantic v2 auto-generates a `model_post_init` on any class that
+    declares a `PrivateAttr` (it just initializes the private slots
+    from their defaults). The guardrail's intent is to forbid
+    user-defined constructors that assemble derived state from public
+    fields — those hide invariants. We check the Task source text to
+    distinguish auto-generation from a hand-written override.
+    """
+
+    import inspect
+
+    from ergon_core.api.benchmark.task import Task
+
+    source = inspect.getsource(Task)
+    assert "def model_post_init" not in source, (
+        "Task defines a custom model_post_init. CLAUDE.md forbids this: "
+        "build derived state explicitly in constructors or factory "
+        "classmethods so object construction stays inspectable."
+    )
+
+
+def _assert_worker_from_buffer_is_gone() -> None:
+    from ergon_core.api.worker.worker import Worker
+
+    assert not hasattr(Worker, "from_buffer")
+
+
+def _assert_terminate_sandbox_by_id_is_gone() -> None:
+    assert _grep_production("terminate_sandbox_by_id") == []
+
+
+def _assert_no_check_evaluators_registration() -> None:
+    text = _read("ergon_core/ergon_core/core/infrastructure/inngest/registry.py")
+    assert "check_evaluators" not in text
+
+
+FINAL_STATE_ASSERTIONS: tuple[FinalStateAssertion, ...] = (
+    FinalStateAssertion(
+        name="worker_execute_imports_only_run_tier",
+        check=_assert_no_definition_repository_in_worker_execute,
+        reason="Δ.2: runtime reads only run-tier tables",
+    ),
+    FinalStateAssertion(
+        name="evaluate_task_run_uses_thin_payload",
+        check=_assert_evaluate_task_run_takes_thin_payload,
+        reason="Δ.4: per-evaluator fanout takes TaskEvaluateRequest",
+    ),
+    FinalStateAssertion(
+        name="check_evaluators_is_unregistered",
+        check=_assert_no_check_evaluators_registration,
+        reason="Δ.4: synchronous fanout replaces check_evaluators dispatch",
+    ),
+    FinalStateAssertion(
+        name="task_has_no_model_post_init",
+        check=_assert_task_has_no_model_post_init,
+        reason="CLAUDE.md: no model_post_init in public API objects",
+    ),
+    FinalStateAssertion(
+        name="materialize_dynamic_subtask_definition_is_gone",
+        check=_assert_no_materialize_dynamic_subtask_definition,
+        reason="Δ.3: dynamic subtasks are graph-native",
+    ),
+    FinalStateAssertion(
+        name="prepare_definition_helper_is_removed",
+        check=_assert_no_prepare_definition_method,
+        reason="Δ.2: no fallback to definition-tier reads",
+    ),
+    FinalStateAssertion(
+        name="criterion_executor_is_removed",
+        check=_assert_no_criterion_executor,
+        reason="Δ.7: deletion list",
+    ),
+    FinalStateAssertion(
+        name="saved_specs_package_is_removed",
+        check=_assert_no_saved_specs_package,
+        reason="Δ.7: write-only package, no readers",
+    ),
+    FinalStateAssertion(
+        name="run_graph_node_uses_task_id_primary_key",
+        check=_assert_run_graph_node_uses_task_id_primary_key,
+        reason="Δ.7 + identity model: task_id is the single canonical id",
+    ),
+    FinalStateAssertion(
+        name="worker_from_buffer_is_removed",
+        check=_assert_worker_from_buffer_is_gone,
+        reason="Δ.7: dead constructor with no callers",
+    ),
+    FinalStateAssertion(
+        name="terminate_sandbox_by_id_is_removed",
+        check=_assert_terminate_sandbox_by_id_is_gone,
+        reason="Δ.7: cleanup helper is deleted or replaced after sandbox_cleanup is canonical",
+    ),
+)
+
+
+def _cases() -> list:
+    return [pytest.param(assertion, id=assertion.name) for assertion in FINAL_STATE_ASSERTIONS]
+
+
+@pytest.mark.parametrize("assertion", _cases())
+def test_v2_final_state(assertion: FinalStateAssertion) -> None:
+    assertion.check()

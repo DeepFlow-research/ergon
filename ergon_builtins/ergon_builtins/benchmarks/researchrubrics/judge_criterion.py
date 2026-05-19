@@ -1,4 +1,5 @@
-from typing import ClassVar
+from pathlib import Path
+from typing import Any, ClassVar
 
 from ergon_core.api.criterion import (
     Criterion,
@@ -9,8 +10,10 @@ from ergon_core.api.criterion import (
     ScoreScale,
 )
 from ergon_core.core.application.resources import RunResourceView
+from ergon_core.core.application.resources.repository import RunResourceRepository
+from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunResourceKind
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import RubricCriterion
 from ergon_builtins.common.llm.structured_judge import (
@@ -32,26 +35,51 @@ class ResearchRubricsVerdict(BaseModel):
 
 
 class ResearchRubricsJudgeCriterion(Criterion):
-    """ResearchRubrics-specific LLM judge for one dataset rubric item."""
+    """ResearchRubrics-specific LLM judge for one dataset rubric item.
+
+    ``judge_model`` and ``rubric_text`` are first-class Pydantic fields
+    so they survive a ``task_json`` round trip alongside the object-bound
+    rubric. ``rubric_text`` mirrors ``rubric.criterion`` for snapshots
+    that need the prompt body without re-walking the rubric structure.
+    """
 
     type_slug: ClassVar[str] = "researchrubrics-llm-judge"
 
-    def __init__(
-        self,
-        *,
-        slug: str,
-        rubric: RubricCriterion,
-        model: str = "openai:gpt-4o",
-    ) -> None:
-        super().__init__(
-            slug=slug,
-            description=rubric.criterion,
-            weight=rubric.weight,
-            score_spec=ScoreScale(max_score=abs(rubric.weight)),
-        )
-        self.rubric = rubric
-        self.model = model
-        self.system_prompt = self._build_system_prompt(rubric)
+    rubric: RubricCriterion
+    judge_model: str = "openai:gpt-4o"
+    rubric_text: str = ""  # slopcop: ignore[no-str-empty-default]
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_model_alias(cls, data: Any) -> Any:  # slopcop: ignore[no-typing-any]
+        if isinstance(data, dict) and "model" in data:
+            raise ValueError(
+                "ResearchRubricsJudgeCriterion uses judge_model; model is not accepted"
+            )
+        return data
+
+    def __init__(self, **data: Any) -> None:  # slopcop: ignore[no-typing-any]
+        rubric = data.get("rubric")
+        if isinstance(rubric, RubricCriterion):
+            if "description" not in data:
+                data["description"] = rubric.criterion
+            if "weight" not in data:
+                data["weight"] = rubric.weight
+            if "score_spec" not in data:
+                data["score_spec"] = ScoreScale(max_score=abs(rubric.weight))
+            if "rubric_text" not in data:
+                data["rubric_text"] = rubric.criterion
+        super().__init__(**data)
+
+    @property
+    def system_prompt(self) -> str:
+        """Rendered system prompt for this rubric criterion.
+
+        Derived lazily from ``self.rubric`` so the criterion remains
+        round-trippable through ``task_json`` — only the persisted fields
+        (``rubric``, ``judge_model``, ``slug``, ...) need to survive serialization.
+        """
+        return self._build_system_prompt(self.rubric)
 
     async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         final_outputs, scratch_outputs = await self._load_researchrubrics_evidence(context)
@@ -60,8 +88,9 @@ class ResearchRubricsJudgeCriterion(Criterion):
             final_outputs=final_outputs,
             scratch_outputs=scratch_outputs,
         )
+        system_prompt = self.system_prompt
         verdict = await self._call_judge(
-            system_prompt=self.system_prompt,
+            system_prompt=system_prompt,
             user_prompt=user_prompt,
         )
         evaluated_resource_ids = [
@@ -79,13 +108,13 @@ class ResearchRubricsJudgeCriterion(Criterion):
             evaluation_input=user_prompt,
             evaluated_resource_ids=evaluated_resource_ids,
             observation=self._build_observation(
-                system_prompt=self.system_prompt,
+                system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 verdict=verdict,
                 evaluated_resource_ids=evaluated_resource_ids,
                 final_outputs=final_outputs,
                 rubric=self.rubric,
-                model=self.model,
+                model=self.judge_model,
             ),
         )
 
@@ -132,7 +161,7 @@ class ResearchRubricsJudgeCriterion(Criterion):
                 JudgeMessage(role="user", content=user_prompt),
             ],
             response_type=ResearchRubricsVerdict,
-            model=self.model,
+            model=self.judge_model,
         )
 
     @classmethod
@@ -140,14 +169,16 @@ class ResearchRubricsJudgeCriterion(Criterion):
         cls,
         context: CriterionContext,
     ) -> tuple[list[_ResourceEvidence], list[_ResourceEvidence]]:
-        if not context.has_runtime:
-            return [], []
-
-        resources = await context.list_resources()
+        with get_session() as session:
+            resources = RunResourceRepository().list_for_run(
+                session,
+                run_id=context.run_id,
+                task_execution_id=context.execution_id,
+            )
         evidence: list[_ResourceEvidence] = []
         for resource in resources:
             try:
-                raw_content = await context.read_resource_by_id(resource.id)
+                raw_content = Path(resource.file_path).read_bytes()
             except OSError as exc:
                 text = f"[Unable to read resource {resource.id}: {exc}]"
             else:

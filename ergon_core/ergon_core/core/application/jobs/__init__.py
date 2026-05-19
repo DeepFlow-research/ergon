@@ -1,0 +1,1 @@
+# TODO: "jobs" is almost certainly a bad split here now. its WAY too big and doesn't just contain dispatches, but meaningful domain logic. probs needs more domain controlers and thin wrappers, and some breaking down into "domains"?

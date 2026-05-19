@@ -5,8 +5,9 @@ from datetime import UTC, datetime
 
 from ergon_core.core.infrastructure.dashboard import emit_cohort_updated_for_run
 from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
+from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord
+from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.application.events.infrastructure_events import RunCleanupEvent
 from ergon_core.core.application.events.task_events import WorkflowCompletedEvent
 from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
@@ -88,7 +89,8 @@ async def run_complete_workflow_job(payload: WorkflowCompletedEvent) -> Workflow
 
     with get_session() as session:
         run = session.get(RunRecord, payload.run_id)
-        experiment = session.get(ExperimentRecord, run.experiment_id) if run else None
+        definition = session.get(ExperimentDefinition, run.definition_id) if run else None
+        cohort_id = _cohort_id_from_definition(definition)
         if run and run.started_at and run.completed_at:
             sink.emit_span(
                 CompletedSpan(
@@ -99,9 +101,7 @@ async def run_complete_workflow_job(payload: WorkflowCompletedEvent) -> Workflow
                     attributes={
                         "run_id": str(payload.run_id),
                         "definition_id": str(payload.definition_id),
-                        "cohort_id": str(experiment.cohort_id)
-                        if experiment and experiment.cohort_id
-                        else "",
+                        "cohort_id": str(cohort_id) if cohort_id else "",
                         "status": run.status,
                         "final_score": finalized.final_score,
                         "normalized_score": finalized.normalized_score,
@@ -116,3 +116,12 @@ async def run_complete_workflow_job(payload: WorkflowCompletedEvent) -> Workflow
         result.evaluators_count,
     )
     return result
+
+
+def _cohort_id_from_definition(definition: ExperimentDefinition | None) -> str | None:
+    if definition is None:
+        return None
+    raw = definition.parsed_metadata().get("cohort_id")
+    if raw is None:
+        return None
+    return str(raw)

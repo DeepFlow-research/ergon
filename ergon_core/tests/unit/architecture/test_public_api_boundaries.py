@@ -38,7 +38,6 @@ PYTHON_DOMAIN_ROOTS = (
 
 EXPORT_FACADE_BOUNDARY_ROOTS = (
     ROOT / "ergon_core" / "ergon_core" / "api",
-    ROOT / "ergon_core" / "ergon_core" / "core" / "domain",
     ROOT / "ergon_core" / "ergon_core" / "core" / "shared",
 )
 
@@ -186,13 +185,14 @@ def test_shared_and_domain_primitives_stay_in_new_core_layout() -> None:
         assert not old_path.exists()
 
     for new_path in (
-        core_root / "domain" / "experiments" / "__init__.py",
-        core_root / "domain" / "generation" / "context_parts.py",
+        core_root / "shared" / "context_parts.py",
         core_root / "shared" / "json_types.py",
         core_root / "shared" / "settings.py",
         core_root / "shared" / "utils.py",
     ):
         assert new_path.exists()
+
+    assert not (core_root / "domain").exists()
 
 
 def test_code_does_not_import_old_core_domain_paths() -> None:
@@ -228,7 +228,6 @@ def test_experiment_application_cluster_stays_in_new_core_layout() -> None:
         core_root / "application" / "experiments" / "__init__.py",
         core_root / "application" / "experiments" / "service.py",
         core_root / "application" / "experiments" / "models.py",
-        core_root / "application" / "experiments" / "repository.py",
         core_root / "application" / "experiments" / "definition_writer.py",
         core_root / "application" / "experiments" / "launch.py",
     ):
@@ -288,11 +287,7 @@ def test_application_clusters_stay_out_of_runtime_layout() -> None:
         core_root / "application" / "tasks" / "errors.py",
         core_root / "application" / "evaluation" / "__init__.py",
         core_root / "application" / "evaluation" / "service.py",
-        core_root / "application" / "evaluation" / "executors.py",
-        core_root / "application" / "evaluation" / "inngest_executor.py",
-        core_root / "application" / "evaluation" / "criterion_runtime.py",
         core_root / "application" / "evaluation" / "scoring.py",
-        core_root / "application" / "evaluation" / "protocols.py",
         core_root / "application" / "evaluation" / "models.py",
         core_root / "application" / "evaluation" / "errors.py",
     ):
@@ -315,7 +310,7 @@ def test_application_clusters_stay_out_of_runtime_layout() -> None:
     assert offenders == []
 
 
-def test_read_context_and_resource_modules_stay_in_application_layout() -> None:
+def test_read_context_and_resource_modules_stay_in_application_and_views_layout() -> None:
     core_root = ROOT / "ergon_core" / "ergon_core" / "core"
 
     for old_path in (
@@ -323,28 +318,37 @@ def test_read_context_and_resource_modules_stay_in_application_layout() -> None:
         core_root / "runtime" / "context_events.py",
         core_root / "runtime" / "output_extraction.py",
         core_root / "runtime" / "resources.py",
+        core_root / "application" / "read_models" / "models.py",
+        core_root / "application" / "read_models" / "runs.py",
+        core_root / "application" / "read_models" / "run_snapshot.py",
+        core_root / "application" / "read_models" / "experiments.py",
+        core_root / "application" / "read_models" / "resources.py",
+        core_root / "application" / "read_models" / "errors.py",
     ):
         assert not old_path.exists()
 
     for new_path in (
         core_root / "application" / "read_models" / "__init__.py",
-        core_root / "application" / "read_models" / "models.py",
-        core_root / "application" / "read_models" / "runs.py",
-        core_root / "application" / "read_models" / "run_snapshot.py",
-        core_root / "application" / "read_models" / "experiments.py",
         core_root / "application" / "read_models" / "cohorts.py",
-        core_root / "application" / "read_models" / "resources.py",
-        core_root / "application" / "read_models" / "errors.py",
         core_root / "application" / "communication" / "__init__.py",
         core_root / "application" / "communication" / "service.py",
         core_root / "application" / "communication" / "models.py",
         core_root / "application" / "communication" / "errors.py",
         core_root / "application" / "context" / "__init__.py",
         core_root / "application" / "context" / "events.py",
-        core_root / "application" / "context" / "output_extraction.py",
         core_root / "application" / "resources" / "__init__.py",
         core_root / "application" / "resources" / "models.py",
         core_root / "application" / "resources" / "repository.py",
+        core_root / "views" / "__init__.py",
+        core_root / "views" / "runs" / "__init__.py",
+        core_root / "views" / "runs" / "models.py",
+        core_root / "views" / "runs" / "service.py",
+        core_root / "views" / "runs" / "snapshot.py",
+        core_root / "views" / "experiments" / "__init__.py",
+        core_root / "views" / "experiments" / "models.py",
+        core_root / "views" / "experiments" / "service.py",
+        core_root / "views" / "resources.py",
+        core_root / "views" / "errors.py",
     ):
         assert new_path.exists()
 
@@ -366,18 +370,126 @@ def test_read_context_and_resource_modules_stay_in_application_layout() -> None:
     assert offenders == []
 
 
+def test_views_package_replaces_non_compat_read_models() -> None:
+    core_root = ROOT / "ergon_core" / "ergon_core" / "core"
+    read_models_root = core_root / "application" / "read_models"
+    views_root = core_root / "views"
+
+    for removed_path in (
+        read_models_root / "models.py",
+        read_models_root / "runs.py",
+        read_models_root / "run_snapshot.py",
+        read_models_root / "experiments.py",
+        read_models_root / "resources.py",
+        read_models_root / "errors.py",
+    ):
+        assert not removed_path.exists()
+
+    for new_path in (
+        views_root / "__init__.py",
+        views_root / "runs" / "__init__.py",
+        views_root / "runs" / "models.py",
+        views_root / "runs" / "service.py",
+        views_root / "runs" / "snapshot.py",
+        views_root / "experiments" / "__init__.py",
+        views_root / "experiments" / "models.py",
+        views_root / "experiments" / "service.py",
+        views_root / "resources.py",
+        views_root / "errors.py",
+        read_models_root / "cohorts.py",
+    ):
+        assert new_path.exists()
+
+
+def test_views_modules_stay_read_only_and_adapter_free() -> None:
+    views_root = ROOT / "ergon_core" / "ergon_core" / "core" / "views"
+
+    offenders: list[str] = []
+    forbidden_snippets = (
+        "session.add(",
+        "session.commit(",
+        "ergon_core.core.infrastructure",
+        ".".join(("ergon_core", "core", "application", "jobs")),
+        "start_workflow",
+    )
+
+    assert views_root.exists()
+    for path in views_root.rglob("*.py"):
+        text = path.read_text()
+        for snippet in forbidden_snippets:
+            if snippet in text:
+                offenders.append(f"{path.relative_to(ROOT)} contains {snippet!r}")
+
+    assert offenders == []
+
+
+def test_views_services_may_read_persistence_rows() -> None:
+    views_root = ROOT / "ergon_core" / "ergon_core" / "core" / "views"
+
+    for path in (
+        views_root / "runs" / "service.py",
+        views_root / "experiments" / "service.py",
+    ):
+        text = path.read_text()
+        assert "get_session" in text
+        assert "select(" in text
+
+
 def _inngest_job_boundary_offenders(core_root: Path) -> list[str]:
+    """The split between `application/jobs` (business logic) and
+    `infrastructure/inngest/handlers` (framework wiring) used to forbid
+    `import inngest` in jobs entirely. That was a fig leaf: jobs reach
+    into Inngest's API via `ctx.step.invoke` / `ctx.group.parallel` /
+    etc., so they're already coupled in spirit. PR 4 admits the
+    coupling and allows `import inngest` in jobs *for typing only* —
+    `inngest.Context` and `inngest.Function` as parameter types.
+
+    Still forbidden in jobs (these are the real coupling concerns the
+    split was meant to prevent — handler-layer ownership of decorators,
+    contracts, and runtime symbols):
+
+    - `@inngest_client.create_function(...)` decorators
+    - imports from `infrastructure.inngest.handlers` (would create a
+      circular dependency once handlers import jobs)
+    - imports from `infrastructure.inngest.contracts` (jobs own their
+      models in `application/jobs/models.py`)
+    - any `inngest.<runtime-symbol>` usage other than as a type
+      annotation
+    """
+
     allowed_job_infrastructure_imports = (
         "from ergon_core.core.infrastructure.inngest.client import",
         "from ergon_core.core.infrastructure.inngest.errors import",
+    )
+
+    # Runtime symbols on the `inngest` package whose use inside a job
+    # would re-introduce the coupling we're trying to keep in handlers.
+    # `inngest.Context` and `inngest.Function` are explicitly allowed
+    # (they're types, used only in annotations).
+    forbidden_runtime_inngest_symbols = (
+        "inngest.NonRetriableError",
+        "inngest.RetryAfterError",
+        "inngest.TriggerEvent",
+        "inngest.TriggerCron",
+        "inngest.Inngest",
+        "inngest.create_function",
     )
 
     offenders: list[str] = []
     for path in (core_root / "application" / "jobs").glob("*.py"):
         text = path.read_text()
         lines = text.splitlines()
-        if any(line == "import inngest" or line.startswith("from inngest ") for line in lines):
-            offenders.append(f"{path.relative_to(ROOT)} imports inngest directly")
+        if any(line.startswith("from inngest ") for line in lines):
+            offenders.append(
+                f"{path.relative_to(ROOT)} uses `from inngest import ...`; "
+                "type annotations should reference `inngest.Context` / `inngest.Function` via the module-level import"
+            )
+        for symbol in forbidden_runtime_inngest_symbols:
+            if symbol in text:
+                offenders.append(
+                    f"{path.relative_to(ROOT)} uses runtime symbol {symbol!r}; "
+                    "this belongs in the infrastructure handler layer"
+                )
         if "@inngest_client.create_function" in text:
             offenders.append(f"{path.relative_to(ROOT)} owns an Inngest decorator")
         if "ergon_core.core.infrastructure.inngest.handlers" in text:
@@ -520,5 +632,6 @@ def test_local_api_composition_mounts_test_owned_smoke_components() -> None:
     api_app = ROOT / "ergon_cli" / "ergon_cli" / "api_app.py"
     compose = ROOT / "docker-compose.yml"
 
-    assert "tests.fixtures.smoke_components" in api_app.read_text()
+    assert "ergon_core.core.rest_api.app" in api_app.read_text()
+    assert "tests.fixtures.smoke_components" not in api_app.read_text()
     assert "./tests:/app/tests" in compose.read_text()

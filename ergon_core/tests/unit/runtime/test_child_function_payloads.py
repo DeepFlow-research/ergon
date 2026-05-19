@@ -4,17 +4,28 @@ from uuid import uuid4
 
 import pytest
 from ergon_core.core.infrastructure.inngest.contracts import (
-    EvaluateTaskRunRequest,
     PersistOutputsRequest,
     SandboxSetupRequest,
+    TaskEvaluateRequest,
     WorkerExecuteRequest,
 )
 from pydantic import ValidationError
 
 
-def test_evaluate_task_request_requires_runtime_node_identity() -> None:
+def test_task_evaluate_request_is_id_only() -> None:
+    request = TaskEvaluateRequest(
+        run_id=uuid4(),
+        task_id=uuid4(),
+        execution_id=uuid4(),
+        evaluator_index=0,
+    )
+
+    assert request.evaluator_index == 0
+
+
+def test_task_evaluate_request_rejects_legacy_definition_fields() -> None:
     with pytest.raises(ValidationError):
-        EvaluateTaskRunRequest(
+        TaskEvaluateRequest(
             run_id=uuid4(),
             definition_id=uuid4(),
             task_id=uuid4(),
@@ -25,51 +36,55 @@ def test_evaluate_task_request_requires_runtime_node_identity() -> None:
         )
 
 
-def test_evaluate_task_request_requires_evaluator_binding_key() -> None:
+def test_worker_execute_request_requires_static_or_dynamic_identity() -> None:
     with pytest.raises(ValidationError):
-        EvaluateTaskRunRequest(
+        WorkerExecuteRequest(
             run_id=uuid4(),
             definition_id=uuid4(),
-            node_id=uuid4(),
-            task_id=uuid4(),
+            task_id=None,
             execution_id=uuid4(),
-            evaluator_id=uuid4(),
-            evaluator_type="researchrubrics-rubric",
+            sandbox_id="sbx",
+            task_slug="task",
+            task_description="description",
+            assigned_worker_slug="worker",
+            worker_type="react",
+            model_target="openai:gpt-4o",
+            benchmark_type="researchrubrics",
         )
 
 
-@pytest.mark.parametrize(
-    ("payload_cls", "base_kwargs"),
-    [
-        (SandboxSetupRequest, {"benchmark_type": "researchrubrics"}),
-        (
-            WorkerExecuteRequest,
-            {
-                "execution_id": uuid4(),
-                "sandbox_id": "sbx",
-                "task_slug": "task",
-                "task_description": "description",
-                "assigned_worker_slug": "worker",
-                "worker_type": "react",
-                "benchmark_type": "researchrubrics",
-            },
-        ),
-        (
-            PersistOutputsRequest,
-            {
-                "execution_id": uuid4(),
-                "benchmark_type": "researchrubrics",
-            },
-        ),
-    ],
-)
-def test_task_child_payloads_require_static_or_dynamic_identity(
-    payload_cls: type[SandboxSetupRequest | WorkerExecuteRequest | PersistOutputsRequest],
-    base_kwargs: dict[str, object],
-) -> None:
+def test_worker_execute_request_allows_dynamic_worker_without_model_target() -> None:
+    task_id = uuid4()
+    request = WorkerExecuteRequest(
+        run_id=uuid4(),
+        definition_id=uuid4(),
+        task_id=task_id,
+        execution_id=uuid4(),
+        sandbox_id="sbx",
+        task_slug="task",
+        task_description="description",
+        assigned_worker_slug="worker",
+        worker_type="worker",
+        model_target=None,
+        benchmark_type="researchrubrics",
+    )
+
+    assert request.model_target is None
+    assert request.task_id == task_id
+
+
+def test_sandbox_and_persist_outputs_require_task_id() -> None:
     with pytest.raises(ValidationError):
-        payload_cls(
+        SandboxSetupRequest(
             run_id=uuid4(),
             definition_id=uuid4(),
-            **base_kwargs,
+            benchmark_type="researchrubrics",
+        )
+
+    with pytest.raises(ValidationError):
+        PersistOutputsRequest(
+            run_id=uuid4(),
+            definition_id=uuid4(),
+            execution_id=uuid4(),
+            benchmark_type="researchrubrics",
         )

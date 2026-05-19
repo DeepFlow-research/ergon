@@ -1,8 +1,9 @@
 """PydanticAI transcript adapter."""
 
 import json
+from typing import Any
 
-from ergon_core.core.domain.generation.context_parts import (
+from ergon_core.core.shared.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
     ContextPartChunkLog,
@@ -15,7 +16,7 @@ from ergon_core.core.domain.generation.context_parts import (
 )
 from ergon_core.core.persistence.context.models import RunContextEvent
 from pydantic import BaseModel
-from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, ToolReturnContent
+from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse
 from pydantic_ai.messages import ModelRequestPart as PydanticModelRequestPart
 from pydantic_ai.messages import ModelResponsePart as PydanticModelResponsePart
 from pydantic_ai.messages import SystemPromptPart as PydanticSystemPromptPart
@@ -61,30 +62,6 @@ class PydanticAITranscriptAdapter(TranscriptAdapter[list[ModelMessage], list[Mod
         new_chunks = chunks[cursor.emitted_chunk_count :]
         cursor.emitted_chunk_count = len(chunks)
         return new_chunks
-
-    def assemble_replay(self, events: list[RunContextEvent]) -> list[ModelMessage]:
-        """Reconstruct PydanticAI messages from ordered context events."""
-        messages: list[ModelMessage] = []
-        current_request_parts: list[PydanticModelRequestPart] = []
-        current_response_parts: list[PydanticModelResponsePart] = []
-
-        for event in events:
-            payload = event.parsed_payload()
-            if request_part := _to_pydantic_request_part(payload):
-                if isinstance(payload.part, ToolResultPart) and current_response_parts:
-                    messages.append(ModelResponse(parts=current_response_parts))
-                    current_response_parts = []
-                current_request_parts.append(request_part)
-            elif response_part := _to_pydantic_response_part(payload):
-                if current_request_parts and not current_response_parts:
-                    messages.append(ModelRequest(parts=current_request_parts))
-                    current_request_parts = []
-                current_response_parts.append(response_part)
-
-        if current_response_parts:
-            messages.append(ModelResponse(parts=current_response_parts))
-
-        return messages
 
 
 def _build_chunks_from_transcript(
@@ -140,7 +117,7 @@ def extract_logprobs(response: ModelResponse) -> list[TokenLogprob] | None:
     return logprobs or None
 
 
-def _serialize_tool_content(content: ToolReturnContent) -> str:
+def _serialize_tool_content(content: Any) -> str:
     if isinstance(content, str):
         return content
     return json.dumps(to_jsonable_python(content))

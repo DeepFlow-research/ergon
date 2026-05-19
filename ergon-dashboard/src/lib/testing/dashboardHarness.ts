@@ -98,9 +98,9 @@ export function getHarnessCohort(cohortId: string): CohortDetail | null {
   return getHarnessState().cohortDetails[cohortId] ?? null;
 }
 
-export function getHarnessExperiment(experimentId: string): ExperimentDetail | null {
+export function getHarnessExperiment(definitionId: string): ExperimentDetail | null {
   requireHarnessEnabled();
-  return getHarnessState().experimentDetails[experimentId] ?? null;
+  return getHarnessState().experimentDetails[definitionId] ?? null;
 }
 
 export function updateHarnessCohortStatus(
@@ -248,12 +248,12 @@ export function emitHarnessThreadMessage(runId: string, thread: CommunicationThr
 
 export function emitHarnessContextEvent(
   runId: string,
-  taskNodeId: string,
+  taskId: string,
   event: ContextEventState,
 ): void {
   requireHarnessEnabled();
-  store.addContextEvent(runId, taskNodeId, event);
-  broadcastContextEvent(runId, taskNodeId, event);
+  store.addContextEvent(runId, taskId, event);
+  broadcastContextEvent(runId, taskId, event);
 }
 
 export function emitHarnessTaskEvaluation(

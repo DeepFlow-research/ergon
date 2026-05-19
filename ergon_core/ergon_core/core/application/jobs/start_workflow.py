@@ -85,23 +85,23 @@ def _build_task_tree_for_run(
         w.binding_key: w for w in worker_rows
     }
 
-    # children_by_parent: parent_node_id -> [child_node_id]
+    # children_by_parent: parent_task_id -> [child_task_id]
     children_by_parent: dict[UUID | None, list[UUID]] = {}
-    node_by_id: dict[UUID, RunGraphNode] = {n.id: n for n in node_rows}
+    node_by_id: dict[UUID, RunGraphNode] = {n.task_id: n for n in node_rows}
     for n in node_rows:
-        children_by_parent.setdefault(n.parent_node_id, []).append(n.id)
+        children_by_parent.setdefault(n.parent_task_id, []).append(n.task_id)
 
-    # depends_on_by_target: target_node_id -> [source_node_id]
+    # depends_on_by_target: target_task_id -> [source_task_id]
     # Edges are stored as source=dependency, target=dependent task.
     depends_on_by_target: dict[UUID, list[UUID]] = {}
     for e in edge_rows:
-        depends_on_by_target.setdefault(e.target_node_id, []).append(e.source_node_id)
+        depends_on_by_target.setdefault(e.target_task_id, []).append(e.source_task_id)
 
     def build(node_id: UUID) -> TaskTreeNode:
         node = node_by_id[node_id]
         child_ids = children_by_parent.get(node_id, [])
         return TaskTreeNode(
-            id=str(node.id),
+            id=str(node.task_id),
             name=node.task_slug,
             description=node.description,
             status=node.status,
@@ -112,7 +112,7 @@ def _build_task_tree_for_run(
             depends_on=[str(s) for s in depends_on_by_target.get(node_id, [])],
             is_leaf=not child_ids,
             resources=[],
-            parent_id=str(node.parent_node_id) if node.parent_node_id else None,
+            parent_id=str(node.parent_task_id) if node.parent_task_id else None,
         )
 
     root_ids = children_by_parent.get(None, [])
@@ -158,7 +158,6 @@ async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStart
                 run_id=payload.run_id,
                 definition_id=payload.definition_id,
                 task_id=td.task_id,
-                node_id=td.node_id,
             ).model_dump(mode="json"),
         )
         for td in initialized.initial_ready_tasks
@@ -171,7 +170,7 @@ async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStart
 
     await get_dashboard_emitter().workflow_started(
         run_id=payload.run_id,
-        experiment_id=payload.definition_id,
+        definition_id=payload.definition_id,
         workflow_name=initialized.benchmark_type,
         task_tree=task_tree,
         total_tasks=initialized.total_tasks,

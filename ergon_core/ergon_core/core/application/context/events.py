@@ -9,7 +9,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from ergon_core.core.domain.generation.context_parts import (
+from ergon_core.core.shared.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
     ContextPartChunkLog,
@@ -121,6 +121,7 @@ class ContextEventService:
 
         for listener in self._listeners:
             try:
+                # TODO: the return of this function should probably be a DTO detailing which of the listeners were actuallly called and which ones failed
                 await listener(event)
             except Exception:  # slopcop: ignore[no-broad-except]
                 logger.warning("Context event listener failed", exc_info=True)

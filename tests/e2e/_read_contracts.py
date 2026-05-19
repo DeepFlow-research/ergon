@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from ergon_core.core.application.read_models.models import RunSnapshotDto
-from ergon_core.core.application.read_models.runs import RunReadService
+from ergon_core.core.views.runs.models import RunSnapshotDto
+from ergon_core.core.views.runs.service import RunReadService
 
 
 def require_run_snapshot(run_id: UUID) -> RunSnapshotDto:

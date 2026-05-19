@@ -11,7 +11,7 @@ interface StatusCounts {
 }
 
 interface CohortExperimentRow {
-  experiment_id: string;
+  definition_id: string;
   name: string;
   benchmark_type: string;
   sample_count: number;
@@ -166,13 +166,13 @@ export function CohortExperimentDetailView({
           <tbody>
             {detail.experiments.map((experiment) => (
               <tr
-                key={experiment.experiment_id}
+                key={experiment.definition_id}
                 className="border-b border-[var(--line)] last:border-0"
-                data-testid={`cohort-experiment-row-${experiment.experiment_id}`}
+                data-testid={`cohort-experiment-row-${experiment.definition_id}`}
               >
                 <td className="px-4 py-3">
                   <Link
-                    href={`/experiments/${experiment.experiment_id}`}
+                    href={`/experiments/${experiment.definition_id}`}
                     className="font-medium text-[var(--ink)] underline-offset-2 hover:underline"
                   >
                     {experiment.name}

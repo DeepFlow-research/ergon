@@ -4,7 +4,8 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from ergon_cli.commands.workflow import WorkflowCommandContext, execute_workflow_command
-from ergon_core.core.application.tasks.models import AddSubtaskResult
+from ergon_core.core.application.graph.models import GraphTaskRef
+from ergon_core.core.application.workflows.models import WorkflowMutationRef
 from ergon_core.core.application.workflows.models import WorkflowResourceRef
 
 
@@ -37,7 +38,7 @@ class _ManagingService:
         session,
         *,
         run_id,
-        parent_node_id,
+        parent_task_id,
         task_slug,
         description,
         assigned_worker_slug,
@@ -46,17 +47,26 @@ class _ManagingService:
         assert isinstance(session, _Session)
         self.added = {
             "run_id": run_id,
-            "parent_node_id": parent_node_id,
+            "parent_task_id": parent_task_id,
             "task_slug": task_slug,
             "description": description,
             "assigned_worker_slug": assigned_worker_slug,
             "dry_run": dry_run,
         }
 
-        return AddSubtaskResult(
-            node_id=uuid4(),
-            task_slug="source-scout",
-            status="pending",
+        return WorkflowMutationRef(
+            action="add-task",
+            dry_run=dry_run,
+            node=GraphTaskRef(
+                task_id=uuid4(),
+                task_slug="source-scout",
+                status="pending",
+                level=1,
+                parent_task_id=parent_task_id,
+                assigned_worker_slug=assigned_worker_slug,
+                description=description,
+            ),
+            message="Added task source-scout",
         )
 
 
@@ -219,10 +229,10 @@ def test_manage_add_task_creates_subtask_with_injected_parent_context() -> None:
 
     payload = json.loads(output.stdout)
     assert output.exit_code == 0
-    assert payload["task"]["task_slug"] == "source-scout"
+    assert payload["task"]["node"]["task_slug"] == "source-scout"
     assert service.added == {
         "run_id": run_id,
-        "parent_node_id": node_id,
+        "parent_task_id": node_id,
         "task_slug": "source-scout",
         "description": "Find authoritative sources",
         "assigned_worker_slug": "researchrubrics-researcher",

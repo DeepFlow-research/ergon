@@ -10,24 +10,13 @@ from collections.abc import Awaitable, Callable
 from typing import Literal
 from uuid import UUID
 
-from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.api.benchmark import Task
+from ergon_core.api.worker import WorkerContext
 from ergon_core.core.persistence.shared.types import (
-    AssignedWorkerSlug,
     NodeId,
-    RunId,
     TaskSlug,
 )
 from ergon_core.core.application.tasks.models import SubtaskInfo
-from ergon_core.core.application.tasks.inspection import TaskInspectionService
-from ergon_core.core.application.tasks.models import (
-    AddSubtaskCommand,
-    CancelTaskCommand,
-    PlanSubtasksCommand,
-    RefineTaskCommand,
-    RestartTaskCommand,
-    SubtaskSpec,
-)
-from ergon_core.core.application.tasks.management import TaskManagementService
 from pydantic import BaseModel
 
 from ergon_builtins.tools.bash_sandbox_tool import make_sandbox_bash_tool
@@ -129,13 +118,13 @@ class SubtaskLifecycleToolkit:
     """Produces the eight manager-facing tool callables for ``Agent(tools=[...])``.
 
     The toolkit is a closure factory, not a service: it captures
-    ``run_id`` and ``parent_node_id`` from ``WorkerContext`` so that
+    ``run_id`` and ``parent_task_id`` from ``WorkerContext`` so that
     creation tools (add_subtask, plan_subtasks, list_subtasks) are
     scoped to the manager's subtree by construction.
 
     Note: cancel_task, refine_task, and get_subtask accept a
     ``node_id`` from the LLM and do not yet verify containment
-    (i.e. that the target is a descendant of ``parent_node_id``).
+    (i.e. that the target is a descendant of ``parent_task_id``).
     The service layer checks status guards but not subtree membership.
     TODO: add descendant-of check for full containment enforcement.
 
@@ -148,17 +137,12 @@ class SubtaskLifecycleToolkit:
     def __init__(
         self,
         *,
-        run_id: UUID,
-        parent_node_id: UUID,
-        sandbox_id: str,
-        task_management_service: TaskManagementService | None = None,
-        task_inspection_service: TaskInspectionService | None = None,
+        context: WorkerContext,
     ) -> None:
-        self._run_id = RunId(run_id)
-        self._parent_node_id = NodeId(parent_node_id)
-        self._sandbox_id = sandbox_id
-        self._mgmt = task_management_service or TaskManagementService()
-        self._inspect = task_inspection_service or TaskInspectionService()
+        if context is None:
+            raise ValueError("SubtaskLifecycleToolkit requires context=WorkerContext.")
+        self._context = context
+        self._sandbox_id = context.sandbox_id
 
     def get_tools(self) -> list[Callable[..., Awaitable[BaseModel]]]:
         """Return the eight subtask lifecycle tools for Agent(tools=[...])."""
@@ -176,138 +160,83 @@ class SubtaskLifecycleToolkit:
     # -- management --------------------------------------------------------
 
     def _make_add_subtask(self) -> Callable[..., Awaitable[AddSubtaskToolResponse]]:
-        mgmt, run_id, pid = self._mgmt, self._run_id, self._parent_node_id
+        context = self._context
 
         async def add_subtask(
-            task_slug: str,
-            description: str,
-            assigned_worker_slug: str,
+            task: Task,
             depends_on: list[str] | None = None,
         ) -> AddSubtaskToolResponse:
-            """Spawn one subtask under this manager.
-
-            The ``task_slug`` is a short kebab-case identifier for this
-            subtask. It is persisted verbatim on the graph node and used
-            by observers (dashboard, criteria, tests) to identify this
-            node semantically. Pick a stable, legible slug — it is not
-            auto-generated.
-
-            ``assigned_worker_slug`` is the slug of the worker type to handle this
-            subtask (e.g. 'researchrubrics-researcher'). Required.
-
-            ``depends_on`` still refers to sibling ``node_id`` strings
-            (real UUIDs from earlier ``add_subtask`` calls), not slugs.
-            """
+            """Spawn one object-bound subtask under this worker context."""
             try:
-                deps = [NodeId(UUID(s)) for s in (depends_on or [])]
-                with get_session() as session:
-                    result = await mgmt.add_subtask(
-                        session,
-                        AddSubtaskCommand(
-                            run_id=run_id,
-                            parent_node_id=pid,
-                            task_slug=TaskSlug(task_slug),
-                            description=description,
-                            assigned_worker_slug=AssignedWorkerSlug(assigned_worker_slug),
-                            depends_on=deps,
-                        ),
-                    )
-                return AddSubtaskToolSuccess.model_validate(result.model_dump())
+                deps = tuple(UUID(s) for s in (depends_on or []))
+                handle = await context.spawn_task(task, depends_on=deps)
+                return AddSubtaskToolSuccess(
+                    node_id=NodeId(handle.task_id),
+                    task_slug=TaskSlug(task.task_slug),
+                    status="pending",
+                )
             except Exception as exc:  # slopcop: ignore[no-broad-except]
                 return ToolFailure(error=str(exc))
 
         return add_subtask
 
     def _make_plan_subtasks(self) -> Callable[..., Awaitable[PlanSubtasksToolResponse]]:
-        mgmt, run_id, pid = self._mgmt, self._run_id, self._parent_node_id
-
-        async def plan_subtasks(subtasks: list[SubtaskSpec]) -> PlanSubtasksToolResponse:
-            """Atomically create a sub-DAG. Each entry has ``task_slug``
-            (kebab-case identifier, persisted verbatim on the graph node),
-            ``description``, required ``assigned_worker_slug``, and
-            optional ``depends_on`` — a list of sibling ``task_slug``s
-            within this same call. Cycles, duplicate slugs, and unknown
-            slugs are rejected."""
-            try:
-                with get_session() as session:
-                    result = await mgmt.plan_subtasks(
-                        session,
-                        PlanSubtasksCommand(
-                            run_id=run_id,
-                            parent_node_id=pid,
-                            subtasks=subtasks,
-                        ),
-                    )
-                return PlanSubtasksToolSuccess.model_validate(result.model_dump())
-            except Exception as exc:  # slopcop: ignore[no-broad-except]
-                return ToolFailure(error=str(exc))
+        async def plan_subtasks(_tasks: list[Task]) -> PlanSubtasksToolResponse:
+            return ToolFailure(
+                error=(
+                    "plan_subtasks was removed from the worker-authoring toolkit; "
+                    "call add_subtask with object-bound Task values."
+                )
+            )
 
         return plan_subtasks
 
     def _make_cancel_task(self) -> Callable[..., Awaitable[CancelTaskToolResponse]]:
-        mgmt, run_id = self._mgmt, self._run_id
+        context = self._context
 
         async def cancel_task(node_id: str) -> CancelTaskToolResponse:
-            """Cancel a subtask. Any descendants are cancelled via engine cascade."""
+            """Cancel a contained subtask through WorkerContext."""
             try:
-                with get_session() as session:
-                    result = await mgmt.cancel_task(
-                        session,
-                        CancelTaskCommand(run_id=run_id, node_id=NodeId(UUID(node_id))),
-                    )
-                return CancelTaskToolSuccess.model_validate(result.model_dump())
+                await context.cancel_task(NodeId(UUID(node_id)))
+                return CancelTaskToolSuccess(
+                    node_id=NodeId(UUID(node_id)),
+                    old_status="unknown",
+                    cascaded_count=0,
+                )
             except Exception as exc:  # slopcop: ignore[no-broad-except]
                 return ToolFailure(error=str(exc))
 
         return cancel_task
 
     def _make_refine_task(self) -> Callable[..., Awaitable[RefineTaskToolResponse]]:
-        mgmt, run_id = self._mgmt, self._run_id
+        context = self._context
 
         async def refine_task(node_id: str, new_description: str) -> RefineTaskToolResponse:
-            """Refine a subtask's description. Allowed on any status except RUNNING.
-
-            Pairs with ``restart_task`` for the edit-then-rerun flow: call
-            ``refine_task`` first to update the description, then
-            ``restart_task`` to put the node back in the scheduling queue.
-            """
+            """Refine a contained subtask through WorkerContext."""
             try:
-                with get_session() as session:
-                    result = await mgmt.refine_task(
-                        session,
-                        RefineTaskCommand(
-                            run_id=run_id,
-                            node_id=NodeId(UUID(node_id)),
-                            new_description=new_description,
-                        ),
-                    )
-                return RefineTaskToolSuccess.model_validate(result.model_dump())
+                await context.refine_task(NodeId(UUID(node_id)), description=new_description)
+                return RefineTaskToolSuccess(
+                    node_id=NodeId(UUID(node_id)),
+                    old_description="",
+                    new_description=new_description,
+                )
             except Exception as exc:  # slopcop: ignore[no-broad-except]
                 return ToolFailure(error=str(exc))
 
         return refine_task
 
     def _make_restart_task(self) -> Callable[..., Awaitable[RestartTaskToolResponse]]:
-        mgmt, run_id = self._mgmt, self._run_id
+        context = self._context
 
         async def restart_task(node_id: str) -> RestartTaskToolResponse:
-            """Reset a terminal subtask back to PENDING and re-dispatch.
-
-            Only nodes in terminal status (COMPLETED / FAILED / CANCELLED)
-            may be restarted. Downstream targets that were running against
-            stale input are invalidated (cancelled and re-queued) so the
-            subgraph is consistent when this node re-runs.
-            """
+            """Restart a contained subtask through WorkerContext."""
             try:
-                with get_session() as session:
-                    result = await mgmt.restart_task(
-                        session,
-                        RestartTaskCommand(
-                            run_id=run_id,
-                            node_id=NodeId(UUID(node_id)),
-                        ),
-                    )
-                return RestartTaskToolSuccess.model_validate(result.model_dump())
+                await context.restart_task(NodeId(UUID(node_id)))
+                return RestartTaskToolSuccess(
+                    node_id=NodeId(UUID(node_id)),
+                    old_status="unknown",
+                    invalidated_node_ids=[],
+                )
             except Exception as exc:  # slopcop: ignore[no-broad-except]
                 return ToolFailure(error=str(exc))
 
@@ -316,29 +245,27 @@ class SubtaskLifecycleToolkit:
     # -- inspection --------------------------------------------------------
 
     def _make_list_subtasks(self) -> Callable[..., Awaitable[ListSubtasksToolResponse]]:
-        inspect, run_id, pid = self._inspect, self._run_id, self._parent_node_id
+        context = self._context
 
         async def list_subtasks() -> ListSubtasksToolResponse:
-            """Return the current status and output-excerpt of every direct subtask."""
+            """Return contained direct subtasks through WorkerContext."""
             try:
-                with get_session() as session:
-                    infos = inspect.list_subtasks(session, run_id=run_id, parent_node_id=pid)
-                return ListSubtasksToolSuccess(subtasks=infos)
+                infos = await context.subtasks()
+                return ListSubtasksToolSuccess(subtasks=list(infos))
             except Exception as exc:  # slopcop: ignore[no-broad-except]
                 return ToolFailure(error=str(exc))
 
         return list_subtasks
 
     def _make_get_subtask(self) -> Callable[..., Awaitable[GetSubtaskToolResponse]]:
-        inspect, run_id = self._inspect, self._run_id
+        context = self._context
 
         async def get_subtask(node_id: str) -> GetSubtaskToolResponse:
-            """Return the full SubtaskInfo for one node_id."""
+            """Return a contained subtask through WorkerContext."""
             try:
-                with get_session() as session:
-                    info = inspect.get_subtask(
-                        session, run_id=run_id, node_id=NodeId(UUID(node_id))
-                    )
+                info = await context.get_task(NodeId(UUID(node_id)))
+                if isinstance(info, dict):
+                    return GetSubtaskToolSuccess.model_validate(info)
                 return GetSubtaskToolSuccess.model_validate(info.model_dump())
             except Exception as exc:  # slopcop: ignore[no-broad-except]
                 return ToolFailure(error=str(exc))
@@ -348,16 +275,10 @@ class SubtaskLifecycleToolkit:
 
 def build_subtask_lifecycle_tools(
     *,
-    run_id: UUID,
-    parent_node_id: UUID,
-    sandbox_id: str,
+    context: WorkerContext,
 ) -> list[Callable[..., Awaitable[BaseModel]]]:
     """Factory entry point for workers.
 
     Convenience wrapper so workers don't need to know about the toolkit class.
     """
-    return SubtaskLifecycleToolkit(
-        run_id=run_id,
-        parent_node_id=parent_node_id,
-        sandbox_id=sandbox_id,
-    ).get_tools()
+    return SubtaskLifecycleToolkit(context=context).get_tools()

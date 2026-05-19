@@ -1,157 +1,221 @@
-"""Evaluate a single task with one evaluator/rubric.
+"""Per-evaluator Inngest function — thin id-only payload, run-tier reads.
 
-Invoked by check_evaluators per evaluator. Creates the criterion executor,
-runs all criteria, aggregates results, persists RunTaskEvaluation.
+Receives one ``TaskEvaluateRequest`` per evaluator from
+`execute_task._fan_out_evaluators`.
+The payload only carries identity (``run_id`` + ``task_id`` +
+``execution_id`` + ``evaluator_index``); everything else is
+reconstructed locally from the run-tier read boundary:
+
+- execution row + stamped ``sandbox_id`` ← ``session.get(RunTaskExecution)``
+- typed Task view ← ``WorkflowGraphRepository.node(..., sandbox_id=...)``
+- persisted ``WorkerOutput`` ← ``WorkerOutputRepository.load``
+- evaluator instance ← ``task.evaluators[payload.evaluator_index]``
+
+Criteria run inline via ``EvaluationService.evaluate``: no
+``evaluator runner`` Protocol, no per-criterion ``ctx.step.run``.
+The Inngest retry unit is now the whole evaluator, because the
+orchestrator already gives one ``step.invoke`` per evaluator via
+the synchronous-fanout boundary in `execute_task`.
+
+Sandbox lifetime: this function detaches its local runtime handle after
+evaluation, but it never terminates the external sandbox. The external
+sandbox is terminated exactly once by the sibling ``sandbox_cleanup``
+function after ``execute_task`` emits a terminal task event.
 """
 
 import logging
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
+from uuid import UUID
 
-from ergon_core.api.benchmark import EmptyTaskPayload, Task
-from ergon_core.core.application.components.catalog import ComponentCatalogService
-from ergon_core.core.application.experiments.repository import DefinitionRepository
-from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
-from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
-from ergon_core.core.application.evaluation.models import TaskEvaluationContext
-from ergon_core.core.application.evaluation.inngest_executor import InngestCriterionExecutor
-from ergon_core.core.application.jobs.models import EvaluateTaskRunRequest
-from ergon_core.core.application.evaluation.service import (
-    EvaluationService,
+import inngest
+
+from ergon_core.api.criterion.context import CriterionContext
+from ergon_core.core.application.evaluation.service import EvaluationService
+from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.jobs.models import (
+    EvaluateTaskRunResult,
+    TaskEvaluateRequest,
 )
-from ergon_core.core.application.jobs.models import EvaluateTaskRunResult
+from ergon_core.core.application.tasks.repository import WorkerOutputRepository
+from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
+from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     evaluation_task_context,
     get_trace_sink,
 )
-from pydantic import BaseModel
-from typing import Any
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.telemetry.models import RunTaskExecution
+
+if TYPE_CHECKING:
+    from ergon_core.api.rubric import Evaluator
+    from ergon_core.core.application.graph.models import RunGraphNodeView
 
 logger = logging.getLogger(__name__)
-evaluation_persistence = EvaluationService()
+_evaluation_persistence = EvaluationService()
+
+
+def _evaluator_binding_key(evaluator: "Evaluator", evaluator_index: int) -> str:
+    return evaluator.name or f"inline-{evaluator_index}"
 
 
 async def run_evaluate_task_run_job(
-    ctx: Any, payload: EvaluateTaskRunRequest
+    ctx: inngest.Context,
+    payload: TaskEvaluateRequest,
 ) -> EvaluateTaskRunResult:
-    run_id = payload.run_id
-    definition_task_id = payload.task_id
-    node_id = payload.node_id
-    execution_id = payload.execution_id
-    evaluator_id = payload.evaluator_id
-    evaluator_binding_key = payload.evaluator_binding_key
-    evaluator_type = payload.evaluator_type
-    agent_reasoning = payload.agent_reasoning
+    """Per-evaluator fanout target. Thin id-only payload."""
+
+    del ctx  # The orchestrator provides the evaluator-level retry boundary.
+
     span_start = datetime.now(UTC)
+    run_id = payload.run_id
+    task_id = payload.task_id
+    execution_id = payload.execution_id
+    evaluator_index = payload.evaluator_index
 
-    catalog = ComponentCatalogService()
-    definition_repo = DefinitionRepository()
     with get_session() as session:
-        evaluator_cls = catalog.resolve_evaluator(session, evaluator_type)
-        evaluator = evaluator_cls(name=evaluator_binding_key)
-        definition = definition_repo.get(session, payload.definition_id)
-        if definition is None:
+        execution = session.get(RunTaskExecution, execution_id)
+        if execution is None:
             raise ContractViolationError(
-                f"ExperimentDefinition {payload.definition_id} not found",
+                f"RunTaskExecution {execution_id} not found",
                 run_id=run_id,
-                task_id=node_id,
+                task_id=task_id,
+                execution_id=execution_id,
             )
-        benchmark_type = definition.benchmark_type
-        manager_cls = catalog.resolve_sandbox_manager(session, benchmark_type)
-        benchmark_cls = catalog.resolve_benchmark(session, benchmark_type)
-        if definition_task_id is None:
+        view = await WorkflowGraphRepository().node(
+            session,
+            run_id=run_id,
+            task_id=task_id,
+            sandbox_id=execution.sandbox_id,
+        )
+        worker_output = await WorkerOutputRepository().load(
+            session,
+            execution_id=execution_id,
+        )
+        task = view.task
+        if evaluator_index < 0 or evaluator_index >= len(task.evaluators):
             raise ContractViolationError(
-                "task/evaluate requires definition_task_id while evaluator bindings are definition-scoped",
+                f"evaluator_index {evaluator_index} out of range for task "
+                f"{task.task_slug!r} (has {len(task.evaluators)} evaluators)",
                 run_id=run_id,
-                task_id=node_id,
+                task_id=task_id,
+                execution_id=execution_id,
             )
-        task_row, instance_row = definition_repo.task_with_instance(session, definition_task_id)
+        evaluator = task.evaluators[evaluator_index]
+        binding_key = _evaluator_binding_key(evaluator, evaluator_index)
 
-    sandbox_manager = manager_cls()
-
-    executor = InngestCriterionExecutor(
-        ctx,
-        task_id=node_id,
-        execution_id=execution_id,
-        evaluator_id=evaluator_id,
-        sandbox_manager=sandbox_manager,
-    )
-
-    task_input = task_row.description
-    task_context = TaskEvaluationContext(
+    context = CriterionContext(
         run_id=run_id,
-        task_input=task_input,
-        agent_reasoning=agent_reasoning,
-        sandbox_id=payload.sandbox_id,
+        task_id=task.task_id,
+        execution_id=execution_id,
+        task=task,
+        worker_result=worker_output,
     )
 
-    task_payload = task_row.task_payload_as(benchmark_cls.task_payload_model)
-    task = Task[BaseModel](
-        task_id=node_id,
-        task_slug=task_row.task_slug,
-        instance_key=instance_row.instance_key,
-        description=task_input,
-        task_payload=task_payload or EmptyTaskPayload(),
-    )
-
-    service = EvaluationService(criterion_executor=executor)
     try:
-        service_result = await service.evaluate(
-            task_context=task_context,
+        return await _run_evaluation(
             evaluator=evaluator,
-            task=task,
-            benchmark_name="",
+            context=context,
+            binding_key=binding_key,
+            evaluator_index=evaluator_index,
+            view=view,
+            run_id=run_id,
+            task_id=task_id,
+            execution_id=execution_id,
+            span_start=span_start,
+        )
+    finally:
+        # Release the local sandbox handle as soon as criteria finish.
+        # The orchestrator owns external sandbox termination, and sibling
+        # eval workers still need it alive until fanout resolves.
+        if task.sandbox.is_live:
+            await task.sandbox.detach()
+
+
+async def _run_evaluation(
+    *,
+    evaluator: "Evaluator",
+    context: CriterionContext,
+    binding_key: str,
+    evaluator_index: int,
+    view: "RunGraphNodeView",
+    run_id: UUID,
+    task_id: UUID,
+    execution_id: UUID,
+    span_start: datetime,
+) -> EvaluateTaskRunResult:
+    """Run the evaluator, persist, emit the trace span. Sandbox lifetime
+    is the caller's concern (see ``run_evaluate_task_run_job``'s
+    ``finally`` block) — extracting this helper keeps the eval body free
+    of nested try/except blocks.
+    """
+
+    try:
+        service_result = await _evaluation_persistence.evaluate(
+            context=context,
+            evaluator=evaluator,
         )
     except Exception as exc:  # slopcop: ignore[no-broad-except]
         logger.exception(
-            "evaluate_task_run failed run_id=%s task_id=%s evaluator=%s",
+            "evaluate_task_run failed run_id=%s task_id=%s index=%s",
             run_id,
-            node_id,
-            evaluator_type,
+            task_id,
+            evaluator_index,
         )
-        evaluation_persistence.persist_failure(
+        await _evaluation_persistence.persist_failure(
             run_id=run_id,
-            node_id=node_id,
             task_execution_id=execution_id,
-            definition_task_id=definition_task_id,
-            evaluator_id=evaluator_id,
-            evaluator_name=evaluator_binding_key,
+            task_id=view.task_id,
+            binding_key=binding_key,
             exc=exc,
         )
         return EvaluateTaskRunResult(
             score=0.0,
             passed=False,
-            evaluator_name=evaluator_binding_key,
+            evaluator_name=binding_key,
         )
-    result = service_result.result
 
-    persisted = evaluation_persistence.persist_success(
+    result = service_result.result
+    persisted = await _evaluation_persistence.persist_success(
         run_id=run_id,
-        node_id=node_id,
         task_execution_id=execution_id,
-        definition_task_id=definition_task_id,
-        evaluator_id=evaluator_id,
+        task_id=view.task_id,
+        binding_key=binding_key,
         service_result=service_result,
     )
     await get_dashboard_emitter().task_evaluation_updated(
         run_id=run_id,
-        task_id=node_id,
+        task_id=view.task_id,
         evaluation=persisted.dashboard_dto,
     )
 
+    # Trace span needs the evaluator_id for stable key derivation;
+    # reuse the persistence lookup so the span key matches the
+    # `run_task_evaluations.definition_evaluator_id` FK on the
+    # row persist_success just wrote.
+    with get_session() as session:
+        evaluator_id = _evaluation_persistence.lookup_evaluator_id(
+            session,
+            run_id,
+            binding_key,
+            evaluator_type=evaluator.type_slug,
+            snapshot_json=evaluator.model_dump(mode="json"),
+        )
     get_trace_sink().emit_span(
         CompletedSpan(
             name="evaluation.task",
-            context=evaluation_task_context(run_id, node_id, execution_id, evaluator_id),
+            context=evaluation_task_context(run_id, view.task_id, execution_id, evaluator_id),
             start_time=span_start,
             end_time=datetime.now(UTC),
             attributes={
                 "run_id": str(run_id),
-                "task_id": str(node_id),
+                "task_id": str(view.task_id),
                 "execution_id": str(execution_id),
                 "evaluator_id": str(evaluator_id),
-                "evaluator_type": evaluator_type,
+                "evaluator_binding_key": binding_key,
+                "evaluator_type": type(evaluator).type_slug,
+                "evaluator_index": evaluator_index,
                 "score": result.score,
                 "passed": result.passed,
                 "stages_evaluated": persisted.summary.stages_evaluated,

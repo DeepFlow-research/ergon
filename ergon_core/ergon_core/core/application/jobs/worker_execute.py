@@ -10,14 +10,25 @@ import logging
 import traceback
 from collections.abc import AsyncIterable, Awaitable, Callable
 from datetime import UTC, datetime
+from uuid import UUID
 
-from ergon_core.api.benchmark import EmptyTaskPayload, Task
+import inngest
+from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
-from ergon_core.core.application.components.catalog import ComponentCatalogService
-from ergon_core.core.application.experiments.repository import DefinitionRepository
+from ergon_core.api.worker.results import SpawnedTaskHandle
+from ergon_core.core.application.events.task_events import TaskReadyEvent
+from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.resources import RunResourceRepository
+from ergon_core.core.application.tasks.inspection import TaskInspectionService
+from ergon_core.core.application.tasks.management import TaskManagementService
+from ergon_core.core.application.tasks.models import PlanSubtasksCommand, PlanSubtasksResult
+from ergon_core.core.application.tasks.repository import (
+    TaskExecutionRepository,
+    WorkerOutputRepository,
+)
 from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
-from ergon_core.core.domain.generation.context_parts import ContextPartChunk
-from ergon_core.core.persistence.graph.models import RunGraphNode
+from ergon_core.core.shared.context_parts import ContextPartChunk
+from ergon_core.core.infrastructure.inngest.client import InngestEvent
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.application.context.events import ContextEventService
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
@@ -29,11 +40,16 @@ from ergon_core.core.infrastructure.tracing import (
     worker_execute_context,
 )
 from pydantic import BaseModel
+from sqlmodel import Session
 
 logger = logging.getLogger(__name__)
 
 
-async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExecuteJobResult:
+async def run_worker_execute_job(
+    payload: WorkerExecuteJobRequest,
+    *,
+    ctx: inngest.Context | None = None,
+) -> WorkerExecuteJobResult:
     logger.info(
         "worker-execute run_id=%s task_id=%s worker_type=%s",
         payload.run_id,
@@ -42,57 +58,40 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
     )
     span_start = datetime.now(UTC)
 
-    if payload.node_id is None:
+    # Read the typed run-tier view instead of rebuilding Task
+    # from definition rows. No definition-tier repository, no component
+    # catalog, no raw graph row read in this job — all of that lives
+    # inside `graph_repo.node`.
+    with get_session() as session:
+        view = await WorkflowGraphRepository().node(
+            session,
+            run_id=payload.run_id,
+            task_id=payload.task_id,
+            sandbox_id=payload.sandbox_id,
+        )
+    task = view.task
+
+    worker = task.worker
+    if not task.sandbox.is_live:
         raise ContractViolationError(
-            "worker-execute requires node_id",
+            "worker-execute object-bound task requires a live sandbox attached via sandbox_id",
             run_id=payload.run_id,
             task_id=payload.task_id,
             execution_id=payload.execution_id,
             sandbox_id=payload.sandbox_id,
         )
+    worker.validate_runtime_deps()
 
-    catalog = ComponentCatalogService()
-    task_payload = None
-    instance_key = str(payload.node_id)
-    with get_session() as session:
-        worker = catalog.build_worker(
-            session,
-            slug=payload.worker_type,
-            name=payload.assigned_worker_slug,
-            model=payload.model_target,
-        )
-        node = session.get(RunGraphNode, payload.node_id)
-        if node is None:
-            raise ContractViolationError(
-                f"RunGraphNode {payload.node_id} not found",
-                run_id=payload.run_id,
-                task_id=payload.task_id,
-                execution_id=payload.execution_id,
-                sandbox_id=payload.sandbox_id,
-            )
-        if node.definition_task_id is not None:
-            task_row, instance_row = DefinitionRepository().task_with_instance(
-                session,
-                node.definition_task_id,
-            )
-            benchmark_cls = catalog.resolve_benchmark(session, payload.benchmark_type)
-            task_payload = task_row.task_payload_as(benchmark_cls.task_payload_model)
-            instance_key = instance_row.instance_key
-
-    task = Task[BaseModel](
-        task_id=payload.node_id,
-        task_slug=payload.task_slug,
-        instance_key=instance_key,
-        description=payload.task_description,
-        task_payload=task_payload or EmptyTaskPayload(),
-    )
-
-    worker_context = WorkerContext(
+    worker_context = WorkerContext._for_job(
         run_id=payload.run_id,
-        definition_id=payload.definition_id,
+        task_id=payload.task_id,
         execution_id=payload.execution_id,
+        definition_id=payload.definition_id,
         sandbox_id=payload.sandbox_id,
-        node_id=payload.node_id,
+        task_mgmt=_task_management_service_for_context(ctx),
+        task_inspect=TaskInspectionService(),
+        resource_repo=RunResourceRepository(),
+        session_factory=get_session,
     )
 
     context_event_repo = ContextEventService()
@@ -100,7 +99,7 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
     context_event_repo.add_listener(dashboard_emitter.on_context_event)
     dashboard_emitter.register_execution(
         execution_id=payload.execution_id,
-        task_node_id=payload.node_id,
+        task_id=payload.task_id,
     )
 
     chunk_count = 0
@@ -135,6 +134,31 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
             },
         )
 
+    # Persist worker output + stamp sandbox_id BEFORE returning to the
+    # orchestrator. The orchestrator's next step is the per-evaluator
+    # fanout (`execute_task._fan_out_evaluators`); each eval worker
+    # receives only a thin `TaskEvaluateRequest` and reloads everything
+    # else from the run-tier read boundary:
+    #
+    #   WorkerOutput      ← WorkerOutputRepository.load(execution_id)
+    #   live sandbox_id   ← session.get(RunTaskExecution, ...).sandbox_id
+    #                       (then fed to graph_repo.node(..., sandbox_id=))
+    #
+    # Both reads happen *after* the orchestrator's gather starts, so
+    # both writes have to commit before this function returns.
+    with get_session() as session:
+        await WorkerOutputRepository().persist(
+            session,
+            execution_id=payload.execution_id,
+            output=output,
+        )
+        await TaskExecutionRepository().set_sandbox_id(
+            session,
+            execution_id=payload.execution_id,
+            sandbox_id=payload.sandbox_id,
+        )
+        session.commit()
+
     sink = get_trace_sink()
     sink.emit_span(
         CompletedSpan(
@@ -165,6 +189,152 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
         final_assistant_message=output.output,
         error=None if output.success else output.output,
     )
+
+
+def _task_management_service_for_context(ctx: inngest.Context | None) -> TaskManagementService:
+    if ctx is None:
+        return TaskManagementService()
+    return _StepAwareTaskManagementService(ctx)
+
+
+class _ReadyDispatch(BaseModel):
+    model_config = {"frozen": True}
+
+    run_id: UUID
+    definition_id: UUID
+    task_id: UUID
+
+
+class _SpawnTaskStepResult(BaseModel):
+    model_config = {"frozen": True}
+
+    handle: SpawnedTaskHandle
+    ready: list[_ReadyDispatch]
+
+
+class _PlanSubtasksStepResult(BaseModel):
+    model_config = {"frozen": True}
+
+    result: PlanSubtasksResult
+    ready: list[_ReadyDispatch]
+
+
+class _StepAwareTaskManagementService(TaskManagementService):
+    """Task management facade for workers running inside an Inngest function.
+
+    Worker-authored graph mutations must be memoized as Inngest steps before
+    any child task/ready events are emitted. Otherwise ``ctx.step.send_event``
+    interrupts and replays the worker function, re-running the DB mutation.
+    """
+
+    def __init__(self, ctx: inngest.Context) -> None:
+        self._ctx = ctx
+        self._plan_subtasks_call_index = 0
+        self._spawn_task_call_index = 0
+        self._active_ready_dispatches: list[_ReadyDispatch] | None = None
+        super().__init__(task_ready_dispatcher=self._collect_ready_dispatch)
+
+    async def spawn_dynamic_task(
+        self,
+        *,
+        run_id: UUID,
+        parent_task_id: UUID,
+        task: Task,
+        depends_on: tuple[UUID, ...] = (),
+    ) -> SpawnedTaskHandle:
+        call_index = self._spawn_task_call_index
+        self._spawn_task_call_index += 1
+        step_id = f"spawn-task-{parent_task_id}-{call_index}"
+
+        async def _run_spawn() -> _SpawnTaskStepResult:
+            previous = self._active_ready_dispatches
+            ready: list[_ReadyDispatch] = []
+            self._active_ready_dispatches = ready
+            try:
+                handle = await TaskManagementService.spawn_dynamic_task(
+                    self,
+                    run_id=run_id,
+                    parent_task_id=parent_task_id,
+                    task=task,
+                    depends_on=depends_on,
+                )
+            finally:
+                self._active_ready_dispatches = previous
+            return _SpawnTaskStepResult(handle=handle, ready=ready)
+
+        spawned = await self._ctx.step.run(
+            step_id,
+            _run_spawn,
+            output_type=_SpawnTaskStepResult,
+        )
+        await self._dispatch_collected_ready_events(step_id, spawned.ready)
+        return spawned.handle
+
+    async def plan_subtasks(
+        self,
+        session: Session,
+        command: PlanSubtasksCommand,
+    ) -> PlanSubtasksResult:
+        call_index = self._plan_subtasks_call_index
+        self._plan_subtasks_call_index += 1
+        step_id = f"plan-subtasks-{command.parent_task_id}-{call_index}"
+
+        async def _run_plan() -> _PlanSubtasksStepResult:
+            previous = self._active_ready_dispatches
+            ready: list[_ReadyDispatch] = []
+            self._active_ready_dispatches = ready
+            try:
+                result = await TaskManagementService.plan_subtasks(
+                    self,
+                    session,
+                    command,
+                )
+            finally:
+                self._active_ready_dispatches = previous
+            return _PlanSubtasksStepResult(result=result, ready=ready)
+
+        planned = await self._ctx.step.run(
+            step_id,
+            _run_plan,
+            output_type=_PlanSubtasksStepResult,
+        )
+        await self._dispatch_collected_ready_events(step_id, planned.ready)
+        return planned.result
+
+    async def _collect_ready_dispatch(
+        self,
+        run_id: UUID,
+        definition_id: UUID,
+        node_id: UUID,
+    ) -> None:
+        if self._active_ready_dispatches is None:
+            raise ContractViolationError(
+                "Worker task-ready dispatch attempted outside a memoized graph mutation",
+                run_id=run_id,
+                task_id=node_id,
+            )
+        self._active_ready_dispatches.append(
+            _ReadyDispatch(run_id=run_id, definition_id=definition_id, task_id=node_id)
+        )
+
+    async def _dispatch_collected_ready_events(
+        self,
+        parent_step_id: str,
+        ready: list[_ReadyDispatch],
+    ) -> None:
+        for dispatch in ready:
+            event = TaskReadyEvent(
+                run_id=dispatch.run_id,
+                definition_id=dispatch.definition_id,
+                task_id=dispatch.task_id,
+            )
+            await self._ctx.step.send_event(
+                f"{parent_step_id}-dispatch-task-ready-{dispatch.task_id}",
+                InngestEvent(
+                    name=TaskReadyEvent.name,
+                    data=event.model_dump(mode="json"),
+                ),
+            )
 
 
 async def _consume_worker_stream(

@@ -4,11 +4,12 @@ import logging
 from uuid import UUID
 
 import inngest
-from ergon_core.core.domain.experiments import DefinitionHandle
+from ergon_core.core.application.experiments.handles import DefinitionHandle
 from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TERMINAL_RUN_STATUSES, RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
+from sqlmodel import select
 from ergon_core.core.application.events.infrastructure_events import (
     RunCancelledEvent,
     RunCleanupEvent,
@@ -37,8 +38,7 @@ def _checkpoint_metadata() -> JsonObject:
 def create_run(  # slopcop: ignore[max-function-params] -- service boundary mirrors RunRecord provenance fields
     definition: DefinitionHandle,
     *,
-    experiment_id: UUID,
-    workflow_definition_id: UUID,
+    definition_id: UUID,
     instance_key: str,
     worker_team_json: JsonObject,
     evaluator_slug: str | None = None,
@@ -50,8 +50,7 @@ def create_run(  # slopcop: ignore[max-function-params] -- service boundary mirr
 ) -> RunRecord:
     with get_session() as session:
         run = RunRecord(
-            experiment_id=experiment_id,
-            workflow_definition_id=workflow_definition_id,
+            definition_id=definition_id,
             benchmark_type=definition.benchmark_type,
             instance_key=instance_key,
             worker_team_json=worker_team_json,
@@ -105,3 +104,15 @@ def cancel_run(run_id: UUID) -> RunRecord:
 
     logger.info("Cancelled run %s and dispatched cleanup", run_id)
     return run
+
+
+def latest_run_for_definition(definition_id: UUID) -> RunRecord | None:
+    """Most-recent ``RunRecord`` for a given definition, or None."""
+    with get_session() as session:
+        stmt = (
+            select(RunRecord)
+            .where(RunRecord.definition_id == definition_id)
+            .order_by(RunRecord.created_at.desc())
+            .limit(1)
+        )
+        return session.exec(stmt).first()

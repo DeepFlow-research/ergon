@@ -314,7 +314,7 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
 
       const cohortId = await client.getCohortId(cohortKey);
       await page.goto(`/cohorts/${cohortId}`);
-      // Dashboard keys cohort experiment rows as ``cohort-experiment-row-<experiment_id>``;
+      // Dashboard keys cohort experiment rows as ``cohort-experiment-row-<definition_id>``;
       // prefix match via locator rather
       // than exact getByTestId.
       const rows = page.locator('[data-testid^="cohort-experiment-row-"]');

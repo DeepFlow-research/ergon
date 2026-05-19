@@ -1,16 +1,4 @@
-"""Integration test: SWEBenchTestCriterion.evaluate() uses Protocol-only runtime ops.
-
-After Task 0 (PR 2 of the criterion-runtime-di-container RFC), the criterion
-must NOT construct ``SWEBenchSandboxManager`` directly.  It calls
-``context.runtime.ensure_sandbox()`` to bring up a sandbox and then drives
-the harness entirely through ``runtime.run_command`` and
-``runtime.write_file`` — no reach-through to the concrete
-``sandbox_manager.get_sandbox`` attribute (RFC 2026-04-22 §3).
-
-Refs: docs/rfcs/active/2026-04-17-criterion-runtime-di-container.md (PR 2 of 2)
-      docs/rfcs/active/2026-04-22-worker-interface-and-artifact-routing.md (§3)
-Closes: docs/bugs/open/2026-04-18-swebench-criterion-spawns-sandbox.md
-"""
+"""SWEBenchTestCriterion.evaluate() uses the object-bound task sandbox."""
 
 from __future__ import annotations
 
@@ -24,7 +12,8 @@ from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTas
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.worker import WorkerOutput
 from ergon_core.api.benchmark import Task
-from ergon_core.core.application.evaluation.protocols import CommandResult
+from ergon_core.api.sandbox.runtime import CommandResult
+from ergon_core.test_support.task_factory import task_with_id
 
 
 def _task_payload() -> SWEBenchTaskPayload:
@@ -43,8 +32,9 @@ def _task_payload() -> SWEBenchTaskPayload:
 
 
 def _task() -> Task[SWEBenchTaskPayload]:
-    return Task[SWEBenchTaskPayload](
-        task_id=uuid4(),
+    return task_with_id(
+        uuid4(),
+        cls=Task[SWEBenchTaskPayload],
         task_slug="swe-001",
         instance_key="default",
         description="Fix the bug",
@@ -60,27 +50,27 @@ async def test_evaluate_calls_ensure_sandbox_not_spawn_eval_sandbox() -> None:
     (``run_command``, ``write_file``); the concrete ``sandbox_manager``
     attribute is never touched.
     """
-    mock_runtime = MagicMock()
-    mock_runtime.ensure_sandbox = AsyncMock()
-    mock_runtime.write_file = AsyncMock()
-    # Criterion extracts the patch, runs install_repo, applies patches, and
-    # runs the eval script — all via run_command. A single benign success
+    sandbox = MagicMock()
+    sandbox.write_file = AsyncMock()
+    # Criterion extracts the patch, runs install_repo, applies patches, and runs
+    # the eval script via the object-bound sandbox. A single benign success
     # return value is enough to drive the happy-path harness shape.
-    mock_runtime.run_command = AsyncMock(
+    sandbox.run_command = AsyncMock(
         return_value=CommandResult(
             stdout="diff --git a/foo.py b/foo.py\n+pass\n",
             stderr="",
             exit_code=0,
         )
     )
+    task = _task()
+    task.sandbox = sandbox
 
     ctx = CriterionContext(
         run_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
-        task=_task(),
+        task=task,
         worker_result=WorkerOutput(output="", success=True),
-        runtime=mock_runtime,
     )
 
     with (
@@ -101,7 +91,7 @@ async def test_evaluate_calls_ensure_sandbox_not_spawn_eval_sandbox() -> None:
         criterion = SWEBenchTestCriterion()
         await criterion.evaluate(ctx)
 
-    mock_runtime.ensure_sandbox.assert_awaited_once()
+    assert sandbox.run_command.await_count >= 1
 
 
 def test_spawn_eval_sandbox_does_not_exist() -> None:

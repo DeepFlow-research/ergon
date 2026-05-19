@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from ergon_core.core.application.read_models.models import (
+from ergon_core.core.application.read_models.cohorts import (
     CohortDetailDto,
     CohortSummaryDto,
     UpdateCohortRequest,

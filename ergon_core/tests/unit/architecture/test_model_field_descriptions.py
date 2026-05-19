@@ -1,7 +1,7 @@
 """Guards for model field docs that must survive schema export."""
 
 from ergon_core.core.infrastructure.dashboard.event_contracts import DashboardContextEventEvent
-from ergon_core.core.domain.generation.context_parts import (
+from ergon_core.core.shared.context_parts import (
     AssistantTextPart,
     ContextPartChunkLog,
     ThinkingPart,
@@ -15,7 +15,7 @@ from ergon_core.core.persistence.graph.models import (
     RunGraphMutation,
     RunGraphNode,
 )
-from ergon_core.core.persistence.telemetry.models import RunResource
+from ergon_core.core.persistence.telemetry.models import RunRecord, RunResource
 from ergon_core.core.application.graph.models import (
     GraphAnnotationDto,
     GraphEdgeDto,
@@ -49,7 +49,7 @@ def test_context_event_payload_field_docs_are_schema_metadata() -> None:
 
 def test_dashboard_context_event_field_docs_are_schema_metadata() -> None:
     assert _description(DashboardContextEventEvent, "id")
-    assert _description(DashboardContextEventEvent, "task_node_id")
+    assert _description(DashboardContextEventEvent, "task_id")
     assert _description(DashboardContextEventEvent, "payload")
 
 
@@ -67,13 +67,18 @@ def test_sqlmodel_field_docs_are_schema_metadata() -> None:
     assert _description(RunGraphNode, "task_slug")
     assert _description(RunGraphNode, "status")
     assert _description(RunGraphNode, "assigned_worker_slug")
-    assert _description(RunGraphNode, "parent_node_id")
+    assert _description(RunGraphNode, "parent_task_id")
     assert _description(RunGraphNode, "level")
     assert _description(RunContextEvent, "event_type")
     assert _description(RunContextEvent, "payload")
     assert _description(RunGraphAnnotation, "target_type")
     assert _description(RunGraphMutation, "mutation_type")
     assert _description(RunGraphMutation, "target_type")
+    assert "Canonical runtime" in (_description(RunRecord, "definition_id") or "")
+    assert "Compatibility/display-only" in (_description(RunRecord, "worker_team_json") or "")
+    assert "Compatibility/display-only" in (_description(RunRecord, "evaluator_slug") or "")
+    assert "Compatibility/display-only" in (_description(RunRecord, "sandbox_slug") or "")
+    assert "Compatibility/display-only" in (_description(RunRecord, "dependency_extras_json") or "")
     assert _description(RunResource, "kind")
 
 

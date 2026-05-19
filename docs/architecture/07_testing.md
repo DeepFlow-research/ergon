@@ -166,7 +166,7 @@ This job runs `docker compose up -d --wait postgres api inngest-dev`, then `pnpm
 
 1. **Topology is identical across all envs.** Enforced by `@final` on `SmokeWorkerBase.execute`. Tested by `tests/unit/smoke_base/test_smoke_worker_base_final.py`.
 2. **No LLM calls on the smoke path.** Enforced by convention + grep: `rg 'OPENROUTER|anthropic|openai|pydantic_ai' tests/e2e/` must return zero.
-3. **Test stubs live in `tests/e2e/_fixtures/`, not `ergon_builtins/`.** Production registry (`ergon_builtins/registry_core.py`) contains only production baselines. Exception: `training_stub_worker.py` — it's a real RL-trajectory baseline, not test scaffolding; operators invoke it via CLI.
+3. **Test stubs live in test fixture packages, not `ergon_builtins/`.** Smoke fixtures import their object-bound benchmark and worker classes explicitly; production builtins expose authoring classes directly instead of mutating a process-local registry. Exception: `training_stub_worker.py` — it's a real RL-trajectory baseline, not test scaffolding; operators invoke it via CLI.
 4. **Criteria reconnect via the CriterionRuntime DI container, never via `AsyncSandbox.connect` directly.** Enforced by code inspection; the anti-pattern previously fixed by `bugs/fixed/2026-04-18-swebench-criterion-spawns-sandbox.md`.
 5. **Sandbox outlives the task until all criteria finish.** RFC `sandbox-lifetime-covers-criteria`. Smoke is the living regression test for this.
 6. **Cohort parallelism exercised on every PR.** 2-run happy/sad cohorts prove concurrent workflow submission and cohort aggregation at the scale smoke uses.

@@ -1,9 +1,9 @@
-from uuid import UUID, uuid4
+from uuid import uuid4
+from types import SimpleNamespace
 
-import pytest
 from ergon_core.core.persistence.telemetry.models import RunTaskEvaluation
-from ergon_core.core.persistence.telemetry.repositories import CreateTaskEvaluation
-from ergon_core.core.application.read_models.run_snapshot import _task_keyed_evaluations
+from ergon_core.core.views.runs.snapshot import _task_keyed_evaluations
+from ergon_core.core.application.jobs.evaluate_task_run import _evaluator_binding_key
 
 
 def _summary_json() -> dict:
@@ -29,16 +29,14 @@ def _summary_json() -> dict:
     }
 
 
-def test_task_keyed_evaluations_prefers_runtime_node_id_for_dynamic_tasks() -> None:
+def test_task_keyed_evaluations_use_runtime_task_id_for_dynamic_tasks() -> None:
     run_id = uuid4()
-    node_id = uuid4()
-    static_definition_task_id = uuid4()
+    dynamic_task_id = uuid4()
 
     evaluation = RunTaskEvaluation(
         run_id=run_id,
-        node_id=node_id,
         task_execution_id=uuid4(),
-        definition_task_id=static_definition_task_id,
+        task_id=dynamic_task_id,
         definition_evaluator_id=uuid4(),
         score=1.0,
         passed=True,
@@ -49,23 +47,13 @@ def test_task_keyed_evaluations_prefers_runtime_node_id_for_dynamic_tasks() -> N
     result = _task_keyed_evaluations(
         [evaluation],
         str(run_id),
-        defn_to_node={},
     )
 
-    assert set(result) == {str(node_id)}
-    assert result[str(node_id)].task_id == str(node_id)
-    assert result[str(node_id)].total_score == 1.0
+    assert set(result) == {str(dynamic_task_id)}
+    assert result[str(dynamic_task_id)].task_id == str(dynamic_task_id)
+    assert result[str(dynamic_task_id)].total_score == 1.0
 
 
-def test_task_evaluation_requires_runtime_node_id() -> None:
-    node_field = RunTaskEvaluation.model_fields["node_id"]
-
-    assert node_field.annotation is UUID
-    assert node_field.is_required()
-
-
-def test_create_task_evaluation_requires_runtime_node_id() -> None:
-    node_field = CreateTaskEvaluation.model_fields["node_id"]
-
-    assert node_field.annotation is UUID
-    assert node_field.is_required()
+def test_blank_inline_evaluator_name_uses_definition_writer_fallback_key() -> None:
+    assert _evaluator_binding_key(SimpleNamespace(name=""), 1) == "inline-1"
+    assert _evaluator_binding_key(SimpleNamespace(name="judge"), 1) == "judge"

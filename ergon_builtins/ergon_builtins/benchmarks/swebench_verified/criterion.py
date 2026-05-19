@@ -1,7 +1,7 @@
 """Evaluator criterion that runs the SWE-Bench test harness.
 
-``SWEBenchTestCriterion`` reuses the task's existing sandbox (via the
-``CriterionRuntime`` DI surface), re-runs the repo setup + install script,
+``SWEBenchTestCriterion`` reuses the task's existing object-bound sandbox,
+re-runs the repo setup + install script,
 applies the gold ``test_patch`` followed by the agent's patch, and then
 executes the official ``spec.eval_script``.  The captured stdout/stderr is
 written to a local tempfile and fed to
@@ -21,11 +21,6 @@ from typing import Any, ClassVar
 
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.criterion import CriterionContext, CriterionOutcome
-from ergon_core.core.application.evaluation.protocols import CriterionRuntime
-
-from ergon_builtins.benchmarks.swebench_verified.sandbox_manager_support import (
-    payload_to_swebench_row as _payload_to_swebench_row,
-)
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
 
 logger = logging.getLogger(__name__)
@@ -36,6 +31,24 @@ APPLY_TIMEOUT_SEC = 120
 PATCH_EXTRACT_TIMEOUT_SEC = 120
 
 
+def _payload_to_swebench_row(payload: SWEBenchTaskPayload) -> dict[str, Any]:
+    """Translate a task payload into the row shape expected by swebench."""
+
+    return {
+        "instance_id": payload.instance_id,
+        "repo": payload.repo,
+        "base_commit": payload.base_commit,
+        "version": payload.version,
+        "problem_statement": payload.problem_statement,
+        "hints_text": payload.hints_text,
+        "FAIL_TO_PASS": payload.fail_to_pass,
+        "PASS_TO_PASS": payload.pass_to_pass,
+        "environment_setup_commit": payload.environment_setup_commit,
+        "test_patch": payload.test_patch,
+        "patch": "",
+    }
+
+
 async def _extract_patch_via_runtime(context: CriterionContext) -> str:
     """Compute ``git add -A && git diff HEAD`` via the criterion runtime.
 
@@ -43,8 +56,7 @@ async def _extract_patch_via_runtime(context: CriterionContext) -> str:
     only reliable source of truth (nothing crosses the durable Inngest
     ``worker_execute`` boundary).
     """
-    await context.ensure_sandbox()
-    result = await context.run_command(
+    result = await context.task.sandbox.run_command(
         f"cd {WORKDIR} && git add -A && git diff HEAD",
         timeout=PATCH_EXTRACT_TIMEOUT_SEC,
     )
@@ -118,13 +130,7 @@ class SWEBenchTestCriterion(Criterion):
 
     type_slug: ClassVar[str] = "swebench-test-resolution"
 
-    def __init__(
-        self,
-        *,
-        slug: str = "swebench-test-resolution",
-        weight: float = 1.0,
-    ) -> None:
-        super().__init__(slug=slug, weight=weight)
+    slug: str = "swebench-test-resolution"
 
     async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         patch_text = await _extract_patch_via_runtime(context)
@@ -144,9 +150,9 @@ class SWEBenchTestCriterion(Criterion):
         spec = make_test_spec(row)
 
         # reason: RFC 2026-04-22 §3 — harness ops go through the
-        # `CriterionRuntime` Protocol (`run_command`, `write_file`) so the
+        # `public sandbox runtime` Protocol (`run_command`, `write_file`) so the
         # criterion doesn't reach past the DI surface to the concrete
-        # `sandbox_manager` attribute. `_extract_patch_via_runtime` above
+        # `sandbox runtime` attribute. `_extract_patch_via_runtime` above
         # already called `ensure_sandbox`, so subsequent `run_command` /
         # `write_file` calls are guaranteed to hit a live sandbox.
         return await self._run_and_grade(
@@ -162,7 +168,7 @@ class SWEBenchTestCriterion(Criterion):
         patch_text: str,
     ) -> CriterionOutcome:
         # 1. install_repo_script: clone + checkout base_commit + install deps.
-        r = await context.run_command(
+        r = await context.task.sandbox.run_command(
             f"bash -c {shlex.quote(spec.install_repo_script)}",
             timeout=EVAL_TIMEOUT_SEC,
         )
@@ -189,7 +195,7 @@ class SWEBenchTestCriterion(Criterion):
             return _error_result(self.slug, self.weight, "git apply failed", str(exc))
 
         # 3. Run eval script with stderr merged so the log has everything.
-        r = await context.run_command(
+        r = await context.task.sandbox.run_command(
             f"bash -c {shlex.quote(spec.eval_script)} 2>&1",
             timeout=EVAL_TIMEOUT_SEC,
         )
@@ -225,13 +231,13 @@ async def _write_and_apply(
     Falls back to ``--3way`` if the straight apply fails. Raises
     ``RuntimeError`` with tail of stdout when both attempts fail.
     """
-    await context.write_file(path, content.encode())
-    r = await context.run_command(
+    await context.task.sandbox.write_file(path, content.encode())
+    r = await context.task.sandbox.run_command(
         f"cd {WORKDIR} && git apply --allow-empty --verbose {path}",
         timeout=APPLY_TIMEOUT_SEC,
     )
     if r.exit_code != 0:
-        r = await context.run_command(
+        r = await context.task.sandbox.run_command(
             f"cd {WORKDIR} && git apply --3way --verbose {path}",
             timeout=APPLY_TIMEOUT_SEC,
         )

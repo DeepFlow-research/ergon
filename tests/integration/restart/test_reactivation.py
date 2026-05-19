@@ -2,7 +2,7 @@
 
 Propagation re-activates a CANCELLED node to PENDING when all its incoming
 dependencies are COMPLETED — but only if the node is a *managed subtask*
-(parent_node_id is not None). Static workflow nodes stay CANCELLED.
+(parent_task_id is not None). Static workflow nodes stay CANCELLED.
 
 Covered here:
 - CANCELLED managed subtask with all deps complete → re-activates to PENDING
@@ -14,7 +14,7 @@ Covered here:
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import CANCELLED, EDGE_PENDING
+from ergon_core.core.application.runtime.status import CANCELLED, EDGE_PENDING
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
@@ -36,7 +36,7 @@ pytestmark = pytest.mark.integration
 
 @pytest.mark.asyncio
 async def test_cancelled_managed_subtask_reactivates_when_dep_completes() -> None:
-    """CANCELLED managed subtask (parent_node_id set) re-activates when all deps complete.
+    """CANCELLED managed subtask (parent_task_id set) re-activates when all deps complete.
 
     Simulates the state after restart_task ran and _invalidate_downstream
     cancelled node_b. When node_a completes again, propagation should
@@ -47,20 +47,20 @@ async def test_cancelled_managed_subtask_reactivates_when_dep_completes() -> Non
         run = make_run(session, defn.id)
         root = make_node(session, run.id, task_slug="root", status="running")
         node_a = make_node(session, run.id, task_slug="task-a", status="completed")
-        # node_b is a managed subtask — parent_node_id makes it eligible for re-activation
+        # node_b is a managed subtask — parent_task_id makes it eligible for re-activation
         node_b = make_node(
             session,
             run.id,
             task_slug="task-b",
             status=CANCELLED,
-            parent_node_id=root.id,
+            parent_task_id=root.task_id,
         )
         # Edge is EDGE_PENDING: reset by restart_task / _invalidate_downstream
-        make_edge(session, run.id, source_node_id=node_a.id, target_node_id=node_b.id)
+        make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_b.task_id)
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
-        node_b_id = node_b.id
+        node_a_id = node_a.task_id
+        node_b_id = node_b.task_id
         session.commit()
 
     try:
@@ -87,22 +87,22 @@ async def test_cancelled_managed_subtask_reactivates_when_dep_completes() -> Non
 
 @pytest.mark.asyncio
 async def test_cancelled_static_node_does_not_reactivate() -> None:
-    """CANCELLED static node (parent_node_id=None) does NOT re-activate when dep completes.
+    """CANCELLED static node (parent_task_id=None) does NOT re-activate when dep completes.
 
     Static workflow nodes have no manager to adapt them — they stay terminal.
-    Only managed subtasks (with parent_node_id) are eligible for re-activation.
+    Only managed subtasks (with parent_task_id) are eligible for re-activation.
     """
     with get_session() as session:
         defn = make_experiment_definition(session)
         run = make_run(session, defn.id)
         node_a = make_node(session, run.id, task_slug="task-a", status="completed")
-        # node_b is a static node — parent_node_id=None (default)
+        # node_b is a static node — parent_task_id=None (default)
         node_b = make_node(session, run.id, task_slug="task-b-static", status=CANCELLED)
-        make_edge(session, run.id, source_node_id=node_a.id, target_node_id=node_b.id)
+        make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_b.task_id)
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
-        node_b_id = node_b.id
+        node_a_id = node_a.task_id
+        node_b_id = node_b.task_id
         session.commit()
 
     try:
@@ -148,15 +148,15 @@ async def test_fan_in_managed_subtask_reactivates_only_when_all_deps_complete() 
             run.id,
             task_slug="fan-c",
             status=CANCELLED,
-            parent_node_id=root.id,
+            parent_task_id=root.task_id,
         )
-        make_edge(session, run.id, source_node_id=node_a.id, target_node_id=node_c.id)
-        make_edge(session, run.id, source_node_id=node_b.id, target_node_id=node_c.id)
+        make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_c.task_id)
+        make_edge(session, run.id, source_task_id=node_b.task_id, target_task_id=node_c.task_id)
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
-        node_b_id = node_b.id
-        node_c_id = node_c.id
+        node_a_id = node_a.task_id
+        node_b_id = node_b.task_id
+        node_c_id = node_c.task_id
         session.commit()
 
     try:

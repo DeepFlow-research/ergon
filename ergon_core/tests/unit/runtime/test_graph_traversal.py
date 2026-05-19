@@ -21,7 +21,7 @@ def _node(
     *,
     run_id: UUID,
     slug: str,
-    parent_node_id: UUID | None = None,
+    parent_task_id: UUID | None = None,
     status: str = "pending",
 ) -> RunGraphNode:
     node = RunGraphNode(
@@ -30,7 +30,7 @@ def _node(
         task_slug=slug,
         description=f"Task {slug}",
         status=status,
-        parent_node_id=parent_node_id,
+        parent_task_id=parent_task_id,
     )
     session.add(node)
     session.flush()
@@ -41,28 +41,32 @@ def test_descendants_walks_full_containment_subtree_past_terminal_nodes() -> Non
     session = _session()
     run_id = uuid4()
     root = _node(session, run_id=run_id, slug="root")
-    child = _node(session, run_id=run_id, slug="child", parent_node_id=root.id, status="completed")
-    grandchild = _node(session, run_id=run_id, slug="grandchild", parent_node_id=child.id)
-    sibling = _node(session, run_id=run_id, slug="sibling", parent_node_id=root.id)
-    other_run_child = _node(session, run_id=uuid4(), slug="other", parent_node_id=root.id)
+    child = _node(
+        session, run_id=run_id, slug="child", parent_task_id=root.task_id, status="completed"
+    )
+    grandchild = _node(session, run_id=run_id, slug="grandchild", parent_task_id=child.task_id)
+    sibling = _node(session, run_id=run_id, slug="sibling", parent_task_id=root.task_id)
+    other_run_child = _node(session, run_id=uuid4(), slug="other", parent_task_id=root.task_id)
     session.commit()
 
-    walked = descendants(session, run_id=run_id, root_node_id=root.id)
+    walked = descendants(session, run_id=run_id, root_node_id=root.task_id)
 
-    assert [node.id for node in walked] == [child.id, sibling.id, grandchild.id]
-    assert other_run_child.id not in {node.id for node in walked}
+    assert [node.task_id for node in walked] == [child.task_id, sibling.task_id, grandchild.task_id]
+    assert other_run_child.task_id not in {node.task_id for node in walked}
 
 
 def test_descendant_ids_respects_max_depth() -> None:
     session = _session()
     run_id = uuid4()
     root = _node(session, run_id=run_id, slug="root")
-    child = _node(session, run_id=run_id, slug="child", parent_node_id=root.id)
-    grandchild = _node(session, run_id=run_id, slug="grandchild", parent_node_id=child.id)
+    child = _node(session, run_id=run_id, slug="child", parent_task_id=root.task_id)
+    grandchild = _node(session, run_id=run_id, slug="grandchild", parent_task_id=child.task_id)
     session.commit()
 
-    assert descendant_ids(session, run_id=run_id, root_node_id=root.id, max_depth=1) == {child.id}
-    assert descendant_ids(session, run_id=run_id, root_node_id=root.id, max_depth=2) == {
-        child.id,
-        grandchild.id,
+    assert descendant_ids(session, run_id=run_id, root_node_id=root.task_id, max_depth=1) == {
+        child.task_id
+    }
+    assert descendant_ids(session, run_id=run_id, root_node_id=root.task_id, max_depth=2) == {
+        child.task_id,
+        grandchild.task_id,
     }

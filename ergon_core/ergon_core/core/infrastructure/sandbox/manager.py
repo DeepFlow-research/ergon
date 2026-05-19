@@ -5,7 +5,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import ClassVar, Protocol, runtime_checkable
+from typing import ClassVar, Protocol, Self, cast, runtime_checkable
 from uuid import UUID
 
 from ergon_core.core.infrastructure.sandbox.errors import SandboxExpiredError
@@ -16,6 +16,11 @@ from ergon_core.core.infrastructure.sandbox.event_sink import (
 from ergon_core.core.infrastructure.sandbox.utils import _truncate, coerce_text
 from ergon_core.core.shared.settings import settings
 from pydantic import BaseModel
+from e2b import NotFoundException as SandboxNotFoundException
+from e2b import TimeoutException
+from e2b_code_interpreter import AsyncSandbox
+
+logger = logging.getLogger(__name__)
 
 
 @runtime_checkable
@@ -24,24 +29,6 @@ class UploadableResource(Protocol):
 
     name: str
     file_path: str
-
-
-try:
-    from e2b import SandboxNotFoundException, TimeoutException
-    from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
-except ImportError:
-    AsyncSandbox = None  # type: ignore[assignment,misc]
-
-    # Fallback exception classes so `except (TimeoutException, SandboxNotFoundException)`
-    # stays syntactically valid when the e2b SDK is unavailable. They will
-    # never actually be raised because the sandbox code paths require e2b.
-    class _MissingE2BError(Exception):  # slopcop: ignore[no-broad-except]
-        pass
-
-    SandboxNotFoundException = _MissingE2BError  # type: ignore[assignment,misc]
-    TimeoutException = _MissingE2BError  # type: ignore[assignment,misc]
-
-logger = logging.getLogger(__name__)
 
 
 class DownloadedFile(BaseModel):
@@ -87,10 +74,15 @@ class BaseSandboxManager(ABC):
     _creation_locks: dict[UUID, asyncio.Lock] = {}
     _event_sink: SandboxEventSink = NoopSandboxEventSink()
 
-    def __new__(cls, *args: object, **kwargs: object):
+    def __new__(cls, *args: object, **kwargs: object) -> Self:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-        return cls._instance
+        # Class attribute `_instance` is typed as `BaseSandboxManager | None`
+        # for storage; the singleton is always materialized as `cls` so a
+        # cast to `Self` is safe and preserves subclass narrowing at the
+        # call site (e.g. `MiniF2FSandboxManager()` resolves to that class
+        # rather than the base).
+        return cast(Self, cls._instance)
 
     def __init__(self) -> None:
         # Sink is configured process-wide via set_event_sink() in app lifespan.

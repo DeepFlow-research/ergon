@@ -23,7 +23,7 @@ class SandboxExpiredError(SandboxError):
     """Raised when a sandbox is unreachable because it has timed out or
     been terminated.
 
-    Callers (criteria, ``CriterionRuntime``) should catch this and surface
+    Callers (criteria, ``public sandbox runtime``) should catch this and surface
     a ``"sandbox-expired"`` evaluation outcome rather than a generic
     failure. The underlying task output is not lost — the sandbox's state
     was already published to the blob store by the worker's resource

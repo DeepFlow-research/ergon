@@ -17,7 +17,7 @@ export interface BackendRunState {
     task_slug: string;
     level: number;
     status: string;
-    parent_node_id: string | null;
+    parent_task_id: string | null;
     parent_task_slug: string | null;
   }[];
   mutations: {

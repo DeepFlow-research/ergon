@@ -20,8 +20,8 @@ class TaskCleanupService:
     """Releases infrastructure for a single CANCELLED task execution.
 
     Called by the Inngest cleanup_cancelled_task_fn after a
-    TaskCancelledEvent. Marks the execution row as CANCELLED; E2B sandbox
-    release is not implemented on this path yet.
+    TaskCancelledEvent. Marks the execution row as CANCELLED and returns
+    the sandbox id for the job's release step.
     """
 
     def cleanup(
@@ -36,36 +36,40 @@ class TaskCleanupService:
         if execution_id is None:
             return CleanupResult(
                 run_id=run_id,
-                node_id=node_id,
+                task_id=node_id,
                 execution_id=None,
+                sandbox_id=None,
                 sandbox_released=False,
                 execution_row_updated=False,
             )
 
-        execution_updated = self._mark_execution_cancelled(session, execution_id)
+        execution = self._execution(session, execution_id)
+        sandbox_id = execution.sandbox_id if execution is not None else None
+        execution_updated = self._mark_execution_cancelled(session, execution)
         session.commit()
 
-        sandbox_released = False
-
         logger.info(
-            "task-cleanup node_id=%s execution_id=%s sandbox=%s",
+            "task-cleanup node_id=%s execution_id=%s sandbox_id=%s",
             node_id,
             execution_id,
-            sandbox_released,
+            sandbox_id,
         )
         return CleanupResult(
             run_id=run_id,
-            node_id=node_id,
+            task_id=node_id,
             execution_id=execution_id,
-            sandbox_released=sandbox_released,
+            sandbox_id=sandbox_id,
+            sandbox_released=False,
             execution_row_updated=execution_updated,
         )
 
-    def _mark_execution_cancelled(self, session: Session, execution_id: UUID) -> bool:
-        """Idempotent: skip if already terminal."""
-        exe = session.exec(
+    def _execution(self, session: Session, execution_id: UUID) -> RunTaskExecution | None:
+        return session.exec(
             select(RunTaskExecution).where(RunTaskExecution.id == execution_id)
         ).first()
+
+    def _mark_execution_cancelled(self, session: Session, exe: RunTaskExecution | None) -> bool:
+        """Idempotent: skip if already terminal."""
         if exe is None or exe.status in {
             TaskExecutionStatus.COMPLETED,
             TaskExecutionStatus.FAILED,

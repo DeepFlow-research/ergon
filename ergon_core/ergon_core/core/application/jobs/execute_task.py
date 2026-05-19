@@ -1,19 +1,66 @@
 """Inngest function: task execution orchestrator.
 
-Prepares a task, invokes sandbox/worker/persist child functions, then
-finalizes. Emits TaskCompletedEvent on success, TaskFailedEvent on failure.
+Prepares a task, invokes sandbox/worker/persist child functions, fans
+out per-evaluator invocations of ``evaluate_task_run``, then finalizes.
+Emits TaskCompletedEvent on success, TaskFailedEvent on failure.
+
+**Sandbox lifetime ownership.** This function owns the *acquisition*
+side of the sandbox lifecycle (via ``sandbox-setup``) and emits the
+*terminal* events (``task/completed`` / ``task/failed``) that gate
+cleanup.  The actual ``terminate_external_sandbox`` call lives in a
+sibling Inngest function — see
+``ergon_core/core/application/jobs/sandbox_cleanup.py``.
+
+The flow is:
+
+    sandbox-setup    →  acquires external sandbox, returns sandbox_id
+    worker-execute   →  runs the worker against the sandbox
+    persist-outputs  →  uploads artifacts (still needs the sandbox)
+    _fan_out_evaluators
+                     →  ctx.group.parallel(partial(ctx.step.invoke, …))
+                        per evaluator; each evaluator reattaches to
+                        the sandbox by id
+    emit task/completed   →  triggers sandbox_cleanup_on_completed_fn
+                              (sibling Inngest function, terminates sandbox)
+
+The ``ctx.group.parallel`` await keeps the sandbox alive through every
+per-evaluator invocation, so ``task/completed`` is only emitted after
+evaluators are done.  The sibling cleanup function then fires once
+and terminates the sandbox.
+
+**Why a sibling function, not an inline try/finally.** Inline sandbox
+termination is incompatible with Inngest's step-replay model: each
+``await ctx.step.invoke(...)`` raises ``ResponseInterrupt`` (a
+``BaseException``) to suspend the coroutine, which fires the
+``finally`` clause — terminating the sandbox **before** the sub-
+function (worker_execute / evaluate_task_run) actually runs.  Smoke
+tests caught the bug as ``KeyError`` on ``manager.reconnect(sandbox_id)``
+from inside the worker body.  Moving termination to a sibling
+function gated on terminal events fixes it because those events are
+emitted only after the entire pipeline completes (success path) or
+after the failure handler runs (failure path) — no replay race.
+
+**Why the orchestrator is `execute_task`, not `worker_execute`.**
+`worker_execute` runs *between* `sandbox_setup` and `persist_outputs`
+as sibling Inngest functions, so terminating in `worker_execute.finally`
+would kill the sandbox before `persist_outputs` could upload artifacts.
 """
 
 import logging
 import traceback
 from datetime import UTC, datetime
-from typing import Any
+from functools import partial
+from uuid import UUID
 
+import inngest
+
+from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 from ergon_core.core.application.jobs.models import (
     PersistOutputsRequest,
     PersistOutputsResult,
     SandboxReadyResult,
     SandboxSetupRequest,
+    TaskEvaluateRequest,
     TaskExecuteResult,
     WorkerExecuteJobRequest,
     WorkerExecuteJobResult,
@@ -45,7 +92,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _prepare_execution(
-    ctx: Any,
+    ctx: inngest.Context,
     svc: TaskExecutionService,
     payload: TaskReadyEvent,
 ) -> PreparedTaskExecution:
@@ -55,36 +102,32 @@ async def _prepare_execution(
                 run_id=payload.run_id,
                 definition_id=payload.definition_id,
                 task_id=payload.task_id,
-                node_id=payload.node_id,
             )
         )
 
     return await ctx.step.run("prepare-execution", _prepare, output_type=PreparedTaskExecution)
 
 
-async def _setup_sandbox(
-    ctx: Any,
+async def _invoke_sandbox_setup(
+    ctx: inngest.Context,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
-    sandbox_setup_function: Any,
+    sandbox_setup_function: inngest.Function,
 ) -> SandboxReadyResult:
-    # Dynamic subtasks have no static task_id. Use node_id as the sandbox key
-    # so each subtask gets its own isolated sandbox slot in the manager registry.
-    sandbox_task_key = payload.task_id or prepared.node_id
     return await ctx.step.invoke(
         "sandbox-setup",
         function=sandbox_setup_function,
         data=SandboxSetupRequest(
             run_id=payload.run_id,
             definition_id=payload.definition_id,
-            task_id=sandbox_task_key,
+            task_id=payload.task_id,
             benchmark_type=prepared.benchmark_type,
-            sandbox_slug=_sandbox_slug_for_run(payload.run_id),
+            sandbox_slug=_load_sandbox_slug(payload.run_id),
         ).model_dump(),
     )
 
 
-def _sandbox_slug_for_run(run_id) -> str | None:
+def _load_sandbox_slug(run_id: UUID) -> str | None:
     session = get_session()
     try:
         run = session.get(RunRecord, run_id)
@@ -93,12 +136,12 @@ def _sandbox_slug_for_run(run_id) -> str | None:
         session.close()
 
 
-async def _run_worker(
-    ctx: Any,
+async def _invoke_worker_execute(
+    ctx: inngest.Context,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
     sandbox_result: SandboxReadyResult,
-    worker_execute_function: Any,
+    worker_execute_function: inngest.Function,
 ) -> WorkerExecuteJobResult:
     return await ctx.step.invoke(
         "worker-execute",
@@ -115,31 +158,77 @@ async def _run_worker(
             worker_type=prepared.worker_type,
             model_target=prepared.model_target,
             benchmark_type=prepared.benchmark_type,
-            node_id=prepared.node_id,
         ).model_dump(),
     )
 
 
-async def _persist_outputs(
-    ctx: Any,
+async def _fan_out_evaluators(
+    ctx: inngest.Context,
+    payload: TaskReadyEvent,
+    prepared: PreparedTaskExecution,
+    evaluate_task_run_function: inngest.Function,
+) -> None:
+    """Synchronously fan out per-evaluator Inngest invocations.
+
+    The orchestrator suspends on `ctx.group.parallel(...)` until every
+    per-evaluator `ctx.step.invoke(...)` returns; once it resumes, the
+    completed event can safely trigger external sandbox cleanup.
+
+    ``ctx.group.parallel`` over a tuple of ``partial(ctx.step.invoke, ...)``
+    is the Inngest-native parallelism primitive. Using
+    ``asyncio.gather`` over `step.invoke` coroutines bypasses the
+    SDK's parallel-step bookkeeping and isn't guaranteed to give
+    proper parallelism.
+
+    Evaluator count comes from the object-bound ``task.evaluators`` tuple.
+    """
+
+    with get_session() as session:
+        view = await WorkflowGraphRepository().node(
+            session,
+            run_id=payload.run_id,
+            task_id=payload.task_id,
+        )
+    if not view.task.evaluators:
+        return
+
+    await ctx.group.parallel(
+        tuple(
+            partial(
+                ctx.step.invoke,
+                f"eval-{i}",
+                function=evaluate_task_run_function,
+                data=TaskEvaluateRequest(
+                    run_id=payload.run_id,
+                    task_id=payload.task_id,
+                    execution_id=prepared.execution_id,
+                    evaluator_index=i,
+                ).model_dump(mode="json"),
+            )
+            for i in range(len(view.task.evaluators))
+        )
+    )
+
+
+async def _invoke_persist_outputs(
+    ctx: inngest.Context,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
     sandbox_result: SandboxReadyResult,
-    persist_outputs_function: Any,
+    persist_outputs_function: inngest.Function,
 ) -> PersistOutputsResult:
-    output_task_key = payload.task_id or prepared.node_id
     return await ctx.step.invoke(
         "persist-outputs",
         function=persist_outputs_function,
         data=PersistOutputsRequest(
             run_id=payload.run_id,
             definition_id=payload.definition_id,
-            task_id=output_task_key,
+            task_id=payload.task_id,
             execution_id=prepared.execution_id,
             sandbox_id=sandbox_result.sandbox_id,
             output_dir=sandbox_result.output_dir,
             benchmark_type=prepared.benchmark_type,
-            sandbox_slug=_sandbox_slug_for_run(payload.run_id),
+            sandbox_slug=_load_sandbox_slug(payload.run_id),
         ).model_dump(),
     )
 
@@ -158,7 +247,6 @@ async def _emit_task_completed(
                 task_id=payload.task_id,
                 execution_id=prepared.execution_id,
                 sandbox_id=sandbox_id,
-                node_id=prepared.node_id,
             ).model_dump(mode="json"),
         )
     )
@@ -180,7 +268,6 @@ async def _emit_task_failed(
                 execution_id=prepared.execution_id,
                 error=error_message,
                 sandbox_id=sandbox_id,
-                node_id=prepared.node_id,
             ).model_dump(mode="json"),
         )
     )
@@ -190,12 +277,13 @@ async def _emit_task_failed(
 # would duplicate on retry. Failure propagates via TaskFailedEvent.
 # Concurrency bounded by E2B sandbox quota and Postgres connection pool.
 async def run_execute_task_job(
-    ctx: Any,
+    ctx: inngest.Context,
     payload: TaskReadyEvent,
     *,
-    sandbox_setup_function: Any,
-    worker_execute_function: Any,
-    persist_outputs_function: Any,
+    sandbox_setup_function: inngest.Function,
+    worker_execute_function: inngest.Function,
+    persist_outputs_function: inngest.Function,
+    evaluate_task_run_function: inngest.Function,
 ) -> TaskExecuteResult:
     logger.info("task-execute run_id=%s task_id=%s", payload.run_id, payload.task_id)
     span_start = datetime.now(UTC)
@@ -222,7 +310,7 @@ async def run_execute_task_job(
                 task_id=payload.task_id,
             )
 
-        sandbox_result = await _setup_sandbox(ctx, payload, prepared, sandbox_setup_function)
+        sandbox_result = await _invoke_sandbox_setup(ctx, payload, prepared, sandbox_setup_function)
         if not sandbox_result.sandbox_id:
             raise ContractViolationError(
                 "sandbox-setup returned empty sandbox_id",
@@ -231,12 +319,14 @@ async def run_execute_task_job(
             )
         task_sandbox_id = sandbox_result.sandbox_id
 
-        worker_result = await _run_worker(
+        worker_result = await _invoke_worker_execute(
             ctx, payload, prepared, sandbox_result, worker_execute_function
         )
 
         if not worker_result.success:
-            await _persist_outputs(ctx, payload, prepared, sandbox_result, persist_outputs_function)
+            await _invoke_persist_outputs(
+                ctx, payload, prepared, sandbox_result, persist_outputs_function
+            )
             error_msg = worker_result.error or "Worker execution failed"
             await svc.finalize_failure(
                 FailTaskExecutionCommand(
@@ -256,9 +346,16 @@ async def run_execute_task_job(
                 error=error_msg,
             )
 
-        persist_result = await _persist_outputs(
+        persist_result = await _invoke_persist_outputs(
             ctx, payload, prepared, sandbox_result, persist_outputs_function
         )
+
+        # Synchronous fanout. `ctx.group.parallel` keeps the sandbox
+        # alive through every per-evaluator Inngest invocation; the
+        # orchestrator emits `task/completed` only after all evaluators
+        # return, and the sibling sandbox_cleanup function terminates
+        # the external sandbox from that terminal event.
+        await _fan_out_evaluators(ctx, payload, prepared, evaluate_task_run_function)
 
         await svc.finalize_success(
             FinalizeTaskExecutionCommand(
@@ -282,13 +379,13 @@ async def run_execute_task_job(
         get_trace_sink().emit_span(
             CompletedSpan(
                 name="task.execute",
-                context=task_execute_context(payload.run_id, prepared.node_id),
+                context=task_execute_context(payload.run_id, prepared.task_id),
                 start_time=span_start,
                 end_time=datetime.now(UTC),
                 attributes={
                     "run_id": str(payload.run_id),
                     "definition_id": str(payload.definition_id),
-                    "task_id": str(prepared.node_id),
+                    "task_id": str(prepared.task_id),
                     "execution_id": str(prepared.execution_id),
                     "task_slug": prepared.task_slug,
                     "benchmark_type": prepared.benchmark_type,
@@ -334,7 +431,7 @@ async def run_execute_task_job(
                             "assigned_worker_slug": str(prepared.assigned_worker_slug),
                             "worker_type": str(prepared.worker_type),
                             "model_target": str(prepared.model_target),
-                            "node_id": str(prepared.node_id),
+                            "task_id": str(prepared.task_id),
                             "execution_id": str(prepared.execution_id),
                         },
                     },
@@ -346,7 +443,7 @@ async def run_execute_task_job(
             get_trace_sink().emit_span(
                 CompletedSpan(
                     name="task.execute",
-                    context=task_execute_context(payload.run_id, prepared.node_id),
+                    context=task_execute_context(payload.run_id, prepared.task_id),
                     start_time=span_start,
                     end_time=datetime.now(UTC),
                     status_code="error",
@@ -354,7 +451,7 @@ async def run_execute_task_job(
                     attributes={
                         "run_id": str(payload.run_id),
                         "definition_id": str(payload.definition_id),
-                        "task_id": str(prepared.node_id),
+                        "task_id": str(prepared.task_id),
                         "execution_id": str(prepared.execution_id),
                         "task_slug": prepared.task_slug,
                         "benchmark_type": prepared.benchmark_type,
@@ -365,20 +462,17 @@ async def run_execute_task_job(
                 )
             )
         else:
-            # Prepare itself raised — no execution row, no task_slug, no
-            # reliable task_id (``payload.task_id`` may be ``None`` for
-            # dynamic subtasks, which is why prepare raised in the
-            # first place).  Log loudly; the span + event emission
-            # requires a non-null task_id which we don't have here.  The
-            # run_graph_node stays in RUNNING on this branch. The
-            # ``node_id``/``task_id`` identity cleanup in README (Open refactors)
-            # targets this ambiguity. Without *this* hoist, even the traceback
-            # was invisible — the function just silently died in Inngest.
+            # Prepare itself raised — no execution row or task_slug to
+            # include in a terminal task event. Log loudly so the
+            # orchestration failure is visible in Inngest.
             logger.error(
-                "task-execute: prepare raised for task_id=%s node_id=%s — "
-                "no execution row to finalize",
+                "task-execute: prepare raised for task_id=%s — no execution row to finalize",
                 payload.task_id,
-                payload.node_id,
             )
 
         raise NonRetriableError(message=error_msg) from exc
+
+    # Sandbox termination is owned by ``sandbox_cleanup`` (sibling Inngest
+    # functions gated on ``task/completed`` / ``task/failed``) — see the
+    # module docstring for why a ``try/finally`` here would terminate
+    # before sub-functions run.

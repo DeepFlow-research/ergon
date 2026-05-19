@@ -15,14 +15,8 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTask,
 )
 from ergon_core.core.persistence.graph.models import RunGraphAnnotation, RunGraphNode
-from ergon_core.core.persistence.imports.models import (
-    RunDropsManifest,
-    RunReducer,
-    RunReducerFootprint,
-)
 from ergon_core.core.persistence.shared.enums import RunResourceKind, RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
-    ExperimentRecord,
     RunRecord,
     RunResource,
     RunTaskExecution,
@@ -38,7 +32,7 @@ class WriteRunResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     run_id: UUID
-    node_id: UUID
+    task_id: UUID
     task_execution_id: UUID
 
 
@@ -50,11 +44,9 @@ class ExternalRunWriter:
         self._source = source
         self._blob_root = blob_root
         self._definition: ExperimentDefinition | None = None
-        self._experiment: ExperimentRecord | None = None
 
     def write_run(self, parsed: ParsedRun) -> WriteRunResult:
         definition = self._definition_row()
-        experiment = self._experiment_row(definition)
         observed_fields = _compact_for_db(_json_safe(parsed.observed_fields))
         missing_fields = _json_safe(parsed.missing_fields)
         instance = ExperimentDefinitionInstance(
@@ -86,8 +78,7 @@ class ExternalRunWriter:
         self._session.flush()
 
         run = RunRecord(
-            experiment_id=experiment.id,
-            workflow_definition_id=definition.id,
+            definition_id=definition.id,
             benchmark_type=f"imported:{self._source.dataset}",
             instance_key=parsed.instance_key,
             sample_id=parsed.source_run_id,
@@ -95,6 +86,7 @@ class ExternalRunWriter:
             summary_json={
                 "imported": True,
                 "source_slug": self._source.dataset,
+                "import_batch_id": self._source.batch_id,
                 "source_run_id": parsed.source_run_id,
                 "source_unit_kind": parsed.schema_fit_class,
                 "observed_fields": observed_fields,
@@ -106,7 +98,7 @@ class ExternalRunWriter:
 
         node = RunGraphNode(
             run_id=run.id,
-            definition_task_id=task.id,
+            task_id=task.id,
             instance_key=parsed.instance_key,
             task_slug="imported-root",
             description=parsed.description,
@@ -117,8 +109,7 @@ class ExternalRunWriter:
 
         execution = RunTaskExecution(
             run_id=run.id,
-            definition_task_id=task.id,
-            node_id=node.id,
+            task_id=node.task_id,
             status=TaskExecutionStatus.COMPLETED,
             output_json={
                 "imported": True,
@@ -134,7 +125,7 @@ class ExternalRunWriter:
                 RunGraphAnnotation(
                     run_id=run.id,
                     target_type="node",
-                    target_id=node.id,
+                    target_id=node.task_id,
                     namespace=annotation.namespace,
                     sequence=sequence,
                     payload=_json_safe(annotation.payload),
@@ -144,50 +135,13 @@ class ExternalRunWriter:
         for resource in parsed.resources:
             self._session.add(self._resource_row(run.id, execution.id, resource))
 
-        for reducer in parsed.reducers:
-            reducer_row = RunReducer(
-                run_id=run.id,
-                node_id=node.id,
-                task_execution_id=execution.id,
-                name=reducer.name,
-                kind=reducer.kind,
-                implementation_ref=reducer.implementation_ref,
-                output_json=_compact_for_db(_json_safe(reducer.output)),
-                input_scope_json={"source_run_id": parsed.source_run_id},
-                status="completed",
-            )
-            self._session.add(reducer_row)
-            self._session.flush()
-            self._session.add(
-                RunReducerFootprint(
-                    reducer_id=reducer_row.id,
-                    source_kind="annotation",
-                    namespace=reducer.name,
-                    fields_read_json=_json_safe(reducer.fields_read),
-                    filters_json=_json_safe(reducer.filters),
-                    aggregation_json=_json_safe(reducer.aggregation),
-                    access_kind="mixed",
-                )
-            )
-            for drop in reducer.drops:
-                self._session.add(
-                    RunDropsManifest(
-                        reducer_id=reducer_row.id,
-                        loss_class=drop.loss_class,
-                        dropped_field_path=drop.dropped_field_path,
-                        reason=drop.reason,
-                        affected_analysis=drop.affected_analysis,
-                        declaration_kind=drop.declaration_kind,
-                        evidence_json=_json_safe(drop.evidence),
-                    )
-                )
-
-        return WriteRunResult(run_id=run.id, node_id=node.id, task_execution_id=execution.id)
+        return WriteRunResult(run_id=run.id, task_id=node.task_id, task_execution_id=execution.id)
 
     def _definition_row(self) -> ExperimentDefinition:
         if self._definition is None:
             self._definition = ExperimentDefinition(
                 benchmark_type=f"imported:{self._source.dataset}",
+                name=f"imported:{self._source.dataset}",
                 metadata_json={
                     "imported": True,
                     "source_slug": self._source.dataset,
@@ -201,24 +155,6 @@ class ExternalRunWriter:
             self._session.add(self._definition)
             self._session.flush()
         return self._definition
-
-    def _experiment_row(self, definition: ExperimentDefinition) -> ExperimentRecord:
-        if self._experiment is None:
-            self._experiment = ExperimentRecord(
-                name=self._source.batch_id,
-                benchmark_type=definition.benchmark_type,
-                sample_count=0,
-                sample_selection_json={"source": self._source.dataset},
-                metadata_json={
-                    "imported": True,
-                    "source_slug": self._source.dataset,
-                    "import_batch_id": self._source.batch_id,
-                },
-            )
-            self._session.add(self._experiment)
-            self._session.flush()
-        self._experiment.sample_count += 1
-        return self._experiment
 
     def _resource_row(
         self,

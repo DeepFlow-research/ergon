@@ -119,9 +119,9 @@ def run_benchmark(
     if define.returncode != 0:
         return define
 
-    experiment_id = _parse_uuid_line("EXPERIMENT_ID=", define.stdout + define.stderr)
+    definition_id = _parse_uuid_line("EXPERIMENT_ID=", define.stdout + define.stderr)
     return subprocess.run(
-        ["ergon", "experiment", "run", experiment_id, "--timeout", str(timeout)],
+        ["ergon", "experiment", "run", definition_id, "--timeout", str(timeout)],
         capture_output=True,
         text=True,
         env=env,

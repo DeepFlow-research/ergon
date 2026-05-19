@@ -11,12 +11,12 @@ from uuid import UUID
 
 import inngest
 from ergon_core.core.persistence.context.models import RunContextEvent
+from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_engine
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohort,
-    ExperimentRecord,
     RunRecord,
     RunResource,
     RunTaskEvaluation,
@@ -27,18 +27,33 @@ from ergon_core.core.application.events.task_events import WorkflowStartedEvent
 from ergon_core.core.infrastructure.inngest.client import inngest_client
 from ergon_core.core.application.read_models.cohorts import experiment_cohort_service
 from ergon_core.core.application.experiments.service import (
-    ExperimentService,
+    run_experiment as _run_experiment,
 )
+from ergon_core.core.application.experiments.definition_writer import persist_benchmark
 from ergon_core.core.application.experiments.models import (
-    ExperimentDefineRequest,
     ExperimentRunRequest,
 )
-from ergon_core.api.registry import registry
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel import Session, asc, select
+from tests.fixtures.smoke_components.benchmarks import (
+    GDPEvalSmokeBenchmark,
+    MiniF2FSmokeBenchmark,
+    ResearchRubricsSmokeBenchmark,
+    SweBenchSmokeBenchmark,
+)
 
 router = APIRouter(prefix="/api/__danger__/test-harness", tags=["danger-test-harness"])
+
+_SMOKE_BENCHMARKS = {
+    benchmark.type_slug: benchmark
+    for benchmark in (
+        GDPEvalSmokeBenchmark,
+        MiniF2FSmokeBenchmark,
+        ResearchRubricsSmokeBenchmark,
+        SweBenchSmokeBenchmark,
+    )
+}
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +66,7 @@ class TestGraphNodeDto(BaseModel):
     task_slug: str
     level: int
     status: str
-    parent_node_id: UUID | None
+    parent_task_id: UUID | None
     parent_task_slug: str | None
 
 
@@ -123,6 +138,17 @@ def _execution_error_message(execution: RunTaskExecution) -> str | None:
     return str(error)
 
 
+def _cohort_id_from_definition(definition: ExperimentDefinition) -> UUID | None:
+    raw = definition.parsed_metadata().get("cohort_id")
+    if raw is None:
+        return None
+    if isinstance(raw, UUID):
+        return raw
+    if isinstance(raw, str):
+        return UUID(raw)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Read endpoint
 # ---------------------------------------------------------------------------
@@ -138,16 +164,16 @@ def read_run_state(
         raise HTTPException(status_code=404, detail=f"run {run_id} not found")
 
     nodes = list(session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all())
-    slug_by_node_id: dict[UUID, str] = {n.id: n.task_slug for n in nodes}
+    slug_by_task_id: dict[UUID, str] = {n.task_id: n.task_slug for n in nodes}
 
     graph_nodes = [
         TestGraphNodeDto(
-            id=n.id,
+            id=n.task_id,
             task_slug=n.task_slug,
             level=n.level,
             status=n.status,
-            parent_node_id=n.parent_node_id,
-            parent_task_slug=(slug_by_node_id.get(n.parent_node_id) if n.parent_node_id else None),
+            parent_task_id=n.parent_task_id,
+            parent_task_slug=(slug_by_task_id.get(n.parent_task_id) if n.parent_task_id else None),
         )
         for n in nodes
     ]
@@ -163,7 +189,7 @@ def read_run_state(
         TestGraphMutationDto(
             sequence=m.sequence,
             mutation_type=m.mutation_type,
-            target_task_slug=slug_by_node_id.get(m.target_id) if m.target_id else None,
+            target_task_slug=slug_by_task_id.get(m.target_id) if m.target_id else None,
         )
         for m in mutation_rows
     ]
@@ -173,8 +199,8 @@ def read_run_state(
     )
     evaluations = [
         TestEvaluationDto(
-            task_id=ev.node_id,
-            task_slug=slug_by_node_id.get(ev.node_id),
+            task_id=ev.task_id,
+            task_slug=slug_by_task_id.get(ev.task_id),
             score=float(ev.score) if ev.score is not None else 0.0,
             reason="" if ev.feedback is None else ev.feedback,
         )
@@ -186,7 +212,7 @@ def read_run_state(
     )
     executions = [
         TestExecutionDto(
-            task_slug=slug_by_node_id.get(ex.node_id) if ex.node_id else None,
+            task_slug=slug_by_task_id.get(ex.task_id),
             status=ex.status,
             error=_execution_error_message(ex),
         )
@@ -255,9 +281,18 @@ def read_cohort_runs(
     ).first()
     if cohort is None:
         return []
+    definition_ids = [
+        definition.id
+        for definition in session.exec(select(ExperimentDefinition)).all()
+        if _cohort_id_from_definition(definition) == cohort.id
+    ]
+    if not definition_ids:
+        return []
     runs = list(
         session.exec(
-            select(RunRecord).join(ExperimentRecord).where(ExperimentRecord.cohort_id == cohort.id)
+            select(RunRecord).where(
+                RunRecord.definition_id.in_(definition_ids)  # type: ignore[attr-defined]
+            )
         ).all(),
     )
     return [TestCohortRunDto(run_id=r.id, status=r.status) for r in runs]
@@ -267,29 +302,15 @@ def read_cohort_runs(
 # Write endpoints — danger-prefixed local/test harness
 # ---------------------------------------------------------------------------
 #
-# Schema reality vs. spec:
-#   The RFC/plan speaks of ``RunRecord.cohort: str`` and ``metadata``. The
-#   actual model has ``cohort_id: UUID | None`` (FK) and ``summary_json: dict``.
-#   We bridge by:
-#     - Recording the test "cohort tag" as a string inside ``summary_json``
-#       under ``_test_cohort`` so reset can match by prefix.
-#     - Marking seeded rows with ``summary_json["_test_seeded"] = True``.
-#     - Requiring the caller to pass an existing ``workflow_definition_id``
-#       (NOT NULL FK) when seeding — no synthetic definition is created here.
-#
-# ``SeedRunRequest.cohort`` is defaulted so a body with only the definition id
-# passes validation and the secret gate (which runs inside the handler body,
-# after FastAPI's validation phase) can surface 401/500 without 422 noise.
-# ``workflow_definition_id`` is the current field; ``experiment_definition_id``
-# remains accepted for older harness callers.
+# Seeded rows record the test cohort tag in ``summary_json`` and stamp the
+# target definition metadata with the resolved cohort id so dashboard read
+# models can use the canonical definition tables.
 # ``ResetRequest.cohort_prefix`` has no default: reset is destructive, so
 # callers must always specify what to nuke.
 
 
 class SeedRunRequest(BaseModel):
-    workflow_definition_id: UUID | None = None
-    experiment_definition_id: UUID | None = None
-    experiment_id: UUID | None = None
+    definition_id: UUID
     benchmark_type: str = "test-harness"
     instance_key: str = "seeded"
     worker_team: dict = Field(default_factory=lambda: {"primary": "test-harness-worker"})
@@ -306,12 +327,6 @@ class ResetRequest(BaseModel):
 def seed_run(
     body: SeedRunRequest,
 ) -> dict:
-    definition_id = body.workflow_definition_id or body.experiment_definition_id
-    if definition_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="workflow_definition_id is required",
-        )
     # Map spec string ``status`` onto the RunStatus StrEnum; unknown strings
     # are rejected as 422-equivalent 400s so bad tests fail loud.
     try:
@@ -327,26 +342,26 @@ def seed_run(
             description="test harness seeded cohort",
             created_by="test-harness",
         )
-        experiment_kwargs = {}
-        if body.experiment_id is not None:
-            experiment_kwargs["id"] = body.experiment_id
-        experiment = ExperimentRecord(
-            **experiment_kwargs,
-            cohort_id=cohort.id,
-            name=f"Seeded {body.cohort}",
-            benchmark_type=body.benchmark_type,
-            sample_count=1,
-            sample_selection_json={"instance_keys": [body.instance_key]},
-            default_worker_team_json=body.worker_team,
-            design_json={},
-            metadata_json={"_test_seeded": True, "_test_cohort": body.cohort},
-            status="seeded",
+        definition = s.get(ExperimentDefinition, body.definition_id)
+        if definition is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"definition {body.definition_id} not found",
+            )
+        metadata = dict(definition.metadata_json)
+        metadata.update(
+            {
+                "cohort_id": str(cohort.id),
+                "_test_seeded": True,
+                "_test_cohort": body.cohort,
+                "default_worker_team": body.worker_team,
+                "status": "seeded",
+            }
         )
-        s.add(experiment)
-        s.flush()
+        definition.metadata_json = metadata
+        s.add(definition)
         run = RunRecord(
-            experiment_id=experiment.id,
-            workflow_definition_id=definition_id,
+            definition_id=body.definition_id,
             benchmark_type=body.benchmark_type,
             instance_key=body.instance_key,
             worker_team_json=body.worker_team,
@@ -378,12 +393,19 @@ def reset_test_rows(
             tag = meta.get("_test_cohort")
             if isinstance(tag, str) and tag.startswith(body.cohort_prefix):
                 s.delete(r)
-        experiments = list(s.exec(select(ExperimentRecord)).all())
-        for experiment in experiments:
-            meta = {} if experiment.metadata_json is None else experiment.metadata_json
+        definitions = list(s.exec(select(ExperimentDefinition)).all())
+        for definition in definitions:
+            meta = {} if definition.metadata_json is None else definition.metadata_json
             tag = meta.get("_test_cohort")
             if isinstance(tag, str) and tag.startswith(body.cohort_prefix):
-                s.delete(experiment)
+                cleaned = dict(meta)
+                cleaned.pop("cohort_id", None)
+                cleaned.pop("_test_seeded", None)
+                cleaned.pop("_test_cohort", None)
+                cleaned.pop("default_worker_team", None)
+                cleaned.pop("status", None)
+                definition.metadata_json = cleaned
+                s.add(definition)
         s.commit()
     return None
 
@@ -426,9 +448,10 @@ class SubmitCohortResponse(BaseModel):
 async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
     """Build + persist + dispatch N runs under one cohort.
 
-    Per-slot flow mirrors the CLI's ``ergon experiment define`` followed by
-    ``ergon experiment run``. Slots submit sequentially — typical N ≤ 3,
-    so the parallel-gather savings are negligible.
+    Per-slot flow persists the object-bound smoke ``Benchmark`` into the
+    immutable ``ExperimentDefinition`` tables. Cohort/display metadata is
+    written onto the definition metadata before launch. Slots submit
+    sequentially — typical N ≤ 3, so the parallel-gather savings are negligible.
     """
     cohort = experiment_cohort_service.resolve_or_create(
         name=body.cohort_key,
@@ -438,34 +461,33 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
 
     run_ids: list[UUID] = []
     for slot in body.slots:
-        experiment_service = ExperimentService()
-        evaluator_bindings = _extra_evaluator_bindings(body.benchmark_slug)
-        defined = experiment_service.define_benchmark_experiment(
-            ExperimentDefineRequest(
-                benchmark_slug=body.benchmark_slug,
-                cohort_id=cohort.id,
-                limit=body.limit,
-                default_model_target=body.model,
-                default_worker_team={"primary": slot.worker_slug},
-                default_evaluator_slug=slot.evaluator_slug,
-                evaluator_bindings=evaluator_bindings,
-                sandbox_slug=body.sandbox_slug or body.benchmark_slug,
-                dependency_extras=body.dependency_extras,
-                metadata={"source": "test-harness"},
-            )
+        try:
+            benchmark_cls = _SMOKE_BENCHMARKS[body.benchmark_slug]
+        except KeyError:
+            known = ", ".join(sorted(_SMOKE_BENCHMARKS))
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown smoke benchmark {body.benchmark_slug!r}; known: {known}",
+            ) from None
+        benchmark_source = benchmark_cls(
+            metadata={
+                "benchmark_slug": body.benchmark_slug,
+                "source": "test-harness",
+                "_test_cohort": body.cohort_key,
+                "cohort_id": str(cohort.id),
+                "default_worker_team": {"primary": slot.worker_slug},
+                "default_evaluator_slug": slot.evaluator_slug,
+                "default_model_target": body.model,
+                "sandbox_slug": body.sandbox_slug or body.benchmark_slug,
+                "dependency_extras": list(body.dependency_extras),
+            },
+            created_by="test-harness",
         )
-        launched = await experiment_service.run_experiment(
-            ExperimentRunRequest(experiment_id=defined.experiment_id)
-        )
+        setattr(benchmark_source, "worker_slug", slot.worker_slug)
+        setattr(benchmark_source, "model", body.model)
+        handle = persist_benchmark(benchmark_source)
+
+        launched = await _run_experiment(ExperimentRunRequest(definition_id=handle.definition_id))
         run_ids.extend(launched.run_ids)
 
     return SubmitCohortResponse(run_ids=run_ids, cohort_id=cohort.id)
-
-
-def _extra_evaluator_bindings(benchmark_slug: str) -> dict[str, str]:
-    benchmark = registry.require_benchmark(benchmark_slug)()
-    requirements = set(benchmark.evaluator_requirements())
-    if "post-root" not in requirements:
-        return {}
-    registry.require_evaluator("smoke-post-root-timing-criterion")
-    return {"post-root": "smoke-post-root-timing-criterion"}

@@ -43,11 +43,20 @@ export const NodeFieldChangedValueSchema = z.object({
 export type NodeFieldChangedValue = z.infer<typeof NodeFieldChangedValueSchema>;
 
 export const EdgeAddedValueSchema = z.object({
-  source_node_id: z.string().uuid(),
-  target_node_id: z.string().uuid(),
+  mutation_type: z.literal("edge.added").optional(),
+  source_task_id: z.string().uuid(),
+  target_task_id: z.string().uuid(),
   status: z.string(),
 });
 export type EdgeAddedValue = z.infer<typeof EdgeAddedValueSchema>;
+
+export const EdgeRemovedValueSchema = z.object({
+  mutation_type: z.literal("edge.removed").optional(),
+  source_task_id: z.string().uuid(),
+  target_task_id: z.string().uuid(),
+  status: z.string(),
+});
+export type EdgeRemovedValue = z.infer<typeof EdgeRemovedValueSchema>;
 
 export const EdgeStatusChangedValueSchema = z.object({
   status: z.string(),

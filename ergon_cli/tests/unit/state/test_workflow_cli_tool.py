@@ -10,14 +10,30 @@ from ergon_cli.commands.workflow import WorkflowCommandOutput, execute_workflow_
 from ergon_core.api.worker import WorkerContext
 
 
-@pytest.mark.asyncio
-async def test_workflow_tool_injects_worker_context() -> None:
-    context = WorkerContext(
+class _Session:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
+def _worker_context() -> WorkerContext:
+    return WorkerContext(
         run_id=uuid4(),
+        task_id=uuid4(),
         execution_id=uuid4(),
         sandbox_id="sandbox",
-        node_id=uuid4(),
+        task_mgmt=object(),
+        task_inspect=object(),
+        resource_repo=object(),
+        session_factory=_Session,
     )
+
+
+@pytest.mark.asyncio
+async def test_workflow_tool_injects_worker_context() -> None:
+    context = _worker_context()
     seen = {}
 
     def execute(command, *, context, session_factory, service):
@@ -33,7 +49,7 @@ async def test_workflow_tool_injects_worker_context() -> None:
 
     workflow = make_workflow_cli_tool(
         worker_context=context,
-        sandbox_task_key=context.node_id,
+        sandbox_task_key=context.task_id,
         benchmark_type="researchrubrics",
         execute_command=execute,
     )
@@ -41,20 +57,15 @@ async def test_workflow_tool_injects_worker_context() -> None:
     assert await workflow("inspect task-tree") == "ok"
     assert seen["command"] == "inspect task-tree"
     assert seen["context"].run_id == context.run_id
-    assert seen["context"].node_id == context.node_id
+    assert seen["context"].node_id == context.task_id
     assert seen["context"].execution_id == context.execution_id
-    assert seen["context"].sandbox_task_key == context.node_id
+    assert seen["context"].sandbox_task_key == context.task_id
     assert seen["context"].benchmark_type == "researchrubrics"
 
 
 @pytest.mark.asyncio
 async def test_workflow_tool_reports_nonzero_exit() -> None:
-    context = WorkerContext(
-        run_id=uuid4(),
-        execution_id=uuid4(),
-        sandbox_id="sandbox",
-        node_id=uuid4(),
-    )
+    context = _worker_context()
 
     def execute(command, *, context, session_factory, service):
         class Output:
@@ -66,7 +77,7 @@ async def test_workflow_tool_reports_nonzero_exit() -> None:
 
     workflow = make_workflow_cli_tool(
         worker_context=context,
-        sandbox_task_key=context.node_id,
+        sandbox_task_key=context.task_id,
         benchmark_type="researchrubrics",
         execute_command=execute,
     )
@@ -76,12 +87,7 @@ async def test_workflow_tool_reports_nonzero_exit() -> None:
 
 @pytest.mark.asyncio
 async def test_workflow_tool_can_run_manage_commands_inside_event_loop() -> None:
-    context = WorkerContext(
-        run_id=uuid4(),
-        execution_id=uuid4(),
-        sandbox_id="sandbox",
-        node_id=uuid4(),
-    )
+    context = _worker_context()
 
     def execute(command, *, context, session_factory, service):
         assert command.startswith("manage add-task")
@@ -89,7 +95,7 @@ async def test_workflow_tool_can_run_manage_commands_inside_event_loop() -> None
 
     workflow = make_workflow_cli_tool(
         worker_context=context,
-        sandbox_task_key=context.node_id,
+        sandbox_task_key=context.task_id,
         benchmark_type="researchrubrics",
         execute_command=execute,
     )
@@ -101,12 +107,7 @@ async def test_workflow_tool_can_run_manage_commands_inside_event_loop() -> None
 
 @pytest.mark.asyncio
 async def test_workflow_tool_default_executor_handles_async_manage_bridge() -> None:
-    context = WorkerContext(
-        run_id=uuid4(),
-        execution_id=uuid4(),
-        sandbox_id="sandbox",
-        node_id=uuid4(),
-    )
+    context = _worker_context()
 
     class Session:
         def close(self):
@@ -114,7 +115,7 @@ async def test_workflow_tool_default_executor_handles_async_manage_bridge() -> N
 
     workflow = make_workflow_cli_tool(
         worker_context=context,
-        sandbox_task_key=context.node_id,
+        sandbox_task_key=context.task_id,
         benchmark_type="researchrubrics",
         execute_command=execute_workflow_command,
         session_factory=Session,
@@ -129,12 +130,7 @@ async def test_workflow_tool_default_executor_handles_async_manage_bridge() -> N
 
 @pytest.mark.asyncio
 async def test_budgeted_workflow_tool_returns_structured_exhaustion() -> None:
-    context = WorkerContext(
-        run_id=uuid4(),
-        execution_id=uuid4(),
-        sandbox_id="sandbox",
-        node_id=uuid4(),
-    )
+    context = _worker_context()
     calls = 0
 
     def execute(command, *, context, session_factory, service):
@@ -144,7 +140,7 @@ async def test_budgeted_workflow_tool_returns_structured_exhaustion() -> None:
 
     workflow = make_workflow_cli_tool(
         worker_context=context,
-        sandbox_task_key=context.node_id,
+        sandbox_task_key=context.task_id,
         benchmark_type="researchrubrics",
         execute_command=execute,
         budgeted=True,

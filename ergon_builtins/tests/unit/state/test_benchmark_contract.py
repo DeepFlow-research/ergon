@@ -1,21 +1,25 @@
-"""Contract: every registered benchmark declares onboarding_deps."""
+"""Contracts for object-bound built-in benchmark classes."""
 
 import pytest
-from ergon_builtins.registry_core import BENCHMARKS as CORE_BENCHMARKS
-from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, EmptyTaskPayload, TaskSpec
+from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
+from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
+from ergon_builtins.benchmarks.swebench_verified.benchmark import SweBenchVerifiedBenchmark
+from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, EmptyTaskPayload, Task
 from pydantic import BaseModel, ValidationError
+from ergon_core.test_support.task_factory import TestSandbox, TestWorker
+
+CORE_BENCHMARKS = {
+    MiniF2FBenchmark.type_slug: MiniF2FBenchmark,
+    SweBenchVerifiedBenchmark.type_slug: SweBenchVerifiedBenchmark,
+}
+
+DATA_BENCHMARKS = {
+    ResearchRubricsBenchmark.type_slug: ResearchRubricsBenchmark,
+}
 
 
 def _require_onboarding_deps(slug: str, cls: type[Benchmark]) -> BenchmarkRequirements:
-    try:
-        deps = cls.onboarding_deps
-    except AttributeError as exc:
-        pytest.fail(
-            f"Benchmark '{slug}' ({cls.__qualname__}) is missing 'onboarding_deps'. "
-            "Add 'onboarding_deps: ClassVar[BenchmarkRequirements] = BenchmarkRequirements(...)' "
-            "to the class body.",
-        )
-        raise AssertionError from exc
+    deps = cls.onboarding_deps
     assert isinstance(deps, BenchmarkRequirements), (
         f"Benchmark '{slug}' ({cls.__qualname__}).onboarding_deps is not a "
         f"BenchmarkRequirements instance; got {type(deps)!r}."
@@ -24,50 +28,27 @@ def _require_onboarding_deps(slug: str, cls: type[Benchmark]) -> BenchmarkRequir
 
 
 class TestBenchmarkOnboardingDepsContract:
-    """Every benchmark in both registries must declare onboarding_deps."""
+    """Every importable benchmark must declare onboarding_deps."""
 
-    def test_core_benchmarks_have_onboarding_deps(self) -> None:
-        for slug, cls in CORE_BENCHMARKS.items():
-            _require_onboarding_deps(slug, cls)
+    @pytest.mark.parametrize("slug, cls", [*CORE_BENCHMARKS.items(), *DATA_BENCHMARKS.items()])
+    def test_benchmarks_have_onboarding_deps(self, slug: str, cls: type[Benchmark]) -> None:
+        _require_onboarding_deps(slug, cls)
 
-    def test_data_benchmarks_have_onboarding_deps(self) -> None:
-        pytest.importorskip("datasets", reason="ergon-builtins[data] not installed")
-        # reason: registry_data imports optional dataset-backed benchmarks.
-        from ergon_builtins.registry_data import BENCHMARKS
-
-        for slug, cls in BENCHMARKS.items():
-            _require_onboarding_deps(slug, cls)
-
-    def test_core_benchmarks_declare_payload_models(self) -> None:
-        for slug, cls in CORE_BENCHMARKS.items():
-            assert issubclass(cls.task_payload_model, BaseModel), (
-                f"Benchmark '{slug}' ({cls.__qualname__}) must declare a "
-                "Pydantic task_payload_model."
-            )
-
-    def test_data_benchmarks_declare_payload_models(self) -> None:
-        pytest.importorskip("datasets", reason="ergon-builtins[data] not installed")
-        # reason: registry_data imports optional dataset-backed benchmarks.
-        from ergon_builtins.registry_data import BENCHMARKS
-
-        for slug, cls in BENCHMARKS.items():
-            assert issubclass(cls.task_payload_model, BaseModel), (
-                f"Benchmark '{slug}' ({cls.__qualname__}) must declare a "
-                "Pydantic task_payload_model."
-            )
+    @pytest.mark.parametrize("slug, cls", [*CORE_BENCHMARKS.items(), *DATA_BENCHMARKS.items()])
+    def test_benchmarks_declare_payload_models(self, slug: str, cls: type[Benchmark]) -> None:
+        assert issubclass(cls.task_payload_model, BaseModel), (
+            f"Benchmark '{slug}' ({cls.__qualname__}) must declare a Pydantic task_payload_model."
+        )
 
     def test_onboarding_deps_is_frozen(self) -> None:
-        """BenchmarkRequirements instances must be immutable (frozen=True via attribute access)."""
-        for slug, cls in CORE_BENCHMARKS.items():
+        for cls in CORE_BENCHMARKS.values():
             deps = cls.onboarding_deps
             with pytest.raises(ValidationError):
                 setattr(deps, "e2b", not deps.e2b)
 
     def test_known_e2b_benchmarks(self) -> None:
-        # ``smoke-test`` and ``researchrubrics-smoke`` benchmarks retired
-        # alongside the canonical-smoke refactor.
-        assert CORE_BENCHMARKS["minif2f"].onboarding_deps.e2b is True
-        assert CORE_BENCHMARKS["swebench-verified"].onboarding_deps.e2b is True
+        assert MiniF2FBenchmark.onboarding_deps.e2b is True
+        assert SweBenchVerifiedBenchmark.onboarding_deps.e2b is True
 
 
 class TestBenchmarkSubclassEnforcement:
@@ -75,7 +56,7 @@ class TestBenchmarkSubclassEnforcement:
         class LocalBenchmark(Benchmark):
             type_slug = "local-test"
 
-            def build_instances(self) -> dict[str, list[TaskSpec[BaseModel]]]:
+            def build_instances(self) -> dict[str, list[Task[EmptyTaskPayload]]]:
                 return {}
 
         assert LocalBenchmark.type_slug == "local-test"
@@ -85,20 +66,24 @@ class TestBenchmarkSubclassEnforcement:
 class TestTaskPayloadContract:
     def test_task_payload_is_a_pydantic_model(self) -> None:
         payload = EmptyTaskPayload()
-        task = TaskSpec(
+        task = Task(
             task_slug="task",
             instance_key="default",
             description="desc",
             task_payload=payload,
+            worker=TestWorker(name="worker", model="test:none"),
+            sandbox=TestSandbox(),
         )
 
         assert task.task_payload is payload
 
     def test_plain_dict_payload_is_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            TaskSpec(
+            Task(
                 task_slug="task",
                 instance_key="default",
                 description="desc",
                 task_payload={"loose": "dict"},
+                worker=TestWorker(name="worker", model="test:none"),
+                sandbox=TestSandbox(),
             )

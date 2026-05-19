@@ -1,9 +1,11 @@
 """Tests for ResearchRubrics benchmark registration and vanilla variant."""
 
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
 from ergon_builtins.benchmarks.researchrubrics.judge_criterion import (
     ResearchRubricsJudgeCriterion,
@@ -14,7 +16,6 @@ from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
     RubricCriterion,
 )
 from ergon_builtins.benchmarks.researchrubrics.vanilla import ResearchRubricsVanillaBenchmark
-from ergon_builtins.registry_data import BENCHMARKS, EVALUATORS, WORKERS
 from ergon_core.api import Benchmark
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.criterion import CriterionOutcome
@@ -22,22 +23,7 @@ from ergon_core.api.worker import WorkerOutput
 from ergon_core.core.application.resources import RunResourceView
 from ergon_core.core.persistence.shared.enums import RunResourceKind
 from ergon_core.api.benchmark import Task
-
-
-class _FakeJudgeRuntime:
-    def __init__(self, resources: list[RunResourceView], blobs: dict[str, bytes]) -> None:
-        self._resources = resources
-        self._blobs = blobs
-        self.listed_task_execution_ids: list[object] = []
-        self.read_resource_ids: list[str] = []
-
-    async def list_resources(self, task_execution_id=None):
-        self.listed_task_execution_ids.append(task_execution_id)
-        return self._resources
-
-    async def read_resource_by_id(self, resource_id):
-        self.read_resource_ids.append(str(resource_id))
-        return self._blobs[str(resource_id)]
+from ergon_core.test_support.task_factory import task_with_id
 
 
 def _resource_view(
@@ -68,73 +54,18 @@ def _resource_view(
 
 
 class TestResearchRubricsBenchmarkRegistration:
-    """Verify benchmark slugs resolve correctly in the registry."""
+    """Verify benchmark classes expose the final object-bound surface."""
 
-    def test_researchrubrics_registered(self):
-        """researchrubrics resolves to the official ScaleAI dataset benchmark."""
-        assert BENCHMARKS["researchrubrics"] is ResearchRubricsBenchmark
-        assert set(BENCHMARKS) == {"gdpeval", "researchrubrics", "researchrubrics-vanilla"}
+    def test_researchrubrics_type_slug(self):
+        assert ResearchRubricsBenchmark.type_slug == "researchrubrics"
         assert issubclass(ResearchRubricsBenchmark, Benchmark)
 
-    def test_researchrubrics_vanilla_registered(self):
-        """researchrubrics-vanilla resolves to ResearchRubricsVanillaBenchmark."""
-        assert "researchrubrics-vanilla" in BENCHMARKS
-        assert BENCHMARKS["researchrubrics-vanilla"] is ResearchRubricsVanillaBenchmark
+    def test_researchrubrics_vanilla_type_slug(self):
+        assert ResearchRubricsVanillaBenchmark.type_slug == "researchrubrics-vanilla"
         assert issubclass(ResearchRubricsVanillaBenchmark, Benchmark)
 
-    def test_worker_slugs_registered(self):
-        expected = {
-            "researchrubrics-researcher",
-            "researchrubrics-workflow-cli-react",
-        }
-        missing = expected - set(WORKERS.keys())
-        assert not missing, f"Expected worker slugs missing from registry: {missing}"
-
-    def test_rubric_registered_by_cli_and_type_slug(self):
-        assert EVALUATORS["research-rubric"] is ResearchRubricsRubric
-        assert EVALUATORS["researchrubrics-rubric"] is ResearchRubricsRubric
-
-    def test_manager_composition_registers_specialist_bindings(self, monkeypatch):
-        from ergon_cli.composition import build_experiment
-
-        class FakeTrainDataset:
-            def __len__(self):
-                return 1
-
-            def __getitem__(self, idx):
-                assert idx == 0
-                return {
-                    "sample_id": "sample",
-                    "domain": "quality",
-                    "prompt": "Write a report.",
-                    "rubrics": [
-                        {"criterion": "Includes citations.", "axis": "quality", "weight": 2.0},
-                    ],
-                }
-
-            def select(self, indexes):
-                assert list(indexes) == [0]
-                return self
-
-        monkeypatch.setattr(
-            "ergon_builtins.benchmarks.researchrubrics.benchmark.load_dataset",
-            lambda *args, **kwargs: {"train": FakeTrainDataset()},
-        )
-
-        experiment = build_experiment(
-            "researchrubrics",
-            model="stub:constant",
-            worker_slug="researchrubrics-workflow-cli-react",
-            evaluator_slug="research-rubric",
-            limit=1,
-        )
-
-        assert set(experiment.workers) == {
-            "manager",
-            "researchrubrics-researcher",
-            "researchrubrics-workflow-cli-react",
-        }
-        assert experiment.assignments == {"manager": ["sample"]}
+    def test_rubric_type_slug(self):
+        assert ResearchRubricsRubric.type_slug == "researchrubrics-rubric"
 
 
 class TestResearchRubricsVanillaBenchmark:
@@ -194,12 +125,12 @@ class TestResearchRubricsRubric:
 
     def test_can_construct_without_prebound_criteria(self):
         rubric = ResearchRubricsRubric(name="evaluator")
-        task = Task[ResearchRubricsTaskPayload](
-            task_id=uuid4(),
+        task = task_with_id(
+            uuid4(),
+            cls=Task[ResearchRubricsTaskPayload],
             task_slug="sample",
             instance_key="default",
             description="Write a report.",
-            evaluator_binding_keys=("default",),
             task_payload=ResearchRubricsTaskPayload.model_validate(
                 {
                     "sample_id": "sample",
@@ -230,19 +161,30 @@ class TestResearchRubricsRubric:
 
     def test_aggregate_uses_result_weights(self):
         rubric = ResearchRubricsRubric(name="evaluator")
-        task = Task(
-            task_id=uuid4(),
+        task = task_with_id(
+            uuid4(),
             task_slug="sample",
             instance_key="default",
             description="Write a report.",
-            evaluator_binding_keys=("default",),
         )
 
         result = rubric.aggregate_task(
             task,
             [
-                CriterionOutcome(name="positive", score=1.0, passed=True, weight=2.0),
-                CriterionOutcome(name="negative", score=0.0, passed=False, weight=-1.0),
+                CriterionOutcome(
+                    slug="positive",
+                    name="positive",
+                    score=1.0,
+                    passed=True,
+                    weight=2.0,
+                ),
+                CriterionOutcome(
+                    slug="negative",
+                    name="negative",
+                    score=0.0,
+                    passed=False,
+                    weight=-1.0,
+                ),
             ],
         )
 
@@ -258,7 +200,11 @@ class TestResearchRubricsRubric:
 
 class TestResearchRubricsJudgeCriterion:
     @pytest.mark.asyncio
-    async def test_judge_prioritizes_final_resources_over_final_message(self) -> None:
+    async def test_judge_prioritizes_final_resources_over_final_message(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
         final_resource, final_blob = _resource_view(
             kind=RunResourceKind.REPORT,
             name="report.md",
@@ -271,31 +217,52 @@ class TestResearchRubricsJudgeCriterion:
             sandbox_origin="/workspace/notes.md",
             text="scratch notes",
         )
-        runtime = _FakeJudgeRuntime(
-            resources=[scratch_resource, final_resource],
-            blobs={
-                str(final_resource.id): final_blob,
-                str(scratch_resource.id): scratch_blob,
-            },
+        final_path = tmp_path / "report.md"
+        final_path.write_bytes(final_blob)
+        scratch_path = tmp_path / "notes.md"
+        scratch_path.write_bytes(scratch_blob)
+        final_resource = final_resource.model_copy(update={"file_path": str(final_path)})
+        scratch_resource = scratch_resource.model_copy(update={"file_path": str(scratch_path)})
+        listed: list[tuple[object, object]] = []
+
+        class FakeRepo:
+            def list_for_run(self, session, *, run_id, task_execution_id):
+                listed.append((run_id, task_execution_id))
+                return [scratch_resource, final_resource]
+
+        class FakeSession:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+        monkeypatch.setattr(
+            "ergon_builtins.benchmarks.researchrubrics.judge_criterion.RunResourceRepository",
+            lambda: FakeRepo(),
         )
+        monkeypatch.setattr(
+            "ergon_builtins.benchmarks.researchrubrics.judge_criterion.get_session",
+            lambda: FakeSession(),
+        )
+        captured_user_prompts: list[str] = []
+
         context = CriterionContext(
             run_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
-            task=Task(
-                task_id=uuid4(),
+            task=task_with_id(
+                uuid4(),
                 task_slug="sample",
                 instance_key="default",
                 description="Write a report.",
-                evaluator_binding_keys=("default",),
             ),
             worker_result=WorkerOutput(output="assistant summary only"),
-            runtime=runtime,
         )
 
         class Criterion(ResearchRubricsJudgeCriterion):
             async def _call_judge(self, *, system_prompt: str, user_prompt: str):
-                self.captured_user_prompt = user_prompt
+                captured_user_prompts.append(user_prompt)
                 from ergon_builtins.benchmarks.researchrubrics.judge_criterion import (
                     ResearchRubricsVerdict,
                 )
@@ -316,11 +283,7 @@ class TestResearchRubricsJudgeCriterion:
 
         result = await criterion.evaluate(context)
 
-        assert runtime.listed_task_execution_ids == [None]
-        assert set(runtime.read_resource_ids) == {
-            str(final_resource.id),
-            str(scratch_resource.id),
-        }
+        assert listed == [(context.run_id, context.execution_id)]
         assert result.evaluated_resource_ids == [
             str(final_resource.id),
             str(scratch_resource.id),
@@ -336,5 +299,32 @@ class TestResearchRubricsJudgeCriterion:
         assert "Final output resources" in result.evaluation_input
         assert "Scratch / supporting resources" in result.evaluation_input
         assert "Final assistant message" in result.evaluation_input
-        assert "This is the primary answer artifact." in criterion.captured_user_prompt
-        assert "assistant summary only" in criterion.captured_user_prompt
+        assert len(captured_user_prompts) == 1
+        assert "This is the primary answer artifact." in captured_user_prompts[0]
+        assert "assistant summary only" in captured_user_prompts[0]
+
+    def test_rejects_model_alias(self) -> None:
+        with pytest.raises(ValidationError, match="model"):
+            ResearchRubricsJudgeCriterion(
+                slug="includes_findings",
+                rubric=RubricCriterion(
+                    criterion="Includes findings",
+                    axis="quality",
+                    weight=1.0,
+                ),
+                model="openai:gpt-4o-mini",
+            )
+
+    def test_does_not_expose_model_alias(self) -> None:
+        criterion = ResearchRubricsJudgeCriterion(
+            slug="includes_findings",
+            rubric=RubricCriterion(
+                criterion="Includes findings",
+                axis="quality",
+                weight=1.0,
+            ),
+            judge_model="openai:gpt-4o-mini",
+        )
+
+        assert criterion.judge_model == "openai:gpt-4o-mini"
+        assert not hasattr(criterion, "model")

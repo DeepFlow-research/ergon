@@ -5,17 +5,17 @@ import json
 import logging
 from collections.abc import AsyncGenerator, Callable
 from types import NoneType
-from typing import Any, Self, cast
+from typing import Any, ClassVar, cast
 from uuid import UUID
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerOutput, WorkerStreamItem
-from ergon_core.core.domain.generation.context_parts import (
+from ergon_core.core.shared.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
     ToolCallPart,
 )
 from ergon_core.core.application.context.events import ContextEventService
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, PrivateAttr, SerializeAsAny
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
 from pydantic_ai.tools import Tool
@@ -27,6 +27,7 @@ from ergon_builtins.common.llm_context.adapters.pydantic_ai import (
 )
 from ergon_builtins.models.resolution import resolve_model_target
 from ergon_builtins.observability.pydantic_ai_logfire import configure_pydantic_ai_logfire
+from ergon_builtins.workers.baselines.toolkit import Toolkit
 
 logger = logging.getLogger(__name__)
 
@@ -46,28 +47,29 @@ class ReActWorker(Worker):
     Yields ``ContextPartChunk`` objects as the PydanticAI transcript grows. Each
     yielded chunk is enriched and persisted by the runtime.
 
-    All wiring (tool list, system prompt, iteration budget) is supplied
-    at construction time — the worker is framework-agnostic. Registry
-    factories build per-benchmark instances by closing over the sandbox
-    and passing a concrete toolkit through ``tools=``.
+    All wiring (system prompt, iteration budget) is declared as Pydantic
+    fields so the worker round-trips through ``task_json`` snapshots.
+    The ``tools`` field is excluded from serialization — registry
+    factories populate it at runtime by closing over the sandbox; see
+    e.g. ``MiniF2FReactWorker.execute`` which builds tools from a
+    sandbox-bound toolkit before delegating to ``super().execute``.
     """
 
-    type_slug = "react-v1"
+    type_slug: ClassVar[str] = "react-v1"
 
-    def __init__(
-        self,
-        *,
-        name: str,
-        model: str | None,
-        tools: list[AgentTool],
-        system_prompt: str | None,
-        max_iterations: int,
-    ) -> None:
-        super().__init__(name=name, model=model)
-        self.tools: list[AgentTool] = tools
-        self.system_prompt: str | None = system_prompt
-        self.max_iterations: int = max_iterations
-        self._seed_messages: list[ModelMessage] | None = None
+    system_prompt: str | None = None
+    max_iterations: int = 10
+    # Serializable toolkit config (v2 object-bound path). When set,
+    # execute() builds live tools from toolkit.tools(task.sandbox, task)
+    # rather than relying on a subclass to populate _tools before calling
+    # super().execute().
+    toolkit: SerializeAsAny[Toolkit] | None = None
+    # `_tools` and `_seed_messages` are runtime-only state — they hold
+    # references to callables/pydantic-ai SDK objects that are not
+    # round-trippable through model_dump/model_validate. PrivateAttr
+    # keeps them out of the Pydantic field surface entirely.
+    _tools: list[AgentTool] = PrivateAttr(default_factory=list)
+    _seed_messages: list[ModelMessage] | None = PrivateAttr(default=None)
 
     async def execute(
         self,
@@ -75,6 +77,8 @@ class ReActWorker(Worker):
         *,
         context: WorkerContext,
     ) -> AsyncGenerator[WorkerStreamItem, None]:
+        if self.toolkit is not None and task.sandbox is not None:
+            self._tools = list(self.toolkit.tools(task.sandbox, task))
         async for chunk in self._run_agent(task, context):
             yield chunk
 
@@ -99,7 +103,7 @@ class ReActWorker(Worker):
             Agent(
                 model=resolved.model,
                 instructions=self.system_prompt or None,
-                tools=self.tools,
+                tools=self._tools,
                 output_type=_AgentOutput,
                 deps_type=cast(type[Any], deps_type),
             ),
@@ -166,31 +170,6 @@ class ReActWorker(Worker):
 
         yield _worker_output_from_chunks(emitted_chunks)
 
-    @classmethod
-    def from_buffer(
-        cls,
-        execution_id: UUID,
-        session: Session,
-        **kwargs: Any,  # slopcop: ignore[no-typing-any]
-    ) -> Self | None:
-        """Return a ReActWorker pre-seeded with context event history."""
-        repo = ContextEventService()
-        events = repo.get_for_execution(session, execution_id)
-        if not events:
-            return None
-        worker = cls(**kwargs)
-        worker._seed_messages = PydanticAITranscriptAdapter().assemble_replay(events)
-        return worker
-
-
-def _format_task(task: Task) -> str:
-    lines = [f"Task: {task.description}"]
-    payload = task.task_payload.model_dump(mode="json")
-    if payload:
-        lines.append("")
-        lines.append(f"Payload: {json.dumps(payload, default=str)}")
-    return "\n".join(lines)
-
 
 def _worker_output_from_chunks(chunks: list[ContextPartChunk]) -> WorkerOutput:
     output = _latest_final_result_message(chunks)
@@ -215,3 +194,12 @@ def _latest_final_result_message(chunks: list[ContextPartChunk]) -> str:
             continue
         messages.append(str(part.args.get("final_assistant_message", "")))
     return messages[-1] if messages else ""
+
+
+def _format_task(task: Task) -> str:
+    lines = [f"Task: {task.description}"]
+    payload = task.task_payload.model_dump(mode="json")
+    if payload:
+        lines.append("")
+        lines.append(f"Payload: {json.dumps(payload, default=str)}")
+    return "\n".join(lines)

@@ -6,23 +6,21 @@ the same completion-thread message shape as a normal leaf.  The top-level
 ``l_3`` dependency therefore waits on a non-leaf dynamic task.
 """
 
-import asyncio
 from collections.abc import AsyncGenerator
 from typing import ClassVar
 from uuid import UUID
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
 from ergon_core.api.worker import WorkerOutput
-from ergon_core.core.domain.generation.context_parts import AssistantTextPart, ContextPartChunk
+from ergon_core.core.shared.context_parts import AssistantTextPart, ContextPartChunk
 from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, NodeId, RunId, TaskSlug
+from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
 from ergon_core.core.application.communication.models import CreateMessageRequest
 from ergon_core.core.application.communication.service import communication_service
-from ergon_core.core.application.tasks.inspection import TaskInspectionService
-from ergon_core.core.application.tasks.models import PlanSubtasksCommand, SubtaskSpec
-from ergon_core.core.application.tasks.management import TaskManagementService
+from ergon_core.core.application.tasks.models import SubtaskSpec
+from tests.fixtures.smoke_components.smoke_base.dynamic_tasks import smoke_task_from_spec
+from sqlmodel import select
 
 NESTED_LINE_SLUGS: tuple[str, ...] = ("l_2_a", "l_2_b")
 NESTED_SUBTASK_GRAPH: tuple[tuple[str, tuple[str, ...], str], ...] = (
@@ -37,18 +35,14 @@ class RecursiveSmokeWorkerBase(Worker):
     leaf_slug: ClassVar[str]
     RECURSIVE_TURN_COUNT: ClassVar[int] = 3
 
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self._last_child_statuses: dict[str, str] = {}
-
     async def execute(
         self,
         task: Task,
         *,
         context: WorkerContext,
     ) -> AsyncGenerator[WorkerStreamItem, None]:
-        if context.node_id is None:
-            raise ValueError(f"{type(self).__name__} requires context.node_id")
+        if context.task_id is None:
+            raise ValueError(f"{type(self).__name__} requires context.task_id")
 
         yield ContextPartChunk(
             part=AssistantTextPart(
@@ -68,18 +62,19 @@ class RecursiveSmokeWorkerBase(Worker):
             )
             for slug, deps, desc in NESTED_SUBTASK_GRAPH
         ]
-        with get_session() as session:
-            result = await TaskManagementService().plan_subtasks(
-                session,
-                PlanSubtasksCommand(
-                    run_id=RunId(context.run_id),
-                    parent_node_id=NodeId(context.node_id),
-                    subtasks=specs,
-                ),
+        planned: dict[TaskSlug, UUID] = {}
+        for spec in specs:
+            child_task = smoke_task_from_spec(
+                parent_task=task,
+                spec=spec,
+                model=self.model,
             )
+            dependency_task_ids = tuple(planned[dep] for dep in spec.depends_on)
+            handle = await context.spawn_task(child_task, depends_on=dependency_task_ids)
+            planned[spec.task_slug] = handle.task_id
 
         summary = "\n".join(
-            f"{slug}: planned (node_id={result.nodes[TaskSlug(slug)]})"
+            f"{slug}: planned (task_id={planned[TaskSlug(slug)]})"
             for slug, _deps, _desc in NESTED_SUBTASK_GRAPH
         )
         yield ContextPartChunk(
@@ -88,49 +83,29 @@ class RecursiveSmokeWorkerBase(Worker):
             ),
         )
 
-        inspection = TaskInspectionService()
-        while True:
-            with get_session() as session:
-                children = inspection.list_subtasks(
-                    session,
-                    run_id=context.run_id,
-                    parent_node_id=context.node_id,
-                )
-            if children and all(c.status in TERMINAL_STATUSES for c in children):
-                self._last_child_statuses = {c.task_slug: c.status for c in children}
-                break
-            await asyncio.sleep(2)
-
-        await self._send_recursive_completion_message(context)
+        planned_children = sorted(str(slug) for slug in planned)
+        await self._send_recursive_completion_message(context, planned_children)
         yield ContextPartChunk(
             part=AssistantTextPart(
-                content=(
-                    f"{type(self).__name__}: nested children terminal {self._last_child_statuses}"
-                ),
+                content=f"{type(self).__name__}: nested children planned {planned_children}",
             ),
         )
 
-        non_completed = {
-            slug: status
-            for slug, status in self._last_child_statuses.items()
-            if status != "completed"
-        }
-        if non_completed:
-            yield WorkerOutput(
-                output=f"nested children did not all complete: {non_completed}",
-                success=False,
-                metadata={"child_statuses": self._last_child_statuses},
-            )
-            return
-
         yield WorkerOutput(
-            output="nested smoke recursion completed",
+            output="nested smoke recursion planned",
             success=True,
-            metadata={"child_statuses": self._last_child_statuses},
+            metadata={
+                "planned_children": planned_children,
+                "child_wait_mode": "criterion",
+            },
         )
 
-    async def _send_recursive_completion_message(self, context: WorkerContext) -> None:
-        task_slug = self._lookup_task_slug(context.node_id)
+    async def _send_recursive_completion_message(
+        self,
+        context: WorkerContext,
+        planned_children: list[str],
+    ) -> None:
+        task_slug = self._lookup_task_slug(context.task_id)
         await communication_service.save_message(
             CreateMessageRequest(
                 run_id=context.run_id,
@@ -138,17 +113,17 @@ class RecursiveSmokeWorkerBase(Worker):
                 from_agent_id=f"leaf-{task_slug}",
                 to_agent_id="parent",
                 thread_topic="smoke-completion",
-                content=(f"{task_slug}: recursive done nested={sorted(self._last_child_statuses)}"),
+                content=(f"{task_slug}: recursive planned nested={planned_children}"),
             ),
         )
 
     @staticmethod
-    def _lookup_task_slug(node_id: UUID | None) -> str:
-        if node_id is None:
+    def _lookup_task_slug(task_id: UUID | None) -> str:
+        if task_id is None:
             return "unknown"
         with get_session() as session:
-            node = session.get(RunGraphNode, node_id)
-        return node.task_slug if node is not None else f"node-{node_id.hex[:8]}"
+            node = session.exec(select(RunGraphNode).where(RunGraphNode.task_id == task_id)).first()
+        return node.task_slug if node is not None else f"node-{task_id.hex[:8]}"
 
 
 class RecursiveSmokeWorkerMixin:

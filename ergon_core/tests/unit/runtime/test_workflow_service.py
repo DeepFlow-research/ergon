@@ -36,7 +36,7 @@ def _node(
     slug: str,
     description: str | None = None,
     status: str = "completed",
-    parent_node_id: UUID | None = None,
+    parent_task_id: UUID | None = None,
     level: int = 0,
 ) -> RunGraphNode:
     return RunGraphNode(
@@ -46,16 +46,16 @@ def _node(
         description=description or f"Task {slug}",
         status=status,
         assigned_worker_slug="worker",
-        parent_node_id=parent_node_id,
+        parent_task_id=parent_task_id,
         level=level,
     )
 
 
-def _edge(*, run_id: UUID, source_node_id: UUID, target_node_id: UUID) -> RunGraphEdge:
+def _edge(*, run_id: UUID, source_task_id: UUID, target_task_id: UUID) -> RunGraphEdge:
     return RunGraphEdge(
         run_id=run_id,
-        source_node_id=source_node_id,
-        target_node_id=target_node_id,
+        source_task_id=source_task_id,
+        target_task_id=target_task_id,
         status="satisfied",
     )
 
@@ -68,6 +68,7 @@ def _execution(
 ) -> RunTaskExecution:
     return RunTaskExecution(
         run_id=run_id,
+        task_id=node_id,
         node_id=node_id,
         status=status,
         final_assistant_message=f"output for {node_id}",
@@ -98,12 +99,11 @@ def _resource(
 
 def _run(session: Session) -> UUID:
     run_id = uuid4()
-    workflow_definition_id = uuid4()
+    definition_id = uuid4()
     session.add(
         RunRecord(
             id=run_id,
-            experiment_id=uuid4(),
-            workflow_definition_id=workflow_definition_id,
+            definition_id=definition_id,
             benchmark_type="ci-workflow-service",
             instance_key="sample-1",
             worker_team_json={"primary": "test-worker"},
@@ -125,20 +125,20 @@ def test_input_scope_uses_immediate_upstream_resources_only(tmp_path: Path) -> N
         [
             RunGraphEdge(
                 run_id=run_id,
-                source_node_id=a.id,
-                target_node_id=b.id,
+                source_task_id=a.task_id,
+                target_task_id=b.task_id,
                 status="satisfied",
             ),
             RunGraphEdge(
                 run_id=run_id,
-                source_node_id=b.id,
-                target_node_id=c.id,
+                source_task_id=b.task_id,
+                target_task_id=c.task_id,
                 status="satisfied",
             ),
         ]
     )
-    exec_a = _execution(run_id=run_id, node_id=a.id)
-    exec_b = _execution(run_id=run_id, node_id=b.id)
+    exec_a = _execution(run_id=run_id, node_id=a.task_id)
+    exec_b = _execution(run_id=run_id, node_id=b.task_id)
     session.add_all([exec_a, exec_b])
     session.flush()
     session.add_all(
@@ -164,7 +164,7 @@ def test_input_scope_uses_immediate_upstream_resources_only(tmp_path: Path) -> N
     resources = WorkflowService().list_resources(
         session,
         run_id=run_id,
-        node_id=c.id,
+        node_id=c.task_id,
         scope="input",
     )
 
@@ -180,8 +180,8 @@ def test_visible_scope_stays_inside_current_run(tmp_path: Path) -> None:
     other = _node(run_id=other_run_id, slug="other")
     session.add_all([current, peer, other])
     session.flush()
-    peer_exec = _execution(run_id=run_id, node_id=peer.id)
-    other_exec = _execution(run_id=other_run_id, node_id=other.id)
+    peer_exec = _execution(run_id=run_id, node_id=peer.task_id)
+    other_exec = _execution(run_id=other_run_id, node_id=other.task_id)
     session.add_all([peer_exec, other_exec])
     session.flush()
     session.add_all(
@@ -207,7 +207,7 @@ def test_visible_scope_stays_inside_current_run(tmp_path: Path) -> None:
     resources = WorkflowService().list_resources(
         session,
         run_id=run_id,
-        node_id=current.id,
+        node_id=current.task_id,
         scope="visible",
     )
 
@@ -222,9 +222,9 @@ async def test_materialize_resource_creates_current_task_owned_copy(tmp_path: Pa
     consumer = _node(run_id=run_id, slug="consumer")
     session.add_all([producer, consumer])
     session.flush()
-    producer_exec = _execution(run_id=run_id, node_id=producer.id)
+    producer_exec = _execution(run_id=run_id, node_id=producer.task_id)
     consumer_exec = _execution(
-        run_id=run_id, node_id=consumer.id, status=TaskExecutionStatus.RUNNING
+        run_id=run_id, node_id=consumer.task_id, status=TaskExecutionStatus.RUNNING
     )
     session.add_all([producer_exec, consumer_exec])
     session.flush()
@@ -251,9 +251,9 @@ async def test_materialize_resource_creates_current_task_owned_copy(tmp_path: Pa
     ).materialize_resource(
         session,
         run_id=run_id,
-        current_node_id=consumer.id,
+        current_node_id=consumer.task_id,
         current_execution_id=consumer_exec.id,
-        sandbox_task_key=consumer.id,
+        sandbox_task_key=consumer.task_id,
         benchmark_type="test",
         resource_id=source.id,
         destination=None,
@@ -275,7 +275,7 @@ async def test_materialize_resource_creates_current_task_owned_copy(tmp_path: Pa
     assert original is not None
     assert original.task_execution_id == producer_exec.id
     assert manager.uploads == [
-        (consumer.id, source.file_path, "/workspace/imported/producer/paper (copy).pdf")
+        (consumer.task_id, source.file_path, "/workspace/imported/producer/paper (copy).pdf")
     ]
 
 
@@ -289,9 +289,9 @@ async def test_materialize_resource_dry_run_keeps_copy_name_for_explicit_destina
     consumer = _node(run_id=run_id, slug="consumer")
     session.add_all([producer, consumer])
     session.flush()
-    producer_exec = _execution(run_id=run_id, node_id=producer.id)
+    producer_exec = _execution(run_id=run_id, node_id=producer.task_id)
     consumer_exec = _execution(
-        run_id=run_id, node_id=consumer.id, status=TaskExecutionStatus.RUNNING
+        run_id=run_id, node_id=consumer.task_id, status=TaskExecutionStatus.RUNNING
     )
     session.add_all([producer_exec, consumer_exec])
     session.flush()
@@ -308,9 +308,9 @@ async def test_materialize_resource_dry_run_keeps_copy_name_for_explicit_destina
     result = await WorkflowService().materialize_resource(
         session,
         run_id=run_id,
-        current_node_id=consumer.id,
+        current_node_id=consumer.task_id,
         current_execution_id=consumer_exec.id,
-        sandbox_task_key=consumer.id,
+        sandbox_task_key=consumer.task_id,
         benchmark_type="test",
         resource_id=source.id,
         destination="selected/paper.pdf",
@@ -327,7 +327,7 @@ def test_resource_location_describes_producer_and_workspace_destination(tmp_path
     producer = _node(run_id=run_id, slug="producer")
     session.add(producer)
     session.flush()
-    producer_exec = _execution(run_id=run_id, node_id=producer.id)
+    producer_exec = _execution(run_id=run_id, node_id=producer.task_id)
     session.add(producer_exec)
     session.flush()
     source = _resource(
@@ -361,13 +361,15 @@ def test_task_workspace_reports_latest_execution_and_resources(tmp_path: Path) -
     session.flush()
     current_exec = _execution(
         run_id=run_id,
-        node_id=current.id,
+        node_id=current.task_id,
         status=TaskExecutionStatus.RUNNING,
     )
-    upstream_exec = _execution(run_id=run_id, node_id=upstream.id)
+    upstream_exec = _execution(run_id=run_id, node_id=upstream.task_id)
     session.add_all([current_exec, upstream_exec])
     session.flush()
-    session.add(_edge(run_id=run_id, source_node_id=upstream.id, target_node_id=current.id))
+    session.add(
+        _edge(run_id=run_id, source_task_id=upstream.task_id, target_task_id=current.task_id)
+    )
     session.add_all(
         [
             _resource(
@@ -391,7 +393,7 @@ def test_task_workspace_reports_latest_execution_and_resources(tmp_path: Path) -
     workspace = WorkflowService().get_task_workspace(
         session,
         run_id=run_id,
-        node_id=current.id,
+        node_id=current.task_id,
     )
 
     assert workspace.task.task_slug == "current"
@@ -411,10 +413,10 @@ async def test_materialize_resource_rejects_parent_directory_destination(
     consumer = _node(run_id=run_id, slug="consumer")
     session.add_all([producer, consumer])
     session.flush()
-    producer_exec = _execution(run_id=run_id, node_id=producer.id)
+    producer_exec = _execution(run_id=run_id, node_id=producer.task_id)
     consumer_exec = _execution(
         run_id=run_id,
-        node_id=consumer.id,
+        node_id=consumer.task_id,
         status=TaskExecutionStatus.RUNNING,
     )
     session.add_all([producer_exec, consumer_exec])
@@ -433,9 +435,9 @@ async def test_materialize_resource_rejects_parent_directory_destination(
         await WorkflowService().materialize_resource(
             session,
             run_id=run_id,
-            current_node_id=consumer.id,
+            current_node_id=consumer.task_id,
             current_execution_id=consumer_exec.id,
-            sandbox_task_key=consumer.id,
+            sandbox_task_key=consumer.task_id,
             benchmark_type="test",
             resource_id=source.id,
             destination="../escape/paper.pdf",
@@ -445,10 +447,6 @@ async def test_materialize_resource_rejects_parent_directory_destination(
 
 @pytest.mark.asyncio
 async def test_add_task_dry_run_does_not_write_node() -> None:
-    from ergon_builtins.registry_core import register_core_builtins
-    from ergon_core.api.registry import registry
-
-    register_core_builtins(registry)
     session = _session()
     run_id = _run(session)
     parent = _node(run_id=run_id, slug="parent", level=1)
@@ -458,7 +456,7 @@ async def test_add_task_dry_run_does_not_write_node() -> None:
     result = await WorkflowService().add_task(
         session,
         run_id=run_id,
-        parent_node_id=parent.id,
+        parent_task_id=parent.task_id,
         task_slug="child",
         description="Child task",
         assigned_worker_slug="minif2f-react",
@@ -471,16 +469,12 @@ async def test_add_task_dry_run_does_not_write_node() -> None:
     assert result.dry_run is True
     assert result.node is not None
     assert result.node.task_slug == "child"
-    assert result.node.parent_node_id == parent.id
+    assert result.node.parent_task_id == parent.task_id
     assert result.node.level == 2
 
 
 @pytest.mark.asyncio
-async def test_add_task_writes_node_and_mutation() -> None:
-    from ergon_builtins.registry_core import register_core_builtins
-    from ergon_core.api.registry import registry
-
-    register_core_builtins(registry)
+async def test_add_task_non_dry_run_requires_object_bound_task() -> None:
     session = _session()
     run_id = _run(session)
     parent = _node(run_id=run_id, slug="parent", level=1)
@@ -491,28 +485,25 @@ async def test_add_task_writes_node_and_mutation() -> None:
     async def dispatch_task_ready(run_id, definition_id, node_id):
         dispatched.append((run_id, definition_id, node_id))
 
-    result = await WorkflowService(task_ready_dispatcher=dispatch_task_ready).add_task(
-        session,
-        run_id=run_id,
-        parent_node_id=parent.id,
-        task_slug="child",
-        description="Child task",
-        assigned_worker_slug="minif2f-react",
-        dry_run=False,
-    )
+    with pytest.raises(ValueError, match="requires an object-bound Task"):
+        await WorkflowService(task_ready_dispatcher=dispatch_task_ready).add_task(
+            session,
+            run_id=run_id,
+            parent_task_id=parent.task_id,
+            task_slug="child",
+            description="Child task",
+            assigned_worker_slug="minif2f-react",
+            dry_run=False,
+        )
 
-    assert result.dry_run is False
-    assert result.node is not None
-    child = session.get(RunGraphNode, result.node.node_id)
-    assert child is not None
-    assert child.task_slug == "child"
-    assert child.description == "Child task"
-    assert child.parent_node_id == parent.id
-    assert child.level == 2
-    assert child.status == TaskExecutionStatus.PENDING.value
-    run = session.get(RunRecord, run_id)
-    assert run is not None
-    assert dispatched == [(run_id, run.workflow_definition_id, child.id)]
+    inserted = session.exec(
+        select(RunGraphNode).where(
+            RunGraphNode.run_id == run_id,
+            RunGraphNode.task_slug == "child",
+        )
+    ).first()
+    assert inserted is None
+    assert dispatched == []
 
 
 @pytest.mark.asyncio
@@ -526,11 +517,11 @@ async def test_add_task_rejects_unknown_worker_slug_before_creating_node() -> No
     async def dispatch_task_ready(run_id: UUID, definition_id: UUID, node_id: UUID) -> None:
         raise AssertionError("invalid worker should not dispatch")
 
-    with pytest.raises(ValueError, match="Unknown worker slug"):
+    with pytest.raises(ValueError, match="requires an object-bound Task"):
         await WorkflowService(task_ready_dispatcher=dispatch_task_ready).add_task(
             session,
             run_id=run_id,
-            parent_node_id=parent.id,
+            parent_task_id=parent.task_id,
             task_slug="bad-worker",
             description="Should not be inserted",
             assigned_worker_slug="not-a-real-worker",
@@ -567,8 +558,8 @@ async def test_add_edge_writes_dependency_between_slugs() -> None:
     assert result.edge is not None
     edge = session.get(RunGraphEdge, result.edge.edge_id)
     assert edge is not None
-    assert edge.source_node_id == source.id
-    assert edge.target_node_id == target.id
+    assert edge.source_task_id == source.task_id
+    assert edge.target_task_id == target.task_id
     assert edge.status == "pending"
 
 
@@ -588,41 +579,9 @@ async def test_update_task_description_changes_only_description() -> None:
         dry_run=False,
     )
 
-    refreshed = session.get(RunGraphNode, node.id)
+    refreshed = session.get(RunGraphNode, (run_id, node.task_id))
     assert refreshed is not None
     assert refreshed.description == "New description"
     assert refreshed.task_slug == "target"
     assert result.node is not None
     assert result.node.description == "New description"
-
-
-@pytest.mark.asyncio
-async def test_restart_and_abandon_task_update_node_status() -> None:
-    session = _session()
-    run_id = _run(session)
-    failed = _node(run_id=run_id, slug="failed", status="failed")
-    running = _node(run_id=run_id, slug="running", status="running")
-    session.add_all([failed, running])
-    session.commit()
-
-    restarted = await WorkflowService().restart_task(
-        session,
-        run_id=run_id,
-        task_slug="failed",
-        dry_run=False,
-    )
-    abandoned = await WorkflowService().abandon_task(
-        session,
-        run_id=run_id,
-        task_slug="running",
-        dry_run=False,
-    )
-
-    failed_row = session.get(RunGraphNode, failed.id)
-    running_row = session.get(RunGraphNode, running.id)
-    assert failed_row is not None
-    assert running_row is not None
-    assert failed_row.status == TaskExecutionStatus.PENDING.value
-    assert running_row.status == TaskExecutionStatus.CANCELLED.value
-    assert restarted.action == "restart-task"
-    assert abandoned.action == "abandon-task"

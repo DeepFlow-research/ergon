@@ -27,13 +27,13 @@ def descendants(
             session.exec(
                 select(RunGraphNode).where(
                     RunGraphNode.run_id == run_id,
-                    RunGraphNode.parent_node_id == parent_id,
+                    RunGraphNode.parent_task_id == parent_id,
                 )
             ).all()
         )
-        children.sort(key=lambda node: (node.level, node.task_slug, str(node.id)))
+        children.sort(key=lambda node: (node.level, node.task_slug, str(node.task_id)))
         result.extend(children)
-        queue.extend((child.id, depth + 1) for child in children)
+        queue.extend((child.task_id, depth + 1) for child in children)
 
     return result
 
@@ -47,7 +47,7 @@ def descendant_ids(
 ) -> set[UUID]:
     """Return IDs for containment descendants under root_node_id."""
     return {
-        node.id
+        node.task_id
         for node in descendants(
             session,
             run_id=run_id,

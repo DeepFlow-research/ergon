@@ -12,7 +12,6 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
-    ExperimentRecord,
     RunRecord,
     RunTaskExecution,
 )
@@ -27,6 +26,7 @@ from ergon_core.core.application.tasks.models import AddSubtaskCommand
 from ergon_core.core.application.tasks.management import TaskManagementService
 from ergon_core.core.application.tasks.execution import TaskExecutionService
 from ergon_core.core.application.workflows.service import WorkflowService
+from ergon_core.test_support.task_factory import task_with_id
 from pydantic import BaseModel
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -37,7 +37,6 @@ class _Payload(BaseModel):
 
 
 def _session() -> Session:
-    _ = ExperimentRecord
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -61,6 +60,7 @@ def _definition_with_worker(
             ExperimentDefinition(
                 id=definition_id,
                 benchmark_type=benchmark_type,
+                name=benchmark_type,
                 metadata_json={},
             ),
             ExperimentDefinitionInstance(
@@ -101,27 +101,11 @@ def _run(
     run_id: UUID | None = None,
     model_target: str = "stub:constant",
 ) -> UUID:
-    experiment_id = uuid4()
     resolved_run_id = run_id or uuid4()
-    session.add(
-        ExperimentRecord(
-            id=experiment_id,
-            name="worker identity",
-            benchmark_type="minif2f",
-            sample_count=1,
-            sample_selection_json={"instance_keys": ["sample-1"]},
-            default_worker_team_json={"primary": "minif2f-react"},
-            default_model_target=model_target,
-            design_json={},
-            metadata_json={},
-            status="running",
-        )
-    )
     session.add(
         RunRecord(
             id=resolved_run_id,
-            experiment_id=experiment_id,
-            workflow_definition_id=definition_id,
+            definition_id=definition_id,
             benchmark_type="minif2f",
             instance_key="sample-1",
             worker_team_json={"primary": "minif2f-react"},
@@ -144,7 +128,6 @@ def test_graph_initialization_writes_concrete_worker_slug_from_definition_bindin
         definition_id,
         initial_node_status=TaskExecutionStatus.PENDING,
         initial_edge_status="pending",
-        task_payload_model=_Payload,
         meta=MutationMeta(actor="test"),
     )
 
@@ -165,16 +148,6 @@ async def test_workflow_initialization_returns_node_ids_for_initial_ready_static
     )
     run_id = _run(session, definition_id=definition_id)
 
-    class _Benchmark:
-        task_payload_model = _Payload
-
-    from ergon_core.api.registry import registry
-
-    monkeypatch.setitem(
-        registry.benchmarks,
-        benchmark_type,
-        _Benchmark,
-    )
     monkeypatch.setattr(
         "ergon_core.core.application.workflows.service.get_session",
         lambda: _session_context(session),
@@ -187,9 +160,9 @@ async def test_workflow_initialization_returns_node_ids_for_initial_ready_static
     assert len(initialized.initial_ready_tasks) == 1
     ready_task = initialized.initial_ready_tasks[0]
     node = session.exec(
-        select(RunGraphNode).where(RunGraphNode.definition_task_id == ready_task.task_id)
+        select(RunGraphNode).where(RunGraphNode.task_id == ready_task.task_id)
     ).one()
-    assert ready_task.node_id == node.id
+    assert ready_task.task_id == node.task_id
     assert node.assigned_worker_slug == "minif2f-react"
 
 
@@ -200,14 +173,24 @@ async def test_dynamic_prepare_uses_node_worker_slug_and_run_model_without_defin
     session = _session()
     definition_id = _definition_with_worker(session, worker_type="minif2f-react")
     run_id = _run(session, definition_id=definition_id, model_target="stub:constant")
+    node_id = uuid4()
+    task = task_with_id(
+        node_id,
+        task_slug="dynamic-leaf",
+        instance_key="sample-1",
+        description="Dynamic specialist task",
+    )
     node = RunGraphNode(
+        task_id=node_id,
         run_id=run_id,
         instance_key="sample-1",
         task_slug="dynamic-leaf",
         description="Dynamic specialist task",
+        task_json=task.model_dump(mode="json"),
+        is_dynamic=True,
         status=TaskExecutionStatus.PENDING,
         assigned_worker_slug="swebench-react",
-        parent_node_id=None,
+        parent_task_id=None,
         level=1,
     )
     session.add(node)
@@ -219,8 +202,7 @@ async def test_dynamic_prepare_uses_node_worker_slug_and_run_model_without_defin
         PrepareTaskExecutionCommand(
             run_id=run_id,
             definition_id=definition_id,
-            task_id=None,
-            node_id=node.id,
+            task_id=node.task_id,
         )
     )
 
@@ -260,12 +242,12 @@ async def test_add_subtask_rejects_unknown_worker_slug_before_creating_node() ->
 
     dashboard_emitter = MagicMock()
 
-    with pytest.raises(ValueError, match="Unknown worker slug"):
+    with pytest.raises(ValueError, match="Slug-based add_subtask was removed"):
         await TaskManagementService(dashboard_emitter=dashboard_emitter).add_subtask(
             session,
             AddSubtaskCommand(
                 run_id=run_id,
-                parent_node_id=parent.id,
+                parent_task_id=parent.task_id,
                 task_slug="bad-worker",
                 description="Should not be inserted",
                 assigned_worker_slug="not-a-real-worker",

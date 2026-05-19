@@ -13,5 +13,9 @@ def test_ergon_core_does_not_import_builtins_registry() -> None:
     assert offenders == []
 
 
+def test_ergon_core_process_local_registry_is_deleted() -> None:
+    assert not Path("ergon_core/ergon_core/api/registry.py").exists()
+
+
 def test_core_package_has_no_smoke_fixture_registration_package() -> None:
     assert not Path("ergon_core/ergon_core/test_support/smoke_fixtures").exists()

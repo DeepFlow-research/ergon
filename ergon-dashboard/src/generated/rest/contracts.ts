@@ -1,15 +1,12 @@
 /* eslint-disable @typescript-eslint/no-empty-object-type */
 import { z } from "zod";
 
-type JsonValue_Input =
-  | (JsonScalar | Array<JsonValue_Input> | {})
-  | Array<JsonScalar | Array<JsonValue_Input> | {}>;
+type JsonValue =
+  | (JsonScalar | Array<JsonValue> | {})
+  | Array<JsonScalar | Array<JsonValue> | {}>;
 type JsonScalar =
   | (string | number | number | boolean | null)
   | Array<string | number | number | boolean | null>;
-type JsonValue_Output =
-  | (JsonScalar | Array<JsonValue_Output> | {})
-  | Array<JsonScalar | Array<JsonValue_Output> | {}>;
 
 const RunTaskDto = z.object({
   id: z.string(),
@@ -161,17 +158,15 @@ const JsonScalar = z.union([
   z.boolean(),
   z.null(),
 ]);
-const JsonValue_Output: z.ZodType<JsonValue_Output> = z.lazy(() => z.union([
-  JsonScalar,
-  z.array(JsonValue_Output),
-  z.record(z.string(), JsonValue_Output),
-]));
-const JsonObject_Output = z.record(z.string(), JsonValue_Output);
+const JsonValue: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([JsonScalar, z.array(JsonValue), z.record(z.string(), JsonValue)])
+);
+const JsonObject = z.record(z.string(), JsonValue);
 const TokenLogprob = z
   .object({
     token: z.string(),
     logprob: z.number(),
-    top_logprobs: z.array(JsonObject_Output).optional(),
+    top_logprobs: z.array(JsonObject).optional(),
   })
   .passthrough();
 const ContextPartChunkLog = z
@@ -198,7 +193,7 @@ const RunContextEventDto = z.object({
   id: z.string().uuid(),
   runId: z.string().uuid(),
   taskExecutionId: z.string().uuid(),
-  taskNodeId: z.string().uuid(),
+  taskId: z.string().uuid(),
   workerBindingKey: z.string(),
   sequence: z.number().int(),
   eventType: z.enum([
@@ -241,7 +236,7 @@ const RunCommunicationThreadDto = z.object({
 });
 const RunSnapshotDto = z.object({
   id: z.string(),
-  experimentId: z.string(),
+  definitionId: z.string(),
   name: z.string(),
   status: z.string(),
   tasks: z.record(z.string(), RunTaskDto).optional(),
@@ -313,16 +308,16 @@ const NodeFieldChangedMutation = z
 const EdgeAddedMutation = z
   .object({
     mutation_type: z.string().optional().default("edge.added"),
-    source_node_id: z.string().uuid(),
-    target_node_id: z.string().uuid(),
+    source_task_id: z.string().uuid(),
+    target_task_id: z.string().uuid(),
     status: z.string(),
   })
   .passthrough();
 const EdgeRemovedMutation = z
   .object({
     mutation_type: z.string().optional().default("edge.removed"),
-    source_node_id: z.string().uuid(),
-    target_node_id: z.string().uuid(),
+    source_task_id: z.string().uuid(),
+    target_task_id: z.string().uuid(),
     status: z.string(),
   })
   .passthrough();
@@ -336,14 +331,14 @@ const AnnotationSetMutation = z
   .object({
     mutation_type: z.string().optional().default("annotation.set"),
     namespace: z.string(),
-    payload: JsonObject_Output,
+    payload: JsonObject,
   })
   .passthrough();
 const AnnotationDeletedMutation = z
   .object({
     mutation_type: z.string().optional().default("annotation.deleted"),
     namespace: z.string(),
-    payload: JsonObject_Output,
+    payload: JsonObject,
   })
   .passthrough();
 const GraphMutationRecordDto = z
@@ -394,37 +389,6 @@ const GraphMutationRecordDto = z
     created_at: z.string().datetime({ offset: true }),
   })
   .passthrough();
-const definition_id = z.union([z.string(), z.null()]).optional();
-const TrainingCurvePointDto = z.object({
-  runId: z.string(),
-  step: z.number().int(),
-  meanScore: z.number(),
-  benchmarkType: z.union([z.string(), z.null()]).optional(),
-  createdAt: z.union([z.string(), z.null()]).optional(),
-});
-const TrainingSessionDto = z.object({
-  id: z.string(),
-  experimentDefinitionId: z.string(),
-  modelName: z.string(),
-  status: z.string(),
-  startedAt: z.union([z.string(), z.null()]).optional(),
-  completedAt: z.union([z.string(), z.null()]).optional(),
-  outputDir: z.union([z.string(), z.null()]).optional(),
-  totalSteps: z.union([z.number(), z.null()]).optional(),
-  finalLoss: z.union([z.number(), z.null()]).optional(),
-});
-const TrainingMetricDto = z.object({
-  step: z.number().int(),
-  epoch: z.union([z.number(), z.null()]).optional(),
-  loss: z.union([z.number(), z.null()]).optional(),
-  gradNorm: z.union([z.number(), z.null()]).optional(),
-  learningRate: z.union([z.number(), z.null()]).optional(),
-  rewardMean: z.union([z.number(), z.null()]).optional(),
-  rewardStd: z.union([z.number(), z.null()]).optional(),
-  entropy: z.union([z.number(), z.null()]).optional(),
-  completionMeanLength: z.union([z.number(), z.null()]).optional(),
-  stepTimeS: z.union([z.number(), z.null()]).optional(),
-});
 const CohortStatusCountsDto = z
   .object({
     pending: z.number().int().default(0),
@@ -455,7 +419,7 @@ const CohortSummaryDto = z
   .passthrough();
 const CohortExperimentRowDto = z
   .object({
-    experiment_id: z.string().uuid(),
+    definition_id: z.string().uuid(),
     name: z.string(),
     benchmark_type: z.string(),
     sample_count: z.number().int(),
@@ -482,15 +446,17 @@ const UpdateCohortRequest = z
   .passthrough();
 const ExperimentSummaryDto = z
   .object({
-    experiment_id: z.string().uuid(),
+    definition_id: z.string().uuid(),
     cohort_id: z.union([z.string(), z.null()]).optional(),
     name: z.string(),
+    description: z.union([z.string(), z.null()]).optional(),
     benchmark_type: z.string(),
     sample_count: z.number().int(),
     status: z.string(),
     default_worker_team: z.object({}).partial().passthrough().optional(),
     default_evaluator_slug: z.union([z.string(), z.null()]).optional(),
     default_model_target: z.union([z.string(), z.null()]).optional(),
+    created_by: z.union([z.string(), z.null()]).optional(),
     created_at: z.string().datetime({ offset: true }),
     started_at: z.union([z.string(), z.null()]).optional(),
     completed_at: z.union([z.string(), z.null()]).optional(),
@@ -500,7 +466,7 @@ const ExperimentSummaryDto = z
 const ExperimentRunRowDto = z
   .object({
     run_id: z.string().uuid(),
-    workflow_definition_id: z.string().uuid(),
+    definition_id: z.string().uuid(),
     benchmark_type: z.string(),
     instance_key: z.string(),
     status: z.string(),
@@ -544,6 +510,10 @@ const ExperimentAnalyticsDto = z
   .passthrough();
 const ExperimentDetailDto = z
   .object({
+    definition_id: z.union([z.string(), z.null()]).optional(),
+    name: z.union([z.string(), z.null()]).optional(),
+    description: z.union([z.string(), z.null()]).optional(),
+    benchmark_type: z.union([z.string(), z.null()]).optional(),
     experiment: ExperimentSummaryDto,
     runs: z.array(ExperimentRunRowDto).optional(),
     analytics: ExperimentAnalyticsDto.optional(),
@@ -552,52 +522,22 @@ const ExperimentDetailDto = z
     metadata: z.object({}).partial().passthrough().optional(),
   })
   .passthrough();
-const JsonValue_Input: z.ZodType<JsonValue_Input> = z.lazy(() => z.union([
-  JsonScalar,
-  z.array(JsonValue_Input),
-  z.record(z.string(), JsonValue_Input),
-]));
-const JsonObject_Input = z.record(z.string(), JsonValue_Input);
-const ExperimentDefineRequest = z
-  .object({
-    benchmark_slug: z.string(),
-    name: z.union([z.string(), z.null()]).optional(),
-    cohort_id: z.union([z.string(), z.null()]).optional(),
-    limit: z.union([z.number(), z.null()]).optional(),
-    sample_ids: z.union([z.array(z.string()), z.null()]).optional(),
-    default_model_target: z.union([z.string(), z.null()]).optional(),
-    default_worker_team: JsonObject_Input.optional(),
-    default_evaluator_slug: z.union([z.string(), z.null()]).optional(),
-    design: JsonObject_Input.optional(),
-    seed: z.union([z.number(), z.null()]).optional(),
-    metadata: JsonObject_Input.optional(),
-  })
-  .passthrough();
-const ExperimentDefineResult = z
-  .object({
-    experiment_id: z.string().uuid(),
-    cohort_id: z.union([z.string(), z.null()]),
-    benchmark_type: z.string(),
-    sample_count: z.number().int(),
-    selected_samples: z.array(z.string()),
-  })
-  .passthrough();
 const ExperimentRunRequest = z
   .object({
-    experiment_id: z.string().uuid(),
+    definition_id: z.string().uuid(),
     timeout_seconds: z.union([z.number(), z.null()]).optional(),
     wait: z.boolean().optional().default(true),
   })
   .passthrough();
-const run_experiment_experiments__experiment_id__run_post_Body = z.union([
+const run_experiment_experiments__definition_id__run_post_Body = z.union([
   ExperimentRunRequest,
   z.null(),
 ]);
 const ExperimentRunResult = z
   .object({
-    experiment_id: z.string().uuid(),
+    definition_id: z.string().uuid(),
     run_ids: z.array(z.string().uuid()),
-    workflow_definition_ids: z.array(z.string().uuid()).optional(),
+    definition_ids: z.array(z.string().uuid()).optional(),
   })
   .passthrough();
 const SubmitRequest = z
@@ -653,6 +593,88 @@ const WeightSyncRequest = z
 const WeightSyncResponse = z
   .object({ success: z.boolean(), vllm_model_loaded: z.string() })
   .passthrough();
+const TestGraphNodeDto = z
+  .object({
+    id: z.string().uuid(),
+    task_slug: z.string(),
+    level: z.number().int(),
+    status: z.string(),
+    parent_task_id: z.union([z.string(), z.null()]),
+    parent_task_slug: z.union([z.string(), z.null()]),
+  })
+  .passthrough();
+const TestGraphMutationDto = z
+  .object({
+    sequence: z.number().int(),
+    mutation_type: z.string(),
+    target_task_slug: z.union([z.string(), z.null()]),
+  })
+  .passthrough();
+const TestEvaluationDto = z
+  .object({
+    task_id: z.string().uuid(),
+    task_slug: z.union([z.string(), z.null()]),
+    score: z.number(),
+    reason: z.string(),
+  })
+  .passthrough();
+const TestExecutionDto = z
+  .object({
+    task_slug: z.union([z.string(), z.null()]),
+    status: z.string(),
+    error: z.union([z.string(), z.null()]),
+  })
+  .passthrough();
+const TestRunStateDto = z
+  .object({
+    run_id: z.string().uuid(),
+    status: z.string(),
+    graph_nodes: z.array(TestGraphNodeDto),
+    mutations: z.array(TestGraphMutationDto),
+    evaluations: z.array(TestEvaluationDto),
+    executions: z.array(TestExecutionDto),
+    execution_count: z.number().int(),
+    mutation_count: z.number().int(),
+    resource_count: z.number().int(),
+    thread_count: z.number().int(),
+    context_event_count: z.number().int(),
+  })
+  .passthrough();
+const TestCohortIdDto = z
+  .object({ cohort_id: z.string().uuid() })
+  .passthrough();
+const TestCohortRunDto = z
+  .object({ run_id: z.string().uuid(), status: z.string() })
+  .passthrough();
+const SeedRunRequest = z
+  .object({
+    definition_id: z.string().uuid(),
+    benchmark_type: z.string().optional().default("test-harness"),
+    instance_key: z.string().optional().default("seeded"),
+    worker_team: z.object({}).partial().passthrough().optional(),
+    cohort: z.string().optional().default("_test_"),
+    status: z.string().optional().default("completed"),
+    task_slugs: z.array(z.string()).optional().default([]),
+  })
+  .passthrough();
+const ResetRequest = z.object({ cohort_prefix: z.string() }).passthrough();
+const CohortSlotRequest = z
+  .object({ worker_slug: z.string(), evaluator_slug: z.string() })
+  .passthrough();
+const SubmitCohortRequest = z
+  .object({
+    benchmark_slug: z.string(),
+    slots: z.array(CohortSlotRequest),
+    cohort_key: z.string(),
+    sandbox_slug: z.union([z.string(), z.null()]).optional(),
+    dependency_extras: z.array(z.string()).optional().default(["none"]),
+    model: z.string().optional().default("openai:gpt-4o"),
+    limit: z.number().int().optional().default(1),
+  })
+  .passthrough();
+const SubmitCohortResponse = z
+  .object({ run_ids: z.array(z.string().uuid()), cohort_id: z.string().uuid() })
+  .passthrough();
 
 export const schemas = {
   RunTaskDto,
@@ -669,8 +691,8 @@ export const schemas = {
   ToolResultPart,
   ThinkingPart,
   JsonScalar,
-  JsonValue_Output,
-  JsonObject_Output,
+  JsonValue,
+  JsonObject,
   TokenLogprob,
   ContextPartChunkLog,
   RunContextEventDto,
@@ -689,10 +711,6 @@ export const schemas = {
   AnnotationSetMutation,
   AnnotationDeletedMutation,
   GraphMutationRecordDto,
-  definition_id,
-  TrainingCurvePointDto,
-  TrainingSessionDto,
-  TrainingMetricDto,
   CohortStatusCountsDto,
   CohortSummaryDto,
   CohortExperimentRowDto,
@@ -704,12 +722,8 @@ export const schemas = {
   ExperimentStatusCountsDto,
   ExperimentAnalyticsDto,
   ExperimentDetailDto,
-  JsonValue_Input,
-  JsonObject_Input,
-  ExperimentDefineRequest,
-  ExperimentDefineResult,
   ExperimentRunRequest,
-  run_experiment_experiments__experiment_id__run_post_Body,
+  run_experiment_experiments__definition_id__run_post_Body,
   ExperimentRunResult,
   SubmitRequest,
   BatchStatus,
@@ -719,4 +733,16 @@ export const schemas = {
   PollResponse,
   WeightSyncRequest,
   WeightSyncResponse,
+  TestGraphNodeDto,
+  TestGraphMutationDto,
+  TestEvaluationDto,
+  TestExecutionDto,
+  TestRunStateDto,
+  TestCohortIdDto,
+  TestCohortRunDto,
+  SeedRunRequest,
+  ResetRequest,
+  CohortSlotRequest,
+  SubmitCohortRequest,
+  SubmitCohortResponse,
 };

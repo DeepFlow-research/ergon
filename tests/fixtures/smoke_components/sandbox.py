@@ -5,14 +5,22 @@ surface. They should not consume live E2B quota, especially in CI where stale
 remote sandboxes can make unrelated smoke runs fail with account-level limits.
 """
 
+from __future__ import annotations
+
 import os
+import builtins
 from collections.abc import Sequence
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from ergon_core.core.infrastructure.sandbox.manager import AsyncSandbox, BaseSandboxManager
+from ergon_core.api.sandbox import Sandbox
+from ergon_core.core.infrastructure.sandbox.manager import (
+    AsyncSandbox,
+    BaseSandboxManager,
+    DefaultSandboxManager,
+)
 from ergon_core.core.shared.settings import settings
 from pydantic import BaseModel
 
@@ -79,12 +87,28 @@ class _SmokeFiles:
             _EntryInfo(name=child.name) for child in sorted(host_path.iterdir()) if child.is_file()
         ]
 
+    def find_files(self, path: str) -> builtins.list[str]:
+        host_path = self._host_path(path)
+        if not host_path.exists():
+            return []
+        return [
+            f"/{child.relative_to(self._root)}"
+            for child in sorted(host_path.rglob("*"))
+            if child.is_file()
+        ]
+
 
 class _SmokeCommands:
     def __init__(self, files: _SmokeFiles) -> None:
         self._files = files
 
     async def run(self, command: str, *args: object, **kwargs: object) -> _CommandResult:
+        if command.startswith("find ") and " -type f" in command:
+            sandbox_dir = command.removeprefix("find ").split(" -type f", 1)[0].strip()
+            return _CommandResult(
+                stdout="\n".join(self._files.find_files(sandbox_dir)),
+                stderr="",
+            )
         if command.startswith("wc -l "):
             path = command.removeprefix("wc -l ").strip()
             content = (await self._files.read(path)).decode("utf-8")
@@ -117,8 +141,54 @@ class SmokeSandbox:
     async def kill(self) -> None:
         return None
 
+    async def close(self) -> None:
+        return None
+
     async def run_code(self, code: str, *args: object, **kwargs: object) -> _CodeExecutionResult:
         return _CodeExecutionResult(error=None, logs=_ExecutionLogs(stdout=[], stderr=[]))
+
+
+class SmokePublicSandbox(Sandbox):
+    """Object-bound Sandbox wrapper used by smoke Task snapshots."""
+
+    async def provision(self) -> None:
+        from ergon_builtins.sandbox._manager_backed import (
+            _E2BSandboxHandle,
+            _ManagerBackedSandboxRuntime,
+        )
+
+        SmokeSandboxManager.set_event_sink(DefaultSandboxManager._event_sink)
+        manager = SmokeSandboxManager()
+        sandbox_key = uuid4()
+        run_id = uuid4()
+        await manager.create(
+            sandbox_key=sandbox_key,
+            run_id=run_id,
+            timeout_minutes=(self.timeout_seconds or 1800) // 60,
+            envs=self.env if self.env else None,
+            display_task_id=sandbox_key,
+        )
+        live_sandbox = manager.get_sandbox(sandbox_key)
+        if live_sandbox is None:
+            raise RuntimeError(
+                f"SmokeSandboxManager.create returned without registering {sandbox_key}"
+            )
+        runtime = _ManagerBackedSandboxRuntime(
+            manager=manager,
+            sandbox=cast("_E2BSandboxHandle", live_sandbox),
+            sandbox_key=sandbox_key,
+        )
+        object.__setattr__(self, "_runtime", runtime)
+
+    async def _bind_runtime(self, sandbox_id: str) -> None:
+        from ergon_builtins.sandbox._manager_backed import (
+            _DirectSandboxRuntime,
+            _E2BSandboxHandle,
+        )
+
+        live_sandbox = await SmokeSandboxManager().reconnect(sandbox_id)
+        runtime = _DirectSandboxRuntime(sandbox=cast("_E2BSandboxHandle", live_sandbox))
+        object.__setattr__(self, "_runtime", runtime)
 
 
 class SmokeSandboxManager(BaseSandboxManager):

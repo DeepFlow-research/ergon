@@ -1,9 +1,8 @@
 """Tests for LLM-judge criteria using provider-owned structured judge calls.
 
 Verifies:
-- CriterionContext accepts an optional runtime field
 - LLMJudgeCriterion.evaluate() does not rely on CriterionRuntime LLM policy
-- Legacy criteria that ignore context.runtime keep working
+- Legacy criteria keep working with the final object-bound context shape
 """
 
 from unittest.mock import AsyncMock
@@ -13,19 +12,16 @@ import pytest
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.criterion import CriterionOutcome
 from ergon_core.api.worker import WorkerOutput
-from ergon_core.api.benchmark import Task
+from ergon_core.test_support.task_factory import task_with_id
 
 
-def _make_eval_context(
-    *,
-    runtime: object = None,
-) -> CriterionContext:
+def _make_eval_context() -> CriterionContext:
     return CriterionContext(
         run_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
-        task=Task(
-            task_id=uuid4(),
+        task=task_with_id(
+            uuid4(),
             task_slug="test",
             instance_key="default",
             description="What is quantum computing?",
@@ -33,19 +29,14 @@ def _make_eval_context(
         worker_result=WorkerOutput(
             output="Quantum computing uses qubits...",
         ),
-        runtime=runtime,
     )
 
 
 class TestCriterionContextRuntime:
-    def test_runtime_defaults_to_none(self):
+    def test_runtime_field_is_removed(self):
         ctx = _make_eval_context()
-        assert ctx.runtime is None
-
-    def test_runtime_can_be_set(self):
-        fake_runtime = object()
-        ctx = _make_eval_context(runtime=fake_runtime)
-        assert ctx.runtime is fake_runtime
+        assert "runtime" not in CriterionContext.model_fields
+        assert not hasattr(ctx, "runtime")
 
     def test_context_is_frozen(self):
         ctx = _make_eval_context()
@@ -81,7 +72,7 @@ class TestLLMJudgeCriterionWithRuntime:
             max_score=1.0,
         )
 
-        ctx = _make_eval_context(runtime=None)
+        ctx = _make_eval_context()
         result = await criterion.evaluate(ctx)
 
         assert result.passed is passed
@@ -94,8 +85,8 @@ class TestLegacyCriterionIgnoresRuntime:
     """Legacy criteria that don't use context.runtime should keep working."""
 
     @pytest.mark.asyncio
-    async def test_criterion_with_runtime_present_but_unused(self):
-        """A criterion that doesn't touch runtime still works fine."""
+    async def test_criterion_with_final_context_shape(self):
+        """A criterion that only uses public context fields still works fine."""
         from ergon_core.api.criterion import Criterion
 
         class _SimpleCriterion(Criterion):
@@ -103,6 +94,7 @@ class TestLegacyCriterionIgnoresRuntime:
 
             async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
                 return CriterionOutcome(
+                    slug=self.slug,
                     name=self.slug,
                     score=1.0,
                     passed=True,
@@ -111,11 +103,8 @@ class TestLegacyCriterionIgnoresRuntime:
                 )
 
         criterion = _SimpleCriterion(slug="simple")
-        fake_runtime = AsyncMock()
-        ctx = _make_eval_context(runtime=fake_runtime)
+        ctx = _make_eval_context()
         result = await criterion.evaluate(ctx)
 
         assert result.passed is True
         assert result.score == 1.0
-        # Runtime was never used.
-        assert fake_runtime.mock_calls == []

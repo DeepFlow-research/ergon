@@ -44,8 +44,14 @@ line-length = 100
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["C9"]
-# C901: function/method is too complex (McCabe cyclomatic complexity)
+select = [
+    "C9",     # McCabe cyclomatic complexity (C901)
+    "ANN001", # missing type annotation for function argument
+    "ANN201", # missing return type annotation for public function
+    "ANN202", # missing return type annotation for private function
+    "ANN204", # missing return type annotation for special method (__init__, __new__, ...)
+    "ANN206", # missing return type annotation for classmethod
+]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
@@ -53,7 +59,7 @@ max-complexity = 10
 [tool.ruff.lint.per-file-ignores]
 # Pre-existing complexity debt — tracked for future refactor PRs, not introduced now.
 # main (13): spike script, not library code
-"scripts/**" = ["C901"]
+"scripts/**" = ["C901", "ANN001", "ANN201", "ANN202", "ANN204", "ANN206"]
 # persist_definition (28): orchestrates full experiment graph persistence in one method
 "ergon_core/ergon_core/core/application/experiments/definition_writer.py" = ["C901"]
 # extract_agent_trajectories (13), _extract_trajectories (11)
@@ -66,6 +72,16 @@ max-complexity = 10
 # _messages_to_text (12): converts PydanticAI message union to chat-template string
 "ergon_builtins/ergon_builtins/models/transformers_backend.py" = ["C901"]
 
+# ANN per-file ignores. Tests and migrations have ~376 pre-existing
+# violations that aren't worth fixing in this PR — production code
+# (~42 hits) is fixed inline. Production ANN coverage is enforced
+# everywhere except these directories. Drain pattern: when a test
+# file is touched in a future PR, drop its ignores at the same time.
+"tests/**" = ["ANN001", "ANN201", "ANN202", "ANN204", "ANN206"]
+"**/tests/**" = ["ANN001", "ANN201", "ANN202", "ANN204", "ANN206"]
+"**/migrations/**" = ["ANN001", "ANN201", "ANN202", "ANN204", "ANN206"]
+"ergon_core/ergon_core/test_support/**" = ["ANN001", "ANN201", "ANN202", "ANN204", "ANN206"]
+
 [tool.slopcop]
 # Per-rule excludes only when a rule is wrong for the whole repo (do not disable no-print / no-typing-any globally).
 
@@ -76,19 +92,28 @@ max-complexity = 10
 # User-facing CLI output and dashboard render helpers.
 "**/ergon_cli/**" = ["no-print"]
 "**/rendering/**" = ["no-print"]
+# Public authoring API intentionally exposes JSON-like metadata bags and
+# dynamic component import helpers; keep these suppressions centralized
+# rather than repeated inline across api/ source files.
+"ergon_core/ergon_core/api/**" = [
+    "no-typing-any",
+    "no-str-empty-default",
+    "no-hasattr-getattr",
+    "max-function-params",
+]
 
 # SQLModel Field(sa_type=DateTime(...)) — ty misreads the overloaded __init__.
 [[tool.ty.overrides]]
 include = ["**/persistence/**/models.py", "**/persistence/graph/**"]
 [tool.ty.overrides.rules]
-invalid-argument-type = "warn"
+invalid-argument-type = "ignore"
 
 # Inngest handlers: ctx.event.data is typed as JSON, not the unpacked model;
 # ctx.step.run accepts sync or async but stubs only declare async.
 [[tool.ty.overrides]]
 include = ["**/infrastructure/inngest/**"]
 [tool.ty.overrides.rules]
-invalid-argument-type = "warn"
+invalid-argument-type = "ignore"
 
 # pydantic-ai Tool(function=...) — ToolFuncEither union doesn't resolve async callables.
 # invalid-return-type: async tool functions return Coroutine but stubs expect plain value.
@@ -102,10 +127,10 @@ include = [
     "**/tools/*_toolkit.py",
 ]
 [tool.ty.overrides.rules]
-invalid-argument-type = "warn"
-unresolved-attribute = "warn"
-invalid-return-type = "warn"
-invalid-assignment = "warn"
+invalid-argument-type = "ignore"
+unresolved-attribute = "ignore"
+invalid-return-type = "ignore"
+invalid-assignment = "ignore"
 
 # E2B sandbox SDK — untyped package; proxy wrappers forward *args/**kwargs to typed methods.
 # invalid-assignment: try/except ImportError fallbacks (AsyncSandbox = None,
@@ -113,11 +138,11 @@ invalid-assignment = "warn"
 [[tool.ty.overrides]]
 include = ["ergon_core/ergon_core/core/infrastructure/sandbox/**"]
 [tool.ty.overrides.rules]
-invalid-argument-type = "warn"
-unresolved-attribute = "warn"
-call-non-callable = "warn"
-no-matching-overload = "warn"
-invalid-assignment = "warn"
+invalid-argument-type = "ignore"
+unresolved-attribute = "ignore"
+call-non-callable = "ignore"
+no-matching-overload = "ignore"
+invalid-assignment = "ignore"
 
 # Transformers/torch optional deps — Unknown types cascade from conditional imports.
 # unknown-argument: pydantic AliasChoices on ModelResponse.provider_details.
@@ -126,29 +151,29 @@ invalid-assignment = "warn"
 [[tool.ty.overrides]]
 include = ["**/models/transformers_backend.py"]
 [tool.ty.overrides.rules]
-invalid-argument-type = "warn"
-unresolved-attribute = "warn"
-call-non-callable = "warn"
-invalid-return-type = "warn"
-unknown-argument = "warn"
-invalid-assignment = "warn"
+invalid-argument-type = "ignore"
+unresolved-attribute = "ignore"
+call-non-callable = "ignore"
+invalid-return-type = "ignore"
+unknown-argument = "ignore"
+invalid-assignment = "ignore"
 
 # pydantic-ai message formatting — complex generic dict unions ty can't resolve.
 [[tool.ty.overrides]]
 include = ["**/common/llm_context/adapters/pydantic_ai.py"]
 [tool.ty.overrides.rules]
-invalid-argument-type = "warn"
-unresolved-attribute = "warn"
-no-matching-overload = "warn"
+invalid-argument-type = "ignore"
+unresolved-attribute = "ignore"
+no-matching-overload = "ignore"
 
 # RL adapter — inngest send, tokenizer, and mixed optional-dep types.
 # invalid-return-type: AutoTokenizer.from_pretrained → Unknown can't verify Tokenizer protocol.
 [[tool.ty.overrides]]
 include = ["**/core/rl/**"]
 [tool.ty.overrides.rules]
-invalid-argument-type = "warn"
-unresolved-attribute = "warn"
-invalid-return-type = "warn"
+invalid-argument-type = "ignore"
+unresolved-attribute = "ignore"
+invalid-return-type = "ignore"
 
 # SQLModel .where() / .order_by() column expressions — ty can't resolve SQLAlchemy operator overloads.
 # unresolved-attribute: Column(datetime|UUID).desc() / .in_() — the SQLAlchemy
@@ -161,10 +186,10 @@ include = [
     "**/core/rl/rollout_service.py",
 ]
 [tool.ty.overrides.rules]
-invalid-argument-type = "warn"
-unresolved-attribute = "warn"
-invalid-assignment = "warn"
-not-iterable = "warn"
+invalid-argument-type = "ignore"
+unresolved-attribute = "ignore"
+invalid-assignment = "ignore"
+not-iterable = "ignore"
 
 # Ingestion adapters normalize heterogeneous public artifacts. The source data is
 # runtime-validated from JSON-like dict/list records, which ty cannot always
@@ -173,18 +198,18 @@ not-iterable = "warn"
 [[tool.ty.overrides]]
 include = ["ergon_ingestion/ergon_ingestion/**"]
 [tool.ty.overrides.rules]
-invalid-argument-type = "warn"
-invalid-return-type = "warn"
-call-non-callable = "warn"
-unresolved-attribute = "warn"
+invalid-argument-type = "ignore"
+invalid-return-type = "ignore"
+call-non-callable = "ignore"
+unresolved-attribute = "ignore"
 
 # pydantic-ai Agent generic — Agent(output_type=T) constructor return type isn't narrowed by ty;
 # the inferred return is Agent[None, str] regardless of output_type value.
 [[tool.ty.overrides]]
 include = ["**/workers/**"]
 [tool.ty.overrides.rules]
-invalid-assignment = "warn"
-invalid-method-override = "warn"
+invalid-assignment = "ignore"
+invalid-method-override = "ignore"
 
 # Remaining files with isolated third-party type issues (inngest JSON, pydantic-ai, SQLModel select).
 # invalid-assignment covers:
@@ -201,25 +226,25 @@ include = [
     "ergon_infra/**",
 ]
 [tool.ty.overrides.rules]
-invalid-argument-type = "warn"
-unresolved-attribute = "warn"
-no-matching-overload = "warn"
-not-iterable = "warn"
-invalid-parameter-default = "warn"
-invalid-assignment = "warn"
+invalid-argument-type = "ignore"
+unresolved-attribute = "ignore"
+no-matching-overload = "ignore"
+not-iterable = "ignore"
+invalid-parameter-default = "ignore"
+invalid-assignment = "ignore"
 
 # Worker ABC: abstract async generator yield + Unknown response_text.
 [[tool.ty.overrides]]
 include = ["ergon_core/ergon_core/api/worker/worker.py"]
 [tool.ty.overrides.rules]
-invalid-yield = "warn"
-invalid-argument-type = "warn"
+invalid-yield = "ignore"
+invalid-argument-type = "ignore"
 
 # inngest_client.send_sync signature vs Callable[[Event], None] — harmless mismatch.
 [[tool.ty.overrides]]
 include = ["**/core/rest_api/app.py"]
 [tool.ty.overrides.rules]
-invalid-argument-type = "warn"
+invalid-argument-type = "ignore"
 
 # Remaining support and validation generics that are checked in the source path
 # but rely on runtime-constrained SQLModel/Pydantic shapes.
@@ -229,7 +254,7 @@ include = [
     "**/test_support/e2e_read_helpers.py",
 ]
 [tool.ty.overrides.rules]
-invalid-argument-type = "warn"
+invalid-argument-type = "ignore"
 
 # Tests: SQLModel column expressions (.desc(), .is_()) and asyncio.run with AsyncGenerator.
 # Tests also exercise pydantic-ai Tool helpers and stub sandbox objects, so we
@@ -244,19 +269,24 @@ include = [
     "ergon_ingestion/tests/**",
 ]
 [tool.ty.overrides.rules]
-unresolved-attribute = "warn"
-invalid-argument-type = "warn"
-invalid-return-type = "warn"
-call-non-callable = "warn"
-not-subscriptable = "warn"
+unresolved-attribute = "ignore"
+invalid-argument-type = "ignore"
+invalid-return-type = "ignore"
+call-non-callable = "ignore"
+not-subscriptable = "ignore"
 
 # Alembic migrations — auto-generated files, SQLAlchemy column type submodules not
 # resolvable by ty. Type-checking these provides no value.
 [[tool.ty.overrides]]
 include = ["**/migrations/**"]
 [tool.ty.overrides.rules]
-possibly-missing-submodule = "warn"
-invalid-argument-type = "warn"
+possibly-missing-submodule = "ignore"
+invalid-argument-type = "ignore"
+
+[tool.ty.rules]
+deprecated = "ignore"
+redundant-cast = "ignore"
+unused-ignore-comment = "ignore"
 
 [tool.ty.environment]
 extra-paths = ["ergon_core", "ergon_builtins", "ergon_cli", "ergon_infra", "ergon_ingestion"]

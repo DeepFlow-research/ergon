@@ -59,25 +59,25 @@ runnable — not a catalog of registered implementations.
     providers layer.
 
 - ReAct toolkit composition.
-  - There is one concrete ReAct worker class — `ReActWorker` (slug `react-v1`,
-    not registered bare) — with a fully explicit construction contract:
-    `ReActWorker(name=..., model=..., task_id=..., sandbox_id=...,
-    tools=[...], system_prompt=..., max_iterations=...)`. Every kwarg is
-    required; no nullable-with-default fallbacks hide sizing decisions.
-    Benchmark-specific glue (the toolkit itself, the system prompt, the
-    iteration budget) is a **factory-closure** concern. Registry entries
-    such as `"minif2f-react"` and `"swebench-react"` live in
-    `registry_core.py` as small closures that build the `list[Tool]` and
-    pass every kwarg — including `task_id` and `sandbox_id` — through to
-    `ReActWorker(...)`. There is no `BenchmarkAdapter` ABC, no
-    `on_run_start`/`on_run_end` hooks, no `transform_output` seam.
+  - There is one concrete ReAct worker class — `ReActWorker` — with a
+    serializable Pydantic construction contract. **v2 (object-bound):**
+    `ReActWorker(name=..., model=..., system_prompt=..., max_iterations=...,
+    toolkit=<Toolkit instance>)`. The `toolkit` field is a serializable
+    `Toolkit` subclass (e.g. `MiniF2FToolkit`, `SWEBenchToolkit`,
+    `ResearchRubricsToolkit`, `GDPEvalToolkit`) that carries only config; live
+    `pydantic_ai.Tool` instances are built lazily at `execute()` time via
+    `toolkit.tools(sandbox, task)`. This makes `ReActWorker` fully
+    round-trippable through task JSON without holding non-serializable state.
+    **v1 (registry-closure):** `ReActWorker(name=..., model=..., task_id=...,
+    sandbox_id=..., tools=[...], system_prompt=..., max_iterations=...)` —
+    constructed by a factory closure at run time, not stored in task JSON.
   - Per-task environment setup (clone a repo, install deps, apply a
     harness spec) lives in `BaseSandboxManager._install_dependencies`, not
     in the worker or an adapter. The sandbox manager reads the per-task
     payload via `queries.task_executions.get_task_payload(task_id)`.
-  - Freeze status: adding a benchmark that needs ReAct means a new registry
-    factory closure and (if it needs bespoke setup) a
-    `BaseSandboxManager` subclass, not a new worker subclass or adapter.
+  - Freeze status: adding a v2 benchmark that needs ReAct means a
+    `make_<slug>_worker()` factory that returns a serializable
+    `ReActWorker(toolkit=...)` instance, not a new registry closure.
 
 - Onboarding profile.
   - Today a hand-maintained `BENCHMARK_DEPS` dict in
@@ -195,8 +195,43 @@ Benchmark loader → Task instances → Worker
   sizing decisions in a shared default and mask per-benchmark intent.
   Concrete workers declare their required construction contract; factories
   pass every kwarg explicitly.
+- **Per-benchmark code under top-level `sandboxes/` or `toolkits/`.**
+  A `LeanSandbox` is only useful inside MiniF2F; a `MiniF2FToolkit`
+  assumes `LeanSandbox`.  These belong in `benchmarks/minif2f/`, not in
+  cross-cutting top-level dirs that imply reuse that doesn't exist.  The
+  cardinality test: a file is cross-cutting only if N different benchmarks
+  would import it.  PR 6 introduced top-level `sandboxes/` / `toolkits/`
+  dirs; PR 6.5 deleted them and moved their contents into per-benchmark
+  subpackages.
+- **`<Benchmark>ReActWorker(ReActWorker)` subclasses.**  Making
+  per-benchmark worker subclasses costs N×M classes (N strategies ×
+  M benchmarks) and forces the agentic-loop logic to live in N subclasses
+  that all `super().execute()`.  The v2 pattern is: one worker class per
+  strategy in `workers/baselines/`, plus a per-benchmark factory function
+  in `benchmarks/<slug>/workers.py` that binds the strategy to the local
+  sandbox + toolkit + prompt.  Cost is N + M, not N × M.
 
-## 7. Follow-ups
+## 7. CLI observation commands
+
+After kicking off a run from Python, observe it via the CLI:
+
+- `ergon run status <run-id>` — current state of one run
+- `ergon run list [--status=S] [--experiment=<tag>]` — list runs, optionally filtered
+- `ergon experiment show <UUID>` — full experiment detail (UUID-based)
+- `ergon experiment list` — list recent experiments
+- `ergon experiment tags` — list distinct experiment-tag strings
+- `ergon experiment by-tag <tag>` — list definitions sharing a tag, with latest run status
+
+The `--experiment=<tag>` filter and the `tags` / `by-tag` commands operate on the
+`BenchmarkDefinitionRecord.experiment` column.  That column is populated today only
+by the cohort / test harness — there is no public `Benchmark(experiment=...)` constructor
+kwarg yet.  If no tags are set, `ergon experiment tags` returns an empty list with a
+message pointing at the cohort harness.
+
+All CLI commands are read-only against persisted state.  Authoring (defining a benchmark,
+persisting it, launching a run) is Python-only; see `ergon_core.api`.
+
+## 8. Follow-ups
 
 Known limits and open questions touching this layer:
 
@@ -221,11 +256,41 @@ today and will be updated when an RFC lands and changes an invariant.
 
 | Concern | Location |
 |---|---|
-| Always-available benchmark registry | `ergon_builtins/registry_core.py` |
-| Data-extra benchmark registry | `ergon_builtins/registry.py` |
+| Public benchmark classes | `ergon_builtins/benchmarks/<slug>/benchmark.py` |
+| Public rubric classes | `ergon_builtins/benchmarks/<slug>/rubric.py` |
 | Benchmark subpackages | `ergon_builtins/benchmarks/<slug>/` |
+| Per-benchmark Sandbox subclass | `ergon_builtins/benchmarks/<slug>/sandbox.py` |
+| Per-benchmark Toolkit config | `ergon_builtins/benchmarks/<slug>/toolkit.py` |
+| Per-benchmark worker factories | `ergon_builtins/benchmarks/<slug>/workers.py` |
 | Cross-benchmark reference workers | `ergon_builtins/workers/baselines/` |
+| Cross-cutting sandbox-adapter infra | `ergon_builtins/sandbox/` |
 | Reusable Criterion primitives | `ergon_builtins/evaluators/criteria/` |
 | Reusable Rubric composites | `ergon_builtins/evaluators/rubrics/` |
 | Model backends | `ergon_builtins/models/` |
 | Onboarding deps dict | `ergon_cli/onboarding/profile.py` |
+
+## Cardinality and Colocation
+
+The file layout follows the actual coupling cardinalities between
+`Sandbox`, `Toolkit`, `Worker`, `Evaluator`, `Criterion`, and `Benchmark`:
+
+| Pair | Cardinality | Lives where |
+|------|-------------|-------------|
+| Benchmark ↔ Sandbox | 1↔1 (in practice) | `benchmarks/<slug>/sandbox.py` |
+| Sandbox ↔ Toolkit | 1↔N possible, 1↔1 in practice | `benchmarks/<slug>/toolkit.py` |
+| Toolkit ↔ Worker class | N↔M (loose) | Worker class in `workers/baselines/`; binding in `benchmarks/<slug>/workers.py` |
+| Worker class ↔ Benchmark | N↔1 (one ReActWorker, N benchmarks) | Worker class in `workers/baselines/` |
+| Evaluator ↔ Benchmark | 1↔1 (rubric); N↔M (reusable criteria) | Rubric in `benchmarks/<slug>/rubric.py`; benchmark-specific criteria in `benchmarks/<slug>/criteria/`; reusable criteria in top-level `evaluators/criteria/` |
+| Evaluator ↔ Sandbox | 1↔1 if agentic, 0 otherwise | Same as Evaluator ↔ Benchmark |
+
+**The test for "where does X live?":**
+
+- 1:1 with a benchmark → `benchmarks/<slug>/`
+- N:1 across benchmarks → top-level under its category
+
+`Sandbox` and `Toolkit` fail the test for cross-cutting (every concrete
+class is 1:1 with a benchmark); they live per-benchmark.  `ReActWorker`
+passes (one class powers every benchmark); it stays under
+`workers/baselines/`.  The shared manager-backed sandbox adapter passes
+(one adapter wraps every benchmark's `BaseSandboxManager` subclass until
+PR 11); it gets its own top-level home in `sandbox/` (singular).

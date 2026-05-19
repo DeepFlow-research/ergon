@@ -21,7 +21,7 @@ across the full service stack.
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from ergon_core.core.persistence.graph.status_conventions import CANCELLED, EDGE_PENDING
+from ergon_core.core.application.runtime.status import CANCELLED, EDGE_PENDING
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.application.workflows.orchestration import PropagateTaskCompletionCommand
@@ -71,33 +71,41 @@ async def test_diamond_restart_invalidates_fanin_and_reactivates_on_recompletion
             run.id,
             task_slug="task-a",
             status="completed",
-            parent_node_id=root.id,
+            parent_task_id=root.task_id,
         )
         task_b = make_node(
             session,
             run.id,
             task_slug="task-b",
             status="completed",
-            parent_node_id=root.id,
+            parent_task_id=root.task_id,
         )
         task_c = make_node(
             session,
             run.id,
             task_slug="task-c",
             status="completed",
-            parent_node_id=root.id,
+            parent_task_id=root.task_id,
         )
         make_edge(
-            session, run.id, source_node_id=task_a.id, target_node_id=task_c.id, status="satisfied"
+            session,
+            run.id,
+            source_task_id=task_a.task_id,
+            target_task_id=task_c.task_id,
+            status="satisfied",
         )
         make_edge(
-            session, run.id, source_node_id=task_b.id, target_node_id=task_c.id, status="satisfied"
+            session,
+            run.id,
+            source_task_id=task_b.task_id,
+            target_task_id=task_c.task_id,
+            status="satisfied",
         )
         run_id = run.id
         defn_id = defn.id
-        task_a_id = task_a.id
-        task_b_id = task_b.id
-        task_c_id = task_c.id
+        task_a_id = task_a.task_id
+        task_b_id = task_b.task_id
+        task_c_id = task_c.task_id
         session.commit()
 
     try:
@@ -115,14 +123,14 @@ async def test_diamond_restart_invalidates_fanin_and_reactivates_on_recompletion
             with get_session() as session:
                 result = await svc.restart_task(
                     session,
-                    RestartTaskCommand(run_id=run_id, node_id=task_a_id),
+                    RestartTaskCommand(run_id=run_id, task_id=task_a_id),
                 )
 
         assert result.old_status == TaskExecutionStatus.COMPLETED
-        assert task_c_id in result.invalidated_node_ids, (
-            f"task_c must be in invalidated_node_ids; got {result.invalidated_node_ids!r}"
+        assert task_c_id in result.invalidated_task_ids, (
+            f"task_c must be in invalidated_task_ids; got {result.invalidated_task_ids!r}"
         )
-        assert task_b_id not in result.invalidated_node_ids, (
+        assert task_b_id not in result.invalidated_task_ids, (
             "task_b must NOT be invalidated — it is not downstream of task_a in this graph"
         )
 

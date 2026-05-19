@@ -1,6 +1,6 @@
 """Task and workflow lifecycle event contracts.
 
-These mirror the ref codebase events but use definition_id instead of experiment_id.
+These mirror the ref codebase events but use definition_id instead of definition_id.
 """
 
 from typing import ClassVar, Literal
@@ -8,11 +8,7 @@ from uuid import UUID
 
 from ergon_core.core.application.events.base import InngestEventContract
 
-# Production task execution emits real sandbox IDs. Test-support managers may
-# use sentinel IDs, but core event consumers must not parse or branch on those
-# sentinel formats. ``TaskFailedEvent.sandbox_id`` is ``str | None`` because a
-# task can fail before sandbox setup runs, in which case there really is no
-# sandbox.
+
 SandboxId = str
 
 
@@ -23,8 +19,7 @@ class TaskReadyEvent(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID | None = None
-    node_id: UUID | None = None
+    task_id: UUID
 
 
 class TaskStartedEvent(InngestEventContract):
@@ -34,7 +29,7 @@ class TaskStartedEvent(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID | None = None
+    task_id: UUID
     execution_id: UUID
 
 
@@ -45,10 +40,9 @@ class TaskCompletedEvent(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID | None = None
+    task_id: UUID
     execution_id: UUID
     sandbox_id: SandboxId
-    node_id: UUID
 
 
 class TaskFailedEvent(InngestEventContract):
@@ -58,12 +52,11 @@ class TaskFailedEvent(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID | None = None
+    task_id: UUID
     execution_id: UUID
     error: str
     # ``None`` when the task failed before sandbox-setup could run.
     sandbox_id: str | None = None
-    node_id: UUID | None = None
 
 
 class WorkflowStartedEvent(InngestEventContract):
@@ -107,11 +100,11 @@ PropagationCancelCause = Literal["parent_terminal", "dep_invalidated"]
 
 
 class TaskCancelledEvent(InngestEventContract):
-    """Emitted whenever a node transitions from non-terminal into CANCELLED.
+    """Emitted whenever a task transitions from non-terminal into CANCELLED.
 
     Consumers:
       - cancel_orphan_subtasks_fn (recurse cascade to descendants)
-      - cleanup_cancelled_task_fn (release sandbox, mark execution row)
+      - cleanup_cancelled_task_fn (mark execution row and release sandbox)
       - execute_task_fn (via TASK_CANCEL matcher — drops queued / terminates running)
       - dashboard_emitter
     """
@@ -120,7 +113,7 @@ class TaskCancelledEvent(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    node_id: UUID
+    task_id: UUID
     execution_id: UUID | None
     cause: CancelCause
 

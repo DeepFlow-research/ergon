@@ -6,13 +6,7 @@ from sqlmodel import SQLModel, Session, create_engine, select
 
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphAnnotation, RunGraphNode
-from ergon_core.core.persistence.imports.models import (
-    RunDropsManifest,
-    RunReducer,
-    RunReducerFootprint,
-)
 from ergon_core.core.persistence.telemetry.models import (
-    ExperimentRecord,
     RunRecord,
     RunResource,
     RunTaskExecution,
@@ -28,7 +22,7 @@ from ergon_ingestion.models import (
 from ergon_ingestion.writers.external_run_writer import ExternalRunWriter
 
 
-def test_external_run_writer_persists_import_spine_and_reducer_metadata(tmp_path: Path) -> None:
+def test_external_run_writer_persists_import_spine_without_reducer_tables(tmp_path: Path) -> None:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
 
@@ -81,8 +75,9 @@ def test_external_run_writer_persists_import_spine_and_reducer_metadata(tmp_path
         session.commit()
 
         assert result.run_id is not None
-        assert session.exec(select(ExperimentDefinition)).one().benchmark_type == "imported:gap"
-        assert session.exec(select(ExperimentRecord)).one().sample_count == 1
+        definition = session.exec(select(ExperimentDefinition)).one()
+        assert definition.benchmark_type == "imported:gap"
+        assert definition.metadata_json["import_batch_id"] == "paper-rq1-v1"
         assert session.exec(select(RunRecord)).one().instance_key == "gap-row-1"
         assert session.exec(select(RunGraphNode)).one().task_slug == "imported-root"
         assert (
@@ -90,9 +85,6 @@ def test_external_run_writer_persists_import_spine_and_reducer_metadata(tmp_path
         )
         assert session.exec(select(RunGraphAnnotation)).one().namespace == "gap.labels"
         assert session.exec(select(RunResource)).one().name == "source-row.json"
-        assert session.exec(select(RunReducer)).one().name == "gap.text_safety"
-        assert session.exec(select(RunReducerFootprint)).one().fields_read_json == ["t_safe"]
-        assert session.exec(select(RunDropsManifest)).one().loss_class == "tool_channel_erasure"
 
 
 def test_external_run_writer_sanitizes_non_finite_json_values(tmp_path: Path) -> None:
@@ -206,9 +198,7 @@ def test_external_run_writer_compacts_oversized_db_metadata(tmp_path: Path) -> N
         session.commit()
 
         run = session.exec(select(RunRecord)).one()
-        reducer = session.exec(select(RunReducer)).one()
         resource = session.exec(select(RunResource)).one()
         assert run.summary_json["observed_fields"]["trajectory_id"] == "agent-reward-large"
         assert run.summary_json["observed_fields"]["process_trace"]["_ergon_compacted"] is True
-        assert reducer.output_json["process_trace"]["_ergon_compacted"] is True
         assert Path(resource.file_path).read_text().count("x") == 4_500_000

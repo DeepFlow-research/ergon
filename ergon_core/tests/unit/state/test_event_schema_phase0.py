@@ -1,9 +1,8 @@
-"""Phase 0 schema tests: node_id on events, DTOs, and optional task_id."""
+"""PR 12 schema tests: task_id is required and node_id is not a public bridge."""
 
 from uuid import uuid4
 
 import pytest
-from ergon_core.api.worker import WorkerContext
 from ergon_core.core.application.events.task_events import (
     TaskCompletedEvent,
     TaskFailedEvent,
@@ -17,13 +16,7 @@ from ergon_core.core.application.workflows.orchestration import (
 )
 
 
-class TestDynamicTaskNone:
-    def test_task_ready_event_task_id_defaults_to_none(self):
-        evt = TaskReadyEvent(run_id=uuid4(), definition_id=uuid4())
-        assert evt.task_id is None
-
-
-_NODE_ID_CASES = [
+_TASK_ID_CASES = [
     (
         "TaskReadyEvent",
         lambda: TaskReadyEvent(run_id=uuid4(), definition_id=uuid4(), task_id=uuid4()),
@@ -46,10 +39,6 @@ _NODE_ID_CASES = [
             task_id=uuid4(),
         ),
     ),
-    # PreparedTaskExecution dropped from this parametrisation: its
-    # ``node_id`` is no longer optional — every prepared task IS a
-    # graph node, so ``node_id: UUID`` is required.  See
-    # docs/bugs/open/2026-04-23-inngest-function-failures.md § A.
     (
         "TaskDescriptor",
         lambda: TaskDescriptor(
@@ -66,48 +55,33 @@ _NODE_ID_CASES = [
             execution_id=uuid4(),
         ),
     ),
-    (
-        "WorkerContext",
-        lambda: WorkerContext(
-            run_id=uuid4(),
-            task_id=uuid4(),
-            execution_id=uuid4(),
-            sandbox_id="sbx-123",
-        ),
-    ),
 ]
 
 
-@pytest.mark.parametrize("label,factory", _NODE_ID_CASES, ids=[c[0] for c in _NODE_ID_CASES])
-def test_node_id_defaults_to_none(label, factory):
+def test_task_ready_event_requires_task_id() -> None:
+    with pytest.raises(ValueError):
+        TaskReadyEvent(run_id=uuid4(), definition_id=uuid4())  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize("label,factory", _TASK_ID_CASES, ids=[c[0] for c in _TASK_ID_CASES])
+def test_task_id_round_trips(label, factory):
     obj = factory()
-    assert obj.node_id is None
     data = obj.model_dump()
-    assert data["node_id"] is None
+    assert "task_id" in data
+    assert "node_id" not in data
     roundtripped = type(obj).model_validate(data)
-    assert roundtripped.node_id is None
+    assert roundtripped.task_id == obj.task_id
 
 
-def test_task_completed_event_requires_node_id() -> None:
-    node_id = uuid4()
+def test_task_completed_event_uses_task_id() -> None:
+    task_id = uuid4()
     event = TaskCompletedEvent(
         run_id=uuid4(),
         definition_id=uuid4(),
-        task_id=uuid4(),
+        task_id=task_id,
         execution_id=uuid4(),
         sandbox_id="sbx-123",
-        node_id=node_id,
     )
 
-    assert event.node_id == node_id
-
-
-@pytest.mark.parametrize("label,factory", _NODE_ID_CASES, ids=[c[0] for c in _NODE_ID_CASES])
-def test_node_id_round_trips(label, factory):
-    nid = uuid4()
-    obj = factory()
-    obj_with_id = type(obj).model_validate({**obj.model_dump(), "node_id": str(nid)})
-    assert obj_with_id.node_id == nid
-    data = obj_with_id.model_dump()
-    roundtripped = type(obj).model_validate(data)
-    assert roundtripped.node_id == nid
+    assert event.task_id == task_id
+    assert "node_id" not in event.model_dump()

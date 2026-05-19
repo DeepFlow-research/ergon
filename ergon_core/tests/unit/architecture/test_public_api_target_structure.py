@@ -3,6 +3,8 @@
 import importlib
 import inspect
 
+import pytest
+
 
 def test_public_api_root_exports_semantic_authoring_names_only() -> None:
     public_api = importlib.import_module("ergon_core.api")
@@ -11,23 +13,36 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "Benchmark",
         "BenchmarkRequirements",
         "Task",
-        "TaskSpec",
         "EmptyTaskPayload",
         "Worker",
         "WorkerContext",
         "WorkerOutput",
         "WorkerStreamItem",
+        "AwaitCompletionNotSupportedError",
+        "DependencyError",
+        # PR 9 — dynamic subtasks: SpawnedTaskHandle is the return type
+        # of ``WorkerContext.spawn_task`` / ``.restart_task``;
+        # ContainmentViolation is raised by the curated single-target
+        # facade methods when a worker targets a task it does not own.
+        "SpawnedTaskHandle",
+        "ContainmentViolation",
         "Criterion",
         "CriterionContext",
         "CriterionOutcome",
         "ScoreScale",
         "CriterionEvidence",
         "EvidenceMessage",
+        # PR 5 — object-bound authoring surface.
+        # PR 6.5 — Experiment wrapper deleted; persist_benchmark replaces it.
+        "Evaluator",
+        "persist_benchmark",
         "Rubric",
+        "Sandbox",
+        "SandboxKindMismatch",
+        "SandboxRuntime",
+        "SandboxNotLiveError",
         "TaskEvaluationResult",
         "CriterionCheckError",
-        "ComponentRegistry",
-        "registry",
     }
     retired = {
         "BenchmarkTask",
@@ -38,10 +53,14 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "CriterionObservation",
         "CriterionObservationMessage",
         "CriteriaCheckError",
-        "Experiment",
         "WorkerSpec",
         "PersistedExperimentDefinition",
         "DefinitionHandle",
+        # Toolkit is a ReAct/builtins implementation detail, not a core
+        # authoring API concept.
+        "Toolkit",
+        "ComponentCatalog",
+        "registry",
     }
 
     assert set(public_api.__all__) == expected
@@ -60,10 +79,19 @@ def test_semantic_api_clusters_are_importable() -> None:
         "Benchmark",
         "BenchmarkRequirements",
         "Task",
-        "TaskSpec",
         "EmptyTaskPayload",
     ]
-    assert worker.__all__ == ["Worker", "WorkerContext", "WorkerOutput", "WorkerStreamItem"]
+    # PR 9 Task 1 added ``SpawnedTaskHandle`` to the worker cluster as
+    # the return type of ``WorkerContext.spawn_task`` and
+    # ``WorkerContext.restart_task``.
+    assert worker.__all__ == [
+        "AwaitCompletionNotSupportedError",
+        "SpawnedTaskHandle",
+        "Worker",
+        "WorkerContext",
+        "WorkerOutput",
+        "WorkerStreamItem",
+    ]
     assert criterion.__all__ == [
         "Criterion",
         "CriterionContext",
@@ -73,15 +101,6 @@ def test_semantic_api_clusters_are_importable() -> None:
         "EvidenceMessage",
     ]
     assert rubric.__all__ == ["Evaluator", "Rubric", "TaskEvaluationResult"]
-
-
-def test_core_composition_owns_experiment_worker_spec_and_definition_handle() -> None:
-    composition = importlib.import_module("ergon_core.core.domain.experiments")
-
-    assert composition.__all__ == ["DefinitionHandle", "Experiment", "WorkerSpec"]
-    assert hasattr(composition, "DefinitionHandle")
-    assert hasattr(composition, "Experiment")
-    assert hasattr(composition, "WorkerSpec")
 
 
 def test_public_worker_module_does_not_import_persistence_or_sessions() -> None:
@@ -102,16 +121,24 @@ def test_criterion_context_hides_runtime_protocol_field() -> None:
     context_fields = context_module.CriterionContext.model_fields
 
     assert "runtime" not in context_fields
-    assert hasattr(context_module.CriterionContext, "execute_code")
+    assert "task" in context_fields
 
 
 def test_public_result_models_do_not_import_core_json_types() -> None:
     modules = [
         importlib.import_module("ergon_core.api.worker.results"),
-        importlib.import_module("ergon_core.api.criterion.results"),
+        importlib.import_module("ergon_core.api.criterion.score"),
+        importlib.import_module("ergon_core.api.criterion.evidence"),
+        importlib.import_module("ergon_core.api.criterion.outcome"),
         importlib.import_module("ergon_core.api.rubric.results"),
     ]
 
     assert all(
         "ergon_core.core.shared.json_types" not in inspect.getsource(module) for module in modules
     )
+
+
+def test_legacy_criterion_results_module_is_absent() -> None:
+    module_name = ".".join(["ergon_core", "api", "criterion", "results"])
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module(module_name)

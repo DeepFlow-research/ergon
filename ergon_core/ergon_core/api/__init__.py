@@ -5,7 +5,6 @@ from ergon_core.api.benchmark import (
     BenchmarkRequirements,
     EmptyTaskPayload,
     Task,
-    TaskSpec,
 )
 from ergon_core.api.criterion import (
     Criterion,
@@ -15,30 +14,60 @@ from ergon_core.api.criterion import (
     EvidenceMessage,
     ScoreScale,
 )
-from ergon_core.api.errors import CriterionCheckError
-from ergon_core.api.registry import ComponentRegistry, registry
-from ergon_core.api.rubric import Rubric, TaskEvaluationResult
-from ergon_core.api.worker import Worker, WorkerContext, WorkerOutput, WorkerStreamItem
+from ergon_core.api.errors import (
+    ContainmentViolation,
+    CriterionCheckError,
+    DependencyError,
+    SandboxKindMismatch,
+    SandboxNotLiveError,
+)
+from ergon_core.core.application.experiments.definition_writer import persist_benchmark
+from ergon_core.api.rubric import Evaluator, Rubric, TaskEvaluationResult
+from ergon_core.api.sandbox import Sandbox, SandboxRuntime
+from ergon_core.api.worker import (
+    AwaitCompletionNotSupportedError,
+    SpawnedTaskHandle,
+    Worker,
+    WorkerContext,
+    WorkerOutput,
+    WorkerStreamItem,
+)
+
+# Resolve forward references on ``Task`` now that ``Worker``,
+# ``Sandbox``, and ``Evaluator`` are all importable. ``Task`` annotates
+# its object-bound fields with string forward refs (the natural import
+# graph runs the other way — Worker/Sandbox/Evaluator each import
+# ``Task``), so Pydantic can't resolve them at the class-definition
+# site. This package's load completes after every component module, so
+# rebuilding here is the canonical late-binding point.
+Task.model_rebuild()
 
 __all__ = [
     "Benchmark",
     "BenchmarkRequirements",
-    "ComponentRegistry",
+    "AwaitCompletionNotSupportedError",
+    "ContainmentViolation",
     "Criterion",
     "CriterionCheckError",
     "CriterionContext",
     "CriterionEvidence",
     "CriterionOutcome",
+    "DependencyError",
     "EmptyTaskPayload",
+    "Evaluator",
     "EvidenceMessage",
+    "persist_benchmark",
     "Rubric",
+    "Sandbox",
+    "SandboxKindMismatch",
+    "SandboxNotLiveError",
+    "SandboxRuntime",
     "ScoreScale",
+    "SpawnedTaskHandle",
     "Task",
-    "TaskSpec",
     "TaskEvaluationResult",
     "Worker",
     "WorkerContext",
     "WorkerOutput",
     "WorkerStreamItem",
-    "registry",
 ]

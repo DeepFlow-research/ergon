@@ -132,9 +132,9 @@
       "title": "Run Id",
       "type": "string"
     },
-    "experiment_id": {
+    "definition_id": {
       "format": "uuid",
-      "title": "Experiment Id",
+      "title": "Definition Id",
       "type": "string"
     },
     "workflow_name": {
@@ -160,7 +160,7 @@
   },
   "required": [
     "run_id",
-    "experiment_id",
+    "definition_id",
     "workflow_name",
     "task_tree",
     "started_at",

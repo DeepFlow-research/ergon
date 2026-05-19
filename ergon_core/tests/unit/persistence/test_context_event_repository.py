@@ -1,7 +1,7 @@
 from uuid import uuid4
 
 import pytest
-from ergon_core.core.domain.generation.context_parts import (
+from ergon_core.core.shared.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
     ContextPartChunkLog,
@@ -16,7 +16,6 @@ from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
-    ExperimentRecord,
     RunRecord,
     RunTaskExecution,
 )
@@ -26,7 +25,6 @@ from sqlmodel import Session, SQLModel, create_engine
 
 def _session() -> Session:
     _ = ExperimentDefinition
-    _ = ExperimentRecord
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -38,10 +36,11 @@ def _session() -> Session:
 
 def _execution_fixture(session: Session) -> tuple:
     run_id = uuid4()
-    experiment_id = uuid4()
     definition_id = uuid4()
+    task_id = uuid4()
     node = RunGraphNode(
         run_id=run_id,
+        task_id=task_id,
         instance_key="instance",
         task_slug="task",
         description="Task",
@@ -49,25 +48,17 @@ def _execution_fixture(session: Session) -> tuple:
         assigned_worker_slug="worker",
     )
     session.add(
-        ExperimentRecord(
-            id=experiment_id,
-            name="context event test",
-            benchmark_type="unit",
-            sample_count=1,
-        )
-    )
-    session.add(
         ExperimentDefinition(
             id=definition_id,
             benchmark_type="unit",
+            name="unit",
             metadata_json={},
         )
     )
     session.add(
         RunRecord(
             id=run_id,
-            experiment_id=experiment_id,
-            workflow_definition_id=definition_id,
+            definition_id=definition_id,
             benchmark_type="unit",
             instance_key="instance",
             status=RunStatus.EXECUTING,
@@ -77,7 +68,8 @@ def _execution_fixture(session: Session) -> tuple:
     session.flush()
     execution = RunTaskExecution(
         run_id=run_id,
-        node_id=node.id,
+        task_id=node.task_id,
+        node_id=node.task_id,
         status=TaskExecutionStatus.RUNNING,
     )
     session.add(execution)

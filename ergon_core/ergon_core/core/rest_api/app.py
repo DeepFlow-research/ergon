@@ -3,6 +3,7 @@
 import logging
 import os
 import sys
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 # Root-logger handler so ``logger.exception`` / ``logger.error`` from
@@ -20,7 +21,6 @@ logging.basicConfig(
 )
 
 import inngest.fast_api
-from ergon_core.api.registry import registry
 from ergon_core.core.rest_api.cohorts import router as cohorts_router
 from ergon_core.core.rest_api.experiments import router as experiments_router
 from ergon_core.core.rest_api.rollouts import router as rollouts_router
@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("starting ensure_db...")
     ensure_db()
     logger.info("ensure_db done, initializing RolloutService...")
@@ -67,11 +67,8 @@ async def lifespan(app: FastAPI):
         PostgresSandboxEventSink(),
     )
     DefaultSandboxManager.set_event_sink(sink)
-    for manager_cls in registry.sandbox_managers.values():
-        manager_cls.set_event_sink(sink)
     logger.info(
-        "sandbox event sink wired on %d manager subclass(es)",
-        1 + len(registry.sandbox_managers),
+        "sandbox event sink wired on default sandbox manager",
     )
 
     logger.info("app startup complete — all subsystems initialised")

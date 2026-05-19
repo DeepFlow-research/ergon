@@ -6,6 +6,8 @@ from ergon_core.core.infrastructure.dashboard.emitter import (
 )
 from ergon_core.core.infrastructure.dashboard.event_contracts import (
     CohortUpdatedEvent,
+    DashboardContextEventEvent,
+    DashboardGraphMutationEvent,
     DashboardResourcePublishedEvent,
     DashboardSandboxClosedEvent,
     DashboardSandboxCommandEvent,
@@ -27,6 +29,8 @@ from ergon_core.core.infrastructure.dashboard.provider import (
 __all__ = [
     "CohortUpdatedEvent",
     "DashboardEmitter",
+    "DashboardContextEventEvent",
+    "DashboardGraphMutationEvent",
     "DashboardResourcePublishedEvent",
     "DashboardSandboxClosedEvent",
     "DashboardSandboxCommandEvent",

@@ -10,7 +10,7 @@ CONFIG_REFERENCE_FILES = (
 )
 
 
-def test_graph_status_literals_are_defined_only_in_status_conventions() -> None:
+def test_graph_status_literals_are_defined_only_in_runtime_status() -> None:
     offenders: list[str] = []
     duplicate_snippets = (
         'Literal["pending", "ready", "running", "completed", "failed", "cancelled", "blocked"]',
@@ -18,7 +18,7 @@ def test_graph_status_literals_are_defined_only_in_status_conventions() -> None:
         'Literal["pending", "satisfied", "invalidated"]',
     )
     allowed = {
-        ROOT / "ergon_core/ergon_core/core/persistence/graph/status_conventions.py",
+        ROOT / "ergon_core/ergon_core/core/application/runtime/status.py",
     }
 
     for path in (ROOT / "ergon_core/ergon_core/core").rglob("*.py"):
@@ -37,7 +37,7 @@ def test_eval_criterion_status_literal_is_defined_only_in_evaluation_summary() -
     offenders: list[str] = []
     snippet = 'EvalCriterionStatus=Literal["passed","failed","errored","skipped"]'
     allowed = {
-        ROOT / "ergon_core/ergon_core/core/persistence/telemetry/evaluation_summary.py",
+        ROOT / "ergon_core/ergon_core/core/application/evaluation/summary.py",
     }
 
     for path in (ROOT / "ergon_core/ergon_core/core").rglob("*.py"):
@@ -51,7 +51,7 @@ def test_eval_criterion_status_literal_is_defined_only_in_evaluation_summary() -
 
 
 def test_run_task_dto_does_not_label_worker_slug_as_name() -> None:
-    path = ROOT / "ergon_core/ergon_core/core/application/read_models/models.py"
+    path = ROOT / "ergon_core/ergon_core/core/views/runs/models.py"
     text = path.read_text()
     assert "assigned_worker_name" not in text
     assert "assigned_worker_slug" in text
@@ -86,7 +86,7 @@ def test_cancel_cause_literals_live_in_task_events() -> None:
 
 def test_core_schema_source_imports_are_directional() -> None:
     forbidden_pairs = {
-        "ergon_core.core.application.read_models.models": (
+        "ergon_core.core.views.runs.models": (
             "EvalCriterionStatus = Literal",
             "GraphMutationValue =",
         ),
@@ -107,12 +107,11 @@ def test_core_schema_source_imports_are_directional() -> None:
     assert offenders == []
 
 
-def test_core_uses_hybrid_domain_layout_roots() -> None:
+def test_core_uses_hybrid_layout_roots_without_nominal_domain() -> None:
     core = ROOT / "ergon_core/ergon_core/core"
 
     expected_dirs = {
         "application",
-        "domain",
         "infrastructure",
         "persistence",
         "rest_api",
@@ -132,17 +131,13 @@ def test_core_uses_hybrid_domain_layout_roots() -> None:
     }
 
     assert expected_dirs <= actual_dirs
+    assert "domain" not in actual_dirs
+    assert not (core / "domain").exists()
     assert actual_dirs.isdisjoint(removed_dirs)
 
 
 def test_core_hybrid_layout_import_directions() -> None:
     forbidden_imports = {
-        "domain": (
-            "ergon_core.core.application",
-            "ergon_core.core.persistence",
-            "ergon_core.core.infrastructure",
-            "ergon_core.core.rest_api",
-        ),
         "persistence": (
             "ergon_core.core.application",
             "ergon_core.core.infrastructure",
@@ -157,6 +152,8 @@ def test_core_hybrid_layout_import_directions() -> None:
     offenders: list[str] = []
     for root_name, snippets in forbidden_imports.items():
         root = ROOT / "ergon_core/ergon_core/core" / root_name
+        if not root.exists():
+            continue
         for path in root.rglob("*.py"):
             text = path.read_text()
             for snippet in snippets:
@@ -214,13 +211,14 @@ def test_runtime_event_contract_references_do_not_return() -> None:
 
 
 def test_context_stream_has_single_discriminated_part_union() -> None:
-    generation = ROOT / "ergon_core/ergon_core/core/domain/generation/context_parts.py"
+    context_parts = ROOT / "ergon_core/ergon_core/core/shared/context_parts.py"
     event_payloads = ROOT / "ergon_core/ergon_core/core/persistence/context/event_payloads.py"
 
-    generation_text = generation.read_text()
-    event_payloads_text = event_payloads.read_text()
+    context_parts_text = context_parts.read_text()
 
-    assert "ContextPart = Annotated[" in generation_text
+    assert "ContextPart = Annotated[" in context_parts_text
+    assert "ContextEventType = Literal[" in context_parts_text
+    assert not event_payloads.exists()
     old_generation_names = (
         "Generation" + "Turn",
         "ModelRequest" + "Part",
@@ -233,9 +231,36 @@ def test_context_stream_has_single_discriminated_part_union() -> None:
     )
 
     for name in old_generation_names:
-        assert name not in generation_text
+        assert name not in context_parts_text
     for name in old_payload_names:
-        assert name not in event_payloads_text
+        assert name not in context_parts_text
+
+
+def test_context_contract_has_no_retired_imports_or_aliases() -> None:
+    checked_roots = (
+        ROOT / "ergon_core",
+        ROOT / "ergon_cli",
+        ROOT / "ergon_builtins",
+        ROOT / "tests",
+    )
+    forbidden_snippets = (
+        ".".join(("domain", "generation", "context_parts")),
+        ".".join(("persistence", "context", "event_payloads")),
+        "Worker" + "Yield",
+        "Context" + "Event" + "Payload",
+    )
+
+    offenders: list[str] = []
+    for root in checked_roots:
+        for path in root.rglob("*.py"):
+            if "__pycache__" in path.parts or path == Path(__file__).resolve():
+                continue
+            text = path.read_text()
+            for snippet in forbidden_snippets:
+                if snippet in text:
+                    offenders.append(f"{path.relative_to(ROOT)} references {snippet!r}")
+
+    assert offenders == []
 
 
 def test_generation_provider_resolution_does_not_live_in_core() -> None:
@@ -309,7 +334,6 @@ def test_definition_and_composition_services_do_not_live_in_runtime_services() -
         assert old_spec is None
 
     new_modules = (
-        "ergon_core.core.domain.experiments.validation",
         "ergon_core.core.application.experiments.definition_writer",
         "ergon_core.core.application.experiments.service",
         "ergon_core.core.application.experiments.models",
@@ -336,7 +360,7 @@ def test_runtime_errors_are_domain_local() -> None:
         "ergon_core.core.application.tasks.errors",
         "ergon_core.core.application.workflows.errors",
         "ergon_core.core.application.evaluation.errors",
-        "ergon_core.core.application.read_models.errors",
+        "ergon_core.core.views.errors",
         "ergon_core.core.infrastructure.inngest.errors",
     ):
         assert importlib.util.find_spec(module_name) is not None
@@ -367,7 +391,7 @@ def test_task_latest_execution_selection_lives_in_task_repository() -> None:
     repository_path = ROOT / "ergon_core/ergon_core/core/application/tasks/repository.py"
 
     assert not queries_path.exists()
-    assert "def latest_for_definition_task" in repository_path.read_text()
+    assert "def latest_for_node" in repository_path.read_text()
 
 
 def test_runtime_and_builtins_do_not_use_task_execution_query_bag_for_domain_reads() -> None:
@@ -390,7 +414,7 @@ def test_runtime_and_builtins_do_not_use_task_execution_query_bag_for_domain_rea
 
 def test_resource_viewer_limits_live_with_read_model_resources() -> None:
     api_path = ROOT / "ergon_core/ergon_core/core/rest_api/runs.py"
-    resource_path = ROOT / "ergon_core/ergon_core/core/application/read_models/resources.py"
+    resource_path = ROOT / "ergon_core/ergon_core/core/views/resources.py"
 
     assert "_RESOURCE_CONTENT_MAX_BYTES" not in api_path.read_text()
     assert "RESOURCE_CONTENT_MAX_BYTES" in resource_path.read_text()
@@ -460,7 +484,7 @@ def test_evaluation_workflow_has_one_front_door_service() -> None:
 
     service = ROOT / "ergon_core/ergon_core/core/application/evaluation/service.py"
     text = service.read_text()
-    for method_name in ("prepare_dispatch", "evaluate", "persist_success", "persist_failure"):
+    for method_name in ("evaluate", "persist_success", "persist_failure"):
         assert f"def {method_name}(" in text
 
 
@@ -512,30 +536,38 @@ def test_persistence_layer_does_not_expose_domain_query_bag_or_runtime_context_s
     assert offenders == []
 
 
-def test_telemetry_repository_is_row_storage_not_evaluation_summary_service() -> None:
-    repository_path = ROOT / "ergon_core/ergon_core/core/persistence/telemetry/repositories.py"
-    text = repository_path.read_text()
+def test_single_consumer_telemetry_repository_is_deleted() -> None:
+    repository_path = ROOT / "ergon_core/ergon_core/core/persistence/telemetry/repository.py"
 
-    assert "refresh_run_evaluation_summary" not in text
-    assert "aggregate_evaluation_scores" not in text
+    assert not repository_path.exists()
 
 
-def test_experiment_lifecycle_has_one_front_door_service() -> None:
+def test_experiment_lifecycle_uses_module_level_functions() -> None:
     service_path = ROOT / "ergon_core/ergon_core/core/application/experiments/service.py"
     service_text = service_path.read_text()
+    writer_path = ROOT / "ergon_core/ergon_core/core/application/experiments/definition_writer.py"
+    writer_text = writer_path.read_text()
 
-    assert "class ExperimentService" in service_text
-    for method_name in ("define_benchmark_experiment", "persist_definition", "run_experiment"):
-        assert f"def {method_name}(" in service_text
+    # PR 6.5 cleanup: ExperimentService façade collapsed; persistence and
+    # launch are module-level functions matching the Benchmark-direct shape.
+    assert "async def run_experiment(" in service_text
+    assert "def persist_benchmark(" in writer_text
+
+    # define_benchmark_experiment, persist_definition, and the
+    # ExperimentService class itself must all be gone.
+    assert "def define_benchmark_experiment(" not in service_text
+    assert "def persist_definition(" not in service_text
+    assert "class ExperimentService" not in service_text
 
     forbidden_class_names = (
+        "class ExperimentService",
         "class ExperimentDefinitionService",
         "class ExperimentPersistenceService",
         "class ExperimentLaunchService",
     )
     for path in (
         service_path,
-        ROOT / "ergon_core/ergon_core/core/application/experiments/definition_writer.py",
+        writer_path,
         ROOT / "ergon_core/ergon_core/core/application/experiments/launch.py",
     ):
         text = path.read_text()

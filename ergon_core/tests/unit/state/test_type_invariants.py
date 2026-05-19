@@ -17,17 +17,15 @@ from ergon_core.core.persistence.graph.models import (
 from ergon_core.core.persistence.shared.enums import (
     RunStatus,
     TaskExecutionStatus,
-    TrainingStatus,
 )
 from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohort,
     ExperimentCohortStatus,
-    ExperimentRecord,
+    BenchmarkDefinitionRecord,
     RolloutBatch,
     RunRecord,
     RunResource,
     RunTaskExecution,
-    TrainingSession,
 )
 from pydantic import ValidationError
 
@@ -41,8 +39,7 @@ from pydantic import ValidationError
     [
         (
             lambda: RunRecord(
-                experiment_id=uuid4(),
-                workflow_definition_id=uuid4(),
+                definition_id=uuid4(),
                 benchmark_type="ci-test",
                 instance_key="sample-1",
                 worker_team_json={"primary": "test-worker"},
@@ -54,7 +51,7 @@ from pydantic import ValidationError
         (
             lambda: RunTaskExecution(
                 run_id=uuid4(),
-                definition_task_id=uuid4(),
+                task_id=uuid4(),
                 node_id=uuid4(),
                 status=TaskExecutionStatus.RUNNING,
             ),
@@ -77,14 +74,6 @@ from pydantic import ValidationError
             ),
             "kind",
             "output",
-        ),
-        (
-            lambda: TrainingSession(
-                experiment_definition_id=uuid4(),
-                model_name="test-model",
-            ),
-            "status",
-            TrainingStatus.RUNNING,
         ),
         (
             lambda: RunGraphMutation(
@@ -144,7 +133,7 @@ def test_task_execution_rejects_missing_static_or_dynamic_identity():
 
 
 def test_experiment_record_accepts_optional_cohort_and_required_name():
-    experiment = ExperimentRecord.model_validate(
+    experiment = BenchmarkDefinitionRecord.model_validate(
         {
             "name": "ci experiment",
             "benchmark_type": "ci-benchmark",
@@ -162,14 +151,12 @@ def test_experiment_record_accepts_optional_cohort_and_required_name():
     assert experiment.parsed_default_worker_team() == {"primary": "test-worker"}
 
 
-def test_run_record_uses_experiment_and_workflow_definition_identity():
-    experiment_id = uuid4()
-    workflow_definition_id = uuid4()
+def test_run_record_uses_definition_identity():
+    definition_id = uuid4()
 
     run = RunRecord.model_validate(
         {
-            "experiment_id": str(experiment_id),
-            "workflow_definition_id": str(workflow_definition_id),
+            "definition_id": str(definition_id),
             "benchmark_type": "ci-benchmark",
             "instance_key": "sample-1",
             "worker_team_json": {"primary": "test-worker"},
@@ -177,12 +164,12 @@ def test_run_record_uses_experiment_and_workflow_definition_identity():
         }
     )
 
-    assert run.experiment_id == experiment_id
-    assert run.workflow_definition_id == workflow_definition_id
+    assert run.definition_id == definition_id
     assert run.benchmark_type == "ci-benchmark"
     assert run.instance_key == "sample-1"
     assert run.parsed_worker_team() == {"primary": "test-worker"}
-    assert not hasattr(run, "experiment_definition_id")
+    assert not hasattr(run, "workflow" + "_definition_id")
+    assert not hasattr(run, "experiment" + "_id")
     assert not hasattr(run, "cohort_id")
 
 
@@ -206,8 +193,7 @@ def test_enum_value_matches_string():
         (
             RunRecord,
             {
-                "experiment_id": str(uuid4()),
-                "workflow_definition_id": str(uuid4()),
+                "definition_id": str(uuid4()),
                 "benchmark_type": "ci-test",
                 "instance_key": "sample-1",
                 "worker_team_json": {"primary": "test-worker"},
@@ -239,12 +225,6 @@ def test_enum_value_matches_string():
             {"name": "test-cohort"},
             "status",
             "unknown-status",
-        ),
-        (
-            TrainingSession,
-            {"experiment_definition_id": str(uuid4()), "model_name": "gpt"},
-            "status",
-            "garbage",
         ),
         (
             RolloutBatch,

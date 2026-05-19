@@ -22,7 +22,7 @@ import time
 from uuid import UUID
 
 import httpx
-from ergon_core.core.application.read_models.models import RunTaskDto
+from ergon_core.core.views.runs.models import RunTaskDto
 from ergon_core.test_support.e2e_read_helpers import (
     ResourceSnapshot,
     first_probe_resource,
@@ -153,10 +153,22 @@ def _assert_run_turn_counts(run_id: UUID) -> None:
 def _assert_run_evaluation(run_id: UUID) -> None:
     """Exactly 2 root RunTaskEvaluation rows with score 1.0.
 
-    Retries for up to 30 s because the evaluator Inngest function fires
-    asynchronously after the root task reaches terminal state.  The second
-    evaluator is the root timing marker; both must be created after root
-    execution completed.
+    Retries for up to 30 s because the evaluator invocations land
+    asynchronously even though PR 4's ``execute_task`` fanout is
+    synchronous within the orchestrator. The second evaluator is the
+    root timing marker.
+
+    Note on ordering: pre-PR-4 the evaluator was a sibling Inngest
+    function triggered by ``task/completed``, so evaluations were
+    written strictly after ``RunTaskExecution.completed_at``. PR 4
+    moved fanout inside ``execute_task`` via ``ctx.group.parallel``
+    after ``persist_outputs`` returns, so evaluation rows are written
+    *before* ``finalize_success`` stamps ``completed_at``. The
+    ordering invariant the assertion enforces is now structural — the
+    orchestrator only fans out after worker output has been persisted
+    — and the temporal check against ``completed_at`` no longer
+    captures that. The retained checks (count, scores, snapshot DTOs)
+    cover the observable contract.
     """
     deadline = time.monotonic() + 30
     evaluations = []
@@ -171,15 +183,6 @@ def _assert_run_evaluation(run_id: UUID) -> None:
     assert len(evaluations) == 2, f"expected 2 root task evaluations, got {len(evaluations)}"
     scores = [evaluation.score for evaluation in evaluations]
     assert scores == [1.0, 1.0], f"expected two score 1.0 evaluations, got {scores}"
-    early = [
-        evaluation.created_at
-        for evaluation in evaluations
-        if evaluation.created_at < root_execution.completed_at
-    ]
-    assert not early, (
-        "root evaluations must be created after the root execution completes; "
-        f"early timestamps={early}, completed_at={root_execution.completed_at}"
-    )
     snapshot = require_run_snapshot(run_id)
     assert snapshot.final_score == 1.0
     snapshot_evaluations = list(snapshot.evaluations_by_task.values())
@@ -251,7 +254,7 @@ def _assert_blob_roundtrip(run_id: UUID) -> None:
     Uses ``kind='report'`` resources because those are written to the
     content-addressed blob store (``ERGON_BLOB_ROOT``) which is bind-mounted
     at the same path on both the host and inside the API container.  The
-    legacy ``kind='output'`` rows store container-internal download paths
+    direct ``kind='output'`` rows store container-internal download paths
     that are not directly accessible from the host-side test process.
     """
     row = first_probe_resource(run_id)
@@ -356,15 +359,16 @@ def _assert_cohort_membership(cohort_key: str, run_ids: list[UUID]) -> None:
 
 
 def _assert_sadpath_graph_cascade(run_id: UUID) -> None:
-    """Canonical sad path: l_2 fails, l_3 blocks, independent leaves complete."""
+    """Canonical sad path: parent plans, l_2 fails, l_3 blocks, independent leaves complete."""
     snapshot = require_run_snapshot(run_id)
     tasks = list(snapshot.tasks.values())
     leaves = [task for task in tasks if task.level > 0]
     root_tasks = [task for task in tasks if task.level == 0]
     by_slug = {task.name: task for task in leaves}
     assert len(root_tasks) == 1, f"expected 1 root task, got {len(root_tasks)}"
-    assert root_tasks[0].status != COMPLETED, (
-        f"parent task should not complete when a child fails, got {root_tasks[0].status}"
+    assert root_tasks[0].status == COMPLETED, (
+        "parent task should complete after planning; child failure is represented "
+        f"on the failing child and run terminal status, got {root_tasks[0].status}"
     )
     assert by_slug["l_2"].status == FAILED, f"l_2 expected FAILED, got {by_slug['l_2'].status}"
     assert by_slug["l_3"].status == BLOCKED, f"l_3 expected BLOCKED, got {by_slug['l_3'].status}"

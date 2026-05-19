@@ -7,10 +7,10 @@ Implements the env-specific hooks on ``SmokeCriterionBase``:
     * body starts with ``"# Research report"``
     * body is at least 20 bytes (non-empty content)
 - ``_verify_sandbox_setup`` — runs a trivial bash probe (write file →
-  wc → echo OK) via ``context.runtime.run_command`` against the parent
+  wc → echo OK) via ``context.task.sandbox.run_command`` against the parent
   task's live sandbox.  Proves bash + coreutils + /tmp are wired up.
 
-Uses the landed CriterionRuntime DI API (RFC
+Uses the landed public sandbox runtime DI API (RFC
 ``criterion-runtime-di-container``) — criteria never call
 ``AsyncSandbox.connect`` directly.  Phase G migrates the runtime
 internal to use ``BaseSandboxManager.reconnect`` for cross-process
@@ -39,7 +39,7 @@ class ResearchRubricsSmokeCriterion(SmokeCriterionBase):
                 exec_ids = [
                     row.id
                     for row in session.exec(
-                        select(RunTaskExecution).where(RunTaskExecution.node_id == child.id),
+                        select(RunTaskExecution).where(RunTaskExecution.task_id == child.task_id),
                     ).all()
                 ]
                 if not exec_ids:
@@ -75,12 +75,8 @@ class ResearchRubricsSmokeCriterion(SmokeCriterionBase):
 
     async def _verify_sandbox_setup(self, context: CriterionContext) -> None:
         """Trivial env probe: bash + coreutils + /tmp writable."""
-        if not context.has_runtime:
-            raise CriterionCheckError(
-                "researchrubrics sandbox health: CriterionRuntime not injected",
-            )
-        await context.ensure_sandbox()
-        result = await context.run_command(
+        result = await self._run_sandbox_command(
+            context,
             "set -e; "
             "echo '# hello world' > /tmp/smoke_health.md && "
             "test \"$(wc -l < /tmp/smoke_health.md)\" = '1' && "

@@ -8,7 +8,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MutationTypeSchema } from "./graphMutations";
+import { EdgeAddedValueSchema, MutationTypeSchema } from "./graphMutations";
 import { applyGraphMutation, createReplayInitialState, replayToSequence } from "../state/graphMutationReducer";
 import type { WorkflowRunState } from "@/lib/types";
 import { TaskStatus } from "@/lib/types";
@@ -18,7 +18,7 @@ import type { GraphMutationDto } from "./graphMutations";
 function emptyState(): WorkflowRunState {
   return {
     id: "run-test",
-    experimentId: "00000000-0000-0000-0000-000000000000",
+    definitionId: "00000000-0000-0000-0000-000000000000",
     name: "test",
     status: "executing",
     tasks: new Map(),
@@ -75,8 +75,8 @@ function syntheticMutation(
     },
     "edge.added": {
       mutation_type: "edge.added",
-      source_node_id: nodeId,
-      target_node_id: "22222222-2222-4222-8222-222222222222",
+      source_task_id: nodeId,
+      target_task_id: "22222222-2222-4222-8222-222222222222",
       status: "pending",
     },
     "edge.removed": { mutation_type: "edge.removed" },
@@ -97,6 +97,7 @@ function syntheticMutation(
   };
 
   return {
+    id: "77777777-7777-4777-8777-777777777777",
     run_id: "00000000-0000-0000-0000-000000000000",
     sequence: 1,
     mutation_type: mutationType as DashboardGraphMutationData["mutation_type"],
@@ -105,8 +106,8 @@ function syntheticMutation(
     actor: "test",
     new_value: newValueByType[mutationType] ?? {},
     old_value: null,
-    reason: null,
-    timestamp: new Date().toISOString(),
+    reason: "parent-child",
+    created_at: new Date().toISOString(),
   };
 }
 
@@ -128,6 +129,60 @@ for (const mutationType of ALL_MUTATION_TYPES) {
 
 test("ALL_MUTATION_TYPES matches MutationTypeSchema.options (no stale snapshot)", () => {
   assert.deepEqual(ALL_MUTATION_TYPES, MutationTypeSchema.options);
+});
+
+test("edge.added accepts backend source_task_id and target_task_id payloads", () => {
+  let state = emptyState();
+  const sourceId = "11111111-1111-4111-8111-111111111111";
+  const targetId = "22222222-2222-4222-8222-222222222222";
+  state = applyGraphMutation(state, syntheticMutation("node.added"));
+  state = applyGraphMutation(state, {
+    ...syntheticMutation("node.added"),
+    target_id: targetId,
+    new_value: {
+      mutation_type: "node.added",
+      task_slug: "child",
+      instance_key: "inst-2",
+      description: "child task",
+      status: "pending",
+      assigned_worker_slug: null,
+    },
+  });
+
+  const next = applyGraphMutation(state, {
+    id: "77777777-7777-4777-8777-777777777778",
+    run_id: "00000000-0000-0000-0000-000000000000",
+    sequence: 3,
+    mutation_type: "edge.added",
+    target_type: "edge",
+    target_id: "33333333-3333-4333-8333-333333333333",
+    actor: "test",
+    new_value: {
+      mutation_type: "edge.added",
+      source_task_id: sourceId,
+      target_task_id: targetId,
+      status: "pending",
+    },
+    old_value: null,
+    reason: "parent-child",
+    created_at: new Date().toISOString(),
+  });
+
+  assert.equal(next.tasks.get(targetId)?.parentId, sourceId);
+});
+
+test("edge.added value schema exposes canonical source_task_id and target_task_id", () => {
+  const parsed = EdgeAddedValueSchema.parse({
+    mutation_type: "edge.added",
+    source_task_id: "11111111-1111-4111-8111-111111111111",
+    target_task_id: "22222222-2222-4222-8222-222222222222",
+    status: "pending",
+  });
+
+  assert.equal(parsed.source_task_id, "11111111-1111-4111-8111-111111111111");
+  assert.equal(parsed.target_task_id, "22222222-2222-4222-8222-222222222222");
+  assert.equal("source_node_id" in parsed, false);
+  assert.equal("target_node_id" in parsed, false);
 });
 
 test("replay base preserves snapshot hierarchy while dependency edges remain dependencies", () => {
@@ -206,8 +261,8 @@ test("replay base preserves snapshot hierarchy while dependency edges remain dep
       actor: "manager",
       old_value: null,
       new_value: {
-        source_node_id: "22222222-2222-4222-8222-222222222222",
-        target_node_id: "33333333-3333-4333-8333-333333333333",
+        source_task_id: "22222222-2222-4222-8222-222222222222",
+        target_task_id: "33333333-3333-4333-8333-333333333333",
         status: "pending",
       },
       reason: "manager_decision",
@@ -217,8 +272,7 @@ test("replay base preserves snapshot hierarchy while dependency edges remain dep
 
   const base = createReplayInitialState(runState, mutations, 3);
   const replayed = mutations.reduce(
-    (state, mutation) =>
-      applyGraphMutation(state, { ...mutation, timestamp: mutation.created_at }),
+    (state, mutation) => applyGraphMutation(state, mutation),
     base,
   );
 
@@ -317,8 +371,8 @@ test("replay base does not leak future dependency edges or node field changes", 
       actor: "manager",
       old_value: null,
       new_value: {
-        source_node_id: "22222222-2222-4222-8222-222222222222",
-        target_node_id: "33333333-3333-4333-8333-333333333333",
+        source_task_id: "22222222-2222-4222-8222-222222222222",
+        target_task_id: "33333333-3333-4333-8333-333333333333",
         status: "pending",
       },
       reason: "manager_decision",
@@ -393,8 +447,8 @@ test("dependency edges between root-level tasks do not become containment", () =
       actor: "manager",
       old_value: null,
       new_value: {
-        source_node_id: "22222222-2222-4222-8222-222222222222",
-        target_node_id: "33333333-3333-4333-8333-333333333333",
+        source_task_id: "22222222-2222-4222-8222-222222222222",
+        target_task_id: "33333333-3333-4333-8333-333333333333",
         status: "pending",
       },
       reason: "manager_decision",

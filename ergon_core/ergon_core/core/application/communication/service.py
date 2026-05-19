@@ -18,7 +18,7 @@ from ergon_core.core.application.communication.models import (
 )
 from ergon_core.core.shared.utils import utcnow
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import func, select
+from sqlmodel import Session, func, select
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +192,7 @@ class CommunicationService:
 
     @staticmethod
     def _get_or_create_thread(
-        session,
+        session: Session,
         *,
         run_id: UUID,
         agent_a_id: str,
@@ -233,4 +233,5 @@ class CommunicationService:
         return thread
 
 
+# TODO: consider if we should have these object level singletons or lean more on proper dependency injection pattern for core
 communication_service = CommunicationService()

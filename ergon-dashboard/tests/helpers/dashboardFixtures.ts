@@ -12,7 +12,7 @@ import { TaskStatus } from "../../src/lib/types";
 export const FIXTURE_IDS = {
   cohortId: "11111111-1111-4111-8111-111111111111",
   runId: "22222222-2222-4222-8222-222222222222",
-  experimentId: "33333333-3333-4333-8333-333333333333",
+  definitionId: "33333333-3333-4333-8333-333333333333",
   rootTaskId: "task-root",
   exploreTaskId: "task-explore",
   solveTaskId: "task-solve",
@@ -32,7 +32,7 @@ export const FIXTURE_IDS = {
 
 export const CONCURRENT_MAS_FIXTURE_IDS = {
   cohortId: "12121212-1212-4121-8121-121212121212",
-  experimentId: "33333333-3333-4333-8333-333333333333",
+  definitionId: "33333333-3333-4333-8333-333333333333",
   runId: "99999999-9999-4999-8999-999999999999",
   searchTaskId: "10000000-0000-4000-8000-000000000002",
   checkTaskId: "10000000-0000-4000-8000-000000000003",
@@ -87,7 +87,7 @@ function serializedRunState(): SerializedWorkflowRunState {
       id: FIXTURE_IDS.toolCallEventId,
       runId: FIXTURE_IDS.runId,
       taskExecutionId: FIXTURE_IDS.solveExecutionId,
-      taskNodeId: FIXTURE_IDS.solveTaskNodeUuid,
+      taskId: FIXTURE_IDS.solveTaskNodeUuid,
       workerBindingKey: "react-worker",
       sequence: 0,
       eventType: "tool_call",
@@ -115,7 +115,7 @@ function serializedRunState(): SerializedWorkflowRunState {
       id: FIXTURE_IDS.toolResultEventId,
       runId: FIXTURE_IDS.runId,
       taskExecutionId: FIXTURE_IDS.solveExecutionId,
-      taskNodeId: FIXTURE_IDS.solveTaskNodeUuid,
+      taskId: FIXTURE_IDS.solveTaskNodeUuid,
       workerBindingKey: "react-worker",
       sequence: 1,
       eventType: "tool_result",
@@ -144,7 +144,7 @@ function serializedRunState(): SerializedWorkflowRunState {
 
   return {
     id: FIXTURE_IDS.runId,
-    experimentId: FIXTURE_IDS.experimentId,
+    definitionId: FIXTURE_IDS.definitionId,
     name: "parallel",
     status: "executing",
     tasks: {
@@ -377,7 +377,7 @@ export function createDeltaContextEvent(): ContextEventState {
     id: FIXTURE_IDS.deltaToolCallEventId,
     runId: FIXTURE_IDS.runId,
     taskExecutionId: "execution-solve-1",
-    taskNodeId: FIXTURE_IDS.solveTaskId,
+    taskId: FIXTURE_IDS.solveTaskId,
     workerBindingKey: "react-worker",
     sequence: 2,
     eventType: "tool_call",
@@ -507,7 +507,7 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
     summary,
     experiments: [
       {
-        experiment_id: FIXTURE_IDS.experimentId,
+        definition_id: FIXTURE_IDS.definitionId,
         name: "minif2f smoke n=3",
         benchmark_type: "minif2f",
         sample_count: 3,
@@ -532,7 +532,7 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
 
   const experimentDetail = {
     experiment: {
-      experiment_id: FIXTURE_IDS.experimentId,
+      definition_id: FIXTURE_IDS.definitionId,
       cohort_id: FIXTURE_IDS.cohortId,
       name: "minif2f smoke n=3",
       benchmark_type: "minif2f",
@@ -549,7 +549,7 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
     runs: [
       {
         run_id: FIXTURE_IDS.runId,
-        workflow_definition_id: FIXTURE_IDS.experimentId,
+        definition_id: FIXTURE_IDS.definitionId,
         benchmark_type: "minif2f",
         instance_key: "algebra_sample",
         status: "completed",
@@ -597,7 +597,7 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
       ...(concurrent.cohortDetails ?? {}),
     },
     experimentDetails: {
-      [FIXTURE_IDS.experimentId]: experimentDetail,
+      [FIXTURE_IDS.definitionId]: experimentDetail,
       ...(concurrent.experimentDetails ?? {}),
     },
     runs: [runState, ...(concurrent.runs ?? [])],
@@ -654,7 +654,7 @@ function createConcurrentMasSeedOnly(): DashboardHarnessSeedPayload {
     summary,
     experiments: [
       {
-        experiment_id: CONCURRENT_MAS_FIXTURE_IDS.experimentId,
+        definition_id: CONCURRENT_MAS_FIXTURE_IDS.definitionId,
         name: "visual debugger n=1",
         benchmark_type: "visual_debugger",
         sample_count: 1,

@@ -96,7 +96,7 @@ test("workspace actions react to controlled context event deltas", async ({ page
   const response = await page.request.post("/api/danger/test-harness/dashboard/events/context-event", {
     data: {
       runId: FIXTURE_IDS.runId,
-      taskNodeId: FIXTURE_IDS.solveTaskId,
+      taskId: FIXTURE_IDS.solveTaskId,
       event: createDeltaContextEvent(),
     },
   });

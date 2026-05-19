@@ -1,31 +1,35 @@
-"""Registry discovery backed by explicit builtins registration."""
+"""Explicit builtin discovery for CLI listing commands."""
 
-from ergon_builtins.registry import register_builtins
-from ergon_core.api.registry import registry
-
-register_builtins(registry)
+_BENCHMARK_ROWS = (
+    ("gdpeval", "gdpeval", "Benchmark for GDP document-processing evaluation tasks."),
+    ("minif2f", "minif2f", "Benchmark backed by MiniF2F theorem-proving tasks."),
+    ("researchrubrics", "researchrubrics", "Benchmark backed by ScaleAI ResearchRubrics samples."),
+    (
+        "researchrubrics-vanilla",
+        "researchrubrics-vanilla",
+        "Vanilla ResearchRubrics baseline benchmark.",
+    ),
+    ("swebench-verified", "swebench-verified", "Benchmark backed by SWE-Bench Verified."),
+)
+_WORKER_ROWS = (
+    ("react-worker", "ReActWorker"),
+    ("training-stub-worker", "TrainingStubWorker"),
+)
+_EVALUATOR_ROWS = (
+    ("gdpeval-staged-rubric", "StagedRubric"),
+    ("minif2f-rubric", "MiniF2FRubric"),
+    ("researchrubrics-rubric", "ResearchRubricsRubric"),
+    ("swebench-rubric", "SWEBenchRubric"),
+)
 
 
 def list_benchmarks() -> list[list[str]]:
-    rows = []
-    for slug, cls in sorted(registry.benchmarks.items()):
-        name = getattr(cls, "type_slug", slug)  # slopcop: ignore[no-hasattr-getattr]
-        desc = getattr(cls, "__doc__", "") or ""  # slopcop: ignore[no-hasattr-getattr]
-        rows.append([slug, name, desc.strip().split("\n")[0] if desc else ""])
-    return rows
+    return [list(row) for row in sorted(_BENCHMARK_ROWS)]
 
 
 def list_workers() -> list[list[str]]:
-    rows = []
-    for slug, cls in sorted(registry.workers.items()):
-        name = getattr(cls, "type_slug", slug)  # slopcop: ignore[no-hasattr-getattr]
-        rows.append([slug, name])
-    return rows
+    return [list(row) for row in sorted(_WORKER_ROWS)]
 
 
 def list_evaluators() -> list[list[str]]:
-    rows = []
-    for slug, cls in sorted(registry.evaluators.items()):
-        name = getattr(cls, "type_slug", slug)  # slopcop: ignore[no-hasattr-getattr]
-        rows.append([slug, name])
-    return rows
+    return [list(row) for row in sorted(_EVALUATOR_ROWS)]

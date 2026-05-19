@@ -1,7 +1,7 @@
 """Typed command/result DTOs for orchestration services.
 
 These are the contracts between Inngest functions and services.
-Adapted from ref: definition_id replaces experiment_id.
+Adapted from ref: definition_id replaces definition_id.
 """
 
 import sys
@@ -27,10 +27,9 @@ class TaskDescriptor(BaseModel):
 
     model_config = {"frozen": True}
 
-    task_id: UUID | None = None
+    task_id: UUID
     task_slug: str
     parent_task_id: UUID | None = None
-    node_id: UUID | None = None
 
 
 class InitializeWorkflowCommand(BaseModel):
@@ -57,36 +56,27 @@ class PrepareTaskExecutionCommand(BaseModel):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID | None
-    node_id: UUID | None = None
+    task_id: UUID
 
 
 class PreparedTaskExecution(BaseModel):
     """Output of ``TaskExecutionService.prepare``.
 
-    ``node_id`` is the runtime task identity (= ``RunGraphNode.id``);
-    always non-null because every task execution is attached to a
-    graph node.  ``definition_task_id`` is the optional FK to the
-    static ``ExperimentDefinitionTask`` row — null for dynamically
-    spawned subtasks which have no compile-time declaration.  This
-    split replaces the earlier ``task_id: UUID`` field, which was dead
-    downstream (never read) but required a non-null value that
-    dynamic-subtask preparation could not provide, crashing on the
-    Pydantic boundary.  See docs/bugs/open/2026-04-23-inngest-function-failures.md § A.
+    ``task_id`` is the canonical runtime task id. Worker execution
+    resolves the concrete object from the run-tier task snapshot.
     """
 
     model_config = {"frozen": True}
 
     run_id: UUID
     definition_id: UUID
-    node_id: UUID
-    definition_task_id: UUID | None = None
+    task_id: UUID
     task_slug: str
     task_description: str
     benchmark_type: str
-    assigned_worker_slug: str
-    worker_type: str
-    model_target: str
+    assigned_worker_slug: str | None = None
+    worker_type: str | None = None
+    model_target: str | None = None
     execution_id: UUID
     skipped: bool = False
     skip_reason: str | None = None
@@ -121,9 +111,8 @@ class PropagateTaskCompletionCommand(BaseModel):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID | None
+    task_id: UUID
     execution_id: UUID
-    node_id: UUID | None = None
 
 
 class PropagationResult(BaseModel):
@@ -131,7 +120,7 @@ class PropagationResult(BaseModel):
 
     run_id: UUID
     definition_id: UUID
-    completed_task_id: UUID | None
+    completed_task_id: UUID
     ready_tasks: list[TaskDescriptor] = Field(default_factory=list)
     workflow_terminal_state: WorkflowTerminalState = WorkflowTerminalState.NONE
 
