@@ -160,7 +160,9 @@ async def test_spawn_task_via_worker_context_does_not_write_definition_row(
     parent = _seed_node(session, run_id=run_id, slug="parent")
     _patch_get_session(monkeypatch, session)
 
-    monkeypatch.setattr(management_module, "definition_id_for_run", lambda _session, _run_id: uuid4())
+    monkeypatch.setattr(
+        management_module, "definition_id_for_run", lambda _session, _run_id: uuid4()
+    )
     task_mgmt = TaskManagementService(
         dashboard_emitter=MagicMock(),
         task_ready_dispatcher=AsyncMock(),
@@ -211,7 +213,9 @@ async def test_spawned_task_inflates_through_graph_repo_node(
     parent = _seed_node(session, run_id=run_id, slug="parent")
     _patch_get_session(monkeypatch, session)
 
-    monkeypatch.setattr(management_module, "definition_id_for_run", lambda _session, _run_id: uuid4())
+    monkeypatch.setattr(
+        management_module, "definition_id_for_run", lambda _session, _run_id: uuid4()
+    )
     task_mgmt = TaskManagementService(
         dashboard_emitter=MagicMock(),
         task_ready_dispatcher=AsyncMock(),

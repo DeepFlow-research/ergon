@@ -11,12 +11,12 @@ from ergon_core.core.persistence.shared.enums import RunResourceKind
 from .contract import PersistOutputsRequest
 
 
-class PublicSandboxWithOutputPath(Protocol):
+class PublicSandboxForOutputs(Protocol):
     output_path: str
 
 
 async def publish_public_sandbox_resources(
-    sandbox: PublicSandboxWithOutputPath,
+    sandbox: PublicSandboxForOutputs,
     payload: PersistOutputsRequest,
 ) -> int:
     publish_dir = payload.output_dir or sandbox.output_path

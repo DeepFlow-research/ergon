@@ -1,15 +1,8 @@
-from typing import ClassVar, Literal
+from typing import Literal
 from uuid import UUID
 
-from ergon_core.core.application.events.base import InngestEventContract
+from ergon_core.core.application.events.runtime import WorkflowCompletedEvent
 from pydantic import BaseModel
-
-
-class WorkflowCompletedEvent(InngestEventContract):
-    name: ClassVar[str] = "workflow/completed"
-
-    run_id: UUID
-    definition_id: UUID
 
 
 class WorkflowCompleteResult(BaseModel):

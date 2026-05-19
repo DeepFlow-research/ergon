@@ -117,15 +117,9 @@ def _runs_for_definition_view(
 ) -> list[RunRecord]:
     experiment = optional_str_metadata(definition.parsed_metadata(), "experiment")
     if experiment:
-        return list(
-            session.exec(
-                select(RunRecord).where(RunRecord.experiment == experiment)
-            ).all()
-        )
+        return list(session.exec(select(RunRecord).where(RunRecord.experiment == experiment)).all())
     return list(
-        session.exec(
-            select(RunRecord).where(RunRecord.definition_id == definition.id)
-        ).all()
+        session.exec(select(RunRecord).where(RunRecord.definition_id == definition.id)).all()
     )
 
 
@@ -203,7 +197,7 @@ def _analytics(rows: list[ExperimentRunRowDto]) -> ExperimentAnalyticsDto:
         total_runs=len(rows),
         status_counts=status_counts,
         average_score=_average(scores),
-        average_duration_ms=_average_duration_ms(durations),
+        average_duration_ms=_rounded_average(durations),
         average_tasks=_average(task_counts),
         total_cost_usd=total_cost_usd,
         latest_activity_at=latest_activity_at,
@@ -233,9 +227,9 @@ def _average(values: list[float] | list[int]) -> float | None:
     return sum(values) / len(values)
 
 
-def _average_duration_ms(durations: list[int]) -> int | None:
-    average = _average(durations)
-    return round(average) if average is not None else None
+def _rounded_average(values: list[int]) -> int | None:
+    average = _average(values)
+    return None if average is None else round(average)
 
 
 def _duration_ms(run: RunRecord) -> int | None:

@@ -159,7 +159,9 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
 
 def test_write_experiment_runs_accepts_explicit_runtime_choices() -> None:
     """Submit grouped experiment-run endpoint accepts explicit runtime choices."""
-    experiment = f"{_EXPERIMENT_PREFIX}explicit-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}"
+    experiment = (
+        f"{_EXPERIMENT_PREFIX}explicit-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}"
+    )
 
     with httpx.Client(timeout=10.0) as client:
         response = client.post(

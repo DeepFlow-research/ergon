@@ -60,9 +60,7 @@ async def _cancel_orphans_for(
     return len(scan_result["cancelled_task_ids"])
 
 
-async def run_block_descendants_on_failed_job(
-    ctx: Any, payload: TaskFailedEvent
-) -> int:
+async def run_block_descendants_on_failed_job(ctx: Any, payload: TaskFailedEvent) -> int:
     """When a parent fails, PENDING/READY containment descendants become BLOCKED.
 
     RUNNING descendants are not interrupted. Horizontal (edge-based) successor
@@ -86,9 +84,7 @@ async def run_block_descendants_on_failed_job(
     return len(blocked)
 
 
-async def run_cancel_orphans_on_cancelled_job(
-    ctx: Any, payload: TaskCancelledEvent
-) -> int:
+async def run_cancel_orphans_on_cancelled_job(ctx: Any, payload: TaskCancelledEvent) -> int:
     logger.info("cancel-orphans parent=%s cause=parent_terminal", payload.task_id)
     return await _cancel_orphans_for(
         ctx,

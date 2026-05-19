@@ -1,29 +1,7 @@
-from typing import ClassVar
 from uuid import UUID
 
-from ergon_core.core.application.events.base import InngestEventContract
+from ergon_core.core.application.events.runtime import TaskCompletedEvent, TaskFailedEvent
 from pydantic import BaseModel
-
-
-class TaskCompletedEvent(InngestEventContract):
-    name: ClassVar[str] = "task/completed"
-
-    run_id: UUID
-    definition_id: UUID
-    task_id: UUID
-    execution_id: UUID
-    sandbox_id: str
-
-
-class TaskFailedEvent(InngestEventContract):
-    name: ClassVar[str] = "task/failed"
-
-    run_id: UUID
-    definition_id: UUID
-    task_id: UUID
-    execution_id: UUID
-    error: str
-    sandbox_id: str | None = None
 
 
 class TaskPropagateResult(BaseModel):

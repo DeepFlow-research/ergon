@@ -208,6 +208,7 @@ def test_persist_definition_writes_only_intended_tables(monkeypatch) -> None:
     assignments = session.exec(select(ExperimentDefinitionTaskAssignment)).all()
     assert [row.worker_binding_key for row in assignments] == ["echo"]
 
+
 def test_worker_execute_reads_task_from_run_tier_only() -> None:
     """PR 3 invariant: ``worker_execute.py`` source does not reference
     definition-tier symbols.
@@ -302,9 +303,7 @@ def test_sandbox_release_happens_after_all_evaluators_complete() -> None:
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[4]
-    execute_task_text = (
-        root / "ergon_core/ergon_core/core/jobs/task/execute/job.py"
-    ).read_text()
+    execute_task_text = (root / "ergon_core/ergon_core/core/jobs/task/execute/job.py").read_text()
     parallel_idx = execute_task_text.find("ctx.group.parallel")
     emit_completed_idx = execute_task_text.find("_emit_task_completed(payload")
     assert parallel_idx != -1, "orchestrator must use ctx.group.parallel for the evaluator fanout"
@@ -327,9 +326,7 @@ def test_sandbox_release_happens_after_all_evaluators_complete() -> None:
         "sandbox_cleanup must call terminate_external_sandbox"
     )
 
-    handler_path = (
-        root / "ergon_core/ergon_core/core/jobs/sandbox/cleanup/inngest.py"
-    )
+    handler_path = root / "ergon_core/ergon_core/core/jobs/sandbox/cleanup/inngest.py"
     assert handler_path.exists(), "sandbox_cleanup Inngest handler module must exist"
     handler_text = handler_path.read_text()
     assert 'event="task/completed"' in handler_text, (
@@ -412,7 +409,9 @@ async def test_dynamic_spawn_writes_only_to_run_graph_nodes(
 
     # 3. Patch get_session so service writes stay in the test session.
     _patch_get_session_smoke(monkeypatch, session)
-    monkeypatch.setattr(management_module, "definition_id_for_run", lambda _session, _run_id: uuid4())
+    monkeypatch.setattr(
+        management_module, "definition_id_for_run", lambda _session, _run_id: uuid4()
+    )
 
     task_mgmt = TaskManagementService(
         dashboard_emitter=SimpleNamespace(graph_mutation=AsyncMock()),
@@ -473,9 +472,7 @@ def test_run_completion_releases_every_acquired_sandbox() -> None:
     sandbox_cleanup_text = (
         root / "ergon_core/ergon_core/core/jobs/sandbox/cleanup/job.py"
     ).read_text()
-    handler_text = (
-        root / "ergon_core/ergon_core/core/jobs/sandbox/cleanup/inngest.py"
-    ).read_text()
+    handler_text = (root / "ergon_core/ergon_core/core/jobs/sandbox/cleanup/inngest.py").read_text()
 
     assert "terminate_external_sandbox" in sandbox_cleanup_text
     assert "run_sandbox_cleanup_on_completed" in sandbox_cleanup_text

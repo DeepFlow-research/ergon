@@ -1,16 +1,8 @@
-from typing import ClassVar, Literal
+from typing import Literal
 from uuid import UUID
 
-from ergon_core.core.application.events.base import InngestEventContract
+from ergon_core.core.application.events.runtime import WorkflowFailedEvent
 from pydantic import BaseModel
-
-
-class WorkflowFailedEvent(InngestEventContract):
-    name: ClassVar[str] = "workflow/failed"
-
-    run_id: UUID
-    definition_id: UUID
-    error: str
 
 
 class WorkflowFailedResult(BaseModel):

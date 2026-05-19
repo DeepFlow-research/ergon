@@ -120,7 +120,6 @@ async def test_1_single_task_happy_path() -> None:
                 definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
-
             )
         )
 

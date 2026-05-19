@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from uuid import UUID
 
 import inngest
-from ergon_core.core.jobs.workflow.start.contract import WorkflowStartedEvent
+from ergon_core.core.application.events.runtime import WorkflowStartedEvent
 from ergon_core.core.application.experiments.errors import DefinitionNotFoundError
 from ergon_core.core.application.experiments.models import ExperimentRunResult
 from ergon_core.core.application.runtime.run_records import create_run

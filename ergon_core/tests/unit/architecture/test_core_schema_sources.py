@@ -62,14 +62,14 @@ def test_workflow_task_ref_does_not_duplicate_graph_task_ref() -> None:
     assert "class WorkflowTaskRef" not in path.read_text()
 
 
-def test_cancel_cause_literals_live_in_cancelled_task_contract() -> None:
+def test_cancel_cause_literals_live_in_application_event_contracts() -> None:
     offenders: list[str] = []
     snippets = (
         'Literal["parent_terminal", "dep_invalidated"]',
         'Literal["dep_invalidated", "parent_terminal"]',
     )
     allowed = {
-        ROOT / "ergon_core/ergon_core/core/jobs/task/cleanup_cancelled/contract.py",
+        ROOT / "ergon_core/ergon_core/core/application/events/runtime.py",
     }
 
     for path in (ROOT / "ergon_core/ergon_core/core").rglob("*.py"):

@@ -2,9 +2,9 @@
 
 from uuid import UUID
 
+from ergon_core.core.application.events.runtime import TaskCancelledEvent
 from ergon_core.core.application.runtime.status import NodeStatus
 from ergon_core.core.persistence.shared.types import NodeId, RunId
-from ergon_core.core.jobs.task.cleanup_cancelled.contract import TaskCancelledEvent
 from pydantic import BaseModel, Field
 
 

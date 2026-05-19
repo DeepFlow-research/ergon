@@ -35,9 +35,7 @@ async def test_failed_task_propagation_does_not_terminate_sandbox_directly() -> 
         return propagation
 
     with (
-        patch(
-            "ergon_core.core.jobs.task.propagate.job.WorkflowService"
-        ) as workflow_service,
+        patch("ergon_core.core.jobs.task.propagate.job.WorkflowService") as workflow_service,
         patch(
             "ergon_core.core.jobs.task.propagate.job.send_job_events",
             new=AsyncMock(),

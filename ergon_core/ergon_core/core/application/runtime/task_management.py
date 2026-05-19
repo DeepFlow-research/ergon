@@ -43,7 +43,7 @@ from ergon_core.core.application.runtime.task_errors import (
     TaskNotTerminalError,
     TaskRunningError,
 )
-from ergon_core.core.jobs.task.cleanup_cancelled.contract import (
+from ergon_core.core.application.events.runtime import (
     CancelCause,
     PropagationCancelCause,
     TaskCancelledEvent,

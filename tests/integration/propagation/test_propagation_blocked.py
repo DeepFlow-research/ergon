@@ -111,7 +111,6 @@ async def test_3_failure_cascade_successor_blocked() -> None:
                 definition_id=defn_id,
                 task_id=node_b_id,
                 execution_id=node_b_id,
-
             )
         )
 
@@ -217,7 +216,6 @@ async def test_7_parent_failure_children_blocked() -> None:
                 definition_id=defn_id,
                 task_id=parent_task_id,
                 execution_id=parent_task_id,
-
             )
         )
 
@@ -307,7 +305,6 @@ async def test_10_blocked_propagates_transitively() -> None:
                 definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
-
             )
         )
 
@@ -390,7 +387,6 @@ async def test_12_running_successor_not_interrupted() -> None:
                 definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
-
             )
         )
 

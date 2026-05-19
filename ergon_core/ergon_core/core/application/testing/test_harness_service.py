@@ -172,9 +172,7 @@ def read_run_state(run_id: UUID, session: Session) -> HarnessRunState | None:
 
 def read_experiment_runs(experiment: str, session: Session) -> list[HarnessExperimentRun]:
     runs = list(
-        session.exec(
-            select(RunRecord).where(RunRecord.experiment == experiment)
-        ).all(),
+        session.exec(select(RunRecord).where(RunRecord.experiment == experiment)).all(),
     )
     return [HarnessExperimentRun(run_id=r.id, status=r.status) for r in runs]
 

@@ -30,10 +30,10 @@ Each Inngest function is a thin wrapper around one service. The services are uni
 
 ### Inngest fabric
 
-- **`core/jobs/**/{contract,job,inngest}.py`** — every durable job owns its event payload contract, orchestration body, and Inngest adapter together. `contract.py` is DTO-only. `job.py` owns business orchestration and, until PR11, some direct persistence access. `inngest.py` owns framework registration and decorator metadata.
+- **`core/jobs/**/{contract,job,inngest}.py`** — every durable job owns its orchestration body and Inngest adapter together. `contract.py` is a compatibility export for the canonical application event DTOs. `job.py` owns business orchestration. `inngest.py` owns framework registration and decorator metadata.
 - **`inngest_client`** (`core/infrastructure/inngest/client.py`) — singleton app. Job-local `inngest.py` modules register functions against it and `core/infrastructure/inngest/registry.py::ALL_FUNCTIONS` lists the serving order.
 - **`RUN_CANCEL`** / **`TASK_CANCEL`** matchers — declarative cancel predicates attached to long-running function decorators. When a `run/cancelled` event arrives, Inngest kills every in-flight function whose trigger payload carries the matching `run_id`.
-- **Event contracts** under `core/jobs/**/contract.py` — `WorkflowStartedEvent`, `TaskReadyEvent`, `TaskCompletedEvent`, `TaskFailedEvent`, `TaskCancelledEvent`, `WorkflowCompletedEvent`, `WorkflowFailedEvent`, and `RunCleanupEvent`. Each defines its own Inngest event name and Pydantic payload; nothing else is allowed to trigger a transition.
+- **Runtime event contracts** under `core/application/events/runtime.py` — `WorkflowStartedEvent`, `TaskReadyEvent`, `TaskCompletedEvent`, `TaskFailedEvent`, `TaskCancelledEvent`, `WorkflowCompletedEvent`, `WorkflowFailedEvent`, and `RunCleanupEvent`. Each defines its own Inngest event name and Pydantic payload; job-local `contract.py` files re-export those application-owned DTOs so existing imports stay narrow while runtime services can depend on event shapes without importing jobs.
 - **Composition boundary** — concrete Inngest client sends and sandbox adapter wiring live in `inngest.py` or job-local composition helpers such as `core/jobs/_events.py`, not in `job.py`. Architecture tests enforce this narrower PR10 boundary while PR11 finishes moving runtime data access behind services.
 
 ### Freeze status
@@ -121,7 +121,7 @@ Dashboard delivery hangs off state mutation (see `05_dashboard.md`); it is not a
 
 ## 5. Extension points
 
-- **Adding a new Inngest function.** Add a package under `core/jobs/<area>/<name>/` with `contract.py`, `job.py`, and `inngest.py`. Define the event payload in `contract.py` with a `ClassVar[str] name`; keep that file free of infrastructure, persistence, and service imports. Put framework registration, trigger, retry, cancel, concurrency, and output metadata in `inngest.py`. Put orchestration in `job.py`; if it must send Inngest events or touch concrete sandbox adapters, route that through job-local composition helpers rather than importing concrete infrastructure in the job body. Import the function in `core/infrastructure/inngest/registry.py` and append it to `ALL_FUNCTIONS`. Pick `retries` by blast radius: 0 for side-effect-bearing, 1 for idempotent orchestration, 3 for best-effort cleanup.
+- **Adding a new Inngest function.** Add a package under `core/jobs/<area>/<name>/` with `contract.py`, `job.py`, and `inngest.py`. Define new runtime event payloads in `core/application/events/runtime.py` with a `ClassVar[str] name`; keep job-local `contract.py` as a DTO-only re-export when callers need the old job-local import path. Put framework registration, trigger, retry, cancel, concurrency, and output metadata in `inngest.py`. Put orchestration in `job.py`; if it must send Inngest events or touch concrete sandbox adapters, route that through job-local composition helpers rather than importing concrete infrastructure in the job body. Import the function in `core/infrastructure/inngest/registry.py` and append it to `ALL_FUNCTIONS`. Pick `retries` by blast radius: 0 for side-effect-bearing, 1 for idempotent orchestration, 3 for best-effort cleanup.
 
 - **Adding a new task status.** Add the value to `TaskExecutionStatus` and the graph `status_conventions`. Update `TERMINAL_STATUSES` if terminal. Teach `on_task_completed_or_failed` the new transition, update `is_workflow_complete_v2` / `is_workflow_failed_v2`, and update the `is_reactivatable_cancelled` guard if the new status should be re-activatable. Every write goes through `WorkflowGraphRepository.update_node_status` with a `MutationMeta`.
 
@@ -167,6 +167,6 @@ A brief index of where runtime functions live. The architectural claims above st
 | Finalization | `core/jobs/workflow/complete/`, `core/jobs/workflow/fail/`, `core/jobs/run/cleanup/` |
 | Registry | `core/infrastructure/inngest/registry.py` |
 | Client + cancel matchers | `core/infrastructure/inngest/client.py` |
-| Event contracts | `core/jobs/**/contract.py` |
+| Runtime event contracts | `core/application/events/runtime.py` |
 | State-machine core | `runtime/execution/propagation.py` |
 | Services | `core/application/**` |

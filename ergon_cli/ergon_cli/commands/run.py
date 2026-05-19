@@ -11,13 +11,16 @@ from sqlmodel import select
 from ergon_cli.rendering import render_table
 
 
-def _definition_id_filter(raw_definition_id: str | None) -> UUID | None:
-    if raw_definition_id is None:
+def _run_definition_filter(value: str | None) -> UUID | None:
+    if value is None:
         return None
-    return UUID(raw_definition_id)
+    try:
+        return UUID(value)
+    except ValueError as exc:
+        raise ValueError(f"Invalid UUID: {value}") from exc
 
 
-def _empty_runs_message(args: Namespace) -> str:
+def _no_runs_message(args: Namespace) -> str:
     parts = ["No runs found"]
     if args.status:
         parts.append(f"with status={args.status!r}")
@@ -28,14 +31,17 @@ def _empty_runs_message(args: Namespace) -> str:
     return " ".join(parts)
 
 
-def _run_row(run: RunRecord) -> list[str]:
-    run_id = str(run.id)[:8]
-    created = run.created_at.strftime("%Y-%m-%d %H:%M") if run.created_at else "-"
-    duration = ""
-    if run.started_at and run.completed_at:
-        delta = run.completed_at - run.started_at
-        duration = f"{int(delta.total_seconds())}s"
-    return [run_id, run.status, created, duration, str(run.id)]
+def _run_table_rows(runs: list[RunRecord]) -> list[list[str]]:
+    rows = []
+    for run in runs:
+        run_id = str(run.id)[:8]
+        created = run.created_at.strftime("%Y-%m-%d %H:%M") if run.created_at else "-"
+        duration = ""
+        if run.started_at and run.completed_at:
+            delta = run.completed_at - run.started_at
+            duration = f"{int(delta.total_seconds())}s"
+        rows.append([run_id, run.status, created, duration, str(run.id)])
+    return rows
 
 
 def handle_run(args: Namespace) -> int:
@@ -50,12 +56,12 @@ def handle_run(args: Namespace) -> int:
         return 1
 
 
-def list_runs(args: Namespace) -> int:  # noqa: C901 - CLI filters are intentionally linear.
+def list_runs(args: Namespace) -> int:
     ensure_db()
     try:
-        definition_id = _definition_id_filter(args.definition_id)
-    except ValueError:
-        print(f"Invalid UUID: {args.definition_id}")
+        definition_id = _run_definition_filter(args.definition_id)
+    except ValueError as exc:
+        print(str(exc))
         return 1
 
     with get_session() as session:
@@ -70,11 +76,10 @@ def list_runs(args: Namespace) -> int:  # noqa: C901 - CLI filters are intention
         runs = list(session.exec(stmt).all())
 
     if not runs:
-        print(_empty_runs_message(args))
+        print(_no_runs_message(args))
         return 0
 
-    rows = [_run_row(run) for run in runs]
-    render_table(["ID (short)", "Status", "Created", "Duration", "Full ID"], rows)
+    render_table(["ID (short)", "Status", "Created", "Duration", "Full ID"], _run_table_rows(runs))
     return 0
 
 

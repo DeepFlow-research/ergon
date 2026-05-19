@@ -1,25 +1,7 @@
-from typing import ClassVar
 from uuid import UUID
 
-from ergon_core.core.application.events.base import InngestEventContract
+from ergon_core.core.application.events.runtime import TaskReadyEvent, TaskStartedEvent
 from pydantic import BaseModel
-
-
-class TaskReadyEvent(InngestEventContract):
-    name: ClassVar[str] = "task/ready"
-
-    run_id: UUID
-    definition_id: UUID
-    task_id: UUID
-
-
-class TaskStartedEvent(InngestEventContract):
-    name: ClassVar[str] = "task/started"
-
-    run_id: UUID
-    definition_id: UUID
-    task_id: UUID
-    execution_id: UUID
 
 
 class TaskExecuteResult(BaseModel):

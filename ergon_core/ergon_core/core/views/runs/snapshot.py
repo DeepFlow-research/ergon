@@ -123,9 +123,9 @@ def _task_keyed_executions(
 
         resource_ids: list[str] = []
         output = ex.parsed_output()
-        output_resource_ids = output.get("resource_ids")
-        if isinstance(output_resource_ids, list):
-            resource_ids = [str(r) for r in output_resource_ids]
+        raw_resource_ids = output.get("resource_ids")
+        if isinstance(raw_resource_ids, list):
+            resource_ids = [str(r) for r in raw_resource_ids]
 
         by_task[tid].append(
             RunExecutionAttemptDto(

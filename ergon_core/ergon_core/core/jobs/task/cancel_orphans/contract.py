@@ -1,8 +1,8 @@
-from ergon_core.core.jobs.task.cleanup_cancelled.contract import (
+from ergon_core.core.application.events.runtime import (
     CancelCause,
     PropagationCancelCause,
     TaskCancelledEvent,
+    TaskFailedEvent,
 )
-from ergon_core.core.jobs.task.propagate.contract import TaskFailedEvent
 
 __all__ = ["CancelCause", "PropagationCancelCause", "TaskCancelledEvent", "TaskFailedEvent"]

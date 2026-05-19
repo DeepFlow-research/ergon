@@ -18,48 +18,61 @@ def _calls_name(node: ast.AST, name: str) -> bool:
     return isinstance(node, ast.Call) and _attr_name(node.func) == name
 
 
-def _relative(path: Path) -> str:
-    return str(path.relative_to(ROOT))
+def _import_offenders(path: Path, tree: ast.AST) -> list[str]:
+    offenders: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            offenders.extend(_import_from_offenders(path, node))
+        elif isinstance(node, ast.Import):
+            offenders.extend(_plain_import_offenders(path, node))
+    return offenders
 
 
 def _import_from_offenders(path: Path, node: ast.ImportFrom) -> list[str]:
+    if node.module == "ergon_core.core.application.resources.repository":
+        return [
+            f"{path.relative_to(ROOT)} imports RunResourceRepository"
+            for alias in node.names
+            if alias.name == "RunResourceRepository"
+        ]
+    if node.module == "ergon_core.core.persistence.telemetry.models":
+        return [
+            f"{path.relative_to(ROOT)} imports RunResource"
+            for alias in node.names
+            if alias.name == "RunResource"
+        ]
+    return []
+
+
+def _plain_import_offenders(path: Path, node: ast.Import) -> list[str]:
     offenders: list[str] = []
-    imported_names = {alias.name for alias in node.names}
-    if (
-        node.module == "ergon_core.core.application.resources.repository"
-        and "RunResourceRepository" in imported_names
-    ):
-        offenders.append(f"{_relative(path)} imports RunResourceRepository")
-    if (
-        node.module == "ergon_core.core.persistence.telemetry.models"
-        and "RunResource" in imported_names
-    ):
-        offenders.append(f"{_relative(path)} imports RunResource")
+    for alias in node.names:
+        if alias.name == "ergon_core.core.application.resources.repository":
+            offenders.append(f"{path.relative_to(ROOT)} imports resource repository module")
+        if alias.name == "ergon_core.core.persistence.telemetry.models":
+            offenders.append(f"{path.relative_to(ROOT)} imports telemetry models")
     return offenders
 
 
-def _import_offenders(path: Path, node: ast.Import) -> list[str]:
+def _call_offenders(path: Path, tree: ast.AST) -> list[str]:
     offenders: list[str] = []
-    imported_modules = {alias.name for alias in node.names}
-    if "ergon_core.core.application.resources.repository" in imported_modules:
-        offenders.append(f"{_relative(path)} imports resource repository module")
-    if "ergon_core.core.persistence.telemetry.models" in imported_modules:
-        offenders.append(f"{_relative(path)} imports telemetry models")
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        called = _attr_name(node.func)
+        if called == "RunResource":
+            offenders.append(f"{path.relative_to(ROOT)} constructs RunResource")
+        if _is_repository_append(node, called):
+            offenders.append(f"{path.relative_to(ROOT)} appends through RunResourceRepository")
+        if called == "add" and node.args and _calls_name(node.args[0], "RunResource"):
+            offenders.append(f"{path.relative_to(ROOT)} adds RunResource through session")
     return offenders
 
 
-def _call_offenders(path: Path, node: ast.Call) -> list[str]:
-    offenders: list[str] = []
-    called = _attr_name(node.func)
-    if called == "RunResource":
-        offenders.append(f"{_relative(path)} constructs RunResource")
-    if called == "append":
-        receiver = node.func.value if isinstance(node.func, ast.Attribute) else None
-        if _attr_name(receiver) in {"_resource_repo", "resource_repo", "repo"}:
-            offenders.append(f"{_relative(path)} appends through RunResourceRepository")
-    if called == "add" and node.args and _calls_name(node.args[0], "RunResource"):
-        offenders.append(f"{_relative(path)} adds RunResource through session")
-    return offenders
+def _is_repository_append(node: ast.Call, called: str | None) -> bool:
+    if called != "append" or not isinstance(node.func, ast.Attribute):
+        return False
+    return _attr_name(node.func.value) in {"_resource_repo", "resource_repo", "repo"}
 
 
 def test_sandbox_infrastructure_does_not_append_run_resource_rows_directly() -> None:
@@ -67,12 +80,7 @@ def test_sandbox_infrastructure_does_not_append_run_resource_rows_directly() -> 
 
     for path in SANDBOX_ROOT.rglob("*.py"):
         tree = ast.parse(path.read_text(), filename=str(path))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom):
-                offenders.extend(_import_from_offenders(path, node))
-            elif isinstance(node, ast.Import):
-                offenders.extend(_import_offenders(path, node))
-            elif isinstance(node, ast.Call):
-                offenders.extend(_call_offenders(path, node))
+        offenders.extend(_import_offenders(path, tree))
+        offenders.extend(_call_offenders(path, tree))
 
     assert offenders == []

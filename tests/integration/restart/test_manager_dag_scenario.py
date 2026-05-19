@@ -162,7 +162,6 @@ async def test_diamond_restart_invalidates_fanin_and_reactivates_on_recompletion
                 definition_id=defn_id,
                 task_id=task_a_id,
                 execution_id=task_a_id,
-
             )
         )
 

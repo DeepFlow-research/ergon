@@ -56,9 +56,7 @@ async def test_spawn_dynamic_task_dispatches_ready_event_when_dependency_free(mo
     dispatched: list[dict] = []
 
     async def dispatch_task_ready(run_id, definition_id, task_id):
-        dispatched.append(
-            {"run_id": run_id, "definition_id": definition_id, "task_id": task_id}
-        )
+        dispatched.append({"run_id": run_id, "definition_id": definition_id, "task_id": task_id})
 
     service = TaskManagementService(
         graph_repo=graph_repo,
@@ -103,9 +101,7 @@ async def test_spawn_dynamic_task_with_dependencies_waits_for_propagation(monkey
     dispatched: list[dict] = []
 
     async def dispatch_task_ready(run_id, definition_id, task_id):
-        dispatched.append(
-            {"run_id": run_id, "definition_id": definition_id, "task_id": task_id}
-        )
+        dispatched.append({"run_id": run_id, "definition_id": definition_id, "task_id": task_id})
 
     service = TaskManagementService(
         graph_repo=graph_repo,

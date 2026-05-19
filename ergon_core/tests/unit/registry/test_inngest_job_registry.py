@@ -174,9 +174,7 @@ def test_inngest_function_ids_and_events_stay_registered() -> None:
                     continue
                 fn_id = _literal_keyword(decorator, "fn_id")
                 trigger = next(
-                    keyword.value
-                    for keyword in decorator.keywords
-                    if keyword.arg == "trigger"
+                    keyword.value for keyword in decorator.keywords if keyword.arg == "trigger"
                 )
                 assert isinstance(trigger, ast.Call)
                 event = _literal_keyword(trigger, "event")
@@ -193,10 +191,7 @@ def test_all_functions_membership_order_and_metadata_stay_stable() -> None:
     metadata = {}
     for fn in ALL_FUNCTIONS:
         opts = fn._opts
-        cancel = tuple(
-            (item.event, item.if_exp)
-            for item in (opts.cancel or ())
-        )
+        cancel = tuple((item.event, item.if_exp) for item in (opts.cancel or ()))
         concurrency = tuple(item.limit for item in (opts.concurrency or ()))
         output_type = fn._output_type
         metadata[fn.local_id] = {

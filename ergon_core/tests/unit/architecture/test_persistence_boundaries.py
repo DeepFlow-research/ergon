@@ -1,6 +1,6 @@
 """Architecture guards for persistence boundaries."""
 
-from importlib import import_module
+import importlib
 from pathlib import Path
 
 from sqlmodel import SQLModel
@@ -74,7 +74,7 @@ def test_persistence_foreign_keys_reference_existing_columns() -> None:
         "ergon_core.core.persistence.graph.models",
         "ergon_core.core.persistence.telemetry.models",
     ):
-        import_module(module_name)
+        importlib.import_module(module_name)
 
     missing_targets: list[str] = []
     for table in SQLModel.metadata.tables.values():

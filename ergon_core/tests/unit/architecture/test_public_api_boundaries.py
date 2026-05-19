@@ -323,6 +323,7 @@ def test_read_context_and_resource_modules_stay_in_application_and_views_layout(
         core_root / "runtime" / "context_events.py",
         core_root / "runtime" / "output_extraction.py",
         core_root / "runtime" / "resources.py",
+        core_root / "application" / "read_models",
         core_root / "application" / "read_models" / "models.py",
         core_root / "application" / "read_models" / "runs.py",
         core_root / "application" / "read_models" / "run_snapshot.py",
@@ -334,7 +335,6 @@ def test_read_context_and_resource_modules_stay_in_application_and_views_layout(
         assert not old_path.exists()
 
     for new_path in (
-        core_root / "application" / "read_models" / "__init__.py",
         core_root / "application" / "communication" / "__init__.py",
         core_root / "application" / "communication" / "service.py",
         core_root / "application" / "communication" / "models.py",

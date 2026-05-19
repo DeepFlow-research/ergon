@@ -83,6 +83,7 @@ from ergon_core.core.infrastructure.tracing import (
     task_execute_context,
     truncate_text,
 )
+from ergon_core.core.shared.utils import require_not_none
 
 logger = logging.getLogger(__name__)
 
@@ -156,8 +157,14 @@ async def _invoke_worker_execute(
             sandbox_id=sandbox_result.sandbox_id,
             task_slug=prepared.task_slug,
             task_description=prepared.task_description,
-            assigned_worker_slug=prepared.assigned_worker_slug,
-            worker_type=prepared.worker_type,
+            assigned_worker_slug=require_not_none(
+                prepared.assigned_worker_slug,
+                f"Prepared task {payload.task_id} missing assigned_worker_slug",
+            ),
+            worker_type=require_not_none(
+                prepared.worker_type,
+                f"Prepared task {payload.task_id} missing worker_type",
+            ),
             model_target=prepared.model_target,
             benchmark_type=prepared.benchmark_type,
         ).model_dump(),

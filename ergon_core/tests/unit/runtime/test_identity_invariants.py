@@ -198,7 +198,9 @@ def test_sandbox_identity_is_preserved_across_worker_to_evaluate_boundary() -> N
 
     from pathlib import Path
 
-    from ergon_core.core.application.runtime.task_execution_repository import TaskExecutionRepository
+    from ergon_core.core.application.runtime.task_execution_repository import (
+        TaskExecutionRepository,
+    )
     from ergon_core.core.persistence.telemetry.models import RunTaskExecution
 
     # Carrier: the execution row owns the sandbox_id.
@@ -208,12 +210,8 @@ def test_sandbox_identity_is_preserved_across_worker_to_evaluate_boundary() -> N
     assert hasattr(TaskExecutionRepository, "set_sandbox_id")
 
     root = Path(__file__).resolve().parents[4]
-    worker_text = (
-        root / "ergon_core/ergon_core/core/jobs/task/worker_execute/job.py"
-    ).read_text()
-    eval_text = (
-        root / "ergon_core/ergon_core/core/jobs/task/evaluate/job.py"
-    ).read_text()
+    worker_text = (root / "ergon_core/ergon_core/core/jobs/task/worker_execute/job.py").read_text()
+    eval_text = (root / "ergon_core/ergon_core/core/jobs/task/evaluate/job.py").read_text()
 
     # Producer side: worker_execute stamps sandbox_id on the row.
     assert "set_sandbox_id(" in worker_text
@@ -243,16 +241,16 @@ def test_execution_id_is_unique_per_attempt_and_shared_across_evaluators() -> No
     from pathlib import Path
 
     from ergon_core.core.jobs.task.evaluate.contract import TaskEvaluateRequest
-    from ergon_core.core.application.runtime.task_execution_repository import TaskExecutionRepository
+    from ergon_core.core.application.runtime.task_execution_repository import (
+        TaskExecutionRepository,
+    )
 
     # (a) execution_id is on the payload.
     assert "execution_id" in TaskEvaluateRequest.model_fields
 
     # (b) the fanout reuses the same execution_id across evaluator_indices.
     root = Path(__file__).resolve().parents[4]
-    orchestrator = (
-        root / "ergon_core/ergon_core/core/jobs/task/execute/job.py"
-    ).read_text()
+    orchestrator = (root / "ergon_core/ergon_core/core/jobs/task/execute/job.py").read_text()
     fanout_start = orchestrator.find("def _fan_out_evaluators")
     assert fanout_start != -1, "fanout helper must exist on the orchestrator"
     # Slice until the next top-level `def `; the docstring length isn't
@@ -343,7 +341,9 @@ async def test_dynamic_task_id_has_no_definition_row(
     parent = _seed_identity_parent(session, run_id=run_id)
 
     _patch_get_session_identity(monkeypatch, session)
-    monkeypatch.setattr(management_module, "definition_id_for_run", lambda _session, _run_id: uuid4())
+    monkeypatch.setattr(
+        management_module, "definition_id_for_run", lambda _session, _run_id: uuid4()
+    )
 
     task_mgmt = TaskManagementService(
         dashboard_emitter=SimpleNamespace(graph_mutation=AsyncMock()),

@@ -129,7 +129,6 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
                 definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
-
             )
         )
 
@@ -140,7 +139,6 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
                 definition_id=defn_id,
                 task_id=node_b_id,
                 execution_id=node_b_id,
-
             )
         )
 
@@ -212,7 +210,6 @@ async def test_ec2_duplicate_propagate_is_idempotent() -> None:
             definition_id=defn_id,
             task_id=node_a_id,
             execution_id=node_a_id,
-
         )
 
         # First propagation
