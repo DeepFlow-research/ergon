@@ -144,14 +144,28 @@ def test_persist_definition_writes_only_intended_tables() -> None:
     pytest.fail("requires PR 7's persistence collapse + helper rewrite")
 
 
-@pytest.mark.xfail(
-    reason="PR 3: worker_execute reads task from run_graph_nodes only",
-    strict=True,
-)
 def test_worker_execute_reads_task_from_run_tier_only() -> None:
-    """PR 3 invariant: worker_execute touches no definition-tier table."""
+    """PR 3 invariant: ``worker_execute.py`` source does not reference
+    definition-tier symbols.
 
-    pytest.fail("requires PR 3's worker-execute cutover")
+    Effect-level test: rather than driving a full worker run (which
+    needs Inngest + sandbox infrastructure not available to unit
+    tests), we check the source code for the symbols PR 3 forbids.
+    The walkthrough integration test in PR 12 exercises the full
+    runtime end-to-end. The textual guard here catches reintroduction
+    on every PR.
+    """
+
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[4]
+    text = (root / "ergon_core/ergon_core/core/application/jobs/worker_execute.py").read_text()
+    forbidden = ("DefinitionRepository", "task_with_instance", "ExperimentDefinitionTask")
+    offenders = [s for s in forbidden if s in text]
+    assert offenders == [], (
+        f"worker_execute references definition-tier symbols {offenders}; "
+        "PR 3's run-tier read boundary forbids these."
+    )
 
 
 @pytest.mark.xfail(

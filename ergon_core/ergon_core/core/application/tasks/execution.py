@@ -69,13 +69,152 @@ class TaskExecutionService:
         self._task_execution_repo = TaskExecutionRepository()
 
     async def prepare(self, command: PrepareTaskExecutionCommand) -> PreparedTaskExecution:
-        if command.node_id is not None:
-            return await self._prepare_graph_native(command)
-        return await self._prepare_definition(command)
+        return await self._prepare_run_node(command)
 
-    # -- Graph-native path (dynamic tasks) ---
+    # -- Unified run-tier path (PR 3) ---
+    #
+    # Reads the run-tier task snapshot via `graph_repo.node(...)`
+    # instead of branching on static vs dynamic. The view's OR
+    # predicate handles both: `command.node_id` (graph-native dynamic)
+    # OR `command.task_id` (definition FK) resolves to the same
+    # RunGraphNode row.
+    #
+    # TODO(PR 5): `worker_type` / `model_target` come from
+    # `task.worker` once Worker is Pydantic-serializable; drop the
+    # ExperimentDefinitionWorker lookup below.
+    # TODO(PR 11): drop `_prepare_legacy_graph_native` /
+    # `_prepare_legacy_definition` along with the legacy DTO fields.
 
-    async def _prepare_graph_native(
+    async def _prepare_run_node(
+        self, command: PrepareTaskExecutionCommand
+    ) -> PreparedTaskExecution:
+        lookup_id = command.node_id or command.task_id
+        if lookup_id is None:
+            raise ConfigurationError(
+                "Task preparation requires node_id or task_id",
+                run_id=command.run_id,
+                task_id=None,
+            )
+        with get_session() as session:
+            view = await self._graph_repo.node(session, run_id=command.run_id, task_id=lookup_id)
+            node = session.get(RunGraphNode, view.node_id)
+            if node is None:
+                raise ConfigurationError(
+                    f"RunGraphNode {view.node_id} not found",
+                    run_id=command.run_id,
+                    task_id=lookup_id,
+                )
+            definition = require_not_none(
+                session.get(ExperimentDefinition, command.definition_id),
+                f"Definition {command.definition_id} not found",
+            )
+
+            # TODO(PR 5): `worker_type` / `model_target` come from
+            # `task.worker` once Worker is Pydantic-serializable.
+            assigned_worker_slug = node.assigned_worker_slug
+            worker_type, model_target, definition_worker_id = self._resolve_worker_config(
+                session,
+                definition_id=command.definition_id,
+                run_id=command.run_id,
+                assigned_worker_slug=assigned_worker_slug,
+            )
+
+            execution = RunTaskExecution(
+                run_id=command.run_id,
+                node_id=view.node_id,
+                definition_task_id=view.definition_task_id,
+                definition_worker_id=definition_worker_id,
+                attempt_number=self._task_execution_repo.next_attempt_for_node(
+                    session, command.run_id, view.node_id
+                ),
+                status=TaskExecutionStatus.RUNNING,
+                started_at=utcnow(),
+            )
+            session.add(execution)
+            session.flush()
+            # Snapshot ORM-derived scalars before commit. SQLAlchemy's
+            # `expire_on_commit=True` default expires every loaded
+            # instance on commit, and `with get_session() as session:`
+            # closes the session immediately after — so the post-commit
+            # reads of `definition.benchmark_type` / `execution.id`
+            # below would raise DetachedInstanceError.
+            benchmark_type = definition.benchmark_type
+            execution_id = execution.id
+            await self._graph_repo.update_node_status(
+                session,
+                run_id=command.run_id,
+                node_id=view.node_id,
+                new_status=graph_status.RUNNING,
+                meta=MutationMeta(
+                    actor="task-execution-service",
+                    reason=f"prepare: execution {execution_id}",
+                ),
+            )
+            session.commit()
+
+        await _emit_task_status(
+            run_id=command.run_id,
+            node_id=view.node_id,
+            task_slug=view.task.task_slug,
+            new_status=graph_status.RUNNING,
+            old_status=None,
+            worker_id=definition_worker_id,
+            worker_slug=assigned_worker_slug,
+        )
+        return PreparedTaskExecution(
+            run_id=command.run_id,
+            definition_id=command.definition_id,
+            task_id=view.task_id,
+            node_id=view.node_id,
+            definition_task_id=view.definition_task_id,
+            task_slug=view.task.task_slug,
+            task_description=view.task.description,
+            benchmark_type=benchmark_type,
+            assigned_worker_slug=assigned_worker_slug,
+            worker_type=worker_type,
+            model_target=model_target,
+            execution_id=execution_id,
+        )
+
+    def _resolve_worker_config(
+        self,
+        session: Session,
+        *,
+        definition_id: UUID,
+        run_id: UUID,
+        assigned_worker_slug: str | None,
+    ) -> tuple[str | None, str | None, UUID | None]:
+        """Resolve (worker_type, model_target, definition_worker_id) for a
+        given assigned_worker_slug.
+
+        Falls back to the run's default model_target when no
+        ExperimentDefinitionWorker row matches the binding key (matches
+        legacy graph-native behavior for dynamically-assigned workers).
+
+        TODO(PR 5): obsoleted by `task.worker` carrying the config
+        directly; this whole helper goes away with the legacy DTO
+        fields.
+        """
+
+        if assigned_worker_slug is None:
+            return None, None, None
+        worker_row = session.exec(
+            select(ExperimentDefinitionWorker).where(
+                ExperimentDefinitionWorker.experiment_definition_id == definition_id,
+                ExperimentDefinitionWorker.binding_key == assigned_worker_slug,
+            )
+        ).first()
+        if worker_row is not None:
+            return worker_row.worker_type, worker_row.model_target, worker_row.id
+        # No matching binding — use the run-level default model_target.
+        run = session.get(RunRecord, run_id)
+        model_target = run.model_target if run is not None else None
+        return assigned_worker_slug, model_target, None
+
+    # -- Legacy graph-native path (PR 3 — kept for rollback, unused) ---
+    # TODO(PR 11): delete `_prepare_legacy_graph_native`.
+
+    async def _prepare_legacy_graph_native(
         self, command: PrepareTaskExecutionCommand
     ) -> PreparedTaskExecution:
         node_id = command.node_id
@@ -177,6 +316,7 @@ class TaskExecutionService:
             return PreparedTaskExecution(
                 run_id=command.run_id,
                 definition_id=command.definition_id,
+                task_id=command.task_id or node_id,
                 node_id=node_id,
                 definition_task_id=command.task_id,
                 task_slug=node.task_slug,
@@ -188,9 +328,10 @@ class TaskExecutionService:
                 execution_id=execution.id,
             )
 
-    # -- Definition path (static tasks) ---
+    # -- Legacy definition path (PR 3 — renamed, kept for rollback) ---
+    # TODO(PR 11): delete `_prepare_legacy_definition`.
 
-    async def _prepare_definition(
+    async def _prepare_legacy_definition(
         self, command: PrepareTaskExecutionCommand
     ) -> PreparedTaskExecution:
         task_id = command.task_id
@@ -299,6 +440,7 @@ class TaskExecutionService:
             return PreparedTaskExecution(
                 run_id=command.run_id,
                 definition_id=command.definition_id,
+                task_id=task_id,
                 node_id=resolved_node_id,
                 definition_task_id=task_id,
                 task_slug=task.task_slug,

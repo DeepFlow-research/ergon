@@ -206,7 +206,6 @@ FINAL_STATE_ASSERTIONS: tuple[FinalStateAssertion, ...] = (
 # invariant green ahead of its landing PR, CI fails and the ledger gets
 # the update at the same time.
 _XFAIL_BY_NAME: dict[str, str] = {
-    "worker_execute_imports_only_run_tier": "PR 3 flips worker_execute to run-tier",
     "evaluate_task_run_uses_thin_payload": "PR 4 reshapes evaluate_task_run",
     "check_evaluators_is_unregistered": "PR 4 removes check_evaluators dispatch",
     # task_has_no_model_post_init: already holds today (v1 Task has no

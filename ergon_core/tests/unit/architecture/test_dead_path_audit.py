@@ -75,6 +75,14 @@ DEAD_PATHS: tuple[DeadPath, ...] = (
         audit_note="transitional name; deleted by PR 11",
     ),
     DeadPath(
+        symbol="_prepare_legacy_graph_native",
+        landing_pr="PR 11",
+        audit_note=(
+            "PR 3 renamed _prepare_graph_native; the legacy method is "
+            "kept callerless for rollback and deleted by PR 11"
+        ),
+    ),
+    DeadPath(
         symbol="materialize_dynamic_subtask_definition",
         landing_pr="PR 9",
         audit_note=("synthesized definition row for dynamic spawn; graph-native replaces it"),
@@ -198,7 +206,17 @@ DEAD_PATHS: tuple[DeadPath, ...] = (
 _XFAIL_BY_SYMBOL: dict[str, str] = {
     "CriterionExecutor": "PR 11: Protocol pair deleted",
     "InngestCriterionExecutor": "PR 11: Protocol pair deleted",
-    "_prepare_definition": "PR 3: renamed to _prepare_legacy_definition",
+    "_worker_from_payload_bridge": "PR 5: task.worker replaces the bridge",
+    "_prepare_legacy_graph_native": (
+        "PR 3 renamed _prepare_graph_native to _prepare_legacy_graph_native; "
+        "the method definition is still in the source file as transitional "
+        "code for rollback. PR 11 deletes it."
+    ),
+    "_prepare_legacy_definition": (
+        "PR 3 renamed _prepare_definition to _prepare_legacy_definition; "
+        "the method definition is still in the source file as transitional "
+        "code for rollback. PR 11 deletes it."
+    ),
     "terminate_sandbox_by_id": "PR 11: orchestrator owns release",
     "_persist_single_sample_workflow_definition": "PR 8: CLI uses persist_definition",
     # Inngest jobs absorbed into worker_execute by PR 4; deleted by PR 11
