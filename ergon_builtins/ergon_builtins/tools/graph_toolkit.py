@@ -16,7 +16,7 @@ from pydantic_ai import RunContext
 from pydantic_ai.tools import Tool
 
 from ergon_builtins.tools.graph_toolkit_types import ResourceRef
-from ergon_builtins.workers.baselines.tool_budget import (
+from ergon_builtins.workers.tool_budget import (
     AgentToolBudgetDeps,
     AgentToolBudgetExhaustedResult,
 )

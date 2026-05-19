@@ -18,7 +18,7 @@ from ergon_core.api.worker import Worker
 from huggingface_hub import hf_hub_download
 
 from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FProblem, MiniF2FTaskPayload
-from ergon_builtins.benchmarks.minif2f.workers import (
+from ergon_builtins.benchmarks.minif2f.worker_factory import (
     make_minif2f_rubric,
     make_minif2f_worker,
 )

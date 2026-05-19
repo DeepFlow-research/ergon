@@ -16,18 +16,21 @@ from ergon_core.api.worker import Worker
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FTask
 from ergon_builtins.benchmarks.minif2f.sandbox import LeanSandbox
 from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FTaskPayload
-from ergon_builtins.benchmarks.minif2f.workers import make_minif2f_rubric, make_minif2f_worker
+from ergon_builtins.benchmarks.minif2f.worker_factory import (
+    make_minif2f_rubric,
+    make_minif2f_worker,
+)
 from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsTask
 from ergon_builtins.benchmarks.researchrubrics.sandbox import ResearchE2BSandbox
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import ResearchRubricsTaskPayload
-from ergon_builtins.benchmarks.researchrubrics.workers import (
+from ergon_builtins.benchmarks.researchrubrics.worker_factory import (
     make_research_rubric,
     make_research_worker,
 )
 from ergon_builtins.benchmarks.swebench_verified.benchmark import SweBenchTask
 from ergon_builtins.benchmarks.swebench_verified.sandbox import SWEBenchSandbox
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
-from ergon_builtins.benchmarks.swebench_verified.workers import (
+from ergon_builtins.benchmarks.swebench_verified.worker_factory import (
     make_swebench_rubric,
     make_swebench_worker,
 )

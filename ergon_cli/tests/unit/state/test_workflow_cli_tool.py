@@ -2,7 +2,7 @@ from uuid import uuid4
 
 import pytest
 from ergon_builtins.tools.workflow_cli_tool import make_workflow_cli_tool
-from ergon_builtins.workers.baselines.tool_budget import (
+from ergon_builtins.workers.tool_budget import (
     AgentToolBudgetDeps,
     AgentToolBudgetState,
 )

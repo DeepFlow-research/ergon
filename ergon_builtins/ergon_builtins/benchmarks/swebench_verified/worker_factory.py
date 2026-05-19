@@ -10,13 +10,16 @@ object graph.
 
 from ergon_builtins.benchmarks.swebench_verified.rubric import SWEBenchRubric
 from ergon_builtins.benchmarks.swebench_verified.toolkit import SWEBenchToolkit
-from ergon_builtins.workers.baselines.react_prompts import SWEBENCH_SYSTEM_PROMPT
-from ergon_builtins.workers.baselines.react_worker import ReActWorker
+from ergon_builtins.benchmarks.swebench_verified.prompts import SWEBENCH_SYSTEM_PROMPT
+from ergon_builtins.workers.react_worker import ReActWorker
+
+
+DEFAULT_WORKER_MODEL = "openai:gpt-4o-mini"
 
 
 def make_swebench_worker(
     *,
-    model: str = "openai:gpt-4o-mini",
+    model: str = DEFAULT_WORKER_MODEL,
     max_iterations: int = 50,
 ) -> ReActWorker:
     """Return a serializable ReActWorker for SWE-Bench (v2 authoring shape)."""

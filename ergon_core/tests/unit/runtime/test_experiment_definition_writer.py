@@ -5,7 +5,7 @@ import pytest
 
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FTask
 from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FTaskPayload
-from ergon_builtins.benchmarks.minif2f.workers import (
+from ergon_builtins.benchmarks.minif2f.worker_factory import (
     make_minif2f_rubric,
     make_minif2f_worker,
 )

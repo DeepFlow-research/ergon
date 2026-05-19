@@ -1,4 +1,4 @@
-from ergon_builtins.workers.baselines.tool_budget import (
+from ergon_builtins.workers.tool_budget import (
     AgentToolBudgetDeps,
     AgentToolBudgetExhaustedResult,
     AgentToolBudgetState,
