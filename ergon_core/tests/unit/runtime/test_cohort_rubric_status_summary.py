@@ -4,7 +4,7 @@ from ergon_core.core.application.evaluation.summary import (
     CriterionOutcomeEntry,
     EvaluationSummary,
 )
-from ergon_core.core.application.read_models.cohorts import _rubric_status_summary
+from ergon_core.core.application.compat.cohorts import _rubric_status_summary
 
 
 def _summary(

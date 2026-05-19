@@ -11,6 +11,33 @@ from sqlmodel import select
 from ergon_cli.rendering import render_table
 
 
+def _definition_id_filter(raw_definition_id: str | None) -> UUID | None:
+    if raw_definition_id is None:
+        return None
+    return UUID(raw_definition_id)
+
+
+def _empty_runs_message(args: Namespace) -> str:
+    parts = ["No runs found"]
+    if args.status:
+        parts.append(f"with status={args.status!r}")
+    if args.definition_id:
+        parts.append(f"for definition_id={args.definition_id!r}")
+    if args.experiment:
+        parts.append(f"for experiment={args.experiment!r}")
+    return " ".join(parts)
+
+
+def _run_row(run: RunRecord) -> list[str]:
+    run_id = str(run.id)[:8]
+    created = run.created_at.strftime("%Y-%m-%d %H:%M") if run.created_at else "-"
+    duration = ""
+    if run.started_at and run.completed_at:
+        delta = run.completed_at - run.started_at
+        duration = f"{int(delta.total_seconds())}s"
+    return [run_id, run.status, created, duration, str(run.id)]
+
+
 def handle_run(args: Namespace) -> int:
     if args.run_action == "list":
         return list_runs(args)
@@ -25,41 +52,28 @@ def handle_run(args: Namespace) -> int:
 
 def list_runs(args: Namespace) -> int:
     ensure_db()
+    try:
+        definition_id = _definition_id_filter(args.definition_id)
+    except ValueError:
+        print(f"Invalid UUID: {args.definition_id}")
+        return 1
 
     with get_session() as session:
         stmt = select(RunRecord).order_by(RunRecord.created_at.desc())  # type: ignore[attr-defined]
         if args.status:
             stmt = stmt.where(RunRecord.status == args.status)
-        filter_definition_id = args.definition_id
-        if filter_definition_id:
-            try:
-                definition_id = UUID(filter_definition_id)
-            except ValueError:
-                print(f"Invalid UUID: {filter_definition_id}")
-                return 1
+        if args.experiment:
+            stmt = stmt.where(RunRecord.experiment == args.experiment)
+        if definition_id is not None:
             stmt = stmt.where(RunRecord.definition_id == definition_id)
         stmt = stmt.limit(args.limit)
         runs = list(session.exec(stmt).all())
 
     if not runs:
-        parts = ["No runs found"]
-        if args.status:
-            parts.append(f"with status={args.status!r}")
-        if args.definition_id:
-            parts.append(f"for definition_id={args.definition_id!r}")
-        print(" ".join(parts))
+        print(_empty_runs_message(args))
         return 0
 
-    rows = []
-    for r in runs:
-        run_id = str(r.id)[:8]
-        created = r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else "-"
-        duration = ""
-        if r.started_at and r.completed_at:
-            delta = r.completed_at - r.started_at
-            duration = f"{int(delta.total_seconds())}s"
-        rows.append([run_id, r.status, created, duration, str(r.id)])
-
+    rows = [_run_row(run) for run in runs]
     render_table(["ID (short)", "Status", "Created", "Duration", "Full ID"], rows)
     return 0
 

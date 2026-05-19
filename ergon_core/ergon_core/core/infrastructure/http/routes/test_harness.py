@@ -9,7 +9,10 @@ from dataclasses import asdict
 from typing import Annotated
 from uuid import UUID
 
-from ergon_core.core.application.compat.cohorts import build_legacy_cohort_marker_metadata
+from ergon_core.core.application.compat.cohorts import (
+    build_legacy_cohort_marker_metadata,
+    deprecated_cohort_compatibility_service,
+)
 from ergon_core.core.application.experiments.definition_writer import persist_benchmark
 from ergon_core.core.application.experiments.models import (
     ExperimentRunRequest,
@@ -17,7 +20,6 @@ from ergon_core.core.application.experiments.models import (
 from ergon_core.core.application.experiments.service import (
     run_experiment as _run_experiment,
 )
-from ergon_core.core.application.read_models.cohorts import experiment_cohort_service
 from ergon_core.core.application.testing.test_harness_service import (
     DefinitionNotFoundError,
     UnknownRunStatusError,
@@ -147,7 +149,7 @@ def read_cohort_runs(
 ) -> list[TestCohortRunDto]:
     """List all runs attached to a cohort by name.
 
-    ``cohort_key`` matches ``ExperimentCohort.name`` exactly.  Returns
+    ``cohort_key`` matches the deprecated cohort compatibility name. Returns
     empty list when the cohort does not exist (rather than 404) so
     Playwright / pytest can poll cheaply while a cohort is being
     submitted.
@@ -261,7 +263,7 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
     written onto the definition metadata before launch. Slots submit
     sequentially — typical N ≤ 3, so the parallel-gather savings are negligible.
     """
-    cohort = experiment_cohort_service.resolve_or_create(
+    cohort = deprecated_cohort_compatibility_service.resolve_or_create(
         name=body.cohort_key,
         description=f"smoke cohort: {body.benchmark_slug}",
         created_by="test-harness",

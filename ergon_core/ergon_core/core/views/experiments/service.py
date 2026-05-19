@@ -3,9 +3,10 @@
 from datetime import datetime
 from uuid import UUID
 
+from ergon_core.core.application.compat.cohorts import cohort_id_from_metadata
 from ergon_core.core.application.compat.legacy_experiments import (
-    cohort_id_from_metadata,
     dict_metadata,
+    legacy_experiment_detail,
     optional_str_metadata,
 )
 from ergon_core.core.views.experiments.models import (
@@ -55,7 +56,7 @@ class ExperimentReadService:
             if definition is not None:
                 return _definition_detail(session, definition)
 
-            return None
+            return legacy_experiment_detail(session, definition_id)
 
 
 def _definition_summary(

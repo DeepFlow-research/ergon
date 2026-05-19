@@ -107,6 +107,89 @@ def test_core_schema_source_imports_are_directional() -> None:
     assert offenders == []
 
 
+def test_legacy_experiment_record_usage_is_compat_only() -> None:
+    allowed = {
+        ROOT / "ergon_core/ergon_core/core/persistence/telemetry/models.py",
+        ROOT / "ergon_core/ergon_core/core/application/compat/legacy_experiments.py",
+    }
+    offenders: list[str] = []
+
+    for base in (
+        ROOT / "ergon_core/ergon_core/core",
+        ROOT / "ergon_cli/ergon_cli",
+    ):
+        for path in base.rglob("*.py"):
+            if path in allowed or "__pycache__" in path.parts:
+                continue
+            if "BenchmarkDefinitionRecord" in path.read_text():
+                offenders.append(str(path.relative_to(ROOT)))
+
+    assert offenders == []
+
+
+def test_deprecated_cohort_table_usage_is_compat_only() -> None:
+    allowed = {
+        ROOT / "ergon_core/ergon_core/core/persistence/telemetry/models.py",
+        ROOT / "ergon_core/ergon_core/core/application/compat/cohorts.py",
+        ROOT / "ergon_core/ergon_core/core/application/read_models/cohorts.py",
+    }
+    snippets = (
+        "ExperimentCohort",
+        "ExperimentCohortStats",
+        "ExperimentCohortStatus",
+    )
+    offenders: list[str] = []
+
+    for path in (ROOT / "ergon_core/ergon_core/core").rglob("*.py"):
+        if path in allowed or "__pycache__" in path.parts:
+            continue
+        text = path.read_text()
+        for snippet in snippets:
+            if snippet in text:
+                offenders.append(f"{path.relative_to(ROOT)} references {snippet}")
+
+    assert offenders == []
+
+
+def test_deprecated_cohort_metadata_behavior_is_compat_only() -> None:
+    allowed = {
+        ROOT / "ergon_core/ergon_core/core/application/compat/cohorts.py",
+    }
+    snippets = (
+        'parsed_metadata().get("cohort_id")',
+        "parsed_metadata().get('cohort_id')",
+        "from ergon_core.core.application.compat.legacy_experiments import cohort_id_from_metadata",
+    )
+    offenders: list[str] = []
+
+    for path in (ROOT / "ergon_core/ergon_core/core").rglob("*.py"):
+        if path in allowed or "__pycache__" in path.parts:
+            continue
+        text = path.read_text()
+        for snippet in snippets:
+            if snippet in text:
+                offenders.append(f"{path.relative_to(ROOT)} contains {snippet}")
+
+    assert offenders == []
+
+
+def test_production_callers_do_not_use_deprecated_cohort_read_model_path() -> None:
+    shim = ROOT / "ergon_core/ergon_core/core/application/read_models/cohorts.py"
+    offenders: list[str] = []
+
+    for base in (
+        ROOT / "ergon_core/ergon_core/core",
+        ROOT / "ergon_cli/ergon_cli",
+    ):
+        for path in base.rglob("*.py"):
+            if path == shim or "__pycache__" in path.parts:
+                continue
+            if "application.read_models.cohorts" in path.read_text():
+                offenders.append(str(path.relative_to(ROOT)))
+
+    assert offenders == []
+
+
 def test_dashboard_event_contracts_live_under_views_not_infrastructure() -> None:
     core_root = ROOT / "ergon_core/ergon_core/core"
 
@@ -448,7 +531,7 @@ def test_task_lifecycle_has_one_front_door_service() -> None:
     assert "def block_pending_descendants(" in text
 
 
-def test_cohort_read_model_has_one_front_door_service() -> None:
+def test_deprecated_cohort_compatibility_has_one_front_door_service() -> None:
     old_module = "ergon_core.core.application.read_models.cohort_stats"
     try:
         spec = importlib.util.find_spec(old_module)
@@ -456,7 +539,7 @@ def test_cohort_read_model_has_one_front_door_service() -> None:
         spec = None
     assert spec is None
 
-    cohorts = ROOT / "ergon_core/ergon_core/core/application/read_models/cohorts.py"
+    cohorts = ROOT / "ergon_core/ergon_core/core/application/compat/cohorts.py"
     assert "def recompute(" in cohorts.read_text()
 
 
