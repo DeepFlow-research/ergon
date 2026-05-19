@@ -58,7 +58,7 @@ class _ManagingService:
             action="add-task",
             dry_run=dry_run,
             node=GraphTaskRef(
-                node_id=uuid4(),
+                task_id=uuid4(),
                 task_slug="source-scout",
                 status="pending",
                 level=1,

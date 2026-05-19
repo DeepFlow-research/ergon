@@ -33,12 +33,27 @@ from ergon_core.core.application.experiments.definition_writer import persist_be
 from ergon_core.core.application.experiments.models import (
     ExperimentRunRequest,
 )
-from ergon_core.api.registry import registry
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel import Session, asc, select
+from tests.fixtures.smoke_components.benchmarks import (
+    GDPEvalSmokeBenchmark,
+    MiniF2FSmokeBenchmark,
+    ResearchRubricsSmokeBenchmark,
+    SweBenchSmokeBenchmark,
+)
 
 router = APIRouter(prefix="/api/__danger__/test-harness", tags=["danger-test-harness"])
+
+_SMOKE_BENCHMARKS = {
+    benchmark.type_slug: benchmark
+    for benchmark in (
+        GDPEvalSmokeBenchmark,
+        MiniF2FSmokeBenchmark,
+        ResearchRubricsSmokeBenchmark,
+        SweBenchSmokeBenchmark,
+    )
+}
 
 
 # ---------------------------------------------------------------------------
@@ -442,7 +457,15 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
 
     run_ids: list[UUID] = []
     for slot in body.slots:
-        benchmark_source = registry.require_benchmark(body.benchmark_slug)(
+        try:
+            benchmark_cls = _SMOKE_BENCHMARKS[body.benchmark_slug]
+        except KeyError:
+            known = ", ".join(sorted(_SMOKE_BENCHMARKS))
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown smoke benchmark {body.benchmark_slug!r}; known: {known}",
+            ) from None
+        benchmark_source = benchmark_cls(
             metadata={
                 "benchmark_slug": body.benchmark_slug,
                 "source": "test-harness",

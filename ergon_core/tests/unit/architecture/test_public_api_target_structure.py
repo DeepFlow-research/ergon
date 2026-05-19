@@ -40,8 +40,6 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "SandboxNotLiveError",
         "TaskEvaluationResult",
         "CriterionCheckError",
-        "ComponentCatalog",
-        "registry",
     }
     retired = {
         "BenchmarkTask",
@@ -58,6 +56,8 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         # Toolkit is a ReAct/builtins implementation detail, not a core
         # authoring API concept.
         "Toolkit",
+        "ComponentCatalog",
+        "registry",
     }
 
     assert set(public_api.__all__) == expected

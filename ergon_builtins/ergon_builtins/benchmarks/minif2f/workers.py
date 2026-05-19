@@ -5,8 +5,8 @@ prompt with a chosen worker class (ReActWorker today; CoTWorker /
 ReflexionWorker future).  Strategies vary independently; the
 domain bundle is constant.
 
-Legacy registry bridge (MiniF2FReactWorker) lives in
-`_legacy_workers.py` and is deleted in PR 11.
+v2 callers use ``make_minif2f_worker()`` directly from the benchmark
+object graph.
 """
 
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric

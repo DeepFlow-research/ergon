@@ -1,15 +1,8 @@
-"""Local API composition target with builtins and smoke fixtures published."""
+"""Local API composition target."""
 
 from importlib import import_module
 
-from ergon_core.api.registry import registry
-from ergon_core.core.persistence.shared.db import ensure_db, get_session
-from tests.fixtures.smoke_components import register_smoke_components
+from ergon_core.core.persistence.shared.db import ensure_db
 
 ensure_db()
-register_smoke_components(registry)
-with get_session() as session:
-    registry.publish(session)
-    session.commit()
-
 app = import_module("ergon_core.core.rest_api.app").app

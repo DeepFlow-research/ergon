@@ -4,7 +4,6 @@ from typing import Literal
 from uuid import UUID, uuid4
 
 import inngest
-from ergon_core.api.registry import registry
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionTask,
@@ -91,10 +90,6 @@ class WorkflowService:
                 session.get(ExperimentDefinition, command.definition_id),
                 f"Definition {command.definition_id} not found",
             )
-            benchmark_cls = require_not_none(
-                registry.benchmarks.get(definition.benchmark_type),
-                f"Benchmark {definition.benchmark_type!r} not found",
-            )
             all_tasks = list(
                 session.exec(
                     select(ExperimentDefinitionTask).where(
@@ -109,7 +104,6 @@ class WorkflowService:
                 command.definition_id,
                 initial_node_status=graph_status.PENDING,
                 initial_edge_status=graph_status.EDGE_PENDING,
-                task_payload_model=benchmark_cls.task_payload_model,
                 meta=MutationMeta(actor="system:workflow_init"),
             )
             session.commit()
@@ -521,8 +515,6 @@ class WorkflowService:
         assigned_worker_slug: str,
         dry_run: bool,
     ) -> WorkflowMutationRef:
-        if assigned_worker_slug not in registry.workers:
-            raise ValueError(f"Unknown worker slug: {assigned_worker_slug!r}")
         parent = self._resolve_node(
             session,
             run_id=run_id,

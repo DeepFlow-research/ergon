@@ -139,7 +139,6 @@ def test_initialize_from_definition_copies_task_json() -> None:
         definition_id=definition_id,
         initial_node_status="pending",
         initial_edge_status="pending",
-        task_payload_model=_EmptyPayload,
         meta=MutationMeta(actor="test", reason="snapshot"),
     )
 
@@ -183,7 +182,6 @@ async def test_graph_repo_node_inflates_task_from_run_tier() -> None:
         definition_id=definition_id,
         initial_node_status="pending",
         initial_edge_status="pending",
-        task_payload_model=_EmptyPayload,
         meta=MutationMeta(actor="test", reason="setup"),
     )
     row = session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).first()
@@ -275,7 +273,6 @@ def test_initialize_from_definition_can_seed_same_task_ids_for_multiple_runs() -
             definition_id=definition_id,
             initial_node_status="pending",
             initial_edge_status="pending",
-            task_payload_model=_EmptyPayload,
             meta=MutationMeta(actor="test", reason="multi-run"),
         )
 

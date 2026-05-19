@@ -26,11 +26,8 @@ Adding a new benchmark = a new subdirectory containing:
   strategy; bind `ReActWorker` / `CoTWorker` / etc. to this benchmark's
   toolkit + sandbox + system prompt)
 - `rubric.py` + optional `criteria/` — evaluator + criteria
-- `_legacy_workers.py` — only if a registry-string bridge is required
-  during the v1→v2 migration (PR 11 deletes)
-
-Then update this table in the same PR.  No CLI registry to edit; no
-factory dispatch dict; no per-benchmark `experiment.py` file.
+Then update this table in the same PR.  No core registry to edit; no
+runtime dispatch dict; no per-benchmark `experiment.py` file.
 
 ## Authoring example (MiniF2F)
 

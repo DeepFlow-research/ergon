@@ -4,8 +4,8 @@ Each factory bundles the SWE-Bench sandbox, toolkit, and system prompt
 with a chosen worker class (ReActWorker today; CoTWorker / ReflexionWorker
 future).  Strategies vary independently; the domain bundle is constant.
 
-Legacy registry bridge (SWEBenchReactWorker) lives in
-`_legacy_workers.py` and is deleted in PR 11.
+v2 callers use ``make_swebench_worker()`` directly from the benchmark
+object graph.
 """
 
 from ergon_builtins.benchmarks.swebench_verified.rubric import SWEBenchRubric

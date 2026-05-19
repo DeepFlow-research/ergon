@@ -12,7 +12,6 @@ from sqlmodel import SQLModel
 
 
 for module_name in (
-    "ergon_core.core.persistence.components.models",
     "ergon_core.core.persistence.context.models",
     "ergon_core.core.persistence.definitions.models",
     "ergon_core.core.persistence.graph.models",

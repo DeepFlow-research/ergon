@@ -66,12 +66,8 @@ def build_tools(
       ``/workspace/final_output``
     - ``read_report`` — read back a previously-written report
 
-    The Exa-backed web search tools historically owned by the runtime
-    ``ergon_builtins.tools.research_rubrics_toolkit.ResearchRubricsToolkit``
-    are not exposed here yet; they are wired through the legacy worker
-    classes until PR 11 retires the registry bridge.  This factory is
-    the v2 entry point invoked by ``ReActWorker.execute`` when the
-    benchmark's serializable toolkit is attached to the task.
+    This factory is the v2 entry point invoked by ``ReActWorker.execute``
+    when the benchmark's serializable toolkit is attached to the task.
     """
 
     workdir = toolkit.workspace_root

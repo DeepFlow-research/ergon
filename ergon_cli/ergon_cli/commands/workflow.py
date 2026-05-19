@@ -331,7 +331,7 @@ async def _handle_manage(
             text_lines=[
                 result.message
                 if result.node is None
-                else f"{result.node.task_slug} {result.node.status} {result.node.node_id}"
+                else f"{result.node.task_slug} {result.node.status} {result.node.task_id}"
             ],
             output_format=args.format,
         )
