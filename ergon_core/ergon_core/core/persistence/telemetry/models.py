@@ -43,15 +43,12 @@ class ExperimentCohortStatus(StrEnum):
 
 
 # ---------------------------------------------------------------------------
-# BenchmarkDefinitionRecord  (renamed from ExperimentRecord in PR 6.5 Phase 2)
+# BenchmarkDefinitionRecord
 # ---------------------------------------------------------------------------
 
 
 class BenchmarkDefinitionRecord(SQLModel, table=True):
     """One launched experiment definition and sample selection.
-
-    Renamed from ``ExperimentRecord`` in PR 6.5 Phase 2.  The old name is kept
-    as a module-level alias below for transitional callers (PR 11 removes it).
 
     The ``experiment`` field is an optional *experiment tag* string.  Multiple
     ``BenchmarkDefinitionRecord`` rows that share the same ``experiment`` value
@@ -60,10 +57,6 @@ class BenchmarkDefinitionRecord(SQLModel, table=True):
     grouped into any named experiment.
     """
 
-    # Class renamed to BenchmarkDefinitionRecord in PR 6.5; the physical
-    # table keeps its v1 name ("experiments") so the existing Alembic chain
-    # still applies cleanly.  PR 11 collapses the migration history into one
-    # v2 initial schema and is the place to rename the table itself (if at all).
     __tablename__ = "experiments"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -133,10 +126,6 @@ class BenchmarkDefinitionRecord(SQLModel, table=True):
         self.__class__._parse_json_object(self.design_json, "design_json")
         self.__class__._parse_json_object(self.metadata_json, "metadata_json")
         return self
-
-
-# Transitional alias: PR 11 deletes this once all callers are migrated.
-ExperimentRecord = BenchmarkDefinitionRecord
 
 
 # ---------------------------------------------------------------------------
@@ -216,9 +205,8 @@ class RunTaskExecution(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
-    definition_task_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_definition_tasks.id",
+    task_id: UUID = Field(
+        foreign_key="run_graph_nodes.id",
         index=True,
     )
     definition_worker_id: UUID | None = Field(
@@ -273,11 +261,8 @@ class RunTaskExecution(SQLModel, table=True):
 
     def validate_identity(self) -> None:
         """Require enough identity to map execution rows to a static or dynamic task."""
-        if self.definition_task_id is None and self.node_id is None:
-            raise ValueError(
-                "RunTaskExecution requires definition_task_id for static tasks "
-                "or node_id for dynamic graph nodes"
-            )
+        if self.task_id is None:
+            raise ValueError("RunTaskExecution requires task_id")
 
     @model_validator(mode="after")
     def _validate_fields(self) -> "RunTaskExecution":
@@ -372,9 +357,8 @@ class RunTaskEvaluation(SQLModel, table=True):
         foreign_key="run_task_executions.id",
         index=True,
     )
-    definition_task_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_definition_tasks.id",
+    task_id: UUID = Field(
+        foreign_key="run_graph_nodes.id",
         index=True,
     )
     definition_evaluator_id: UUID = Field(

@@ -36,7 +36,7 @@ def _node(
     slug: str,
     description: str | None = None,
     status: str = "completed",
-    parent_node_id: UUID | None = None,
+    parent_task_id: UUID | None = None,
     level: int = 0,
 ) -> RunGraphNode:
     return RunGraphNode(
@@ -46,16 +46,16 @@ def _node(
         description=description or f"Task {slug}",
         status=status,
         assigned_worker_slug="worker",
-        parent_node_id=parent_node_id,
+        parent_task_id=parent_task_id,
         level=level,
     )
 
 
-def _edge(*, run_id: UUID, source_node_id: UUID, target_node_id: UUID) -> RunGraphEdge:
+def _edge(*, run_id: UUID, source_task_id: UUID, target_task_id: UUID) -> RunGraphEdge:
     return RunGraphEdge(
         run_id=run_id,
-        source_node_id=source_node_id,
-        target_node_id=target_node_id,
+        source_task_id=source_task_id,
+        target_task_id=target_task_id,
         status="satisfied",
     )
 
@@ -68,6 +68,7 @@ def _execution(
 ) -> RunTaskExecution:
     return RunTaskExecution(
         run_id=run_id,
+        task_id=node_id,
         node_id=node_id,
         status=status,
         final_assistant_message=f"output for {node_id}",
@@ -125,14 +126,14 @@ def test_input_scope_uses_immediate_upstream_resources_only(tmp_path: Path) -> N
         [
             RunGraphEdge(
                 run_id=run_id,
-                source_node_id=a.id,
-                target_node_id=b.id,
+                source_task_id=a.id,
+                target_task_id=b.id,
                 status="satisfied",
             ),
             RunGraphEdge(
                 run_id=run_id,
-                source_node_id=b.id,
-                target_node_id=c.id,
+                source_task_id=b.id,
+                target_task_id=c.id,
                 status="satisfied",
             ),
         ]
@@ -367,7 +368,7 @@ def test_task_workspace_reports_latest_execution_and_resources(tmp_path: Path) -
     upstream_exec = _execution(run_id=run_id, node_id=upstream.id)
     session.add_all([current_exec, upstream_exec])
     session.flush()
-    session.add(_edge(run_id=run_id, source_node_id=upstream.id, target_node_id=current.id))
+    session.add(_edge(run_id=run_id, source_task_id=upstream.id, target_task_id=current.id))
     session.add_all(
         [
             _resource(
@@ -444,11 +445,10 @@ async def test_materialize_resource_rejects_parent_directory_destination(
 
 
 @pytest.mark.asyncio
-async def test_add_task_dry_run_does_not_write_node() -> None:
-    from ergon_builtins.registry_core import register_core_builtins
+async def test_add_task_dry_run_does_not_write_node(monkeypatch: pytest.MonkeyPatch) -> None:
     from ergon_core.api.registry import registry
 
-    register_core_builtins(registry)
+    monkeypatch.setitem(registry.workers, "minif2f-react", object)
     session = _session()
     run_id = _run(session)
     parent = _node(run_id=run_id, slug="parent", level=1)
@@ -458,7 +458,7 @@ async def test_add_task_dry_run_does_not_write_node() -> None:
     result = await WorkflowService().add_task(
         session,
         run_id=run_id,
-        parent_node_id=parent.id,
+        parent_task_id=parent.id,
         task_slug="child",
         description="Child task",
         assigned_worker_slug="minif2f-react",
@@ -471,16 +471,17 @@ async def test_add_task_dry_run_does_not_write_node() -> None:
     assert result.dry_run is True
     assert result.node is not None
     assert result.node.task_slug == "child"
-    assert result.node.parent_node_id == parent.id
+    assert result.node.parent_task_id == parent.id
     assert result.node.level == 2
 
 
 @pytest.mark.asyncio
-async def test_add_task_writes_node_and_mutation() -> None:
-    from ergon_builtins.registry_core import register_core_builtins
+async def test_add_task_non_dry_run_requires_object_bound_task(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from ergon_core.api.registry import registry
 
-    register_core_builtins(registry)
+    monkeypatch.setitem(registry.workers, "minif2f-react", object)
     session = _session()
     run_id = _run(session)
     parent = _node(run_id=run_id, slug="parent", level=1)
@@ -491,28 +492,25 @@ async def test_add_task_writes_node_and_mutation() -> None:
     async def dispatch_task_ready(run_id, definition_id, node_id):
         dispatched.append((run_id, definition_id, node_id))
 
-    result = await WorkflowService(task_ready_dispatcher=dispatch_task_ready).add_task(
-        session,
-        run_id=run_id,
-        parent_node_id=parent.id,
-        task_slug="child",
-        description="Child task",
-        assigned_worker_slug="minif2f-react",
-        dry_run=False,
-    )
+    with pytest.raises(ValueError, match="requires an object-bound Task"):
+        await WorkflowService(task_ready_dispatcher=dispatch_task_ready).add_task(
+            session,
+            run_id=run_id,
+            parent_task_id=parent.id,
+            task_slug="child",
+            description="Child task",
+            assigned_worker_slug="minif2f-react",
+            dry_run=False,
+        )
 
-    assert result.dry_run is False
-    assert result.node is not None
-    child = session.get(RunGraphNode, result.node.node_id)
-    assert child is not None
-    assert child.task_slug == "child"
-    assert child.description == "Child task"
-    assert child.parent_node_id == parent.id
-    assert child.level == 2
-    assert child.status == TaskExecutionStatus.PENDING.value
-    run = session.get(RunRecord, run_id)
-    assert run is not None
-    assert dispatched == [(run_id, run.workflow_definition_id, child.id)]
+    inserted = session.exec(
+        select(RunGraphNode).where(
+            RunGraphNode.run_id == run_id,
+            RunGraphNode.task_slug == "child",
+        )
+    ).first()
+    assert inserted is None
+    assert dispatched == []
 
 
 @pytest.mark.asyncio
@@ -530,7 +528,7 @@ async def test_add_task_rejects_unknown_worker_slug_before_creating_node() -> No
         await WorkflowService(task_ready_dispatcher=dispatch_task_ready).add_task(
             session,
             run_id=run_id,
-            parent_node_id=parent.id,
+            parent_task_id=parent.id,
             task_slug="bad-worker",
             description="Should not be inserted",
             assigned_worker_slug="not-a-real-worker",
@@ -567,8 +565,8 @@ async def test_add_edge_writes_dependency_between_slugs() -> None:
     assert result.edge is not None
     edge = session.get(RunGraphEdge, result.edge.edge_id)
     assert edge is not None
-    assert edge.source_node_id == source.id
-    assert edge.target_node_id == target.id
+    assert edge.source_task_id == source.id
+    assert edge.target_task_id == target.id
     assert edge.status == "pending"
 
 

@@ -33,6 +33,8 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
+    ExperimentDefinitionTaskAssignment,
+    ExperimentDefinitionWorker,
 )
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
@@ -41,12 +43,16 @@ from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
 )
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
 
 class _EmptyPayload(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+class _SmokeTask(Task[_EmptyPayload]):
     pass
 
 
@@ -70,6 +76,14 @@ def _seed_run(session: Session) -> tuple[UUID, UUID]:
     instance_id = uuid4()
     task_id = uuid4()
     run_id = uuid4()
+    task_json = _SmokeTask(
+        task_slug="root",
+        instance_key="sample-1",
+        description="root task",
+        task_payload=_EmptyPayload.model_validate({"problem": "p"}),
+        worker=EchoWorker(name="echo", model=None),
+        sandbox=EchoSandbox(),
+    ).model_dump(mode="json")
     session.add_all(
         [
             BenchmarkDefinitionRecord(
@@ -93,6 +107,7 @@ def _seed_run(session: Session) -> tuple[UUID, UUID]:
                 task_slug="root",
                 description="root task",
                 task_payload_json={"problem": "p"},
+                task_json=task_json,
             ),
             RunRecord(
                 id=run_id,
@@ -154,7 +169,6 @@ def test_persist_definition_writes_only_intended_tables(monkeypatch) -> None:
     from typing import ClassVar
 
     from ergon_core.api import Benchmark
-    from ergon_core.api.benchmark import TaskSpec
     from ergon_core.core.application.experiments import (
         definition_writer as definition_writer_module,
     )
@@ -163,13 +177,15 @@ def test_persist_definition_writes_only_intended_tables(monkeypatch) -> None:
     class _OneTaskBenchmark(Benchmark):
         type_slug: ClassVar[str] = "smoketest-one-task"
 
-        def build_instances(self) -> Mapping[str, Sequence[TaskSpec]]:
+        def build_instances(self) -> Mapping[str, Sequence[Task]]:
             return {
                 "sample-1": (
-                    TaskSpec(
+                    Task(
                         task_slug="root",
                         instance_key="sample-1",
                         description="root task",
+                        worker=EchoWorker(name="echo", model="echo-model"),
+                        sandbox=EchoSandbox(),
                     ),
                 )
             }
@@ -205,6 +221,13 @@ def test_persist_definition_writes_only_intended_tables(monkeypatch) -> None:
     instances = session.exec(select(ExperimentDefinitionInstance)).all()
     assert len(instances) == 1
     assert instances[0].experiment_definition_id == handle.definition_id
+
+    workers = session.exec(select(ExperimentDefinitionWorker)).all()
+    assert [(row.binding_key, row.worker_type, row.model_target) for row in workers] == [
+        ("echo", "echo", "echo-model")
+    ]
+    assignments = session.exec(select(ExperimentDefinitionTaskAssignment)).all()
+    assert [row.worker_binding_key for row in assignments] == ["echo"]
 
     # PR 7 invariant: persist_benchmark must NOT write to the legacy
     # BenchmarkDefinitionRecord table at all.
@@ -328,8 +351,8 @@ def test_sandbox_release_happens_after_all_evaluators_complete() -> None:
     cleanup_path = root / "ergon_core/ergon_core/core/application/jobs/sandbox_cleanup.py"
     assert cleanup_path.exists(), "sandbox_cleanup job module must exist"
     cleanup_text = cleanup_path.read_text()
-    assert "terminate_sandbox_by_id" in cleanup_text, (
-        "sandbox_cleanup must call terminate_sandbox_by_id"
+    assert "terminate_external_sandbox" in cleanup_text, (
+        "sandbox_cleanup must call terminate_external_sandbox"
     )
 
     handler_path = (
@@ -389,7 +412,7 @@ def _seed_parent_node(session: Session, *, run_id: UUID) -> RunGraphNode:
         description="parent task",
         status="RUNNING",
         is_dynamic=False,
-        parent_node_id=None,
+        parent_task_id=None,
         level=0,
     )
     session.add(node)

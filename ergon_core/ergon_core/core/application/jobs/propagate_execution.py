@@ -13,7 +13,7 @@ from ergon_core.core.application.workflows.orchestration import (
 )
 from ergon_core.core.application.workflows.service import WorkflowService
 from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
-from ergon_core.core.infrastructure.sandbox.lifecycle import terminate_sandbox_by_id
+from ergon_core.core.infrastructure.sandbox.lifecycle import terminate_external_sandbox
 from ergon_core.core.application.events.task_events import (
     TaskCompletedEvent,
     TaskFailedEvent,
@@ -158,7 +158,7 @@ async def run_propagate_task_failure_job(payload: TaskFailedEvent) -> TaskPropag
 
 
 async def _terminate_failed_task_sandbox(sandbox_id: str | None) -> None:
-    result = await terminate_sandbox_by_id(sandbox_id)
+    result = await terminate_external_sandbox(sandbox_id)
     if not result.terminated:
         logger.info(
             "failed-task sandbox cleanup did not terminate sandbox_id=%s reason=%s",

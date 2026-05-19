@@ -96,7 +96,7 @@ def test_evaluator_dispatch_uses_definition_task_description(
             graph_node = RunGraphNode(
                 id=node_id,
                 run_id=uuid4(),
-                definition_task_id=task_id,
+                task_id=task_id,
                 instance_key="instance",
                 task_slug="task",
                 description="actual task prompt",

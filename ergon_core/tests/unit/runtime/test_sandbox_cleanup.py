@@ -3,7 +3,7 @@
 These jobs (introduced as a fix for the PR 4 try/finally bug) own the
 *termination* side of the sandbox lifecycle.  They listen for the
 terminal task events (``task/completed`` / ``task/failed``) and call
-``terminate_sandbox_by_id`` once.
+``terminate_external_sandbox`` once.
 """
 
 from types import SimpleNamespace
@@ -59,7 +59,7 @@ async def test_cleanup_on_completed_terminates_sandbox(monkeypatch: pytest.Monke
             reason=SandboxTerminationReason.TERMINATED,
         )
 
-    monkeypatch.setattr(sandbox_cleanup_module, "terminate_sandbox_by_id", fake_terminate)
+    monkeypatch.setattr(sandbox_cleanup_module, "terminate_external_sandbox", fake_terminate)
 
     result = await sandbox_cleanup_module.run_sandbox_cleanup_on_completed(_FakeStepCtx(), payload)
 
@@ -90,7 +90,7 @@ async def test_cleanup_on_failed_terminates_sandbox(monkeypatch: pytest.MonkeyPa
             reason=SandboxTerminationReason.TERMINATED,
         )
 
-    monkeypatch.setattr(sandbox_cleanup_module, "terminate_sandbox_by_id", fake_terminate)
+    monkeypatch.setattr(sandbox_cleanup_module, "terminate_external_sandbox", fake_terminate)
 
     result = await sandbox_cleanup_module.run_sandbox_cleanup_on_failed(_FakeStepCtx(), payload)
 
@@ -124,7 +124,7 @@ async def test_cleanup_on_failed_skips_when_sandbox_id_missing(
             reason=SandboxTerminationReason.MISSING_ID,
         )
 
-    monkeypatch.setattr(sandbox_cleanup_module, "terminate_sandbox_by_id", fake_terminate)
+    monkeypatch.setattr(sandbox_cleanup_module, "terminate_external_sandbox", fake_terminate)
 
     result = await sandbox_cleanup_module.run_sandbox_cleanup_on_failed(_FakeStepCtx(), payload)
 

@@ -61,41 +61,7 @@ def _grep_production_callers(pattern: str, exclude_path: Path | None = None) -> 
 # Keys are "ClassName.method_name". The dict is populated from the
 # initial-run audit and drains as fix-PRs land. PR 11 asserts it's
 # empty.
-_KNOWN_UNUSED_FOR_NOW: dict[str, str] = {
-    # First-run inventory captured during PR 0.5 landing. Each entry
-    # below is callerless today; PR 11's Structural Simplification
-    # Audit (12-pr-11-deletion-final-schema.md § Task 5) triages each
-    # one with a KEEP / RENAME / INLINE / SPLIT decision.
-    #
-    # Some of these may grow legitimate callers as PRs 1-10 land
-    # (e.g. annotations grow callers when worker_execute starts
-    # emitting them) — strict=True will catch that as XPASS and force
-    # the ledger update at the same time.
-    "TaskExecutionRepository.latest_for_definition_task": "PR 11 structural audit: callerless today; likely deleted with "
-    "definition_task_id collapse",
-    "DefinitionRepository.task_with_instance": (
-        "PR 4 dropped the last production caller (the legacy "
-        "evaluate_task_run body). The PR 4 _evaluator_bridge does its "
-        "own focused query against ExperimentDefinitionEvaluator; PR 5's "
-        "object-bound Task removes the need for definition-tier reads "
-        "from runtime code entirely, at which point this method goes."
-    ),
-    "WorkflowGraphRepository.delete_annotation": "PR 11 structural audit: annotation API; consumer side TBD",
-    "WorkflowGraphRepository.get_annotation": "PR 11 structural audit: annotation API; consumer side TBD",
-    "WorkflowGraphRepository.get_annotation_at": "PR 11 structural audit: annotation API; consumer side TBD",
-    "WorkflowGraphRepository.get_annotations": "PR 11 structural audit: annotation API; consumer side TBD",
-    "WorkflowGraphRepository.get_edge": "PR 11 structural audit: read accessor; may collapse into views",
-    "WorkflowGraphRepository.get_graph": "PR 11 structural audit: read accessor; may collapse into views",
-    "WorkflowGraphRepository.get_mutations": "PR 11 structural audit: WAL accessor; consumer side TBD",
-    "WorkflowGraphRepository.get_nodes_by_status": "PR 11 structural audit: callerless today; PR 9 spawn paths may "
-    "grow callers",
-    "WorkflowGraphRepository.remove_edge": "PR 11 structural audit: callerless today; PR 9 spawn paths may "
-    "grow callers",
-    "WorkflowGraphRepository.remove_node": "PR 11 structural audit: callerless today; PR 9 spawn paths may "
-    "grow callers",
-    "WorkflowGraphRepository.set_annotation": "PR 11 structural audit: annotation API; consumer side TBD",
-    "WorkflowGraphRepository.validate_acyclic": "PR 11 structural audit: invariant check; only used in tests today",
-}
+_KNOWN_UNUSED_FOR_NOW: dict[str, str] = {}
 
 
 def _cases() -> list:

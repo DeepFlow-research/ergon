@@ -1,5 +1,6 @@
 from uuid import uuid4
 
+import pytest
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -90,7 +91,7 @@ def _seed_inline_evaluator_run(session: Session) -> tuple:
             RunGraphNode(
                 id=node_id,
                 run_id=run_id,
-                definition_task_id=task_id,
+                task_id=task_id,
                 instance_key="sample-1",
                 task_slug="root",
                 description="root task",
@@ -99,7 +100,7 @@ def _seed_inline_evaluator_run(session: Session) -> tuple:
             RunTaskExecution(
                 id=execution_id,
                 run_id=run_id,
-                definition_task_id=task_id,
+                task_id=task_id,
                 node_id=node_id,
                 status=TaskExecutionStatus.RUNNING,
             ),
@@ -109,7 +110,8 @@ def _seed_inline_evaluator_run(session: Session) -> tuple:
     return run_id, node_id, task_id, evaluator_id, execution_id
 
 
-def test_persist_success_links_inline_evaluator_definition_row(monkeypatch) -> None:
+@pytest.mark.asyncio
+async def test_persist_success_links_inline_evaluator_definition_row(monkeypatch) -> None:
     from ergon_core.core.application.evaluation import service as module
 
     session = _session()
@@ -118,11 +120,11 @@ def test_persist_success_links_inline_evaluator_definition_row(monkeypatch) -> N
     run_id, node_id, task_id, evaluator_id, execution_id = _seed_inline_evaluator_run(session)
     service = EvaluationService()
 
-    service.persist_success(
+    await service.persist_success(
         run_id=run_id,
         node_id=node_id,
         task_execution_id=execution_id,
-        definition_task_id=task_id,
+        task_id=task_id,
         binding_key="judge",
         service_result=EvaluationServiceResult(
             result=TaskEvaluationResult(
@@ -141,7 +143,8 @@ def test_persist_success_links_inline_evaluator_definition_row(monkeypatch) -> N
     assert rows[0].definition_evaluator_id == evaluator_id
 
 
-def test_persist_failure_links_inline_evaluator_definition_row(monkeypatch) -> None:
+@pytest.mark.asyncio
+async def test_persist_failure_links_inline_evaluator_definition_row(monkeypatch) -> None:
     from ergon_core.core.application.evaluation import service as module
 
     session = _session()
@@ -150,11 +153,11 @@ def test_persist_failure_links_inline_evaluator_definition_row(monkeypatch) -> N
     run_id, node_id, task_id, evaluator_id, execution_id = _seed_inline_evaluator_run(session)
     service = EvaluationService()
 
-    service.persist_failure(
+    await service.persist_failure(
         run_id=run_id,
         node_id=node_id,
         task_execution_id=execution_id,
-        definition_task_id=task_id,
+        task_id=task_id,
         binding_key="judge",
         exc=RuntimeError("boom"),
     )

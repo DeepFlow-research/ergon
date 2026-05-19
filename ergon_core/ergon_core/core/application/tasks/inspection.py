@@ -36,9 +36,9 @@ class TaskInspectionService:
         session: Session,
         *,
         run_id: UUID,
-        parent_node_id: UUID,
+        parent_task_id: UUID,
     ) -> list[SubtaskInfo]:
-        """Direct children of parent_node_id, ordered by task_slug.
+        """Direct children of parent_task_id, ordered by task_slug.
 
         Deterministic ordering lets the LLM refer to subtasks by
         position across turns without node_id confusion.
@@ -47,7 +47,7 @@ class TaskInspectionService:
             select(RunGraphNode)
             .where(
                 RunGraphNode.run_id == run_id,
-                RunGraphNode.parent_node_id == parent_node_id,
+                RunGraphNode.parent_task_id == parent_task_id,
             )
             .order_by(RunGraphNode.task_slug, RunGraphNode.id)
         ).all()
@@ -89,8 +89,8 @@ class TaskInspectionService:
     def _hydrate(self, session: Session, node: RunGraphNode) -> SubtaskInfo:
         """Build a SubtaskInfo from a RunGraphNode, attaching deps and output/error."""
         deps = session.exec(
-            select(RunGraphEdge.source_node_id).where(
-                RunGraphEdge.target_node_id == node.id,
+            select(RunGraphEdge.source_task_id).where(
+                RunGraphEdge.target_task_id == node.id,
                 RunGraphEdge.run_id == node.run_id,
             )
         ).all()

@@ -4,7 +4,7 @@ import logging
 from uuid import UUID
 
 import inngest
-from ergon_core.core.domain.experiments import DefinitionHandle
+from ergon_core.core.application.experiments.handles import DefinitionHandle
 from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TERMINAL_RUN_STATUSES, RunStatus

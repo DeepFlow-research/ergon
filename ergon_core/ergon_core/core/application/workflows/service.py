@@ -310,7 +310,7 @@ class WorkflowService:
             if node is not None:
                 descriptors.append(
                     TaskDescriptor(
-                        task_id=node.definition_task_id,
+                        task_id=node.id,
                         task_slug=node.task_slug,
                         node_id=node_id,
                     )
@@ -322,11 +322,11 @@ class WorkflowService:
         session: Session,
         *,
         run_id: UUID,
-        parent_node_id: UUID | None = None,
+        parent_task_id: UUID | None = None,
     ) -> list[WorkflowTaskRef]:
         stmt = select(RunGraphNode).where(RunGraphNode.run_id == run_id)
-        if parent_node_id is not None:
-            stmt = stmt.where(RunGraphNode.parent_node_id == parent_node_id)
+        if parent_task_id is not None:
+            stmt = stmt.where(RunGraphNode.parent_task_id == parent_task_id)
         nodes = list(session.exec(stmt).all())
         nodes.sort(key=lambda node: (node.level, node.task_slug, str(node.id)))
         return [self._task_ref(node) for node in nodes]
@@ -360,9 +360,9 @@ class WorkflowService:
     ) -> list[WorkflowDependencyRef]:
         clauses = []
         if direction in {"upstream", "both"}:
-            clauses.append(RunGraphEdge.target_node_id == node_id)
+            clauses.append(RunGraphEdge.target_task_id == node_id)
         if direction in {"downstream", "both"}:
-            clauses.append(RunGraphEdge.source_node_id == node_id)
+            clauses.append(RunGraphEdge.source_task_id == node_id)
         if not clauses:
             raise ValueError(f"unsupported dependency direction: {direction}")
 
@@ -377,8 +377,8 @@ class WorkflowService:
             WorkflowDependencyRef(
                 edge_id=edge.id,
                 edge_status=edge.status,
-                source=self._task_ref(nodes[edge.source_node_id]),
-                target=self._task_ref(nodes[edge.target_node_id]),
+                source=self._task_ref(nodes[edge.source_task_id]),
+                target=self._task_ref(nodes[edge.target_task_id]),
             )
             for edge in edges
         ]
@@ -530,7 +530,7 @@ class WorkflowService:
         session: Session,
         *,
         run_id: UUID,
-        parent_node_id: UUID,
+        parent_task_id: UUID,
         task_slug: str,
         description: str,
         assigned_worker_slug: str,
@@ -541,7 +541,7 @@ class WorkflowService:
         parent = self._resolve_node(
             session,
             run_id=run_id,
-            node_id=parent_node_id,
+            node_id=parent_task_id,
             task_slug=None,
         )
         node_ref = WorkflowTaskRef(
@@ -549,7 +549,7 @@ class WorkflowService:
             task_slug=task_slug,
             status=TaskExecutionStatus.PENDING.value,
             level=parent.level + 1,
-            parent_node_id=parent.id,
+            parent_task_id=parent.id,
             assigned_worker_slug=assigned_worker_slug,
             description=description,
         )
@@ -561,26 +561,9 @@ class WorkflowService:
                 message=f"Would add task {task_slug}",
             )
 
-        created = await self._graph_repo.add_node(
-            session,
-            run_id,
-            task_slug=task_slug,
-            instance_key=parent.instance_key,
-            description=description,
-            status=TaskExecutionStatus.PENDING.value,
-            assigned_worker_slug=assigned_worker_slug,
-            parent_node_id=parent.id,
-            level=parent.level + 1,
-            meta=self._meta("add-task"),
-        )
-        session.commit()
-        definition_id = self._resolve_definition_id(session, run_id)
-        await self._task_ready_dispatcher(run_id, definition_id, created.id)
-        return WorkflowMutationRef(
-            action="add-task",
-            dry_run=False,
-            node=self._task_ref_from_graph(created),
-            message=f"Added task {task_slug}",
+        raise ValueError(
+            "add-task requires an object-bound Task in the final v2 schema; "
+            "use WorkerContext.spawn_task(Task(...)) for dynamic tasks."
         )
 
     async def add_edge(
@@ -621,8 +604,8 @@ class WorkflowService:
         created = await self._graph_repo.add_edge(
             session,
             run_id,
-            source_node_id=source.id,
-            target_node_id=target.id,
+            source_task_id=source.id,
+            target_task_id=target.id,
             status="pending",
             meta=self._meta("add-edge"),
         )
@@ -809,7 +792,7 @@ class WorkflowService:
             task_slug=node.task_slug,
             status=node.status,
             level=node.level,
-            parent_node_id=node.parent_node_id,
+            parent_task_id=node.parent_task_id,
             assigned_worker_slug=node.assigned_worker_slug,
             description=node.description,
         )
@@ -821,7 +804,7 @@ class WorkflowService:
             task_slug=node.task_slug,
             status=node.status,
             level=node.level,
-            parent_node_id=node.parent_node_id,
+            parent_task_id=node.parent_task_id,
             assigned_worker_slug=node.assigned_worker_slug,
             description=node.description,
         )
@@ -836,8 +819,8 @@ class WorkflowService:
         return WorkflowDependencyRef(
             edge_id=edge.id,
             edge_status=edge.status,
-            source=self._task_ref(nodes[edge.source_node_id]),
-            target=self._task_ref(nodes[edge.target_node_id]),
+            source=self._task_ref(nodes[edge.source_task_id]),
+            target=self._task_ref(nodes[edge.target_task_id]),
         )
 
     @staticmethod
@@ -963,15 +946,15 @@ class WorkflowService:
             edges = session.exec(
                 select(RunGraphEdge).where(
                     RunGraphEdge.run_id == run_id,
-                    RunGraphEdge.target_node_id == node_id,
+                    RunGraphEdge.target_task_id == node_id,
                 )
             ).all()
-            return {edge.source_node_id for edge in edges}
+            return {edge.source_task_id for edge in edges}
         if scope == "children":
             children = session.exec(
                 select(RunGraphNode).where(
                     RunGraphNode.run_id == run_id,
-                    RunGraphNode.parent_node_id == node_id,
+                    RunGraphNode.parent_task_id == node_id,
                 )
             ).all()
             return {child.id for child in children}

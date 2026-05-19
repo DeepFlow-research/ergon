@@ -11,7 +11,6 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "Benchmark",
         "BenchmarkRequirements",
         "Task",
-        "TaskSpec",
         "EmptyTaskPayload",
         "Worker",
         "WorkerContext",
@@ -41,7 +40,7 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "SandboxNotLiveError",
         "TaskEvaluationResult",
         "CriterionCheckError",
-        "ComponentRegistry",
+        "ComponentCatalog",
         "registry",
     }
     retired = {
@@ -53,7 +52,6 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "CriterionObservation",
         "CriterionObservationMessage",
         "CriteriaCheckError",
-        # ``WorkerSpec`` is still alive in core.domain until PR 11.
         "WorkerSpec",
         "PersistedExperimentDefinition",
         "DefinitionHandle",
@@ -78,7 +76,6 @@ def test_semantic_api_clusters_are_importable() -> None:
         "Benchmark",
         "BenchmarkRequirements",
         "Task",
-        "TaskSpec",
         "EmptyTaskPayload",
     ]
     # PR 9 Task 1 added ``SpawnedTaskHandle`` to the worker cluster as
@@ -103,15 +100,6 @@ def test_semantic_api_clusters_are_importable() -> None:
     assert rubric.__all__ == ["Evaluator", "Rubric", "TaskEvaluationResult"]
 
 
-def test_core_composition_owns_experiment_worker_spec_and_definition_handle() -> None:
-    composition = importlib.import_module("ergon_core.core.domain.experiments")
-
-    assert composition.__all__ == ["DefinitionHandle", "Experiment", "WorkerSpec"]
-    assert hasattr(composition, "DefinitionHandle")
-    assert hasattr(composition, "Experiment")
-    assert hasattr(composition, "WorkerSpec")
-
-
 def test_public_worker_module_does_not_import_persistence_or_sessions() -> None:
     worker_module = importlib.import_module("ergon_core.api.worker.worker")
     source = inspect.getsource(worker_module)
@@ -130,7 +118,7 @@ def test_criterion_context_hides_runtime_protocol_field() -> None:
     context_fields = context_module.CriterionContext.model_fields
 
     assert "runtime" not in context_fields
-    assert hasattr(context_module.CriterionContext, "execute_code")
+    assert "task" in context_fields
 
 
 def test_public_result_models_do_not_import_core_json_types() -> None:

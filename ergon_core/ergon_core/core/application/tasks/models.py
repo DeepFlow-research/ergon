@@ -21,7 +21,7 @@ class AddSubtaskCommand(BaseModel):
     """
 
     run_id: RunId
-    parent_node_id: NodeId
+    parent_task_id: NodeId
     task_slug: TaskSlug = Field(min_length=1)
     description: str = Field(min_length=1)
     assigned_worker_slug: AssignedWorkerSlug
@@ -58,7 +58,7 @@ class PlanSubtasksCommand(BaseModel):
     """Batch-create subtasks with local dependency references."""
 
     run_id: RunId
-    parent_node_id: NodeId
+    parent_task_id: NodeId
     subtasks: list[SubtaskSpec]
 
     model_config = {"frozen": True}
@@ -153,7 +153,7 @@ class RestartTaskResult(BaseModel):
 class CancelOrphansResult(BaseModel):
     """Result of cascade-cancelling non-terminal children of a parent node."""
 
-    parent_node_id: NodeId
+    parent_task_id: NodeId
     cancelled_node_ids: list[NodeId]
     events_to_emit: list[TaskCancelledEvent]
 

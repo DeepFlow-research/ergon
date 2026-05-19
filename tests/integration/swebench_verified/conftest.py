@@ -96,7 +96,7 @@ def swebench_execution() -> tuple[UUID, UUID]:
         execution = RunTaskExecution(
             id=execution_id,
             run_id=run.id,
-            definition_task_id=task.id,
+            task_id=task.id,
             status=TaskExecutionStatus.RUNNING,
         )
         session.add(execution)

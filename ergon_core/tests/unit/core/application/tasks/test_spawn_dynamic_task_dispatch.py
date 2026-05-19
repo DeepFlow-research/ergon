@@ -6,6 +6,7 @@ import pytest
 
 from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
 from ergon_core.core.application.tasks.management import TaskManagementService
+from ergon_core.test_support.task_factory import TestSandbox, TestWorker
 
 
 class _DynamicTask(Task[EmptyTaskPayload]):
@@ -73,6 +74,8 @@ async def test_spawn_dynamic_task_dispatches_ready_event_when_dependency_free(mo
             task_slug="child",
             instance_key="sample-1",
             description="child task",
+            worker=TestWorker(name="worker", model=None),
+            sandbox=TestSandbox(),
         ),
     )
 
@@ -116,9 +119,11 @@ async def test_spawn_dynamic_task_with_dependencies_waits_for_propagation(monkey
             task_slug="child",
             instance_key="sample-1",
             description="child task",
+            worker=TestWorker(name="worker", model=None),
+            sandbox=TestSandbox(),
         ),
         depends_on=(dependency_id,),
     )
 
     assert dispatched == []
-    assert graph_repo.added_edges[0]["source_node_id"] == dependency_id
+    assert graph_repo.added_edges[0]["source_task_id"] == dependency_id

@@ -8,16 +8,20 @@ the external sandbox AND drop the local handle) from ``close_local()``
 (orchestrator terminates external, eval workers only detach locally)
 needs both verbs to exist on the Protocol.
 
-``CommandResult`` (the return type of ``run_command``) lives in
-``core/application/evaluation/protocols.py`` to avoid cycles between
-the public API and the evaluation service; the ``api/sandbox`` package
-re-exports it from there.
 """
 
 from collections.abc import Sequence
 from typing import Protocol
 
-from ergon_core.core.application.evaluation.protocols import CommandResult
+from pydantic import BaseModel, Field
+
+
+class CommandResult(BaseModel):
+    """Result from command execution in a sandbox."""
+
+    stdout: str | None = Field(default=None)
+    stderr: str | None = Field(default=None)
+    exit_code: int | None = Field(default=None)
 
 
 class SandboxRuntime(Protocol):

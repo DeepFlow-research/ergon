@@ -199,7 +199,7 @@ async def _block_successors_bfs(
                 session.exec(
                     select(RunGraphEdge).where(
                         RunGraphEdge.run_id == run_id,
-                        RunGraphEdge.source_node_id == target_id,
+                        RunGraphEdge.source_task_id == target_id,
                     )
                 ).all()
             )
@@ -211,7 +211,28 @@ async def _block_successors_bfs(
                     new_status=graph_status.EDGE_INVALIDATED,
                     meta=_PROPAGATION_META,
                 )
-                queue.append(edge.target_node_id)
+                queue.append(edge.target_task_id)
+
+
+def _dependency_free_children(session: Session, run_id: UUID, node_id: UUID) -> set[UUID]:
+    child_ids: set[UUID] = set()
+    containment_children = list(
+        session.exec(
+            select(RunGraphNode).where(
+                RunGraphNode.run_id == run_id,
+                RunGraphNode.parent_task_id == node_id,
+            )
+        ).all()
+    )
+    for child in containment_children:
+        has_incoming_edges = session.exec(
+            select(RunGraphEdge.id)
+            .where(RunGraphEdge.run_id == run_id)
+            .where(RunGraphEdge.target_task_id == child.id)
+        ).first()
+        if has_incoming_edges is None:
+            child_ids.add(child.id)
+    return child_ids
 
 
 async def on_task_completed_or_failed(
@@ -229,7 +250,7 @@ async def on_task_completed_or_failed(
         session.exec(
             select(RunGraphEdge).where(
                 RunGraphEdge.run_id == run_id,
-                RunGraphEdge.source_node_id == node_id,
+                RunGraphEdge.source_task_id == node_id,
             )
         ).all()
     )
@@ -244,7 +265,9 @@ async def on_task_completed_or_failed(
             meta=_PROPAGATION_META,
         )
 
-    candidate_node_ids = {edge.target_node_id for edge in outgoing}
+    candidate_node_ids = {edge.target_task_id for edge in outgoing}
+    if is_success:
+        candidate_node_ids.update(_dependency_free_children(session, run_id, node_id))
     newly_ready: list[UUID] = []
 
     if not is_success:
@@ -270,7 +293,7 @@ async def on_task_completed_or_failed(
             continue
 
         status = candidate_node.status
-        is_managed_subtask = candidate_node.parent_node_id is not None
+        is_managed_subtask = candidate_node.parent_task_id is not None
         is_pending = status == graph_status.PENDING
         is_reactivatable_cancelled = status == graph_status.CANCELLED and is_managed_subtask
 
@@ -281,12 +304,12 @@ async def on_task_completed_or_failed(
             session.exec(
                 select(RunGraphEdge).where(
                     RunGraphEdge.run_id == run_id,
-                    RunGraphEdge.target_node_id == candidate_id,
+                    RunGraphEdge.target_task_id == candidate_id,
                 )
             ).all()
         )
 
-        source_nodes = [session.get(RunGraphNode, edge.source_node_id) for edge in incoming]
+        source_nodes = [session.get(RunGraphNode, edge.source_task_id) for edge in incoming]
         if all(node is not None and node.status == graph_status.COMPLETED for node in source_nodes):
             reason = (
                 f"all dependencies satisfied after {node_id}"

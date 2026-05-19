@@ -7,7 +7,7 @@ Env subclasses implement:
 - ``_verify_env_content`` — env-specific checks against leaf artifacts
   (pulled via blob storage; no sandbox needed).
 - ``_verify_sandbox_setup`` — env-specific probe run inside the parent
-  task's sandbox via ``context.runtime.run_command(...)``; proves the
+  task's sandbox via ``context.task.sandbox.run_command(...)``; proves the
   toolchain is healthy at evaluation time.
 
 Both hooks raise ``CriterionCheckError`` to surface as a failed
@@ -18,8 +18,10 @@ Topology + slug set is sourced from ``constants.EXPECTED_SUBTASK_SLUGS``.
 See docs/superpowers/plans/test-refactor/01-fixtures.md §2.5 and §2.7.
 """
 
+import asyncio
 import json
 import logging
+import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol
@@ -28,10 +30,9 @@ from uuid import UUID
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.criterion import CriterionContext, CriterionOutcome
 from ergon_core.api.errors import CriterionCheckError
-from ergon_core.api.sandbox import Sandbox
-from ergon_core.core.application.evaluation.protocols import CommandResult
+from ergon_core.api.sandbox.runtime import CommandResult
 from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import COMPLETED
+from ergon_core.core.persistence.graph.status_conventions import COMPLETED, NON_AUTONOMOUS_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource, RunTaskExecution
 from tests.fixtures.smoke_components.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
@@ -75,14 +76,13 @@ class SmokeCriterionBase(Criterion):
 
     async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         try:
-            # 1. Artifact-side checks (no sandbox; reads blob storage only)
+            # 1. Parent-side planning checks. Child completion, artifacts,
+            # probes, messages, and WAL are asserted by the E2E harness after
+            # graph propagation reaches a terminal run state. The parent
+            # evaluator runs before task/completed is emitted, so waiting for
+            # child artifacts here would deadlock propagation.
             children = await self._pull_children(context)
             self._check_graph_shape(children)
-            self._check_children_completed(children)
-            artifact_children = await self._artifact_children(children)
-            probes = await self._pull_probe_results(context, artifact_children)
-            self._check_probes_succeeded(probes, artifact_children)
-            await self._verify_env_content(context, artifact_children, probes)
 
             # 2. Sandbox-side check: attach to the parent task's OWN sandbox
             #    (kept alive by the runtime per RFC
@@ -121,7 +121,7 @@ class SmokeCriterionBase(Criterion):
         ``context.execution_id`` points at the parent's
         ``RunTaskExecution``; ``RunTaskExecution.node_id`` is the parent's
         graph-node id.  Direct children are the rows whose
-        ``parent_node_id`` equals that id.
+        ``parent_task_id`` equals that id.
         """
         with get_session() as session:
             parent_exec = session.get(RunTaskExecution, context.execution_id)
@@ -132,11 +132,41 @@ class SmokeCriterionBase(Criterion):
             children = list(
                 session.exec(
                     select(RunGraphNode)
-                    .where(RunGraphNode.parent_node_id == parent_exec.node_id)
+                    .where(RunGraphNode.parent_task_id == parent_exec.node_id)
                     .order_by(RunGraphNode.task_slug),
                 ).all(),
             )
         return children
+
+    async def _wait_for_artifact_state(
+        self,
+        context: CriterionContext,
+        *,
+        timeout_s: float = 180.0,
+        interval_s: float = 2.0,
+    ) -> tuple[list[RunGraphNode], list[RunGraphNode], dict[UUID, ProbeResult]]:
+        deadline = time.monotonic() + timeout_s
+        last_error: CriterionCheckError | None = None
+
+        while time.monotonic() < deadline:
+            try:
+                children = await self._pull_children(context)
+                self._check_graph_shape(children)
+                artifact_children = await self._artifact_children(children)
+                self._check_children_completed(children)
+                self._check_children_completed(artifact_children)
+                probes = await self._pull_probe_results(context, artifact_children)
+                self._check_probes_succeeded(probes, artifact_children)
+                return children, artifact_children, probes
+            except CriterionCheckError as err:
+                last_error = err
+                if await self._observed_terminal_non_completed(context):
+                    raise
+                await asyncio.sleep(interval_s)
+
+        raise CriterionCheckError(
+            f"timed out waiting for smoke child artifacts: {last_error}",
+        )
 
     async def _artifact_children(
         self,
@@ -152,11 +182,11 @@ class SmokeCriterionBase(Criterion):
             nested = list(
                 session.exec(
                     select(RunGraphNode)
-                    .where(RunGraphNode.parent_node_id.in_([child.id for child in children]))  # ty: ignore[unresolved-attribute]
+                    .where(RunGraphNode.parent_task_id.in_([child.id for child in children]))  # ty: ignore[unresolved-attribute]
                     .order_by(RunGraphNode.task_slug),
                 ).all(),
             )
-        nested_parent_ids = {node.parent_node_id for node in nested}
+        nested_parent_ids = {node.parent_task_id for node in nested}
         direct_artifact_children = [
             child for child in children if child.id not in nested_parent_ids
         ]
@@ -238,6 +268,18 @@ class SmokeCriterionBase(Criterion):
                     f"child {c.task_slug} not completed (status={c.status!r})",
                 )
 
+    async def _observed_terminal_non_completed(self, context: CriterionContext) -> bool:
+        try:
+            children = await self._pull_children(context)
+            artifact_children = await self._artifact_children(children)
+        except CriterionCheckError:
+            return False
+        all_children = [*children, *artifact_children]
+        return bool(all_children) and any(
+            child.status in NON_AUTONOMOUS_STATUSES and child.status != COMPLETED
+            for child in all_children
+        )
+
     def _check_probes_succeeded(
         self,
         probes: dict[UUID, ProbeResult],
@@ -274,13 +316,13 @@ class SmokeCriterionBase(Criterion):
         """Subclass hook: run a trivial env-specific command in the parent
         task's sandbox to prove the toolchain is healthy.
 
-        Canonical shape for subclasses (uses the landed ``CriterionRuntime``
+        Canonical shape for subclasses (uses the landed ``public sandbox runtime``
         DI API — criteria never call ``AsyncSandbox.connect`` directly):
 
-            if context.runtime is None:
-                raise CriterionCheckError("no CriterionRuntime injected")
-            await context.runtime.ensure_sandbox()
-            result = await context.runtime.run_command("<env-probe>", timeout=20)
+            if context.task.sandbox is None:
+                raise CriterionCheckError("no public sandbox runtime injected")
+            await context.task.sandbox.ensure_sandbox()
+            result = await context.task.sandbox.run_command("<env-probe>", timeout=20)
             if result.exit_code != 0:
                 raise CriterionCheckError(
                     f"<env> health probe failed: exit={result.exit_code} "
@@ -297,15 +339,10 @@ class SmokeCriterionBase(Criterion):
         path: str,
         content: bytes,
     ) -> None:
-        sandbox = context.task.sandbox
-        if isinstance(sandbox, Sandbox) and sandbox.is_live:
-            await sandbox.write_file(path, content)
+        if context.task.sandbox.is_live:
+            await context.task.sandbox.write_file(path, content)
             return
-        if context.has_runtime:
-            await context.ensure_sandbox()
-            await context.write_file(path, content)
-            return
-        raise CriterionCheckError("CriterionRuntime not injected and no live task sandbox attached")
+        raise CriterionCheckError("no live task sandbox attached")
 
     async def _run_sandbox_command(
         self,
@@ -314,10 +351,6 @@ class SmokeCriterionBase(Criterion):
         *,
         timeout: int,
     ) -> CommandResult:
-        sandbox = context.task.sandbox
-        if isinstance(sandbox, Sandbox) and sandbox.is_live:
-            return await sandbox.run_command(command, timeout=timeout)
-        if context.has_runtime:
-            await context.ensure_sandbox()
-            return await context.run_command(command, timeout=timeout)
-        raise CriterionCheckError("CriterionRuntime not injected and no live task sandbox attached")
+        if context.task.sandbox.is_live:
+            return await context.task.sandbox.run_command(command, timeout=timeout)
+        raise CriterionCheckError("no live task sandbox attached")

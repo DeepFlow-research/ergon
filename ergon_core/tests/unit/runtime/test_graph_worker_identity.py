@@ -27,6 +27,7 @@ from ergon_core.core.application.tasks.models import AddSubtaskCommand
 from ergon_core.core.application.tasks.management import TaskManagementService
 from ergon_core.core.application.tasks.execution import TaskExecutionService
 from ergon_core.core.application.workflows.service import WorkflowService
+from ergon_core.test_support.task_factory import task_with_id
 from pydantic import BaseModel
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -187,9 +188,7 @@ async def test_workflow_initialization_returns_node_ids_for_initial_ready_static
 
     assert len(initialized.initial_ready_tasks) == 1
     ready_task = initialized.initial_ready_tasks[0]
-    node = session.exec(
-        select(RunGraphNode).where(RunGraphNode.definition_task_id == ready_task.task_id)
-    ).one()
+    node = session.exec(select(RunGraphNode).where(RunGraphNode.id == ready_task.task_id)).one()
     assert ready_task.node_id == node.id
     assert node.assigned_worker_slug == "minif2f-react"
 
@@ -201,27 +200,24 @@ async def test_dynamic_prepare_uses_node_worker_slug_and_run_model_without_defin
     session = _session()
     definition_id = _definition_with_worker(session, worker_type="minif2f-react")
     run_id = _run(session, definition_id=definition_id, model_target="stub:constant")
-    # PR 2 contract: every RunGraphNode must carry a `task_json`
-    # snapshot with a `_type` discriminator. Dynamic-spawn tests in
-    # PR 9 will use `task.model_dump(...)` directly; in the meantime
-    # this fixture uses a TaskSpec-shaped bridge snapshot (matching
-    # what PR 1's `_definition_task_snapshot` writes for static tasks)
-    # so `graph_repo.node` can inflate the typed view.
+    node_id = uuid4()
+    task = task_with_id(
+        node_id,
+        task_slug="dynamic-leaf",
+        instance_key="sample-1",
+        description="Dynamic specialist task",
+    )
     node = RunGraphNode(
+        id=node_id,
         run_id=run_id,
         instance_key="sample-1",
         task_slug="dynamic-leaf",
         description="Dynamic specialist task",
-        task_json={
-            "_type": "ergon_core.api.benchmark.task:TaskSpec",
-            "task_slug": "dynamic-leaf",
-            "instance_key": "sample-1",
-            "description": "Dynamic specialist task",
-        },
+        task_json=task.model_dump(mode="json"),
         is_dynamic=True,
         status=TaskExecutionStatus.PENDING,
         assigned_worker_slug="swebench-react",
-        parent_node_id=None,
+        parent_task_id=None,
         level=1,
     )
     session.add(node)
@@ -279,7 +275,7 @@ async def test_add_subtask_rejects_unknown_worker_slug_before_creating_node() ->
             session,
             AddSubtaskCommand(
                 run_id=run_id,
-                parent_node_id=parent.id,
+                parent_task_id=parent.id,
                 task_slug="bad-worker",
                 description="Should not be inserted",
                 assigned_worker_slug="not-a-real-worker",

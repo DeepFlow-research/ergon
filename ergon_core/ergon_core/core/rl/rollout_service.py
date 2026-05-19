@@ -42,7 +42,6 @@ from ergon_core.core.rl.rollout_types import (
 )
 from ergon_core.core.application.events.task_events import WorkflowStartedEvent
 from sqlmodel import Session, select
-from transformers import AutoTokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +73,8 @@ class RolloutService:
 
     def _get_tokenizer(self) -> Tokenizer:
         if self._tokenizer is None:
+            from transformers import AutoTokenizer
+
             logger.info("Loading tokenizer: %s", self._tokenizer_name)
             self._tokenizer = AutoTokenizer.from_pretrained(self._tokenizer_name)
         return self._tokenizer
@@ -299,11 +300,11 @@ class RolloutService:
         evals_by_run: dict[UUID, dict[str, float]] = defaultdict(dict)
         for ev in all_evals:
             if ev.score is not None:
-                evals_by_run[ev.run_id][str(ev.definition_task_id)] = ev.score
+                evals_by_run[ev.run_id][str(ev.task_id)] = ev.score
 
         exec_to_def_task: dict[str, str] = {}
         for ex in all_execs:
-            exec_to_def_task[str(ex.id)] = str(ex.definition_task_id)
+            exec_to_def_task[str(ex.id)] = str(ex.task_id)
 
         evals_remapped: dict[UUID, dict[str, float]] = defaultdict(dict)
         for run_id, scores in evals_by_run.items():

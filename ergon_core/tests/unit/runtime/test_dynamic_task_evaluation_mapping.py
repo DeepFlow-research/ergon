@@ -32,13 +32,13 @@ def _summary_json() -> dict:
 def test_task_keyed_evaluations_prefers_runtime_node_id_for_dynamic_tasks() -> None:
     run_id = uuid4()
     node_id = uuid4()
-    static_definition_task_id = uuid4()
+    static_task_id = uuid4()
 
     evaluation = RunTaskEvaluation(
         run_id=run_id,
         node_id=node_id,
         task_execution_id=uuid4(),
-        definition_task_id=static_definition_task_id,
+        task_id=static_task_id,
         definition_evaluator_id=uuid4(),
         score=1.0,
         passed=True,

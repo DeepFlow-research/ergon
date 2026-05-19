@@ -12,7 +12,11 @@ import pyarrow.parquet as pq
 from sqlmodel import Session, select
 
 from ergon_core.core.persistence.imports.models import RunDropsManifest, RunReducer
-from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord, RunResource
+from ergon_core.core.persistence.telemetry.models import (
+    BenchmarkDefinitionRecord,
+    RunRecord,
+    RunResource,
+)
 from ergon_ingestion.exports.models import (
     DatasetExportManifest,
     ExportState,
@@ -117,9 +121,9 @@ def export_dataset_from_config(config: ShardedExportConfig) -> DatasetExportMani
 def _load_runs(*, session: Session, dataset: str, batch: str) -> list[RunRecord]:
     statement = (
         select(RunRecord)
-        .join(ExperimentRecord)
+        .join(BenchmarkDefinitionRecord)
         .where(RunRecord.benchmark_type == f"imported:{dataset}")
-        .where(ExperimentRecord.name == batch)
+        .where(BenchmarkDefinitionRecord.name == batch)
         .order_by(RunRecord.created_at, RunRecord.id)
     )
     return list(session.exec(statement))

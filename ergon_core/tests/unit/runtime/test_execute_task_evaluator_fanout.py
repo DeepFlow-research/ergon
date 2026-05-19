@@ -253,7 +253,7 @@ async def test_execute_task_emits_failed_when_worker_fails(
 
     run_id = uuid4()
     prepared = _prepared(uuid4(), uuid4())
-    payload = _ready_event(run_id, uuid4(), uuid4(), prepared.node_id)
+    payload = _ready_event(run_id, uuid4(), uuid4(), prepared.task_id)
 
     async def fake_prepare(
         _ctx: inngest.Context,

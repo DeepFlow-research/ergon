@@ -105,7 +105,7 @@ function syntheticMutation(
     actor: "test",
     new_value: newValueByType[mutationType] ?? {},
     old_value: null,
-    reason: null,
+    reason: "parent-child",
     timestamp: new Date().toISOString(),
   };
 }
@@ -128,6 +128,45 @@ for (const mutationType of ALL_MUTATION_TYPES) {
 
 test("ALL_MUTATION_TYPES matches MutationTypeSchema.options (no stale snapshot)", () => {
   assert.deepEqual(ALL_MUTATION_TYPES, MutationTypeSchema.options);
+});
+
+test("edge.added accepts backend source_task_id and target_task_id payloads", () => {
+  let state = emptyState();
+  const sourceId = "11111111-1111-4111-8111-111111111111";
+  const targetId = "22222222-2222-4222-8222-222222222222";
+  state = applyGraphMutation(state, syntheticMutation("node.added"));
+  state = applyGraphMutation(state, {
+    ...syntheticMutation("node.added"),
+    target_id: targetId,
+    new_value: {
+      mutation_type: "node.added",
+      task_slug: "child",
+      instance_key: "inst-2",
+      description: "child task",
+      status: "pending",
+      assigned_worker_slug: null,
+    },
+  });
+
+  const next = applyGraphMutation(state, {
+    run_id: "00000000-0000-0000-0000-000000000000",
+    sequence: 3,
+    mutation_type: "edge.added",
+    target_type: "edge",
+    target_id: "33333333-3333-4333-8333-333333333333",
+    actor: "test",
+    new_value: {
+      mutation_type: "edge.added",
+      source_task_id: sourceId,
+      target_task_id: targetId,
+      status: "pending",
+    },
+    old_value: null,
+    reason: "parent-child",
+    timestamp: new Date().toISOString(),
+  });
+
+  assert.equal(next.tasks.get(targetId)?.parentId, sourceId);
 });
 
 test("replay base preserves snapshot hierarchy while dependency edges remain dependencies", () => {

@@ -13,14 +13,12 @@ path at realistic volume.  See
 ``docs/superpowers/plans/test-refactor/01-fixtures.md §2.3``.
 """
 
-import asyncio
 from collections.abc import AsyncGenerator
 from typing import ClassVar, final
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
 from ergon_core.api.worker import WorkerOutput
 from ergon_core.core.domain.generation.context_parts import AssistantTextPart, ContextPartChunk
-from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.types import (
     AssignedWorkerSlug,
@@ -28,19 +26,11 @@ from ergon_core.core.persistence.shared.types import (
     RunId,
     TaskSlug,
 )
-from ergon_core.core.application.tasks.inspection import (
-    TaskInspectionService,
-)
 from ergon_core.core.application.tasks.models import (
     PlanSubtasksCommand,
     SubtaskSpec,
 )
-from ergon_core.core.application.tasks.management import (
-    TaskManagementService,
-)
 from tests.fixtures.smoke_components.smoke_base.constants import SUBTASK_GRAPH
-
-_CHILD_WAIT_TERMINAL_STATUSES = TERMINAL_STATUSES | {"blocked"}
 
 
 class SmokeWorkerBase(Worker):
@@ -60,10 +50,6 @@ class SmokeWorkerBase(Worker):
     # Driver asserts per-run context chunk count against this constant
     # (see tests/e2e/_asserts.py ``_assert_run_turn_counts``).
     PARENT_TURN_COUNT: ClassVar[int] = 3
-
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self._last_child_statuses: dict[str, str] = {}
 
     @final
     async def execute(
@@ -90,11 +76,11 @@ class SmokeWorkerBase(Worker):
         # without overriding execute (which stays @final).
         specs = [self._spec_for(slug, deps, desc) for slug, deps, desc in SUBTASK_GRAPH]
         with get_session() as session:
-            result = await TaskManagementService().plan_subtasks(
+            result = await context.task_mgmt.plan_subtasks(
                 session,
                 PlanSubtasksCommand(
                     run_id=RunId(context.run_id),
-                    parent_node_id=NodeId(context.node_id),
+                    parent_task_id=NodeId(context.node_id),
                     subtasks=specs,
                 ),
             )
@@ -115,8 +101,7 @@ class SmokeWorkerBase(Worker):
 
         # --- Turn 3: awaiting children (terminal) -------------------------
         waiting_message = (
-            f"{type(self).__name__}: awaiting 9 children -- "
-            "runtime will mark parent COMPLETED once wait_all resolves"
+            f"{type(self).__name__}: planned 9 children -- criterion will observe child completion"
         )
         yield ContextPartChunk(
             part=AssistantTextPart(
@@ -124,40 +109,13 @@ class SmokeWorkerBase(Worker):
             ),
         )
 
-        # Poll until every direct child has reached a terminal status.
-        # The evaluators fire on TaskCompletedEvent, so the parent must not
-        # return until all children are terminal (otherwise criterion checks
-        # like SmokeCriterionBase._check_children_completed fail immediately).
-        inspection = TaskInspectionService()
-        while True:
-            with get_session() as session:
-                children = inspection.list_subtasks(
-                    session,
-                    run_id=context.run_id,
-                    parent_node_id=context.node_id,
-                )
-            if children and all(c.status in _CHILD_WAIT_TERMINAL_STATUSES for c in children):
-                self._last_child_statuses = {c.task_slug: c.status for c in children}
-                break
-            await asyncio.sleep(2)
-
-        non_completed = {
-            slug: status
-            for slug, status in self._last_child_statuses.items()
-            if status != "completed"
-        }
-        if non_completed:
-            yield WorkerOutput(
-                output=f"child tasks did not all complete: {non_completed}",
-                success=False,
-                metadata={"child_statuses": self._last_child_statuses},
-            )
-            return
-
         yield WorkerOutput(
             output=waiting_message,
             success=True,
-            metadata={"child_statuses": self._last_child_statuses},
+            metadata={
+                "planned_children": sorted(str(slug) for slug in result.nodes),
+                "child_wait_mode": "criterion",
+            },
         )
 
     def _spec_for(

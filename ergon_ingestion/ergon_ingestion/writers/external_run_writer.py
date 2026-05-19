@@ -22,7 +22,7 @@ from ergon_core.core.persistence.imports.models import (
 )
 from ergon_core.core.persistence.shared.enums import RunResourceKind, RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
-    ExperimentRecord,
+    BenchmarkDefinitionRecord,
     RunRecord,
     RunResource,
     RunTaskExecution,
@@ -50,7 +50,7 @@ class ExternalRunWriter:
         self._source = source
         self._blob_root = blob_root
         self._definition: ExperimentDefinition | None = None
-        self._experiment: ExperimentRecord | None = None
+        self._experiment: BenchmarkDefinitionRecord | None = None
 
     def write_run(self, parsed: ParsedRun) -> WriteRunResult:
         definition = self._definition_row()
@@ -106,7 +106,6 @@ class ExternalRunWriter:
 
         node = RunGraphNode(
             run_id=run.id,
-            definition_task_id=task.id,
             instance_key=parsed.instance_key,
             task_slug="imported-root",
             description=parsed.description,
@@ -117,7 +116,7 @@ class ExternalRunWriter:
 
         execution = RunTaskExecution(
             run_id=run.id,
-            definition_task_id=task.id,
+            task_id=node.id,
             node_id=node.id,
             status=TaskExecutionStatus.COMPLETED,
             output_json={
@@ -203,9 +202,9 @@ class ExternalRunWriter:
             self._session.flush()
         return self._definition
 
-    def _experiment_row(self, definition: ExperimentDefinition) -> ExperimentRecord:
+    def _experiment_row(self, definition: ExperimentDefinition) -> BenchmarkDefinitionRecord:
         if self._experiment is None:
-            self._experiment = ExperimentRecord(
+            self._experiment = BenchmarkDefinitionRecord(
                 name=self._source.batch_id,
                 benchmark_type=definition.benchmark_type,
                 sample_count=0,

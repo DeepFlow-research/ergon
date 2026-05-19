@@ -5,7 +5,6 @@ from ergon_core.api.benchmark import (
     BenchmarkRequirements,
     EmptyTaskPayload,
     Task,
-    TaskSpec,
 )
 from ergon_core.api.criterion import (
     Criterion,
@@ -21,7 +20,7 @@ from ergon_core.api.errors import (
     SandboxKindMismatch,
     SandboxNotLiveError,
 )
-from ergon_core.api.registry import ComponentRegistry, registry
+from ergon_core.api.registry import ComponentCatalog, registry
 from ergon_core.core.application.experiments.definition_writer import persist_benchmark
 from ergon_core.api.rubric import Evaluator, Rubric, TaskEvaluationResult
 from ergon_core.api.sandbox import Sandbox, SandboxRuntime
@@ -47,7 +46,7 @@ __all__ = [
     "Benchmark",
     "BenchmarkRequirements",
     "AwaitCompletionNotSupportedError",
-    "ComponentRegistry",
+    "ComponentCatalog",
     "ContainmentViolation",
     "Criterion",
     "CriterionCheckError",
@@ -66,7 +65,6 @@ __all__ = [
     "ScoreScale",
     "SpawnedTaskHandle",
     "Task",
-    "TaskSpec",
     "TaskEvaluationResult",
     "Worker",
     "WorkerContext",

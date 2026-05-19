@@ -23,7 +23,7 @@ def _dashboard_emitter() -> None:
 def _make_toolkit() -> SubtaskLifecycleToolkit:
     return SubtaskLifecycleToolkit(
         run_id=uuid4(),
-        parent_node_id=uuid4(),
+        parent_task_id=uuid4(),
         sandbox_id="test-sandbox",
     )
 

@@ -4,22 +4,16 @@ Each factory bundles the GDPEval sandbox, toolkit, and system prompt
 with a chosen worker class (ReActWorker today; CoTWorker / ReflexionWorker
 future).  Strategies vary independently; the domain bundle is constant.
 
-Legacy registry bridge (``GDPEvalReactWorker``) lives in
-``_legacy_workers.py`` and is deleted in PR 11.  It is re-exported here
-so the existing ``gdpeval-react`` registry slug keeps resolving for
-experiments persisted before PR 10c.
+PR 11 removed the legacy registry bridge. v2 callers use
+``make_gdpeval_worker()`` directly from the benchmark object graph.
 """
 
 from ergon_builtins.benchmarks.gdpeval.rubric import StagedRubric
 from ergon_builtins.benchmarks.gdpeval.toolkit import GDPEvalToolkit
 
-# TODO(PR 11): drop this re-export along with the ``gdpeval-react``
-# registry slug.  v2 callers use ``make_gdpeval_worker()`` directly.
-from ergon_builtins.benchmarks.gdpeval._legacy_workers import GDPEvalReactWorker
 from ergon_builtins.shared.workers.react_worker import ReActWorker
 
 __all__ = [
-    "GDPEvalReactWorker",
     "make_gdpeval_rubric",
     "make_gdpeval_worker",
 ]

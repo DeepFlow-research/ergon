@@ -47,10 +47,6 @@ class RunGraphNode(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
-    definition_task_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_definition_tasks.id",
-    )
     instance_key: str = Field(
         description=(
             "Benchmark instance identifier for this node, such as a dataset row or "
@@ -105,7 +101,7 @@ class RunGraphNode(SQLModel, table=True):
         ),
     )
 
-    parent_node_id: UUID | None = Field(
+    parent_task_id: UUID | None = Field(
         default=None,
         foreign_key="run_graph_nodes.id",
         index=True,
@@ -141,11 +137,11 @@ class RunGraphEdge(SQLModel, table=True):
         default=None,
         foreign_key="experiment_definition_task_dependencies.id",
     )
-    source_node_id: UUID = Field(
+    source_task_id: UUID = Field(
         foreign_key="run_graph_nodes.id",
         index=True,
     )
-    target_node_id: UUID = Field(
+    target_task_id: UUID = Field(
         foreign_key="run_graph_nodes.id",
         index=True,
     )

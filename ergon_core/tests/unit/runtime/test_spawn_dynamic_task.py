@@ -79,7 +79,7 @@ def _seed_parent(session: Session, *, run_id: UUID) -> RunGraphNode:
         description="Parent task",
         status="RUNNING",
         is_dynamic=False,
-        parent_node_id=None,
+        parent_task_id=None,
         level=0,
     )
     session.add(parent)
@@ -95,7 +95,7 @@ def _seed_other(session: Session, *, run_id: UUID, slug: str) -> RunGraphNode:
         description=f"Task {slug}",
         status="PENDING",
         is_dynamic=False,
-        parent_node_id=None,
+        parent_task_id=None,
         level=0,
     )
     session.add(node)
@@ -159,7 +159,7 @@ async def test_spawn_dynamic_task_inserts_dynamic_node_with_task_json(
     ).one()
 
     assert new_node.is_dynamic is True
-    assert new_node.parent_node_id == parent.id
+    assert new_node.parent_task_id == parent.id
     assert new_node.level == parent.level + 1
     assert new_node.status == "pending"
 
@@ -219,8 +219,8 @@ async def test_spawn_dynamic_task_creates_dependency_edge(
 
     edges = session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all()
     assert len(edges) == 1
-    assert edges[0].source_node_id == other.id
-    assert edges[0].target_node_id == handle.task_id
+    assert edges[0].source_task_id == other.id
+    assert edges[0].target_task_id == handle.task_id
 
 
 @pytest.mark.asyncio

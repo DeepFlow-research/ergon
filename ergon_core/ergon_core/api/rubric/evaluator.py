@@ -69,7 +69,8 @@ class Evaluator(BaseModel, ABC):
                 f"must carry `_type`."
             )
         EvaluatorCls = import_component_subclass(evaluator_type, Evaluator, kind="Evaluator")
-        return cast("Evaluator", EvaluatorCls.model_validate(evaluator_json))
+        payload = {k: v for k, v in evaluator_json.items() if k != "_type"}
+        return cast("Evaluator", EvaluatorCls.model_validate(payload))
 
     # TODO: check if this is ever actually used, if not delete it
     def validate_runtime_deps(self) -> None:

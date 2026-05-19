@@ -17,7 +17,7 @@ class CreateTaskEvaluation(BaseModel):
     run_id: UUID
     node_id: UUID
     task_execution_id: UUID
-    definition_task_id: UUID | None
+    task_id: UUID
     definition_evaluator_id: UUID
     score: float | None = None
     passed: bool | None = None
@@ -40,7 +40,7 @@ class TelemetryRepository:
     # Writes
     # ------------------------------------------------------------------
 
-    def create_task_evaluation(
+    async def create_task_evaluation(
         self,
         session: Session,
         command: CreateTaskEvaluation,
@@ -50,7 +50,7 @@ class TelemetryRepository:
             run_id=command.run_id,
             node_id=command.node_id,
             task_execution_id=command.task_execution_id,
-            definition_task_id=command.definition_task_id,
+            task_id=command.task_id,
             definition_evaluator_id=command.definition_evaluator_id,
             score=command.score,
             passed=command.passed,

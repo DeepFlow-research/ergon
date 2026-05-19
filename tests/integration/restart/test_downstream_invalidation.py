@@ -55,8 +55,8 @@ async def test_completed_successor_is_cancelled_by_invalidation() -> None:
         make_edge(
             session,
             run.id,
-            source_node_id=node_a.id,
-            target_node_id=node_b.id,
+            source_task_id=node_a.id,
+            target_task_id=node_b.id,
             status=EDGE_SATISFIED,
         )
         run_id = run.id
@@ -108,15 +108,15 @@ async def test_pending_successor_is_cancelled_but_cascade_stops_there() -> None:
         make_edge(
             session,
             run.id,
-            source_node_id=node_a.id,
-            target_node_id=node_b.id,
+            source_task_id=node_a.id,
+            target_task_id=node_b.id,
             status=EDGE_SATISFIED,
         )
         make_edge(
             session,
             run.id,
-            source_node_id=node_b.id,
-            target_node_id=node_c.id,
+            source_task_id=node_b.id,
+            target_task_id=node_c.id,
             status=EDGE_SATISFIED,
         )
         run_id = run.id
@@ -170,15 +170,15 @@ async def test_failed_and_cancelled_successors_are_skipped() -> None:
         make_edge(
             session,
             run.id,
-            source_node_id=node_a.id,
-            target_node_id=node_b.id,
+            source_task_id=node_a.id,
+            target_task_id=node_b.id,
             status=EDGE_SATISFIED,
         )
         make_edge(
             session,
             run.id,
-            source_node_id=node_a.id,
-            target_node_id=node_c.id,
+            source_task_id=node_a.id,
+            target_task_id=node_c.id,
             status=EDGE_SATISFIED,
         )
         run_id = run.id
@@ -237,15 +237,15 @@ async def test_cascade_invalidation_recurses_through_completed_chain() -> None:
         make_edge(
             session,
             run.id,
-            source_node_id=node_a.id,
-            target_node_id=node_b.id,
+            source_task_id=node_a.id,
+            target_task_id=node_b.id,
             status=EDGE_SATISFIED,
         )
         make_edge(
             session,
             run.id,
-            source_node_id=node_b.id,
-            target_node_id=node_c.id,
+            source_task_id=node_b.id,
+            target_task_id=node_c.id,
             status=EDGE_SATISFIED,
         )
         run_id = run.id

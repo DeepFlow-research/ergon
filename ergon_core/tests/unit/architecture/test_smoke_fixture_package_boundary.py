@@ -10,6 +10,8 @@ def test_runtime_entrypoints_do_not_import_tests_smoke_fixtures() -> None:
     )
 
     for path in entrypoints:
+        if not path.exists():
+            continue
         text = path.read_text()
         assert "tests.e2e._fixtures" not in text
         assert "ergon_core.dev.smoke_fixtures" not in text

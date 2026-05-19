@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, ClassVar
 
 from ergon_core.api.criterion import (
@@ -9,6 +10,8 @@ from ergon_core.api.criterion import (
     ScoreScale,
 )
 from ergon_core.core.application.resources import RunResourceView
+from ergon_core.core.application.resources.repository import RunResourceRepository
+from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunResourceKind
 from pydantic import BaseModel
 
@@ -175,14 +178,16 @@ class ResearchRubricsJudgeCriterion(Criterion):
         cls,
         context: CriterionContext,
     ) -> tuple[list[_ResourceEvidence], list[_ResourceEvidence]]:
-        if not context.has_runtime:
-            return [], []
-
-        resources = await context.list_resources()
+        with get_session() as session:
+            resources = RunResourceRepository().list_for_run(
+                session,
+                run_id=context.run_id,
+                task_execution_id=context.execution_id,
+            )
         evidence: list[_ResourceEvidence] = []
         for resource in resources:
             try:
-                raw_content = await context.read_resource_by_id(resource.id)
+                raw_content = Path(resource.file_path).read_bytes()
             except OSError as exc:
                 text = f"[Unable to read resource {resource.id}: {exc}]"
             else:

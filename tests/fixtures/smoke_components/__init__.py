@@ -1,6 +1,6 @@
 """Test-only smoke component registration."""
 
-from ergon_core.api.registry import ComponentRegistry, registry
+from ergon_core.api.registry import ComponentCatalog, registry
 from tests.fixtures.smoke_components.benchmarks import (
     GDPEvalSmokeBenchmark,
     MiniF2FSmokeBenchmark,
@@ -37,7 +37,7 @@ from tests.fixtures.smoke_components.workers.swebench_smoke import (
 )
 
 
-def register_smoke_fixtures(target: ComponentRegistry = registry) -> None:
+def register_smoke_fixtures(target: ComponentCatalog = registry) -> None:
     """Register smoke-only benchmark, worker, evaluator, and sandbox slugs."""
 
     # Production benchmark loaders fetch external datasets. The smoke harness

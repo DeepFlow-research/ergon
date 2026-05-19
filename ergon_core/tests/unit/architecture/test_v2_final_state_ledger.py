@@ -88,10 +88,10 @@ def _assert_evaluate_task_run_takes_thin_payload() -> None:
     )
 
 
-def _assert_run_graph_node_has_no_definition_task_id_column() -> None:
+def _assert_run_graph_node_has_no_task_id_column() -> None:
     from ergon_core.core.persistence.graph.models import RunGraphNode
 
-    assert "definition_task_id" not in RunGraphNode.model_fields
+    assert "task_id" not in RunGraphNode.model_fields
 
 
 def _assert_task_has_no_model_post_init() -> None:
@@ -183,9 +183,9 @@ FINAL_STATE_ASSERTIONS: tuple[FinalStateAssertion, ...] = (
         reason="Δ.7: write-only package, no readers",
     ),
     FinalStateAssertion(
-        name="run_graph_node_has_no_definition_task_id_column",
+        name="run_graph_node_has_no_task_id_column",
         landing_pr="PR 11",
-        check=_assert_run_graph_node_has_no_definition_task_id_column,
+        check=_assert_run_graph_node_has_no_task_id_column,
         reason="Δ.7 + identity model: task_id is the single canonical id",
     ),
     FinalStateAssertion(
@@ -207,23 +207,7 @@ FINAL_STATE_ASSERTIONS: tuple[FinalStateAssertion, ...] = (
 # strict=True surfaces unexpected passes — if a later refactor flips an
 # invariant green ahead of its landing PR, CI fails and the ledger gets
 # the update at the same time.
-_XFAIL_BY_NAME: dict[str, str] = {
-    # PR 4 landed: evaluate_task_run takes TaskEvaluateRequest, and the
-    # legacy `check_evaluators` Inngest function is unregistered.
-    # task_has_no_model_post_init: already holds today (v1 Task has no
-    # model_post_init); the assertion ensures PR 5's v2 Task keeps it
-    # that way. Tested every run, no xfail needed.
-    # materialize_dynamic_subtask_definition_is_gone: the v1 codebase
-    # doesn't currently use this symbol name. Asserted every run; PR 9
-    # ensures the graph-native path doesn't reintroduce it.
-    "prepare_definition_helper_is_removed": "PR 11 deletes legacy prepare path",
-    "criterion_executor_is_removed": "PR 11 deletes Protocol pair",
-    "saved_specs_package_is_removed": "PR 11 deletes write-only package",
-    "run_graph_node_has_no_definition_task_id_column": "PR 11 drops the column",
-    # PR 5 deleted Worker.from_buffer (base + the one ReActWorker
-    # override) along with the assemble_replay support method.
-    "terminate_sandbox_by_id_is_removed": "PR 11 deletes legacy cleanup path",
-}
+_XFAIL_BY_NAME: dict[str, str] = {}
 
 
 def _cases() -> list:

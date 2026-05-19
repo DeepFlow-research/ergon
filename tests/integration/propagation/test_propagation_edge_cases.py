@@ -42,8 +42,19 @@ def _cleanup_run(run_id, defn_id) -> None:  # type: ignore[no-untyped-def]
             session.delete(mut)
         for edge in session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all():
             session.delete(edge)
-        for nd in session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all():
-            session.delete(nd)
+        nodes = list(session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all())
+        remaining = {node.id: node for node in nodes}
+        while remaining:
+            parent_ids = {
+                node.parent_task_id
+                for node in remaining.values()
+                if node.parent_task_id is not None
+            }
+            leaves = [node for node in remaining.values() if node.id not in parent_ids]
+            for node in leaves:
+                session.delete(node)
+                remaining.pop(node.id)
+            session.flush()
         run_row = session.get(RunRecord, run_id)
         if run_row is not None:
             session.delete(run_row)
@@ -81,8 +92,8 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
         node_a = make_node(session, run.id, task_slug="fan-a", status="running")
         node_b = make_node(session, run.id, task_slug="fan-b", status="running")
         node_c = make_node(session, run.id, task_slug="fan-c", status="pending")
-        make_edge(session, run.id, source_node_id=node_a.id, target_node_id=node_c.id)
-        make_edge(session, run.id, source_node_id=node_b.id, target_node_id=node_c.id)
+        make_edge(session, run.id, source_task_id=node_a.id, target_task_id=node_c.id)
+        make_edge(session, run.id, source_task_id=node_b.id, target_task_id=node_c.id)
         run_id = run.id
         defn_id = defn.id
         node_a_id = node_a.id
@@ -175,7 +186,7 @@ async def test_ec2_duplicate_propagate_is_idempotent() -> None:
         run = make_run(session, defn.id)
         node_a = make_node(session, run.id, task_slug="idem-a", status="running")
         node_b = make_node(session, run.id, task_slug="idem-b", status="pending")
-        make_edge(session, run.id, source_node_id=node_a.id, target_node_id=node_b.id)
+        make_edge(session, run.id, source_task_id=node_a.id, target_task_id=node_b.id)
         run_id = run.id
         defn_id = defn.id
         node_a_id = node_a.id

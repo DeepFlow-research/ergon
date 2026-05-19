@@ -3,11 +3,10 @@ from uuid import uuid4
 
 import pytest
 from ergon_core.core.application.experiments import launch as launch_module
-from ergon_core.core.application.experiments import service as service_module
 from ergon_core.core.application.experiments.errors import DefinitionNotFoundError
 from ergon_core.core.application.experiments.launch import launch_run
-from ergon_core.core.application.experiments.models import ExperimentRunRequest, RunAssignment
-from ergon_core.core.domain.experiments import DefinitionHandle
+from ergon_core.core.application.experiments.models import ExperimentRunRequest
+from ergon_core.core.application.experiments.handles import DefinitionHandle
 from ergon_core.core.application.experiments.service import run_experiment
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.shared.enums import RunStatus
@@ -56,33 +55,14 @@ class _FakeSession:
 
 @pytest.mark.asyncio
 async def test_run_experiment_creates_one_run_per_selected_sample(monkeypatch):
-    experiment = BenchmarkDefinitionRecord(
+    definition = ExperimentDefinition(
         id=uuid4(),
         name="ci experiment",
         benchmark_type="ci-benchmark",
-        sample_count=2,
-        sample_selection_json={"instance_keys": ["sample-a", "sample-b"]},
-        default_worker_team_json={"primary": "test-worker"},
-        default_evaluator_slug="test-rubric",
-        default_model_target="openai:gpt-4o",
-        sandbox_slug="test-sandbox",
-        dependency_extras_json={"extras": ["none"]},
-        design_json={},
         metadata_json={},
-        status="defined",
     )
     created_runs: list[RunRecord] = []
     emitted: list[tuple] = []
-
-    def workflow_factory(
-        experiment_record: BenchmarkDefinitionRecord,
-        assignment: RunAssignment,
-    ) -> DefinitionHandle:
-        return DefinitionHandle(
-            definition_id=uuid4(),
-            benchmark_type=experiment_record.benchmark_type,
-            worker_bindings=assignment.worker_team,
-        )
 
     def fake_create_run(definition, **kwargs):
         run = RunRecord(
@@ -97,32 +77,20 @@ async def test_run_experiment_creates_one_run_per_selected_sample(monkeypatch):
     async def fake_emit(run_id, definition_id):
         emitted.append((run_id, definition_id))
 
-    monkeypatch.setattr(service_module, "get_session", lambda: _FakeSession(experiment))
-    monkeypatch.setattr(launch_module, "get_session", lambda: _FakeSession(experiment))
+    monkeypatch.setattr(launch_module, "get_session", lambda: _FakeSession(definition=definition))
     monkeypatch.setattr(launch_module, "create_run", fake_create_run)
 
     result = await run_experiment(
-        ExperimentRunRequest(experiment_id=experiment.id),
-        workflow_definition_factory=workflow_factory,
+        ExperimentRunRequest(experiment_id=definition.id),
         emit_workflow_started=fake_emit,
     )
 
-    assert result.experiment_id == experiment.id
-    assert result.run_ids == [run.id for run in created_runs]
-    assert len(result.workflow_definition_ids) == 2
-    assert [run.instance_key for run in created_runs] == ["sample-a", "sample-b"]
-    assert {run.experiment_id for run in created_runs} == {experiment.id}
-    assert [run.worker_team_json for run in created_runs] == [
-        {"primary": "test-worker"},
-        {"primary": "test-worker"},
-    ]
-    assert [run.evaluator_slug for run in created_runs] == ["test-rubric", "test-rubric"]
-    assert [run.sandbox_slug for run in created_runs] == ["test-sandbox", "test-sandbox"]
-    assert [run.dependency_extras_json for run in created_runs] == [
-        {"extras": ["none"]},
-        {"extras": ["none"]},
-    ]
-    assert len(emitted) == 2
+    assert result.experiment_id == definition.id
+    assert result.run_ids == [created_runs[0].id]
+    assert result.workflow_definition_ids == [definition.id]
+    assert [run.instance_key for run in created_runs] == ["default"]
+    assert {run.experiment_id for run in created_runs} == {definition.id}
+    assert emitted == [(created_runs[0].id, definition.id)]
 
 
 @pytest.mark.asyncio
@@ -165,9 +133,8 @@ async def test_launch_run_accepts_definition_id_without_experiment_record(monkey
     assert captured["handle"].definition_id == definition.id
     assert captured["handle"].benchmark_type == "mini"
     assert captured["kwargs"]["workflow_definition_id"] == definition.id
-    # PR 11 tracking: legacy NOT NULL columns are passed None for now.
-    assert captured["kwargs"]["experiment_id"] is None
-    assert captured["kwargs"]["instance_key"] is None
+    assert captured["kwargs"]["experiment_id"] == definition.id
+    assert captured["kwargs"]["instance_key"] == "default"
 
     # Result shape mirrors the spec.
     assert result.experiment_id == definition.id

@@ -149,7 +149,7 @@ async def test_7_parent_failure_children_blocked() -> None:
     """Parent task fails. Its PENDING child successors become BLOCKED, not CANCELLED or FAILED.
 
     Uses a 2-level structure: parent_node → [child_a, child_b] via edges.
-    parent_node is a static (parent_node_id=None) node so the propagation
+    parent_node is a static (parent_task_id=None) node so the propagation
     logic treats its successors as static workflow nodes that should be
     auto-managed (not left pending for a manager).
     """
@@ -163,13 +163,13 @@ async def test_7_parent_failure_children_blocked() -> None:
         child_c = make_node(session, run.id, task_slug="child-c", status="running")
         # child_d is already COMPLETED — it is terminal and must not be overwritten
         child_d = make_node(session, run.id, task_slug="child-d", status="completed")
-        make_edge(session, run.id, source_node_id=parent_node.id, target_node_id=child_a.id)
-        make_edge(session, run.id, source_node_id=parent_node.id, target_node_id=child_b.id)
-        make_edge(session, run.id, source_node_id=parent_node.id, target_node_id=child_c.id)
-        make_edge(session, run.id, source_node_id=parent_node.id, target_node_id=child_d.id)
+        make_edge(session, run.id, source_task_id=parent_node.id, target_task_id=child_a.id)
+        make_edge(session, run.id, source_task_id=parent_node.id, target_task_id=child_b.id)
+        make_edge(session, run.id, source_task_id=parent_node.id, target_task_id=child_c.id)
+        make_edge(session, run.id, source_task_id=parent_node.id, target_task_id=child_d.id)
         run_id = run.id
         defn_id = defn.id
-        parent_node_id = parent_node.id
+        parent_task_id = parent_node.id
         child_a_id = child_a.id
         child_b_id = child_b.id
         child_c_id = child_c.id
@@ -182,7 +182,7 @@ async def test_7_parent_failure_children_blocked() -> None:
             await graph_repo.update_node_status(
                 session,
                 run_id=run_id,
-                node_id=parent_node_id,
+                node_id=parent_task_id,
                 new_status=TaskExecutionStatus.FAILED,
                 meta=MutationMeta(actor="test:setup", reason="test: parent failed"),
             )
@@ -207,9 +207,9 @@ async def test_7_parent_failure_children_blocked() -> None:
             PropagateTaskCompletionCommand(
                 run_id=run_id,
                 definition_id=defn_id,
-                task_id=parent_node_id,
-                execution_id=parent_node_id,
-                node_id=parent_node_id,
+                task_id=parent_task_id,
+                execution_id=parent_task_id,
+                node_id=parent_task_id,
             )
         )
 
@@ -349,7 +349,7 @@ async def test_12_running_successor_not_interrupted() -> None:
         run = make_run(session, defn.id)
         node_a = make_node(session, run.id, task_slug="task-a", status="failed")
         node_b = make_node(session, run.id, task_slug="task-b", status="running")
-        make_edge(session, run.id, source_node_id=node_a.id, target_node_id=node_b.id)
+        make_edge(session, run.id, source_task_id=node_a.id, target_task_id=node_b.id)
         run_id = run.id
         defn_id = defn.id
         node_a_id = node_a.id

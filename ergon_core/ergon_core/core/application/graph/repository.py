@@ -37,20 +37,15 @@ from ergon_core.core.application.graph.errors import (
 )
 from ergon_core.api.benchmark import Task
 from ergon_core.core.application.graph.models import (
-    AnnotationDeletedMutation,
     AnnotationSetMutation,
     EdgeAddedMutation,
-    EdgeRemovedMutation,
     EdgeStatusChangedMutation,
-    GraphAnnotationDto,
     GraphEdgeDto,
-    GraphMutationRecordDto,
     GraphMutationValue,
     GraphNodeDto,
     MutationMeta,
     NodeAddedMutation,
     NodeFieldChangedMutation,
-    NodeRemovedMutation,
     NodeStatusChangedMutation,
     RunGraphNodeView,
     WorkflowGraphDto,
@@ -160,22 +155,15 @@ class WorkflowGraphRepository:
         node_rows: list[RunGraphNode] = []
 
         for task in tasks:
-            node_id = uuid4()
-            def_to_node[task.id] = node_id
+            def_to_node[task.id] = task.id
             node_rows.append(
                 RunGraphNode(
-                    id=node_id,
+                    id=task.id,
                     run_id=run_id,
-                    definition_task_id=task.id,
                     instance_key=instance_key_by_id[task.instance_id],
                     task_slug=task.task_slug,
                     description=task.description,
-                    task_json=task.task_json
-                    or _definition_task_snapshot(
-                        task,
-                        instance_key=instance_key_by_id[task.instance_id],
-                        assigned_worker_slug=worker_by_task.get(task.id),
-                    ),  # TODO: make sure this gets deleted
+                    task_json=task.task_json,
                     is_dynamic=False,
                     status=initial_node_status,
                     assigned_worker_slug=worker_by_task.get(task.id),
@@ -191,8 +179,8 @@ class WorkflowGraphRepository:
                     id=uuid4(),
                     run_id=run_id,
                     definition_dependency_id=dep.id,
-                    source_node_id=def_to_node[dep.depends_on_task_id],
-                    target_node_id=def_to_node[dep.task_id],
+                    source_task_id=def_to_node[dep.depends_on_task_id],
+                    target_task_id=def_to_node[dep.task_id],
                     status=initial_edge_status,
                     created_at=now,
                     updated_at=now,
@@ -306,32 +294,28 @@ class WorkflowGraphRepository:
         this signature; PR 5 actually awaits in the body once Sandbox
         reconstruction lands).
 
-        The OR predicate ``(id == task_id) | (definition_task_id ==
-        task_id)`` is transitional. PR 11 collapses the lookup to
-        ``(run_id, task_id)`` exact-match after schema finalization.
+        PR 11 makes ``RunGraphNode.id`` the task identity for both
+        definition-seeded and dynamic nodes.
         """
 
         row = session.exec(
             select(RunGraphNode).where(
                 RunGraphNode.run_id == run_id,
-                (RunGraphNode.id == task_id) | (RunGraphNode.definition_task_id == task_id),
+                RunGraphNode.id == task_id,
             )
         ).first()
         if row is None:
             raise NodeNotFoundError(task_id, run_id=run_id)
 
-        canonical_task_id = row.definition_task_id or row.id
         task = await Task.from_definition(
             row.task_json,
-            task_id=canonical_task_id,
+            task_id=row.id,
             sandbox_id=sandbox_id,
         )
         return RunGraphNodeView(
             run_id=row.run_id,
-            task_id=canonical_task_id,
-            node_id=row.id,
-            definition_task_id=row.definition_task_id,
-            parent_node_id=row.parent_node_id,
+            task_id=row.id,
+            parent_task_id=row.parent_task_id,
             status=row.status,
             task=task,
             is_dynamic=row.is_dynamic,
@@ -347,7 +331,7 @@ class WorkflowGraphRepository:
         description: str,
         status: str,
         assigned_worker_slug: str | None = None,
-        parent_node_id: UUID | None = None,
+        parent_task_id: UUID | None = None,
         level: int = 0,
         task_json: dict | None = None,
         is_dynamic: bool = True,
@@ -355,41 +339,25 @@ class WorkflowGraphRepository:
     ) -> GraphNodeDto:
         """Create a graph node. Writes the containment columns directly.
 
-        parent_node_id and level are set at creation time and never change.
+        parent_task_id and level are set at creation time and never change.
         The caller (TaskManagementService) computes level = parent.level + 1.
 
         ``task_json`` and ``is_dynamic`` carry the run-tier task snapshot
-        and the static-vs-dynamic discriminator. Defaults reflect the
-        common caller: a dynamic-spawn site producing a graph-native
-        task. Static callers (``initialize_from_definition``) pass
-        ``is_dynamic=False`` explicitly with the bridge snapshot.
-
-        Dynamic-spawn callers (``TaskManagementService.add_subtask`` /
-        ``plan_subtasks`` / ``WorkflowService.add_task``) currently
-        spawn subtasks without an authored Task subclass, so they pass
-        no ``task_json``. We synthesise a ``TaskSpec``-shaped snapshot
-        here so PR 3's run-tier readers (``Task.from_definition``) can
-        re-inflate the node without crashing on a missing ``_type``
-        discriminator. PR 5 replaces this with the object-bound Task
-        snapshot once dynamic spawn callers carry one explicitly.
+        and the static-vs-dynamic discriminator.
         """
+        if task_json is None:
+            raise ValueError("WorkflowGraphRepository.add_node requires task_json")
         now = utcnow()
         node = RunGraphNode(
             run_id=run_id,
             instance_key=instance_key,
             task_slug=task_slug,
             description=description,
-            task_json=task_json
-            or _dynamic_task_snapshot(
-                task_slug=task_slug,
-                instance_key=instance_key,
-                description=description,
-                assigned_worker_slug=assigned_worker_slug,
-            ),
+            task_json=task_json,
             is_dynamic=is_dynamic,
             status=status,
             assigned_worker_slug=assigned_worker_slug,
-            parent_node_id=parent_node_id,
+            parent_task_id=parent_task_id,
             level=level,
             created_at=now,
             updated_at=now,
@@ -408,52 +376,6 @@ class WorkflowGraphRepository:
             new_value=_node_snapshot(node),
         )
         return _to_node_dto(node)
-
-    async def remove_node(
-        self,
-        session: Session,
-        *,
-        run_id: UUID,
-        node_id: UUID,
-        terminal_status: str,
-        meta: MutationMeta,
-    ) -> None:
-        node = self._get_node_row(session, run_id, node_id)
-        old = _node_removed_snapshot(node)
-
-        connected = list(
-            session.exec(
-                select(RunGraphEdge).where(
-                    RunGraphEdge.run_id == run_id,
-                    (RunGraphEdge.source_node_id == node_id)
-                    | (RunGraphEdge.target_node_id == node_id),
-                )
-            ).all()
-        )
-        for edge in connected:
-            await self.remove_edge(
-                session,
-                run_id=run_id,
-                edge_id=edge.id,
-                terminal_status=terminal_status,
-                meta=meta,
-            )
-
-        node.status = terminal_status
-        node.updated_at = utcnow()
-        session.add(node)
-        session.flush()
-
-        await self._log_mutation(
-            session,
-            run_id,
-            mutation_type="node.removed",
-            target_type="node",
-            target_id=node_id,
-            meta=meta,
-            old_value=old,
-            new_value=_node_removed_snapshot(node),
-        )
 
     async def update_node_status(
         self,
@@ -543,20 +465,20 @@ class WorkflowGraphRepository:
         session: Session,
         run_id: UUID,
         *,
-        source_node_id: UUID,
-        target_node_id: UUID,
+        source_task_id: UUID,
+        target_task_id: UUID,
         status: str,
         meta: MutationMeta,
     ) -> GraphEdgeDto:
-        self._require_node_exists(session, run_id, source_node_id)
-        self._require_node_exists(session, run_id, target_node_id)
-        self._check_no_cycle(session, run_id, source_node_id, target_node_id)
+        self._require_node_exists(session, run_id, source_task_id)
+        self._require_node_exists(session, run_id, target_task_id)
+        self._check_no_cycle(session, run_id, source_task_id, target_task_id)
 
         now = utcnow()
         edge = RunGraphEdge(
             run_id=run_id,
-            source_node_id=source_node_id,
-            target_node_id=target_node_id,
+            source_task_id=source_task_id,
+            target_task_id=target_task_id,
             status=status,
             created_at=now,
             updated_at=now,
@@ -575,34 +497,6 @@ class WorkflowGraphRepository:
             new_value=_edge_snapshot(edge),
         )
         return _to_edge_dto(edge)
-
-    async def remove_edge(
-        self,
-        session: Session,
-        *,
-        run_id: UUID,
-        edge_id: UUID,
-        terminal_status: str,
-        meta: MutationMeta,
-    ) -> None:
-        edge = self._get_edge_row(session, run_id, edge_id)
-        old = _edge_removed_snapshot(edge)
-
-        edge.status = terminal_status
-        edge.updated_at = utcnow()
-        session.add(edge)
-        session.flush()
-
-        await self._log_mutation(
-            session,
-            run_id,
-            mutation_type="edge.removed",
-            target_type="edge",
-            target_id=edge_id,
-            meta=meta,
-            old_value=old,
-            new_value=_edge_removed_snapshot(edge),
-        )
 
     async def update_edge_status(
         self,
@@ -633,174 +527,7 @@ class WorkflowGraphRepository:
         )
         return _to_edge_dto(edge)
 
-    # ── Annotation operations ───────────────────────────────
-
-    async def set_annotation(
-        self,
-        session: Session,
-        run_id: UUID,
-        target_type: str,
-        target_id: UUID,
-        namespace: str,
-        payload: dict,
-        *,
-        meta: MutationMeta,
-    ) -> GraphAnnotationDto:
-        old_payload = self.get_annotation(session, run_id, target_type, target_id, namespace)
-        seq = self._next_sequence(session, run_id)
-
-        row = RunGraphAnnotation(
-            run_id=run_id,
-            target_type=target_type,
-            target_id=target_id,
-            namespace=namespace,
-            sequence=seq,
-            payload=payload,
-            created_at=utcnow(),
-        )
-        session.add(row)
-        session.flush()
-
-        await self._log_mutation(
-            session,
-            run_id,
-            mutation_type="annotation.set",
-            target_type=target_type,
-            target_id=target_id,
-            meta=meta,
-            old_value=AnnotationSetMutation(namespace=namespace, payload=old_payload)
-            if old_payload
-            else None,
-            new_value=AnnotationSetMutation(namespace=namespace, payload=payload),
-        )
-        return _to_annotation_dto(row)
-
-    def get_annotation(
-        self,
-        session: Session,
-        run_id: UUID,
-        target_type: str,
-        target_id: UUID,
-        namespace: str,
-    ) -> dict | None:
-        stmt = (
-            select(RunGraphAnnotation.payload)
-            .where(
-                RunGraphAnnotation.run_id == run_id,
-                RunGraphAnnotation.target_type == target_type,
-                RunGraphAnnotation.target_id == target_id,
-                RunGraphAnnotation.namespace == namespace,
-            )
-            .order_by(col(RunGraphAnnotation.sequence).desc())
-            .limit(1)
-        )
-        result = session.exec(stmt).first()
-        return dict(result) if result is not None else None
-
-    def get_annotation_at(
-        self,
-        session: Session,
-        run_id: UUID,
-        target_type: str,
-        target_id: UUID,
-        namespace: str,
-        sequence: int,
-    ) -> dict | None:
-        """Annotation payload as of a given mutation sequence."""
-        stmt = (
-            select(RunGraphAnnotation.payload)
-            .where(
-                RunGraphAnnotation.run_id == run_id,
-                RunGraphAnnotation.target_type == target_type,
-                RunGraphAnnotation.target_id == target_id,
-                RunGraphAnnotation.namespace == namespace,
-                RunGraphAnnotation.sequence <= sequence,
-            )
-            .order_by(col(RunGraphAnnotation.sequence).desc())
-            .limit(1)
-        )
-        result = session.exec(stmt).first()
-        return dict(result) if result is not None else None
-
-    def get_annotations(
-        self,
-        session: Session,
-        run_id: UUID,
-        target_type: str,
-        target_id: UUID,
-    ) -> dict[str, dict]:
-        """Latest version of all annotations for a target."""
-        stmt = (
-            select(RunGraphAnnotation)
-            .where(
-                RunGraphAnnotation.run_id == run_id,
-                RunGraphAnnotation.target_type == target_type,
-                RunGraphAnnotation.target_id == target_id,
-            )
-            .order_by(col(RunGraphAnnotation.sequence).desc())
-        )
-        rows = list(session.exec(stmt).all())
-
-        latest: dict[str, dict] = {}
-        for row in rows:
-            if row.namespace not in latest:
-                latest[row.namespace] = dict(row.payload)
-        return latest
-
-    async def delete_annotation(
-        self,
-        session: Session,
-        run_id: UUID,
-        target_type: str,
-        target_id: UUID,
-        namespace: str,
-        *,
-        meta: MutationMeta,
-    ) -> None:
-        """Tombstone, not a hard delete. Inserts a row with empty payload so
-        the append-only WAL retains complete version history for replay."""
-        old_payload = self.get_annotation(session, run_id, target_type, target_id, namespace)
-        seq = self._next_sequence(session, run_id)
-
-        row = RunGraphAnnotation(
-            run_id=run_id,
-            target_type=target_type,
-            target_id=target_id,
-            namespace=namespace,
-            sequence=seq,
-            payload={},
-            created_at=utcnow(),
-        )
-        session.add(row)
-        session.flush()
-
-        await self._log_mutation(
-            session,
-            run_id,
-            mutation_type="annotation.deleted",
-            target_type=target_type,
-            target_id=target_id,
-            meta=meta,
-            old_value=AnnotationDeletedMutation(namespace=namespace, payload=old_payload)
-            if old_payload
-            else None,
-            new_value=AnnotationDeletedMutation(namespace=namespace, payload={}),
-        )
-
     # ── Query operations ────────────────────────────────────
-
-    def get_graph(
-        self,
-        session: Session,
-        run_id: UUID,
-    ) -> WorkflowGraphDto:
-        nodes = list(session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all())
-        edges = list(session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all())
-        return WorkflowGraphDto(
-            run_id=run_id,
-            nodes=[_to_node_dto(n) for n in nodes],
-            edges=[_to_edge_dto(e) for e in edges],
-        )
 
     def get_node(
         self,
@@ -810,15 +537,6 @@ class WorkflowGraphRepository:
         node_id: UUID,
     ) -> GraphNodeDto:
         return _to_node_dto(self._get_node_row(session, run_id, node_id))
-
-    def get_edge(
-        self,
-        session: Session,
-        *,
-        run_id: UUID,
-        edge_id: UUID,
-    ) -> GraphEdgeDto:
-        return _to_edge_dto(self._get_edge_row(session, run_id, edge_id))
 
     def get_incoming_edges(
         self,
@@ -831,7 +549,7 @@ class WorkflowGraphRepository:
             session.exec(
                 select(RunGraphEdge).where(
                     RunGraphEdge.run_id == run_id,
-                    RunGraphEdge.target_node_id == node_id,
+                    RunGraphEdge.target_task_id == node_id,
                 )
             ).all()
         )
@@ -848,27 +566,11 @@ class WorkflowGraphRepository:
             session.exec(
                 select(RunGraphEdge).where(
                     RunGraphEdge.run_id == run_id,
-                    RunGraphEdge.source_node_id == node_id,
+                    RunGraphEdge.source_task_id == node_id,
                 )
             ).all()
         )
         return [_to_edge_dto(e) for e in rows]
-
-    def get_nodes_by_status(
-        self,
-        session: Session,
-        run_id: UUID,
-        status: str,
-    ) -> list[GraphNodeDto]:
-        rows = list(
-            session.exec(
-                select(RunGraphNode).where(
-                    RunGraphNode.run_id == run_id,
-                    RunGraphNode.status == status,
-                )
-            ).all()
-        )
-        return [_to_node_dto(n) for n in rows]
 
     def descendants_by_parent(
         self,
@@ -878,26 +580,26 @@ class WorkflowGraphRepository:
         root_task_id: UUID,
     ) -> Sequence[RunGraphNode]:
         """Return all RunGraphNode rows transitively reachable from
-        root_task_id via parent_node_id, NOT including the root itself.
+        root_task_id via parent_task_id, NOT including the root itself.
         """
 
         # During the transition the canonical identity column is `id`
-        # (with `parent_node_id` pointing at parent.id). PR 11 renames to
+        # (with `parent_task_id` pointing at parent.id). PR 11 renames to
         # `task_id` / `parent_task_id`; update the column references in
         # the same commit that does the rename.
         cte_sql = text(
             """
             WITH RECURSIVE descendants AS (
-                SELECT id, parent_node_id, run_id
+                SELECT id, parent_task_id, run_id
                 FROM run_graph_nodes
                 WHERE run_id = :run_id
-                  AND parent_node_id = :root_task_id
+                  AND parent_task_id = :root_task_id
 
                 UNION ALL
 
-                SELECT child.id, child.parent_node_id, child.run_id
+                SELECT child.id, child.parent_task_id, child.run_id
                 FROM run_graph_nodes AS child
-                JOIN descendants ON child.parent_node_id = descendants.id
+                JOIN descendants ON child.parent_task_id = descendants.id
                 WHERE child.run_id = :run_id
             )
             SELECT id FROM descendants
@@ -918,31 +620,6 @@ class WorkflowGraphRepository:
             return ()
 
         return session.exec(select(RunGraphNode).where(RunGraphNode.id.in_(descendant_ids))).all()
-
-    def get_mutations(
-        self,
-        session: Session,
-        run_id: UUID,
-        *,
-        since_sequence: int = 0,
-    ) -> list[GraphMutationRecordDto]:
-        rows = list(
-            session.exec(
-                select(RunGraphMutation)
-                .where(
-                    RunGraphMutation.run_id == run_id,
-                    RunGraphMutation.sequence >= since_sequence,
-                )
-                .order_by(col(RunGraphMutation.sequence).asc())
-            ).all()
-        )
-        return [_to_mutation_dto(m) for m in rows]
-
-    # ── Structural validation ───────────────────────────────
-
-    def validate_acyclic(self, session: Session, run_id: UUID) -> bool:
-        edges = list(session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all())
-        return _is_acyclic(edges)
 
     # ── Internal helpers ────────────────────────────────────
 
@@ -1053,7 +730,7 @@ class WorkflowGraphRepository:
         edges = list(session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all())
         adj: dict[UUID, list[UUID]] = defaultdict(list)
         for e in edges:
-            adj[e.source_node_id].append(e.target_node_id)
+            adj[e.source_task_id].append(e.target_task_id)
 
         visited: set[UUID] = set()
         stack = [target_id]
@@ -1076,13 +753,12 @@ def _to_node_dto(row: RunGraphNode) -> GraphNodeDto:
     return GraphNodeDto(
         id=row.id,
         run_id=row.run_id,
-        definition_task_id=row.definition_task_id,
         instance_key=row.instance_key,
         task_slug=row.task_slug,
         description=row.description,
         status=row.status,
         assigned_worker_slug=row.assigned_worker_slug,
-        parent_node_id=row.parent_node_id,
+        parent_task_id=row.parent_task_id,
         level=row.level,
     )
 
@@ -1092,55 +768,9 @@ def _to_edge_dto(row: RunGraphEdge) -> GraphEdgeDto:
         id=row.id,
         run_id=row.run_id,
         definition_dependency_id=row.definition_dependency_id,
-        source_node_id=row.source_node_id,
-        target_node_id=row.target_node_id,
+        source_task_id=row.source_task_id,
+        target_task_id=row.target_task_id,
         status=row.status,
-    )
-
-
-def _to_annotation_dto(row: RunGraphAnnotation) -> GraphAnnotationDto:
-    return GraphAnnotationDto(
-        id=row.id,
-        run_id=row.run_id,
-        target_type=row.target_type,
-        target_id=row.target_id,
-        namespace=row.namespace,
-        sequence=row.sequence,
-        payload=dict(row.payload),
-    )
-
-
-def _to_mutation_dto(row: RunGraphMutation) -> GraphMutationRecordDto:
-    return GraphMutationRecordDto(
-        id=row.id,
-        run_id=row.run_id,
-        sequence=row.sequence,
-        mutation_type=row.mutation_type,
-        target_type=row.target_type,
-        target_id=row.target_id,
-        actor=row.actor,
-        old_value=dict(row.old_value) if row.old_value else None,
-        new_value=dict(row.new_value),
-        reason=row.reason,
-        created_at=row.created_at,
-    )
-
-
-def _node_removed_snapshot(node: RunGraphNode) -> NodeRemovedMutation:
-    return NodeRemovedMutation(
-        task_slug=node.task_slug,
-        instance_key=node.instance_key,
-        description=node.description,
-        status=node.status,
-        assigned_worker_slug=node.assigned_worker_slug,
-    )
-
-
-def _edge_removed_snapshot(edge: RunGraphEdge) -> EdgeRemovedMutation:
-    return EdgeRemovedMutation(
-        source_node_id=edge.source_node_id,
-        target_node_id=edge.target_node_id,
-        status=edge.status,
     )
 
 
@@ -1156,98 +786,7 @@ def _node_snapshot(node: RunGraphNode) -> NodeAddedMutation:
 
 def _edge_snapshot(edge: RunGraphEdge) -> EdgeAddedMutation:
     return EdgeAddedMutation(
-        source_node_id=edge.source_node_id,
-        target_node_id=edge.target_node_id,
+        source_task_id=edge.source_task_id,
+        target_task_id=edge.target_task_id,
         status=edge.status,
     )
-
-
-def _definition_task_snapshot(
-    task: ExperimentDefinitionTask,
-    *,
-    instance_key: str,
-    assigned_worker_slug: str | None,
-) -> dict:
-    """Build the PR 1 bridge snapshot for a static run-graph node.
-
-    The shape mirrors v1's `TaskSpec` JSON so existing readers keep
-    working through the transition. PR 5 replaces this with the
-    object-bound `Task` JSON shape; PR 11 deletes the `_legacy` block.
-    """
-
-    return {
-        "_type": "ergon_core.api.benchmark.task:TaskSpec",
-        "task_slug": task.task_slug,
-        "instance_key": instance_key,
-        "description": task.description,
-        "parent_task_slug": None,
-        "dependency_task_slugs": (),
-        "evaluator_binding_keys": (),
-        "task_payload": task.task_payload_json,
-        "_legacy": {
-            "assigned_worker_slug": assigned_worker_slug,
-            "definition_task_id": str(task.id),
-        },
-    }
-
-
-def _dynamic_task_snapshot(
-    *,
-    task_slug: str,
-    instance_key: str,
-    description: str,
-    assigned_worker_slug: str | None,
-) -> dict:
-    """Build the PR 1 bridge snapshot for a dynamically-spawned subtask.
-
-    Dynamic-spawn callers (``add_subtask`` / ``plan_subtasks`` /
-    ``WorkflowService.add_task``) don't have an authored ``Task``
-    subclass at hand — the parent worker emits a slug + description +
-    worker assignment via the management API. PR 3's run-tier readers
-    still need a valid ``_type`` discriminator on every ``task_json``
-    or ``Task.from_definition`` raises. We emit a minimal ``TaskSpec``
-    snapshot so the run-graph node round-trips through the typed
-    reader. PR 5's object-bound API will replace this when dynamic
-    spawn callers carry a ``Task`` instance directly.
-    """
-
-    return {
-        "_type": "ergon_core.api.benchmark.task:TaskSpec",
-        "task_slug": task_slug,
-        "instance_key": instance_key,
-        "description": description,
-        "parent_task_slug": None,
-        "dependency_task_slugs": (),
-        "evaluator_binding_keys": (),
-        "task_payload": None,
-        "_legacy": {
-            "assigned_worker_slug": assigned_worker_slug,
-            "definition_task_id": None,
-        },
-    }
-
-
-def _is_acyclic(edges: list[RunGraphEdge]) -> bool:
-    """Kahn's algorithm for cycle detection."""
-    adj: dict[UUID, list[UUID]] = defaultdict(list)
-    in_degree: dict[UUID, int] = defaultdict(int)
-    all_nodes: set[UUID] = set()
-
-    for e in edges:
-        adj[e.source_node_id].append(e.target_node_id)
-        in_degree[e.target_node_id] = in_degree.get(e.target_node_id, 0) + 1
-        all_nodes.add(e.source_node_id)
-        all_nodes.add(e.target_node_id)
-
-    queue = [n for n in all_nodes if in_degree.get(n, 0) == 0]
-    visited = 0
-
-    while queue:
-        node = queue.pop()
-        visited += 1
-        for neighbor in adj.get(node, []):
-            in_degree[neighbor] -= 1
-            if in_degree[neighbor] == 0:
-                queue.append(neighbor)
-
-    return visited == len(all_nodes)

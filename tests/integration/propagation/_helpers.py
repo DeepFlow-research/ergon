@@ -109,7 +109,7 @@ def make_node(
     *,
     task_slug: str,
     status: str = "pending",
-    parent_node_id: UUID | None = None,
+    parent_task_id: UUID | None = None,
     level: int = 0,
 ) -> RunGraphNode:
     """Create a RunGraphNode row for test scaffolding."""
@@ -119,7 +119,7 @@ def make_node(
         task_slug=task_slug,
         description=f"Test node: {task_slug}",
         status=status,
-        parent_node_id=parent_node_id,
+        parent_task_id=parent_task_id,
         level=level,
     )
     session.add(node)
@@ -132,15 +132,15 @@ def make_edge(
     session: Session,
     run_id: UUID,
     *,
-    source_node_id: UUID,
-    target_node_id: UUID,
+    source_task_id: UUID,
+    target_task_id: UUID,
     status: str = "pending",
 ) -> RunGraphEdge:
     """Create a RunGraphEdge row for test scaffolding."""
     edge = RunGraphEdge(
         run_id=run_id,
-        source_node_id=source_node_id,
-        target_node_id=target_node_id,
+        source_task_id=source_task_id,
+        target_task_id=target_task_id,
         status=status,
     )
     session.add(edge)
@@ -169,7 +169,7 @@ def seed_linear_chain(
         nodes.append(node)
 
     for i in range(len(nodes) - 1):
-        make_edge(session, run_id, source_node_id=nodes[i].id, target_node_id=nodes[i + 1].id)
+        make_edge(session, run_id, source_task_id=nodes[i].id, target_task_id=nodes[i + 1].id)
 
     session.commit()
     return nodes

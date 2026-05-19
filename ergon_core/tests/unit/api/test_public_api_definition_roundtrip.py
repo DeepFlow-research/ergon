@@ -56,6 +56,22 @@ class FakeWorker(Worker):
         yield WorkerOutput(output="ok")
 
 
+class LegacyInitWorker(Worker):
+    type_slug: ClassVar[str] = "legacy-init-worker"
+
+    def __init__(self, *, name: str, model: str | None, label: str = "legacy") -> None:
+        super().__init__(name=name, model=model)
+        self.label = label
+
+    async def execute(
+        self,
+        task: Task,
+        *,
+        context: WorkerContext,
+    ) -> AsyncGenerator[WorkerStreamItem, None]:
+        yield WorkerOutput(output=self.label)
+
+
 class FakeTask(Task[EmptyTaskPayload]):
     """Concrete importable task class for round-trip tests."""
 
@@ -90,6 +106,22 @@ async def test_object_bound_task_definition_round_trips_concrete_nested_componen
     assert loaded.evaluators[0].criteria[0].threshold == 0.8
 
 
+def test_worker_from_definition_does_not_pass_type_to_custom_init() -> None:
+    worker = LegacyInitWorker.from_definition(
+        {
+            "_type": (
+                "ergon_core.tests.unit.api.test_public_api_definition_roundtrip:LegacyInitWorker"
+            ),
+            "name": "worker",
+            "model": None,
+            "label": "roundtrip",
+        }
+    )
+
+    assert type(worker).__name__ == "LegacyInitWorker"
+    assert worker.label == "roundtrip"
+
+
 def test_criterion_from_definition_requires_type_discriminator() -> None:
     with pytest.raises(ValueError, match="Criterion snapshot.*`_type`"):
         Criterion.from_definition({"slug": "missing"})
@@ -105,6 +137,8 @@ def test_parametrized_generic_task_type_is_rejected_when_persisting() -> None:
         task_slug="generic",
         instance_key="sample-1",
         description="Should use a concrete subclass before persistence.",
+        worker=FakeWorker(name="worker", model=None),
+        sandbox=FakeSandbox(),
     )
 
     with pytest.raises(ValueError, match="Task snapshot.*concrete Task subclass"):

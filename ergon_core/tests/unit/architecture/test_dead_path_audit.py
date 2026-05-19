@@ -150,7 +150,7 @@ DEAD_PATHS: tuple[DeadPath, ...] = (
         audit_note="Identity collapses to task_id only",
     ),
     DeadPath(
-        symbol="PreparedTaskExecution.definition_task_id",
+        symbol="PreparedTaskExecution.task_id",
         landing_pr="PR 11",
         audit_note="Identity collapses to task_id only",
     ),
@@ -190,39 +190,7 @@ DEAD_PATHS: tuple[DeadPath, ...] = (
 # symbols listed in `DEAD_PATHS` (e.g. names not yet present in v1, or
 # names already cleaned up) are still asserted every run — they just
 # pass without xfail because they're already in the desired state.
-_XFAIL_BY_SYMBOL: dict[str, str] = {
-    "CriterionExecutor": "PR 11: Protocol pair deleted",
-    "InngestCriterionExecutor": "PR 11: Protocol pair deleted",
-    # PR 5 moved the in-body bridge into `_legacy_worker_bridge.py`
-    # (sibling module) for the PR 5 → PR 10c window and renamed the
-    # function to `legacy_worker_from_payload`. It still has one
-    # caller — worker_execute's `if worker is None:` branch — so the
-    # symbol is on the deletion list but not yet callerless. PR 11
-    # Task 1.5 deletes both the sibling module and the branch.
-    "legacy_worker_from_payload": (
-        "PR 11 Task 1.5: deleted once every benchmark migrates to "
-        "object-bound Task (PR 6 / PR 10a / PR 10b / PR 10c)."
-    ),
-    "_prepare_legacy_graph_native": (
-        "PR 3 renamed _prepare_graph_native to _prepare_legacy_graph_native; "
-        "the method definition is still in the source file as transitional "
-        "code for rollback. PR 11 deletes it."
-    ),
-    "_prepare_legacy_definition": (
-        "PR 3 renamed _prepare_definition to _prepare_legacy_definition; "
-        "the method definition is still in the source file as transitional "
-        "code for rollback. PR 11 deletes it."
-    ),
-    "terminate_sandbox_by_id": "PR 11: cleanup helper deleted or renamed",
-    "_persist_single_sample_workflow_definition": "PR 8: CLI uses persist_benchmark",
-    # Registry/definition layer retired by PR 11
-    "ComponentCatalogService": "PR 11: object-bound task replaces registry resolution",
-    "DefinitionRepository": "PR 11: runtime reads run-tier only",
-    # Schema column renames
-    "parent_node_id": "PR 11: renamed to parent_task_id",
-    "source_node_id": "PR 11: renamed to source_task_id",
-    "target_node_id": "PR 11: renamed to target_task_id",
-}
+_XFAIL_BY_SYMBOL: dict[str, str] = {}
 
 
 def _cases() -> list:

@@ -7,7 +7,7 @@ timeout) and — once provisioned or attached — holds a live
 proxies IO (``run_command``, ``write_file``, ``read_file``,
 ``list_files``) to the runtime; criteria call those directly off
 ``context.task.sandbox`` rather than reaching into a separate
-``CriterionRuntime`` object.
+``public sandbox runtime`` object.
 
 Lifecycle verbs:
 
@@ -115,7 +115,8 @@ class Sandbox(BaseModel, ABC):
                 f"must carry `_type`."
             )
         SandboxCls = import_component_subclass(sandbox_type, Sandbox, kind="Sandbox")
-        instance = cast("Sandbox", SandboxCls.model_validate(sandbox_json))
+        payload = {k: v for k, v in sandbox_json.items() if k != "_type"}
+        instance = cast("Sandbox", SandboxCls.model_validate(payload))
         if sandbox_id is not None:
             await instance._bind_runtime(sandbox_id)
         return instance

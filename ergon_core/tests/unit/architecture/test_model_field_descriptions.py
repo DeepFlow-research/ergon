@@ -67,7 +67,7 @@ def test_sqlmodel_field_docs_are_schema_metadata() -> None:
     assert _description(RunGraphNode, "task_slug")
     assert _description(RunGraphNode, "status")
     assert _description(RunGraphNode, "assigned_worker_slug")
-    assert _description(RunGraphNode, "parent_node_id")
+    assert _description(RunGraphNode, "parent_task_id")
     assert _description(RunGraphNode, "level")
     assert _description(RunContextEvent, "event_type")
     assert _description(RunContextEvent, "payload")

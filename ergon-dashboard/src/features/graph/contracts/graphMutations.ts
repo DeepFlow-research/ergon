@@ -42,11 +42,19 @@ export const NodeFieldChangedValueSchema = z.object({
 });
 export type NodeFieldChangedValue = z.infer<typeof NodeFieldChangedValueSchema>;
 
-export const EdgeAddedValueSchema = z.object({
+export const EdgeAddedValueSchema = z.preprocess((input) => {
+  if (typeof input !== "object" || input === null) return input;
+  const value = input as Record<string, unknown>;
+  return {
+    ...value,
+    source_node_id: value.source_node_id ?? value.source_task_id,
+    target_node_id: value.target_node_id ?? value.target_task_id,
+  };
+}, z.object({
   source_node_id: z.string().uuid(),
   target_node_id: z.string().uuid(),
   status: z.string(),
-});
+}));
 export type EdgeAddedValue = z.infer<typeof EdgeAddedValueSchema>;
 
 export const EdgeStatusChangedValueSchema = z.object({

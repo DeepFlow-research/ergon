@@ -232,17 +232,17 @@ def _handle_inspect(
             return _format_output({"content": content.decode(errors="replace")}, [], "json")
         return WorkflowCommandOutput(stdout=content.decode(errors="replace"))
     if args.action == "task-tree":
-        parent = UUID(args.parent_node_id) if args.parent_node_id else None
+        parent = UUID(args.parent_task_id) if args.parent_task_id else None
         deadline = time.monotonic() + max(args.wait_seconds, 0)
-        tasks = service.list_tasks(session, run_id=context.run_id, parent_node_id=parent)
+        tasks = service.list_tasks(session, run_id=context.run_id, parent_task_id=parent)
         while args.wait_seconds > 0 and time.monotonic() < deadline:
-            children = [task for task in tasks if task.parent_node_id == context.node_id]
+            children = [task for task in tasks if task.parent_task_id == context.node_id]
             if children and all(
                 task.status in {"completed", "failed", "cancelled"} for task in children
             ):
                 break
             time.sleep(2)
-            tasks = service.list_tasks(session, run_id=context.run_id, parent_node_id=parent)
+            tasks = service.list_tasks(session, run_id=context.run_id, parent_task_id=parent)
         return _format_output(
             {"tasks": [_dump(task) for task in tasks]},
             text_lines=[
@@ -320,7 +320,7 @@ async def _handle_manage(
         result = await service.add_task(
             session,
             run_id=context.run_id,
-            parent_node_id=context.node_id,
+            parent_task_id=context.node_id,
             task_slug=args.task_slug,
             description=args.description,
             assigned_worker_slug=args.worker,
@@ -328,7 +328,11 @@ async def _handle_manage(
         )
         return _format_output(
             {"task": _dump(result)},
-            text_lines=[f"{result.task_slug} {result.status} {result.node_id}"],
+            text_lines=[
+                result.message
+                if result.node is None
+                else f"{result.node.task_slug} {result.node.status} {result.node.node_id}"
+            ],
             output_format=args.format,
         )
     try:
