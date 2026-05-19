@@ -6,7 +6,6 @@ import logging
 from collections.abc import AsyncGenerator, Callable
 from types import NoneType
 from typing import Any, ClassVar, cast
-from uuid import UUID
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerOutput, WorkerStreamItem
 from ergon_core.core.shared.context_parts import (
@@ -14,12 +13,10 @@ from ergon_core.core.shared.context_parts import (
     ContextPartChunk,
     ToolCallPart,
 )
-from ergon_core.core.application.context.events import ContextEventService
-from pydantic import BaseModel, Field, PrivateAttr, SerializeAsAny
+from pydantic import BaseModel, PrivateAttr, SerializeAsAny
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
 from pydantic_ai.tools import Tool
-from sqlmodel import Session
 
 from ergon_builtins.common.llm_context.adapters.pydantic_ai import (
     PydanticAITranscriptAdapter,
