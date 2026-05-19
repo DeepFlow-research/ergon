@@ -106,7 +106,7 @@ class BaseSandboxManager(ABC):
 
         Production callers MUST NOT call this after startup. The only
         sanctioned call site is inside the ``lifespan`` context manager in
-        ``ergon_core/ergon_core/core/rest_api/app.py``.
+        ``ergon_core/ergon_core/core/infrastructure/http/app.py``.
         """
         cls._event_sink = sink
 

@@ -4,7 +4,7 @@ ROOT = Path(__file__).resolve().parents[4]
 CORE = ROOT / "ergon_core" / "ergon_core" / "core"
 
 ALLOWED_FILES = {
-    CORE / "rest_api" / "test_harness.py",
+    CORE / "infrastructure" / "http" / "routes" / "test_harness.py",
     CORE / "shared" / "settings.py",
 }
 

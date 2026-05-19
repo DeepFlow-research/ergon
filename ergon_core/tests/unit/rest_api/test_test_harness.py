@@ -3,8 +3,9 @@
 from collections.abc import Iterator
 from uuid import uuid4
 
-from ergon_core.core.rest_api import test_harness
-from ergon_core.core.rest_api.test_harness import get_session_dep, router
+from ergon_core.core.application.testing.test_harness_service import get_session_dep
+from ergon_core.core.infrastructure.http.routes import test_harness
+from ergon_core.core.infrastructure.http.routes.test_harness import router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

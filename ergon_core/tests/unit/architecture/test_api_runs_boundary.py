@@ -7,7 +7,9 @@ RUNS_API_PATH = (
     / "ergon_core"
     / "ergon_core"
     / "core"
-    / "rest_api"
+    / "infrastructure"
+    / "http"
+    / "routes"
     / "runs.py"
 )
 
