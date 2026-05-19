@@ -43,17 +43,17 @@ def _cleanup_run(run_id, defn_id) -> None:  # type: ignore[no-untyped-def]
         for edge in session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all():
             session.delete(edge)
         nodes = list(session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all())
-        remaining = {node.id: node for node in nodes}
+        remaining = {node.task_id: node for node in nodes}
         while remaining:
             parent_ids = {
                 node.parent_task_id
                 for node in remaining.values()
                 if node.parent_task_id is not None
             }
-            leaves = [node for node in remaining.values() if node.id not in parent_ids]
+            leaves = [node for node in remaining.values() if node.task_id not in parent_ids]
             for node in leaves:
                 session.delete(node)
-                remaining.pop(node.id)
+                remaining.pop(node.task_id)
             session.flush()
         run_row = session.get(RunRecord, run_id)
         if run_row is not None:
@@ -92,13 +92,13 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
         node_a = make_node(session, run.id, task_slug="fan-a", status="running")
         node_b = make_node(session, run.id, task_slug="fan-b", status="running")
         node_c = make_node(session, run.id, task_slug="fan-c", status="pending")
-        make_edge(session, run.id, source_task_id=node_a.id, target_task_id=node_c.id)
-        make_edge(session, run.id, source_task_id=node_b.id, target_task_id=node_c.id)
+        make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_c.task_id)
+        make_edge(session, run.id, source_task_id=node_b.task_id, target_task_id=node_c.task_id)
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
-        node_b_id = node_b.id
-        node_c_id = node_c.id
+        node_a_id = node_a.task_id
+        node_b_id = node_b.task_id
+        node_c_id = node_c.task_id
         session.commit()
 
     try:
@@ -186,11 +186,11 @@ async def test_ec2_duplicate_propagate_is_idempotent() -> None:
         run = make_run(session, defn.id)
         node_a = make_node(session, run.id, task_slug="idem-a", status="running")
         node_b = make_node(session, run.id, task_slug="idem-b", status="pending")
-        make_edge(session, run.id, source_task_id=node_a.id, target_task_id=node_b.id)
+        make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_b.task_id)
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
-        node_b_id = node_b.id
+        node_a_id = node_a.task_id
+        node_b_id = node_b.task_id
         session.commit()
 
     try:

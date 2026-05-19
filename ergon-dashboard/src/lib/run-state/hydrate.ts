@@ -101,7 +101,7 @@ export function hydrateRunSnapshot(input: unknown): WorkflowRunState {
 
   return {
     id: data.id,
-    experimentId: data.experimentId,
+    definitionId: data.definitionId,
     name: data.name,
     status: data.status as WorkflowRunState["status"],
     tasks: new Map(

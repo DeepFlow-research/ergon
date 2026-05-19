@@ -3,7 +3,6 @@
 from argparse import Namespace
 from uuid import UUID
 
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.application.workflows.runs import cancel_run as do_cancel
@@ -31,11 +30,14 @@ def list_runs(args: Namespace) -> int:
         stmt = select(RunRecord).order_by(RunRecord.created_at.desc())  # type: ignore[attr-defined]
         if args.status:
             stmt = stmt.where(RunRecord.status == args.status)
-        if args.experiment:
-            stmt = stmt.join(
-                ExperimentDefinition,
-                RunRecord.workflow_definition_id == ExperimentDefinition.id,  # type: ignore[invalid-argument-type]
-            ).where(ExperimentDefinition.name == args.experiment)
+        filter_definition_id = args.definition_id
+        if filter_definition_id:
+            try:
+                definition_id = UUID(filter_definition_id)
+            except ValueError:
+                print(f"Invalid UUID: {filter_definition_id}")
+                return 1
+            stmt = stmt.where(RunRecord.workflow_definition_id == definition_id)
         stmt = stmt.limit(args.limit)
         runs = list(session.exec(stmt).all())
 
@@ -43,8 +45,8 @@ def list_runs(args: Namespace) -> int:
         parts = ["No runs found"]
         if args.status:
             parts.append(f"with status={args.status!r}")
-        if args.experiment:
-            parts.append(f"for experiment={args.experiment!r}")
+        if args.definition_id:
+            parts.append(f"for definition_id={args.definition_id!r}")
         print(" ".join(parts))
         return 0
 

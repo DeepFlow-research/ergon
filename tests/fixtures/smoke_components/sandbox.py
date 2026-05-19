@@ -16,7 +16,11 @@ from typing import cast
 from uuid import UUID, uuid4
 
 from ergon_core.api.sandbox import Sandbox
-from ergon_core.core.infrastructure.sandbox.manager import AsyncSandbox, BaseSandboxManager
+from ergon_core.core.infrastructure.sandbox.manager import (
+    AsyncSandbox,
+    BaseSandboxManager,
+    DefaultSandboxManager,
+)
 from ergon_core.core.shared.settings import settings
 from pydantic import BaseModel
 
@@ -153,6 +157,7 @@ class SmokePublicSandbox(Sandbox):
             _ManagerBackedSandboxRuntime,
         )
 
+        SmokeSandboxManager.set_event_sink(DefaultSandboxManager._event_sink)
         manager = SmokeSandboxManager()
         sandbox_key = uuid4()
         run_id = uuid4()

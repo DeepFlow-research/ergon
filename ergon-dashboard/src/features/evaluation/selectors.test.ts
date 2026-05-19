@@ -73,7 +73,7 @@ function evaluation(taskId: string, statuses: Array<"passed" | "failed" | "error
 function state(evaluationsByTask: Map<string, TaskEvaluationState>): WorkflowRunState {
   return {
     id: "run-1",
-    experimentId: "experiment-1",
+    definitionId: "experiment-1",
     name: "run",
     status: "completed",
     tasks: new Map([

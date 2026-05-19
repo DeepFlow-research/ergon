@@ -50,7 +50,6 @@ def _run(
 
 def test_latest_run_for_definition_returns_most_recent(monkeypatch, session_factory) -> None:
     definition_id = uuid4()
-    experiment_id = uuid4()
 
     now = datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
     older = _run(
@@ -68,7 +67,7 @@ def test_latest_run_for_definition_returns_most_recent(monkeypatch, session_fact
     with session_factory() as session:
         session.add(
             BenchmarkDefinitionRecord(
-                id=experiment_id,
+                id=definition_id,
                 name="ci",
                 benchmark_type="ci-benchmark",
                 sample_count=1,
@@ -97,7 +96,7 @@ def test_latest_run_for_definition_returns_most_recent(monkeypatch, session_fact
 def test_latest_run_for_definition_ignores_other_definitions(monkeypatch, session_factory) -> None:
     def_a = uuid4()
     def_b = uuid4()
-    experiment_id = uuid4()
+    definition_id = uuid4()
 
     now = datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
     run_a = _run(definition_id=def_a, workflow_definition_id=def_a, created_at=now)
@@ -111,7 +110,7 @@ def test_latest_run_for_definition_ignores_other_definitions(monkeypatch, sessio
     with session_factory() as session:
         session.add(
             BenchmarkDefinitionRecord(
-                id=experiment_id,
+                id=definition_id,
                 name="ci",
                 benchmark_type="ci-benchmark",
                 sample_count=1,

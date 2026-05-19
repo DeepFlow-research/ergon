@@ -254,7 +254,7 @@ def _assert_blob_roundtrip(run_id: UUID) -> None:
     Uses ``kind='report'`` resources because those are written to the
     content-addressed blob store (``ERGON_BLOB_ROOT``) which is bind-mounted
     at the same path on both the host and inside the API container.  The
-    legacy ``kind='output'`` rows store container-internal download paths
+    direct ``kind='output'`` rows store container-internal download paths
     that are not directly accessible from the host-side test process.
     """
     row = first_probe_resource(run_id)

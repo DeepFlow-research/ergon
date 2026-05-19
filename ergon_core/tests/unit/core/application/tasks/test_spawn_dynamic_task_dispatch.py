@@ -27,7 +27,7 @@ class _FakeGraphRepo:
     def __init__(self) -> None:
         self.added_nodes: list[dict] = []
         self.added_edges: list[dict] = []
-        self.parent = SimpleNamespace(id=uuid4(), instance_key="sample-1", level=2)
+        self.parent = SimpleNamespace(task_id=uuid4(), instance_key="sample-1", level=2)
 
     def add_mutation_listener(self, listener) -> None:
         del listener
@@ -38,7 +38,7 @@ class _FakeGraphRepo:
 
     async def add_node(self, session, run_id, **kwargs):
         del session, run_id
-        node = SimpleNamespace(id=uuid4(), task_id=uuid4(), **kwargs)
+        node = SimpleNamespace(task_id=uuid4(), **kwargs)
         self.added_nodes.append(kwargs)
         return node
 
@@ -83,7 +83,7 @@ async def test_spawn_dynamic_task_dispatches_ready_event_when_dependency_free(mo
         {
             "run_id": dispatched[0]["run_id"],
             "definition_id": dispatched[0]["definition_id"],
-            "node_id": handle.task_id,
+            "task_id": handle.task_id,
         }
     ]
     node_kwargs = graph_repo.added_nodes[0]

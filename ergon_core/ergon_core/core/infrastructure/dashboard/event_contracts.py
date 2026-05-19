@@ -79,7 +79,7 @@ class DashboardWorkflowStartedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/workflow.started"
 
     run_id: UUID
-    experiment_id: UUID
+    definition_id: UUID
     workflow_name: str
     task_tree: TaskTreeNode
     started_at: datetime

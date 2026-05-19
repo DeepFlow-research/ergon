@@ -1,7 +1,7 @@
 """Persist a Benchmark directly into immutable definition rows.
 
 Reads identity fields inline from the live Benchmark object graph: no
-domain Experiment wrapper and no legacy Task template bridge.
+domain Experiment wrapper and no Task template bridge.
 """
 
 from typing import Any

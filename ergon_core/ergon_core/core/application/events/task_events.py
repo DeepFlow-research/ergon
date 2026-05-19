@@ -1,6 +1,6 @@
 """Task and workflow lifecycle event contracts.
 
-These mirror the ref codebase events but use definition_id instead of experiment_id.
+These mirror the ref codebase events but use definition_id instead of definition_id.
 """
 
 from typing import ClassVar, Literal

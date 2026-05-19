@@ -36,7 +36,6 @@ def _session() -> Session:
 
 
 def _seed_inline_evaluator_run(session: Session) -> tuple:
-    experiment_id = uuid4()
     definition_id = uuid4()
     instance_id = uuid4()
     task_id = uuid4()
@@ -46,7 +45,7 @@ def _seed_inline_evaluator_run(session: Session) -> tuple:
     session.add_all(
         [
             BenchmarkDefinitionRecord(
-                id=experiment_id,
+                id=definition_id,
                 name="bench",
                 benchmark_type="bench",
                 sample_count=1,

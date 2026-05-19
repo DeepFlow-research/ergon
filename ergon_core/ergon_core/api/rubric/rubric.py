@@ -73,4 +73,4 @@ class Rubric(Evaluator):
     def validate_runtime_deps(self) -> None:
         super().validate_runtime_deps()
         for criterion in self.criteria:
-            criterion.validate()
+            criterion.validate_runtime_deps()

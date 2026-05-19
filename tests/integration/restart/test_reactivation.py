@@ -53,14 +53,14 @@ async def test_cancelled_managed_subtask_reactivates_when_dep_completes() -> Non
             run.id,
             task_slug="task-b",
             status=CANCELLED,
-            parent_task_id=root.id,
+            parent_task_id=root.task_id,
         )
         # Edge is EDGE_PENDING: reset by restart_task / _invalidate_downstream
-        make_edge(session, run.id, source_task_id=node_a.id, target_task_id=node_b.id)
+        make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_b.task_id)
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
-        node_b_id = node_b.id
+        node_a_id = node_a.task_id
+        node_b_id = node_b.task_id
         session.commit()
 
     try:
@@ -98,11 +98,11 @@ async def test_cancelled_static_node_does_not_reactivate() -> None:
         node_a = make_node(session, run.id, task_slug="task-a", status="completed")
         # node_b is a static node — parent_task_id=None (default)
         node_b = make_node(session, run.id, task_slug="task-b-static", status=CANCELLED)
-        make_edge(session, run.id, source_task_id=node_a.id, target_task_id=node_b.id)
+        make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_b.task_id)
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
-        node_b_id = node_b.id
+        node_a_id = node_a.task_id
+        node_b_id = node_b.task_id
         session.commit()
 
     try:
@@ -148,15 +148,15 @@ async def test_fan_in_managed_subtask_reactivates_only_when_all_deps_complete() 
             run.id,
             task_slug="fan-c",
             status=CANCELLED,
-            parent_task_id=root.id,
+            parent_task_id=root.task_id,
         )
-        make_edge(session, run.id, source_task_id=node_a.id, target_task_id=node_c.id)
-        make_edge(session, run.id, source_task_id=node_b.id, target_task_id=node_c.id)
+        make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_c.task_id)
+        make_edge(session, run.id, source_task_id=node_b.task_id, target_task_id=node_c.task_id)
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
-        node_b_id = node_b.id
-        node_c_id = node_c.id
+        node_a_id = node_a.task_id
+        node_b_id = node_b.task_id
+        node_c_id = node_c.task_id
         session.commit()
 
     try:

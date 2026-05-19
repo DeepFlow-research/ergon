@@ -11,11 +11,11 @@ from uuid import UUID
 
 import inngest
 from ergon_core.core.persistence.context.models import RunContextEvent
+from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_engine
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import (
-    BenchmarkDefinitionRecord,
     ExperimentCohort,
     RunRecord,
     RunResource,
@@ -136,6 +136,17 @@ def _execution_error_message(execution: RunTaskExecution) -> str | None:
         if isinstance(value, str):
             return value
     return str(error)
+
+
+def _cohort_id_from_definition(definition: ExperimentDefinition) -> UUID | None:
+    raw = definition.parsed_metadata().get("cohort_id")
+    if raw is None:
+        return None
+    if isinstance(raw, UUID):
+        return raw
+    if isinstance(raw, str):
+        return UUID(raw)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -270,11 +281,18 @@ def read_cohort_runs(
     ).first()
     if cohort is None:
         return []
+    definition_ids = [
+        definition.id
+        for definition in session.exec(select(ExperimentDefinition)).all()
+        if _cohort_id_from_definition(definition) == cohort.id
+    ]
+    if not definition_ids:
+        return []
     runs = list(
         session.exec(
-            select(RunRecord)
-            .join(BenchmarkDefinitionRecord)
-            .where(BenchmarkDefinitionRecord.cohort_id == cohort.id)
+            select(RunRecord).where(
+                RunRecord.workflow_definition_id.in_(definition_ids)  # type: ignore[attr-defined]
+            )
         ).all(),
     )
     return [TestCohortRunDto(run_id=r.id, status=r.status) for r in runs]
@@ -284,29 +302,15 @@ def read_cohort_runs(
 # Write endpoints — danger-prefixed local/test harness
 # ---------------------------------------------------------------------------
 #
-# Schema reality vs. spec:
-#   The RFC/plan speaks of ``RunRecord.cohort: str`` and ``metadata``. The
-#   actual model has ``cohort_id: UUID | None`` (FK) and ``summary_json: dict``.
-#   We bridge by:
-#     - Recording the test "cohort tag" as a string inside ``summary_json``
-#       under ``_test_cohort`` so reset can match by prefix.
-#     - Marking seeded rows with ``summary_json["_test_seeded"] = True``.
-#     - Requiring the caller to pass an existing ``workflow_definition_id``
-#       (NOT NULL FK) when seeding — no synthetic definition is created here.
-#
-# ``SeedRunRequest.cohort`` is defaulted so a body with only the definition id
-# passes validation and the secret gate (which runs inside the handler body,
-# after FastAPI's validation phase) can surface 401/500 without 422 noise.
-# ``workflow_definition_id`` is the current field; ``experiment_definition_id``
-# remains accepted for older harness callers.
+# Seeded rows record the test cohort tag in ``summary_json`` and stamp the
+# target definition metadata with the resolved cohort id so dashboard read
+# models can use the canonical definition tables.
 # ``ResetRequest.cohort_prefix`` has no default: reset is destructive, so
 # callers must always specify what to nuke.
 
 
 class SeedRunRequest(BaseModel):
-    workflow_definition_id: UUID | None = None
-    experiment_definition_id: UUID | None = None
-    experiment_id: UUID | None = None
+    definition_id: UUID
     benchmark_type: str = "test-harness"
     instance_key: str = "seeded"
     worker_team: dict = Field(default_factory=lambda: {"primary": "test-harness-worker"})
@@ -323,12 +327,6 @@ class ResetRequest(BaseModel):
 def seed_run(
     body: SeedRunRequest,
 ) -> dict:
-    definition_id = body.workflow_definition_id or body.experiment_definition_id
-    if definition_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="workflow_definition_id is required",
-        )
     # Map spec string ``status`` onto the RunStatus StrEnum; unknown strings
     # are rejected as 422-equivalent 400s so bad tests fail loud.
     try:
@@ -344,26 +342,27 @@ def seed_run(
             description="test harness seeded cohort",
             created_by="test-harness",
         )
-        experiment_kwargs = {}
-        if body.experiment_id is not None:
-            experiment_kwargs["id"] = body.experiment_id
-        experiment = BenchmarkDefinitionRecord(
-            **experiment_kwargs,
-            cohort_id=cohort.id,
-            name=f"Seeded {body.cohort}",
-            benchmark_type=body.benchmark_type,
-            sample_count=1,
-            sample_selection_json={"instance_keys": [body.instance_key]},
-            default_worker_team_json=body.worker_team,
-            design_json={},
-            metadata_json={"_test_seeded": True, "_test_cohort": body.cohort},
-            status="seeded",
+        definition = s.get(ExperimentDefinition, body.definition_id)
+        if definition is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"definition {body.definition_id} not found",
+            )
+        metadata = dict(definition.metadata_json)
+        metadata.update(
+            {
+                "cohort_id": str(cohort.id),
+                "_test_seeded": True,
+                "_test_cohort": body.cohort,
+                "default_worker_team": body.worker_team,
+                "status": "seeded",
+            }
         )
-        s.add(experiment)
-        s.flush()
+        definition.metadata_json = metadata
+        s.add(definition)
         run = RunRecord(
-            definition_id=experiment.id,
-            workflow_definition_id=definition_id,
+            definition_id=body.definition_id,
+            workflow_definition_id=body.definition_id,
             benchmark_type=body.benchmark_type,
             instance_key=body.instance_key,
             worker_team_json=body.worker_team,
@@ -395,12 +394,19 @@ def reset_test_rows(
             tag = meta.get("_test_cohort")
             if isinstance(tag, str) and tag.startswith(body.cohort_prefix):
                 s.delete(r)
-        experiments = list(s.exec(select(BenchmarkDefinitionRecord)).all())
-        for experiment in experiments:
-            meta = {} if experiment.metadata_json is None else experiment.metadata_json
+        definitions = list(s.exec(select(ExperimentDefinition)).all())
+        for definition in definitions:
+            meta = {} if definition.metadata_json is None else definition.metadata_json
             tag = meta.get("_test_cohort")
             if isinstance(tag, str) and tag.startswith(body.cohort_prefix):
-                s.delete(experiment)
+                cleaned = dict(meta)
+                cleaned.pop("cohort_id", None)
+                cleaned.pop("_test_seeded", None)
+                cleaned.pop("_test_cohort", None)
+                cleaned.pop("default_worker_team", None)
+                cleaned.pop("status", None)
+                definition.metadata_json = cleaned
+                s.add(definition)
         s.commit()
     return None
 
@@ -444,10 +450,9 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
     """Build + persist + dispatch N runs under one cohort.
 
     Per-slot flow persists the object-bound smoke ``Benchmark`` into the
-    immutable ``ExperimentDefinition`` tables, then writes a same-id legacy
-    ``BenchmarkDefinitionRecord`` only as the cohort/dashboard compatibility
-    marker.  Slots submit sequentially — typical N ≤ 3, so the
-    parallel-gather savings are negligible.
+    immutable ``ExperimentDefinition`` tables. Cohort/display metadata is
+    written onto the definition metadata before launch. Slots submit
+    sequentially — typical N ≤ 3, so the parallel-gather savings are negligible.
     """
     cohort = experiment_cohort_service.resolve_or_create(
         name=body.cohort_key,
@@ -470,6 +475,12 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
                 "benchmark_slug": body.benchmark_slug,
                 "source": "test-harness",
                 "_test_cohort": body.cohort_key,
+                "cohort_id": str(cohort.id),
+                "default_worker_team": {"primary": slot.worker_slug},
+                "default_evaluator_slug": slot.evaluator_slug,
+                "default_model_target": body.model,
+                "sandbox_slug": body.sandbox_slug or body.benchmark_slug,
+                "dependency_extras": list(body.dependency_extras),
             },
             created_by="test-harness",
         )
@@ -477,33 +488,7 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
         setattr(benchmark_source, "model", body.model)
         handle = persist_benchmark(benchmark_source)
 
-        with Session(get_engine()) as s:
-            bench_def = BenchmarkDefinitionRecord(
-                id=handle.definition_id,
-                cohort_id=cohort.id,
-                name=f"smoke:{body.benchmark_slug}",
-                benchmark_type=benchmark_source.type_slug,
-                sample_count=handle.instance_count,
-                sample_selection_json={"instance_keys": ["default"]},
-                default_worker_team_json={"primary": slot.worker_slug},
-                default_evaluator_slug=slot.evaluator_slug,
-                default_model_target=body.model,
-                sandbox_slug=body.sandbox_slug or body.benchmark_slug,
-                dependency_extras_json={"extras": list(body.dependency_extras)},
-                design_json={},
-                metadata_json={
-                    "benchmark_slug": body.benchmark_slug,
-                    "source": "test-harness",
-                    "_test_cohort": body.cohort_key,
-                },
-                status="defined",
-            )
-            s.add(bench_def)
-            s.commit()
-            s.refresh(bench_def)
-            experiment_id = bench_def.id
-
-        launched = await _run_experiment(ExperimentRunRequest(experiment_id=experiment_id))
+        launched = await _run_experiment(ExperimentRunRequest(definition_id=handle.definition_id))
         run_ids.extend(launched.run_ids)
 
     return SubmitCohortResponse(run_ids=run_ids, cohort_id=cohort.id)

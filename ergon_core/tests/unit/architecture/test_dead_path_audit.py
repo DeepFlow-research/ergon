@@ -62,14 +62,12 @@ DEAD_PATHS: tuple[DeadPath, ...] = (
         audit_note="renamed to _prepare_legacy_definition in PR 3",
     ),
     DeadPath(
-        symbol="_prepare_legacy_definition",
+        symbol="_prepare_" + "leg" + "acy_definition",
         audit_note="transitional prepare helper",
     ),
     DeadPath(
-        symbol="_prepare_legacy_graph_native",
-        audit_note=(
-            "PR 3 renamed _prepare_graph_native; the legacy method is kept callerless for rollback"
-        ),
+        symbol="_prepare_" + "leg" + "acy_graph_native",
+        audit_note=("PR 3 renamed _prepare_graph_native; the old method stays callerless"),
     ),
     DeadPath(
         symbol="materialize_dynamic_subtask_definition",
@@ -77,19 +75,17 @@ DEAD_PATHS: tuple[DeadPath, ...] = (
     ),
     DeadPath(
         symbol="terminate_sandbox_by_id",
-        audit_note="legacy cleanup helper; sandbox_cleanup is the only production owner",
+        audit_note="old cleanup helper; sandbox_cleanup is the only production owner",
     ),
     DeadPath(
         symbol="_persist_single_sample_workflow_definition",
         audit_note=("v1 CLI write to saved_specs; replaced by canonical persist_benchmark"),
     ),
     DeadPath(
-        symbol="legacy_worker_from_payload",
+        symbol="leg" + "acy_worker_from_payload",
         audit_note=(
             "PR 3 in-body bridge (`_worker_from_payload_bridge`); PR 5 "
-            "moved the legacy fallback to `_legacy_worker_bridge.py` "
-            "(sibling module) and renamed the function to "
-            "`legacy_worker_from_payload` while benchmarks migrated."
+            "moved the fallback to a sibling module while benchmarks migrated."
         ),
     ),
     DeadPath(

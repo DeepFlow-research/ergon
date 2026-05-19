@@ -9,7 +9,7 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord, RunRecord
+from ergon_core.core.persistence.telemetry.models import RunRecord
 from pydantic import BaseModel, Field, model_validator
 from sqlmodel import Session, select
 
@@ -25,7 +25,7 @@ class ExperimentStatusCountsDto(BaseModel):
 
 
 class ExperimentSummaryDto(BaseModel):
-    experiment_id: UUID
+    definition_id: UUID
     cohort_id: UUID | None = None
     name: str
     description: str | None = None
@@ -74,16 +74,9 @@ class ExperimentAnalyticsDto(BaseModel):
 
 
 class ExperimentDetailDto(BaseModel):
-    # Top-level identity fields (PR 7 Task 4): when the row is sourced from
-    # the new ``ExperimentDefinition`` table these mirror the columns Task 1
-    # added (``name``/``description``/``created_by``).  For legacy
-    # ``BenchmarkDefinitionRecord`` rows they fall through to the nested
-    # ``experiment`` summary's values.  Kept denormalized so the public
-    # contract surfaces a flat identity even when the backing storage shape
-    # is split across two tables.  The ``@model_validator`` below back-fills
-    # them from ``experiment`` when callers only provide the nested summary
-    # (preserves the pre-PR-7 construction shape for existing tests / sites).
-    experiment_id: UUID | None = None
+    # Kept denormalized so the public contract exposes definition identity and
+    # display fields without requiring consumers to traverse the nested summary.
+    definition_id: UUID | None = None
     name: str | None = None
     description: str | None = None
     benchmark_type: str | None = None
@@ -96,8 +89,8 @@ class ExperimentDetailDto(BaseModel):
 
     @model_validator(mode="after")
     def _backfill_identity_from_summary(self) -> "ExperimentDetailDto":
-        if self.experiment_id is None:
-            self.experiment_id = self.experiment.experiment_id
+        if self.definition_id is None:
+            self.definition_id = self.experiment.definition_id
         if self.name is None:
             self.name = self.experiment.name
         if self.description is None:
@@ -108,15 +101,7 @@ class ExperimentDetailDto(BaseModel):
 
 
 class ExperimentReadService:
-    """List/show queries for experiments.
-
-    PR 7 Task 4 flips the read order so ``ExperimentDefinition`` rows (the
-    canonical source after ``persist_benchmark``) are preferred over the
-    legacy ``BenchmarkDefinitionRecord`` table.  When both shapes exist for
-    a given id the definition row wins; when only a legacy row exists we
-    route through ``_legacy_benchmark_definition_record_detail`` so old
-    pre-PR-7 data still renders.
-    """
+    """List/show queries for persisted benchmark definitions."""
 
     def list_experiments(self, *, limit: int = 50) -> list[ExperimentSummaryDto]:
         with get_session() as session:
@@ -127,15 +112,6 @@ class ExperimentReadService:
                     .limit(limit)
                 ).all()
             )
-            legacy_records = list(
-                session.exec(
-                    select(BenchmarkDefinitionRecord)
-                    .order_by(BenchmarkDefinitionRecord.created_at.desc())
-                    .limit(limit)
-                ).all()
-            )
-
-            definition_ids = {d.id for d in definitions}
             summaries: list[tuple[datetime, ExperimentSummaryDto]] = []
             for definition in definitions:
                 summaries.append(
@@ -144,75 +120,17 @@ class ExperimentReadService:
                         _definition_summary(session, definition),
                     )
                 )
-            for legacy in legacy_records:
-                if legacy.id in definition_ids:
-                    # ``ExperimentDefinition`` row already represents this id
-                    continue
-                summaries.append((legacy.created_at, _summary(session, legacy)))
 
             summaries.sort(key=lambda pair: pair[0], reverse=True)
             return [summary for _, summary in summaries[:limit]]
 
-    def get_experiment(self, experiment_id: UUID) -> ExperimentDetailDto | None:
+    def get_experiment(self, definition_id: UUID) -> ExperimentDetailDto | None:
         with get_session() as session:
-            definition = session.get(ExperimentDefinition, experiment_id)
+            definition = session.get(ExperimentDefinition, definition_id)
             if definition is not None:
                 return _definition_detail(session, definition)
 
-            legacy = session.get(BenchmarkDefinitionRecord, experiment_id)
-            if legacy is None:
-                return None
-            return self._legacy_benchmark_definition_record_detail(session, legacy)
-
-    def _legacy_benchmark_definition_record_detail(
-        self,
-        session: Session,
-        experiment: BenchmarkDefinitionRecord,
-    ) -> ExperimentDetailDto:
-        """Build a detail DTO from the pre-PR-7 ``BenchmarkDefinitionRecord``.
-
-        Kept isolated so the read model has one compatibility path for
-        historical rows that predate ``ExperimentDefinition``.
-        """
-        runs = list(
-            session.exec(select(RunRecord).where(RunRecord.definition_id == experiment.id)).all()
-        )
-        task_counts = _task_counts_by_run(session, [run.id for run in runs])
-        run_rows = [_run_row(run, total_tasks=task_counts.get(run.id)) for run in runs]
-        return ExperimentDetailDto(
-            experiment=_summary(session, experiment, runs=runs),
-            runs=run_rows,
-            analytics=_analytics(run_rows),
-            sample_selection=experiment.parsed_sample_selection(),
-            design=experiment.parsed_design(),
-            metadata=experiment.parsed_metadata(),
-        )
-
-
-def _summary(
-    session: Session,
-    experiment: BenchmarkDefinitionRecord,
-    *,
-    runs: list[RunRecord] | None = None,
-) -> ExperimentSummaryDto:
-    run_count = len(runs) if runs is not None else _run_count(session, experiment.id)
-    return ExperimentSummaryDto(
-        experiment_id=experiment.id,
-        cohort_id=experiment.cohort_id,
-        name=experiment.name,
-        description=None,  # ``BenchmarkDefinitionRecord`` has no description column
-        benchmark_type=experiment.benchmark_type,
-        sample_count=experiment.sample_count,
-        status=experiment.status,
-        default_worker_team=experiment.parsed_default_worker_team(),
-        default_evaluator_slug=experiment.default_evaluator_slug,
-        default_model_target=experiment.default_model_target,
-        created_by=None,  # ``BenchmarkDefinitionRecord`` has no created_by column
-        created_at=experiment.created_at,
-        started_at=experiment.started_at,
-        completed_at=experiment.completed_at,
-        run_count=run_count,
-    )
+            return None
 
 
 def _definition_summary(
@@ -226,25 +144,22 @@ def _definition_summary(
     Identity fields (``name``/``description``/``benchmark_type``/``created_by``)
     come directly from the columns Task 1 added.  Run / sample bookkeeping is
     derived: ``RunRecord.workflow_definition_id`` indexes runs, and
-    ``ExperimentDefinitionInstance`` rows index instances.  Legacy-only
-    fields (``cohort_id``, ``default_*``, ``started_at``/``completed_at``,
-    ``status``) default to ``None``/``"defined"``; if a row also has a
-    matching ``BenchmarkDefinitionRecord`` the legacy fallback path renders
-    it instead.
+    ``ExperimentDefinitionInstance`` rows index instances.
     """
     run_count = len(runs) if runs is not None else _run_count_by_definition(session, definition.id)
     sample_count = _instance_count(session, definition.id)
+    metadata = definition.parsed_metadata()
     return ExperimentSummaryDto(
-        experiment_id=definition.id,
-        cohort_id=None,
+        definition_id=definition.id,
+        cohort_id=_cohort_id_from_metadata(metadata),
         name=definition.name,
         description=definition.description,
         benchmark_type=definition.benchmark_type,
         sample_count=sample_count,
-        status="defined",
-        default_worker_team={},
-        default_evaluator_slug=None,
-        default_model_target=None,
+        status=str(metadata.get("status", "defined")),
+        default_worker_team=_dict_metadata(metadata, "default_worker_team"),
+        default_evaluator_slug=_optional_str_metadata(metadata, "default_evaluator_slug"),
+        default_model_target=_optional_str_metadata(metadata, "default_model_target"),
         created_by=definition.created_by,
         created_at=definition.created_at,
         started_at=None,
@@ -266,7 +181,7 @@ def _definition_detail(
     task_counts = _task_counts_by_run(session, [run.id for run in runs])
     run_rows = [_run_row(run, total_tasks=task_counts.get(run.id)) for run in runs]
     return ExperimentDetailDto(
-        experiment_id=definition.id,
+        definition_id=definition.id,
         name=definition.name,
         description=definition.description,
         benchmark_type=definition.benchmark_type,
@@ -301,12 +216,6 @@ def _instance_count(session: Session, definition_id: UUID) -> int:
     )
 
 
-def _run_count(session: Session, experiment_id: UUID) -> int:
-    return len(
-        list(session.exec(select(RunRecord.id).where(RunRecord.definition_id == experiment_id)))
-    )
-
-
 def _run_row(run: RunRecord, *, total_tasks: int | None = None) -> ExperimentRunRowDto:
     summary = run.parsed_summary()
     return ExperimentRunRowDto(
@@ -338,6 +247,27 @@ def _task_counts_by_run(session: Session, run_ids: list[UUID]) -> dict[UUID, int
         )
         for run_id in run_ids
     }
+
+
+def _cohort_id_from_metadata(metadata: dict) -> UUID | None:
+    raw = metadata.get("cohort_id")
+    if raw is None:
+        return None
+    if isinstance(raw, UUID):
+        return raw
+    if isinstance(raw, str):
+        return UUID(raw)
+    return None
+
+
+def _dict_metadata(metadata: dict, key: str) -> dict:
+    value = metadata.get(key)
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _optional_str_metadata(metadata: dict, key: str) -> str | None:
+    value = metadata.get(key)
+    return value if isinstance(value, str) else None
 
 
 def _analytics(rows: list[ExperimentRunRowDto]) -> ExperimentAnalyticsDto:

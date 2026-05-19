@@ -96,7 +96,7 @@ async def test_1_single_task_happy_path() -> None:
         node_a = make_node(session, run.id, task_slug="task-a", status="running")
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
+        node_a_id = node_a.task_id
         session.commit()
 
     try:

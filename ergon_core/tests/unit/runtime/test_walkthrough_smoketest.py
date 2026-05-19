@@ -65,7 +65,6 @@ def _seed_run(session: Session) -> tuple[UUID, UUID]:
     """Insert a minimal experiment/definition/run with one task; return
     (run_id, definition_id)."""
 
-    experiment_id = uuid4()
     definition_id = uuid4()
     instance_id = uuid4()
     task_id = uuid4()
@@ -81,7 +80,7 @@ def _seed_run(session: Session) -> tuple[UUID, UUID]:
     session.add_all(
         [
             BenchmarkDefinitionRecord(
-                id=experiment_id,
+                id=definition_id,
                 name="smoke",
                 benchmark_type="test",
                 sample_count=1,
@@ -105,7 +104,7 @@ def _seed_run(session: Session) -> tuple[UUID, UUID]:
             ),
             RunRecord(
                 id=run_id,
-                definition_id=experiment_id,
+                definition_id=definition_id,
                 workflow_definition_id=definition_id,
                 benchmark_type="test",
                 instance_key="sample-1",
@@ -154,7 +153,7 @@ def test_prepare_run_populates_task_json_for_every_node() -> None:
 def test_persist_definition_writes_only_intended_tables(monkeypatch) -> None:
     """PR 7 invariant: persist_benchmark writes experiment_definitions
     plus experiment_definition_tasks (and related instance / task-
-    evaluator rows). It must NOT write to the legacy
+    evaluator rows). It must NOT write to the older
     BenchmarkDefinitionRecord table — identity comes from
     ExperimentDefinition only after PR 7's persistence collapse."""
 
@@ -222,10 +221,10 @@ def test_persist_definition_writes_only_intended_tables(monkeypatch) -> None:
     assignments = session.exec(select(ExperimentDefinitionTaskAssignment)).all()
     assert [row.worker_binding_key for row in assignments] == ["echo"]
 
-    # PR 7 invariant: persist_benchmark must NOT write to the legacy
+    # PR 7 invariant: persist_benchmark must NOT write to the older
     # BenchmarkDefinitionRecord table at all.
-    legacy_rows = session.exec(select(BenchmarkDefinitionRecord)).all()
-    assert legacy_rows == []
+    bdr_rows = session.exec(select(BenchmarkDefinitionRecord)).all()
+    assert bdr_rows == []
 
 
 def test_worker_execute_reads_task_from_run_tier_only() -> None:

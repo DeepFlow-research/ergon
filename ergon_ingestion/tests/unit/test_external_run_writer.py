@@ -12,7 +12,6 @@ from ergon_core.core.persistence.imports.models import (
     RunReducerFootprint,
 )
 from ergon_core.core.persistence.telemetry.models import (
-    BenchmarkDefinitionRecord,
     RunRecord,
     RunResource,
     RunTaskExecution,
@@ -81,8 +80,9 @@ def test_external_run_writer_persists_import_spine_and_reducer_metadata(tmp_path
         session.commit()
 
         assert result.run_id is not None
-        assert session.exec(select(ExperimentDefinition)).one().benchmark_type == "imported:gap"
-        assert session.exec(select(BenchmarkDefinitionRecord)).one().sample_count == 1
+        definition = session.exec(select(ExperimentDefinition)).one()
+        assert definition.benchmark_type == "imported:gap"
+        assert definition.metadata_json["import_batch_id"] == "paper-rq1-v1"
         assert session.exec(select(RunRecord)).one().instance_key == "gap-row-1"
         assert session.exec(select(RunGraphNode)).one().task_slug == "imported-root"
         assert (

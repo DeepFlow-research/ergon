@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
 from ergon_builtins.benchmarks.researchrubrics.judge_criterion import (
     ResearchRubricsJudgeCriterion,
@@ -244,6 +245,7 @@ class TestResearchRubricsJudgeCriterion:
             "ergon_builtins.benchmarks.researchrubrics.judge_criterion.get_session",
             lambda: FakeSession(),
         )
+        captured_user_prompts: list[str] = []
 
         context = CriterionContext(
             run_id=uuid4(),
@@ -260,7 +262,7 @@ class TestResearchRubricsJudgeCriterion:
 
         class Criterion(ResearchRubricsJudgeCriterion):
             async def _call_judge(self, *, system_prompt: str, user_prompt: str):
-                self.captured_user_prompt = user_prompt
+                captured_user_prompts.append(user_prompt)
                 from ergon_builtins.benchmarks.researchrubrics.judge_criterion import (
                     ResearchRubricsVerdict,
                 )
@@ -297,5 +299,32 @@ class TestResearchRubricsJudgeCriterion:
         assert "Final output resources" in result.evaluation_input
         assert "Scratch / supporting resources" in result.evaluation_input
         assert "Final assistant message" in result.evaluation_input
-        assert "This is the primary answer artifact." in criterion.captured_user_prompt
-        assert "assistant summary only" in criterion.captured_user_prompt
+        assert len(captured_user_prompts) == 1
+        assert "This is the primary answer artifact." in captured_user_prompts[0]
+        assert "assistant summary only" in captured_user_prompts[0]
+
+    def test_rejects_model_alias(self) -> None:
+        with pytest.raises(ValidationError, match="model"):
+            ResearchRubricsJudgeCriterion(
+                slug="includes_findings",
+                rubric=RubricCriterion(
+                    criterion="Includes findings",
+                    axis="quality",
+                    weight=1.0,
+                ),
+                model="openai:gpt-4o-mini",
+            )
+
+    def test_does_not_expose_model_alias(self) -> None:
+        criterion = ResearchRubricsJudgeCriterion(
+            slug="includes_findings",
+            rubric=RubricCriterion(
+                criterion="Includes findings",
+                axis="quality",
+                weight=1.0,
+            ),
+            judge_model="openai:gpt-4o-mini",
+        )
+
+        assert criterion.judge_model == "openai:gpt-4o-mini"
+        assert not hasattr(criterion, "model")

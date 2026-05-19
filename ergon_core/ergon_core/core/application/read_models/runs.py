@@ -21,7 +21,6 @@ from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutat
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import (
-    BenchmarkDefinitionRecord,
     RunRecord,
     RunResource,
     RunTaskEvaluation,
@@ -48,7 +47,7 @@ from ergon_core.core.application.read_models.run_snapshot import (
 )
 from ergon_core.core.application.read_models.resources import require_viewable_resource_size
 from pydantic import BaseModel
-from sqlmodel import select
+from sqlmodel import Session, select
 
 
 class RunResourceBlob(BaseModel):
@@ -147,7 +146,7 @@ class RunReadService:
 
         return RunSnapshotDto(
             id=run_id_str,
-            experiment_id=str(run.definition_id),
+            definition_id=str(run.definition_id),
             name=run_name,
             status=run.status,
             tasks=task_map,
@@ -247,8 +246,11 @@ class RunReadService:
             if definition_id:
                 stmt = stmt.where(RunRecord.workflow_definition_id == definition_id)
             if cohort_id:
-                stmt = stmt.join(BenchmarkDefinitionRecord).where(
-                    BenchmarkDefinitionRecord.cohort_id == cohort_id
+                definition_ids = _definition_ids_for_cohort(session, cohort_id)
+                if not definition_ids:
+                    return []
+                stmt = stmt.where(
+                    RunRecord.workflow_definition_id.in_(definition_ids)  # type: ignore[attr-defined]
                 )
             stmt = stmt.order_by(RunRecord.created_at)
             runs = list(session.exec(stmt).all())
@@ -302,7 +304,7 @@ class RunReadService:
         return [
             TrainingSessionDto(
                 id=str(s.id),
-                experiment_definition_id=str(s.experiment_definition_id),
+                definition_id=str(s.experiment_definition_id),
                 model_name=s.model_name,
                 status=s.status,
                 started_at=s.started_at.isoformat() if s.started_at else None,
@@ -346,6 +348,19 @@ def _display_run_score(score_summary: EvaluationScoreSummary, run_status: str) -
         return None
     # TODO: this is a hack, we need to fix the calculation / rename variables to make clear that the output score should be normalised by here.
     return score_summary.normalized_score
+
+
+def _definition_ids_for_cohort(session: Session, cohort_id: UUID) -> list[UUID]:
+    definition_ids: list[UUID] = []
+    for definition in session.exec(select(ExperimentDefinition)).all():
+        metadata = definition.parsed_metadata()
+        raw = metadata.get("cohort_id")
+        if raw is None:
+            continue
+        resolved = raw if isinstance(raw, UUID) else UUID(str(raw))
+        if resolved == cohort_id:
+            definition_ids.append(definition.id)
+    return definition_ids
 
 
 def _blob_root() -> Path:

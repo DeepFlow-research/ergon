@@ -15,22 +15,20 @@ path at realistic volume.  See
 
 from collections.abc import AsyncGenerator
 from typing import ClassVar, final
+from uuid import UUID
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
 from ergon_core.api.worker import WorkerOutput
 from ergon_core.core.domain.generation.context_parts import AssistantTextPart, ContextPartChunk
-from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.types import (
     AssignedWorkerSlug,
-    NodeId,
-    RunId,
     TaskSlug,
 )
 from ergon_core.core.application.tasks.models import (
-    PlanSubtasksCommand,
     SubtaskSpec,
 )
 from tests.fixtures.smoke_components.smoke_base.constants import SUBTASK_GRAPH
+from tests.fixtures.smoke_components.smoke_base.dynamic_tasks import smoke_task_from_spec
 
 
 class SmokeWorkerBase(Worker):
@@ -58,8 +56,8 @@ class SmokeWorkerBase(Worker):
         *,
         context: WorkerContext,
     ) -> AsyncGenerator[WorkerStreamItem, None]:
-        if context.node_id is None:
-            raise ValueError(f"{type(self).__name__} requires context.node_id")
+        if context.task_id is None:
+            raise ValueError(f"{type(self).__name__} requires context.task_id")
 
         # --- Turn 1: planning announcement (pre-service-call) -------------
         yield ContextPartChunk(
@@ -74,27 +72,30 @@ class SmokeWorkerBase(Worker):
         # Per-slug spec construction goes through ``_spec_for`` so sad-path
         # subclasses can route specific slugs to a different leaf worker
         # without overriding execute (which stays @final).
-        specs = [self._spec_for(slug, deps, desc) for slug, deps, desc in SUBTASK_GRAPH]
-        with get_session() as session:
-            result = await context.task_mgmt.plan_subtasks(
-                session,
-                PlanSubtasksCommand(
-                    run_id=RunId(context.run_id),
-                    parent_task_id=NodeId(context.node_id),
-                    subtasks=specs,
-                ),
+        planned: dict[TaskSlug, UUID] = {}
+        roots: list[TaskSlug] = []
+        for slug, deps, desc in SUBTASK_GRAPH:
+            spec = self._spec_for(slug, deps, desc)
+            child_task = smoke_task_from_spec(
+                parent_task=task,
+                spec=spec,
+                model=self.model,
             )
+            dependency_task_ids = tuple(planned[dep] for dep in spec.depends_on)
+            handle = await context.spawn_task(child_task, depends_on=dependency_task_ids)
+            planned[spec.task_slug] = handle.task_id
+            if not spec.depends_on:
+                roots.append(spec.task_slug)
 
         # --- Turn 2: plan result (post-service-call) ----------------------
         summary = "\n".join(
-            f"{slug}: planned (node_id={result.nodes[TaskSlug(slug)]})"
+            f"{slug}: planned (task_id={planned[TaskSlug(slug)]})"
             for slug, _deps, _desc in SUBTASK_GRAPH
         )
         yield ContextPartChunk(
             part=AssistantTextPart(
                 content=(
-                    f"{type(self).__name__}: 9 subtasks planned "
-                    f"(roots={sorted(result.roots)}):\n{summary}"
+                    f"{type(self).__name__}: 9 subtasks planned (roots={sorted(roots)}):\n{summary}"
                 ),
             ),
         )
@@ -113,7 +114,7 @@ class SmokeWorkerBase(Worker):
             output=waiting_message,
             success=True,
             metadata={
-                "planned_children": sorted(str(slug) for slug in result.nodes),
+                "planned_children": sorted(str(slug) for slug in planned),
                 "child_wait_mode": "criterion",
             },
         )

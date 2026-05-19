@@ -8,7 +8,6 @@ import pytest
 from ergon_cli.commands import run as run_cmd
 from ergon_cli.main import build_parser
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from sqlalchemy.pool import StaticPool
@@ -24,11 +23,12 @@ def test_run_subcommands_are_registered_in_main_parser() -> None:
     parser = build_parser()
 
     status_args = parser.parse_args(["run", "status", str(uuid4())])
-    list_args = parser.parse_args(["run", "list", "--experiment", "ablation-x"])
+    definition_id = uuid4()
+    list_args = parser.parse_args(["run", "list", "--definition-id", str(definition_id)])
 
     assert status_args.run_action == "status"
     assert list_args.run_action == "list"
-    assert list_args.experiment == "ablation-x"
+    assert list_args.definition_id == str(definition_id)
 
 
 # ---------------------------------------------------------------------------
@@ -39,13 +39,15 @@ def test_run_subcommands_are_registered_in_main_parser() -> None:
 @pytest.fixture()
 def session_factory():
     _ = ExperimentDefinition
-    _ = RunGraphNode
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    SQLModel.metadata.create_all(engine)
+    SQLModel.metadata.create_all(
+        engine,
+        tables=[ExperimentDefinition.__table__, RunRecord.__table__],
+    )
 
     def _get_session() -> Session:
         return Session(engine)
@@ -87,11 +89,11 @@ def _run_record(*, definition_id: object) -> RunRecord:
 
 def test_run_status_prints_status_fields(monkeypatch, capsys):
     run_id = uuid4()
-    bdr_id = uuid4()
+    definition_id = uuid4()
     fake_run = RunRecord(
         id=run_id,
-        definition_id=bdr_id,
-        workflow_definition_id=uuid4(),
+        definition_id=definition_id,
+        workflow_definition_id=definition_id,
         benchmark_type="ci-benchmark",
         instance_key="sample-1",
         worker_team_json={},
@@ -167,19 +169,20 @@ def test_run_status_reports_missing_run(monkeypatch, capsys):
 
 
 # ---------------------------------------------------------------------------
-# test_run_list_filters_by_experiment
+# test_run_list_filters_by_definition
 # ---------------------------------------------------------------------------
 
 
-def test_run_list_filters_by_experiment(monkeypatch, session_factory, capsys):
-    """Only runs whose workflow definition name matches --experiment appear."""
-    definition_matching = _definition(name="ablation-x")
-    definition_other = _definition(name="other-exp")
+def test_run_list_filters_by_definition(monkeypatch, session_factory, capsys):
+    """Only runs for the requested definition appear."""
+    definition_matching = _definition(name="matching")
+    definition_other = _definition(name="other")
 
     run_matching = _run_record(definition_id=definition_matching.id)
     run_other = _run_record(definition_id=definition_other.id)
 
     # Capture IDs before the session closes to avoid DetachedInstanceError
+    matching_definition_id = str(definition_matching.id)
     matching_id = str(run_matching.id)
     other_id = str(run_other.id)
 
@@ -193,7 +196,7 @@ def test_run_list_filters_by_experiment(monkeypatch, session_factory, capsys):
     monkeypatch.setattr(run_cmd, "get_session", session_factory)
     monkeypatch.setattr(run_cmd, "ensure_db", lambda: None)
 
-    rc = run_cmd.list_runs(Namespace(experiment="ablation-x", status=None, limit=20))
+    rc = run_cmd.list_runs(Namespace(definition_id=matching_definition_id, status=None, limit=20))
 
     assert rc == 0
     out = capsys.readouterr().out

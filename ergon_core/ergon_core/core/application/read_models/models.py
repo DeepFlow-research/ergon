@@ -163,7 +163,7 @@ class RunContextEventDto(CamelModel):
 
 class RunSnapshotDto(CamelModel):
     id: str
-    experiment_id: str
+    definition_id: str
     name: str
     status: str
     tasks: dict[str, RunTaskDto] = Field(default_factory=dict)
@@ -202,7 +202,7 @@ class TrainingCurvePointDto(CamelModel):
 
 class TrainingSessionDto(CamelModel):
     id: str
-    experiment_definition_id: str
+    definition_id: str
     model_name: str
     status: str
     started_at: str | None = None
@@ -257,7 +257,7 @@ class CohortSummaryDto(BaseModel):
 class CohortExperimentRowDto(BaseModel):
     """One experiment inside a cohort detail view."""
 
-    experiment_id: UUID
+    definition_id: UUID
     name: str
     benchmark_type: str
     sample_count: int

@@ -83,15 +83,11 @@ class Criterion(BaseModel, ABC):
         """Run one atomic evaluation against the provided context."""
         ...
 
-    def validate(self) -> None:  # ty: ignore[invalid-method-override]
+    def validate_runtime_deps(self) -> None:
         """Check that runtime dependencies are available.
 
-        Shadows the deprecated ``BaseModel.validate`` classmethod alias
-        intentionally — Criterion semantics predate the Pydantic conversion
-        and ``criterion.validate()`` is the public API every benchmark uses.
-        ``Evaluator`` solved the same collision by renaming to
-        ``validate_runtime_deps``; we keep the legacy name here to avoid
-        churning every benchmark in PR 10 Task 0.
+        Mirrors ``Worker`` and ``Evaluator`` so dependency checks have a
+        single runtime API across public components.
         """
         errors = check_packages(
             self.required_packages,

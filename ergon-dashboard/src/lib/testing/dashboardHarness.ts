@@ -98,9 +98,9 @@ export function getHarnessCohort(cohortId: string): CohortDetail | null {
   return getHarnessState().cohortDetails[cohortId] ?? null;
 }
 
-export function getHarnessExperiment(experimentId: string): ExperimentDetail | null {
+export function getHarnessExperiment(definitionId: string): ExperimentDetail | null {
   requireHarnessEnabled();
-  return getHarnessState().experimentDetails[experimentId] ?? null;
+  return getHarnessState().experimentDetails[definitionId] ?? null;
 }
 
 export function updateHarnessCohortStatus(

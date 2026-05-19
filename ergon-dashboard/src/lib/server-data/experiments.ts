@@ -6,7 +6,7 @@ import { getHarnessExperiment } from "@/lib/testing/dashboardHarness";
 import { backendUnavailable, type ServerDataResult } from "./responses";
 
 export interface ExperimentSummary {
-  experiment_id: string;
+  definition_id: string;
   cohort_id: string | null;
   name: string;
   benchmark_type: string;
@@ -23,7 +23,7 @@ function parseExperimentList(input: unknown): ExperimentSummary[] {
   return input.map((item) => {
     const record = typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {};
     return {
-      experiment_id: String(record.experiment_id ?? ""),
+      definition_id: String(record.definition_id ?? ""),
       cohort_id: (record.cohort_id as string | null | undefined) ?? null,
       name: String(record.name ?? ""),
       benchmark_type: String(record.benchmark_type ?? ""),
@@ -56,10 +56,10 @@ export async function loadExperimentList(): Promise<ServerDataResult<ExperimentS
 }
 
 export async function loadExperimentDetail(
-  experimentId: string,
+  definitionId: string,
 ): Promise<ServerDataResult<ExperimentDetail>> {
   if (config.enableTestHarness) {
-    const detail = getHarnessExperiment(experimentId);
+    const detail = getHarnessExperiment(definitionId);
     if (detail !== null) {
       return {
         ok: true,
@@ -71,7 +71,7 @@ export async function loadExperimentDetail(
   }
 
   try {
-    const response = await fetchErgonApi(`/experiments/${experimentId}`);
+    const response = await fetchErgonApi(`/experiments/${definitionId}`);
     const body = await response.json();
     if (response.ok) {
       return {
@@ -83,6 +83,6 @@ export async function loadExperimentDetail(
     }
     return { ok: false, body, status: response.status, source: "backend" };
   } catch (error) {
-    return backendUnavailable(`Ergon API is unavailable while loading experiment ${experimentId}.`, error);
+    return backendUnavailable(`Ergon API is unavailable while loading experiment ${definitionId}.`, error);
   }
 }

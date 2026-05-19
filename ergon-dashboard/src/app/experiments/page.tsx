@@ -48,10 +48,10 @@ export default async function ExperimentsPage() {
           </thead>
           <tbody>
             {experiments.map((experiment) => (
-              <tr key={experiment.experiment_id} className="border-b border-[var(--line)] last:border-0">
+              <tr key={experiment.definition_id} className="border-b border-[var(--line)] last:border-0">
                 <td className="px-4 py-3">
                   <Link
-                    href={`/experiments/${experiment.experiment_id}`}
+                    href={`/experiments/${experiment.definition_id}`}
                     className="font-medium text-[var(--ink)] underline-offset-2 hover:underline"
                   >
                     {experiment.name}

@@ -17,7 +17,6 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionWorker,
 )
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
-from pydantic import ValidationError
 
 
 class _InlineTask(Task[EmptyTaskPayload]):
@@ -106,15 +105,3 @@ def test_persist_benchmark_rejects_duplicate_inline_evaluator_names(
 
     with pytest.raises(ValueError, match="Duplicate inline evaluator name"):
         persist_benchmark(_InlineBenchmark((Rubric(name="judge"), Rubric(name="judge"))))
-
-
-def test_task_rejects_legacy_evaluator_binding_keys() -> None:
-    with pytest.raises(ValidationError, match="evaluator_binding_keys"):
-        _InlineTask(
-            task_slug="root",
-            instance_key="sample-1",
-            description="root task",
-            worker=EchoWorker(name="worker", model="echo-model"),
-            sandbox=EchoSandbox(),
-            evaluator_binding_keys=("default",),
-        )

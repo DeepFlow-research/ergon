@@ -8,13 +8,13 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class ExperimentRunRequest(BaseModel):
-    experiment_id: UUID
+    definition_id: UUID
     timeout_seconds: int | None = None
     wait: bool = True
 
 
 class ExperimentRunResult(BaseModel):
-    experiment_id: UUID
+    definition_id: UUID
     run_ids: list[UUID]
     workflow_definition_ids: list[UUID] = Field(default_factory=list)
 

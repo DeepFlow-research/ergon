@@ -33,14 +33,13 @@ def test_worker_execute_does_not_read_definition_repository() -> None:
     )
 
 
-def test_worker_execute_prefers_task_worker_over_legacy_bridge() -> None:
+def test_worker_execute_prefers_task_worker_over_payload_bridge() -> None:
     """PR 5 makes ``task.worker`` the canonical source.
 
     The body must read the worker off ``task.worker`` first. A narrow
-    legacy fallback lives in a sibling module
-    (``_legacy_worker_bridge.py``) and only fires when
-    ``task.worker is None`` — i.e. when an unmigrated TaskSpec-returning
-    benchmark reaches this path. The body must NOT import
+    compatibility fallback used to live in a sibling module and only
+    fired when ``task.worker is None`` — i.e. when an unmigrated
+    TaskSpec-returning benchmark reached this path. The body must NOT import
     ``ComponentCatalogService`` directly or define an in-body
     ``_worker_from_payload_bridge`` function; both belong in the
     sibling. PR 11 (after PR 10c migrates the last benchmark) deletes
@@ -50,14 +49,12 @@ def test_worker_execute_prefers_task_worker_over_legacy_bridge() -> None:
     text = (ROOT / "ergon_core/ergon_core/core/application/jobs/worker_execute.py").read_text()
     assert "ComponentCatalogService" not in text, (
         "worker_execute body must not import the registry directly — "
-        "any legacy fallback lives in `_legacy_worker_bridge.py`."
+        "runtime code must read object-bound workers from task.worker."
     )
-    # The PR 3 in-body bridge name is gone; the PR 5 legacy fallback is
-    # a sibling-module function and must not appear as a module-level
-    # def here.
+    # The PR 3 in-body bridge name is gone and must not appear as a
+    # module-level def here.
     assert "def _worker_from_payload_bridge" not in text, (
-        "PR 5 retired the in-body bridge. The legacy fallback lives in a "
-        "sibling module, not as a top-level def in `worker_execute.py`."
+        "PR 5 retired the in-body bridge; it must not be a top-level def in `worker_execute.py`."
     )
     assert "task.worker" in text, (
         "PR 5 binds the worker directly to the Task snapshot; "
@@ -73,7 +70,7 @@ def test_evaluate_task_run_uses_thin_payload_and_run_tier_read() -> None:
     # Thin payload only.
     assert "TaskEvaluateRequest" in body
     assert "EvaluateTaskRunRequest" not in body, (
-        "The legacy multi-field payload must stay out of the eval body."
+        "The pre-v2 multi-field payload must stay out of the eval body."
     )
 
     # No definition-tier reads.

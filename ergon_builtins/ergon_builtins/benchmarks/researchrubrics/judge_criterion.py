@@ -13,7 +13,7 @@ from ergon_core.core.application.resources import RunResourceView
 from ergon_core.core.application.resources.repository import RunResourceRepository
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunResourceKind
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import RubricCriterion
 from ergon_builtins.common.llm.structured_judge import (
@@ -41,9 +41,7 @@ class ResearchRubricsJudgeCriterion(Criterion):
     fields so they survive a ``task_json`` round trip alongside the
     object-bound rubric.  ``rubric_text`` mirrors ``rubric.criterion`` for
     snapshots that need the prompt body without re-walking the rubric
-    structure (e.g. the v2 definition JSON test).  Legacy callers that
-    construct the criterion with positional/keyword ``model=`` still work
-    through the ``__init__`` shim below.
+    structure (e.g. the v2 definition JSON test).
     """
 
     type_slug: ClassVar[str] = "researchrubrics-llm-judge"
@@ -51,6 +49,15 @@ class ResearchRubricsJudgeCriterion(Criterion):
     rubric: RubricCriterion
     judge_model: str = "openai:gpt-4o"
     rubric_text: str = ""  # slopcop: ignore[no-str-empty-default]
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_model_alias(cls, data: Any) -> Any:  # slopcop: ignore[no-typing-any]
+        if isinstance(data, dict) and "model" in data:
+            raise ValueError(
+                "ResearchRubricsJudgeCriterion uses judge_model; model is not accepted"
+            )
+        return data
 
     def __init__(self, **data: Any) -> None:  # slopcop: ignore[no-typing-any]
         rubric = data.get("rubric")
@@ -63,22 +70,7 @@ class ResearchRubricsJudgeCriterion(Criterion):
                 data["score_spec"] = ScoreScale(max_score=abs(rubric.weight))
             if "rubric_text" not in data:
                 data["rubric_text"] = rubric.criterion
-        # PR 10b: accept the legacy ``model=`` kwarg for one release while
-        # call sites migrate to ``judge_model=``.  Round-trip JSON already
-        # carries ``judge_model``; this only catches in-process callers.
-        if "model" in data and "judge_model" not in data:
-            data["judge_model"] = data.pop("model")
         super().__init__(**data)
-
-    @property
-    def model(self) -> str:
-        """Alias for ``judge_model`` (legacy callsite compatibility).
-
-        Used by callers that read ``criterion.model`` (the v1 attribute
-        name) — most notably the in-tree judge-call helpers.  PR 11
-        deletes those callsites along with the legacy worker chain.
-        """
-        return self.judge_model
 
     @property
     def system_prompt(self) -> str:
@@ -86,7 +78,7 @@ class ResearchRubricsJudgeCriterion(Criterion):
 
         Derived lazily from ``self.rubric`` so the criterion remains
         round-trippable through ``task_json`` — only the persisted fields
-        (``rubric``, ``model``, ``slug``, ...) need to survive serialization.
+        (``rubric``, ``judge_model``, ``slug``, ...) need to survive serialization.
         """
         return self._build_system_prompt(self.rubric)
 
@@ -123,7 +115,7 @@ class ResearchRubricsJudgeCriterion(Criterion):
                 evaluated_resource_ids=evaluated_resource_ids,
                 final_outputs=final_outputs,
                 rubric=self.rubric,
-                model=self.model,
+                model=self.judge_model,
             ),
         )
 
@@ -170,7 +162,7 @@ class ResearchRubricsJudgeCriterion(Criterion):
                 JudgeMessage(role="user", content=user_prompt),
             ],
             response_type=ResearchRubricsVerdict,
-            model=self.model,
+            model=self.judge_model,
         )
 
     @classmethod

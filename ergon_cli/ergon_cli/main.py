@@ -41,14 +41,9 @@ def build_parser() -> argparse.ArgumentParser:
     experiment = sub.add_parser("experiment", help="Experiment lifecycle")
     experiment_sub = experiment.add_subparsers(dest="experiment_action")
     experiment_show = experiment_sub.add_parser("show", help="Show experiment detail")
-    experiment_show.add_argument("experiment_id", help="Experiment UUID")
+    experiment_show.add_argument("definition_id", help="Experiment UUID")
     experiment_list = experiment_sub.add_parser("list", help="List experiments")
     experiment_list.add_argument("--limit", type=int, default=50, help="Number of experiments")
-    experiment_sub.add_parser("tags", help="List distinct experiment tags")
-    experiment_by_tag_parser = experiment_sub.add_parser(
-        "by-tag", help="List definitions for an experiment tag"
-    )
-    experiment_by_tag_parser.add_argument("tag", help="Experiment tag")
 
     run = sub.add_parser("run", help="Run management")
     run_sub = run.add_subparsers(dest="run_action")
@@ -60,9 +55,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Filter by status (pending, executing, completed, failed, cancelled)",
     )
     run_list_parser.add_argument(
-        "--experiment",
+        "--definition-id",
         default=None,
-        help="Filter by experiment tag (BenchmarkDefinitionRecord.experiment)",
+        help="Filter by definition UUID",
     )
     run_cancel_parser = run_sub.add_parser("cancel", help="Cancel a running experiment")
     run_cancel_parser.add_argument("run_id", help="Run ID (UUID) to cancel")

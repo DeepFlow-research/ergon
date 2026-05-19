@@ -2,10 +2,9 @@
 
 All serialisation goes through :class:`SandboxResourcePublisher` — the
 single authoritative path from sandbox → Postgres (``run_resources`` rows)
-and local blob store.  The legacy "download-to-local-path + kind='output'"
-loop that created a second row per file has been removed; consumers should
-read via the publisher (``kind='report'``/``kind='artifact'`` rows whose
-``file_path`` points at the content-addressed blob store).
+and local blob store. Consumers read via the publisher
+(``kind='report'``/``kind='artifact'`` rows whose ``file_path`` points at the
+content-addressed blob store).
 """
 
 import logging
