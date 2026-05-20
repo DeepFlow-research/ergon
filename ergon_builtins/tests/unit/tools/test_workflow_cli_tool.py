@@ -27,6 +27,10 @@ class _Session:
         return False
 
 
+class _ResourceService:
+    pass
+
+
 def _worker_context() -> WorkerContext:
     return WorkerContext(
         run_id=uuid4(),
@@ -35,7 +39,7 @@ def _worker_context() -> WorkerContext:
         sandbox_id="sandbox",
         task_mgmt=object(),
         task_inspect=object(),
-        resource_repo=object(),
+        resource_service=_ResourceService(),
         session_factory=_Session,
     )
 
@@ -155,7 +159,7 @@ async def test_workflow_adapter_add_subtask_spawns_object_bound_child() -> None:
         sandbox_id="sandbox",
         task_mgmt=TaskManagement(),
         task_inspect=object(),
-        resource_repo=object(),
+        resource_service=_ResourceService(),
         session_factory=_Session,
     )
 

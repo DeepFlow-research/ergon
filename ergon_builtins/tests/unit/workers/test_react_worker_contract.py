@@ -181,6 +181,10 @@ class _DepsWorker(ReActWorker):
         return {"execution_id": str(context.execution_id)}
 
 
+class _ResourceService:
+    pass
+
+
 def _minimal_task() -> Task:
     return task_with_id(
         UUID(int=6),
@@ -200,7 +204,7 @@ def _minimal_context() -> WorkerContext:
         task_id=UUID(int=6),
         task_mgmt=object(),
         task_inspect=object(),
-        resource_repo=object(),
+        resource_service=_ResourceService(),
         session_factory=lambda: None,
     )
 
