@@ -251,7 +251,7 @@ export function TaskWorkspace({
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--card)]" data-testid="task-workspace">
       <header
-        className="shrink-0 border-b border-[var(--line)] bg-[var(--card)] p-4"
+        className="shrink-0 border-b border-[var(--accent-soft)] bg-[var(--paper)] p-4"
         data-testid="workspace-header"
       >
         <div className="flex items-start gap-3">
@@ -325,7 +325,7 @@ export function TaskWorkspace({
       <div
         role="tablist"
         aria-label="Workspace sections"
-        className="flex shrink-0 gap-1 overflow-x-auto border-b border-[var(--line)] bg-[var(--card)] px-3 py-2"
+        className="flex shrink-0 gap-1 overflow-x-auto border-b border-[var(--line)] bg-[var(--paper)] px-3 py-2"
         data-testid="workspace-tabs"
       >
         {WORKSPACE_TABS.map((tab) => {
