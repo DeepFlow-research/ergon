@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from pathlib import PurePosixPath
-from typing import Literal
+from typing import Literal, Protocol
 from uuid import UUID, uuid4
 
 from ergon_core.core.persistence.definitions.models import (
@@ -67,6 +67,17 @@ from sqlmodel import Session, col, select
 ResourceScope = Literal["input", "upstream", "own", "children", "descendants", "visible"]
 
 
+class SandboxMaterializer(Protocol):
+    """Sandbox adapter surface needed to materialize resources."""
+
+    async def upload_file(
+        self,
+        task_id: UUID,
+        local_path: str,
+        sandbox_path: str,
+    ) -> None: ...
+
+
 class WorkflowService:
     """Run-scoped workflow navigation and resource-copy policy.
 
@@ -79,7 +90,7 @@ class WorkflowService:
     def __init__(
         self,
         *,
-        sandbox_manager_factory: Callable[[str], "BaseSandboxManager"] | None = None,
+        sandbox_manager_factory: Callable[[str], SandboxMaterializer] | None = None,
         graph_repository: RuntimeGraphRepository | None = None,
         task_ready_dispatcher: TaskReadyDispatcher | None = None,
     ) -> None:
@@ -658,7 +669,7 @@ class WorkflowService:
         return result.model_copy(update={"copied_resource_id": copy.id})
 
     @staticmethod
-    def _sandbox_manager_for(benchmark_type: str) -> "BaseSandboxManager":
+    def _sandbox_manager_for(benchmark_type: str) -> SandboxMaterializer:
         # reason: application runtime should not import the E2B adapter at module load time;
         # this default factory is only needed when materializing resources into a sandbox.
         from ergon_core.core.infrastructure.sandbox.manager import DefaultSandboxManager

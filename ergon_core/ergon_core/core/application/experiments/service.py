@@ -4,7 +4,6 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from ergon_core.core.application.experiments.launch import launch_run
 from ergon_core.core.application.experiments.models import (
     DefinitionHandle,
     ExperimentRunRequest,
@@ -25,6 +24,22 @@ def persist_benchmark(benchmark: "Benchmark") -> DefinitionHandle:
     )
 
     return _persist_benchmark(benchmark)
+
+
+async def launch_run(
+    definition_id: UUID,
+    *,
+    emit_workflow_started: WorkflowStartedEmitter | None = None,
+) -> ExperimentRunResult:
+    """Launch a persisted definition while keeping the heavy runtime import lazy."""
+
+    # reason: keep HTTP app imports from cycling through runtime models and public API exports.
+    from ergon_core.core.application.experiments.launch import launch_run as _launch_run
+
+    return await _launch_run(
+        definition_id,
+        emit_workflow_started=emit_workflow_started,
+    )
 
 
 async def run_experiment(
