@@ -19,6 +19,7 @@ For every Repository class discovered in `ergon_core`, enforce:
 
 from __future__ import annotations
 
+import ast
 import importlib
 import inspect
 from collections.abc import Iterator
@@ -28,6 +29,27 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 PRODUCTION_ROOT = ROOT / "ergon_core" / "ergon_core"
+CORE_ROOT = PRODUCTION_ROOT / "core"
+APPLICATION_ROOT = CORE_ROOT / "application"
+APPLICATION_PREFIX = "ergon_core.core.application"
+
+_REPOSITORY_REEXPORT_IMPORT_LEDGER = (
+    pytest.param(
+        "ergon_core.core.jobs.task.worker_execute.job",
+        "ergon_core.core.application.resources.RunResourceRepository",
+        marks=pytest.mark.xfail(
+            strict=True,
+            reason=(
+                "PR 04: route worker output resource writes through the resources "
+                "facade instead of the repository re-export."
+            ),
+        ),
+        id=(
+            "ergon_core.core.jobs.task.worker_execute.job -> "
+            "ergon_core.core.application.resources.RunResourceRepository"
+        ),
+    ),
+)
 
 
 _WRITE_PREFIXES = (
@@ -200,3 +222,167 @@ def test_repository_does_not_import_infrastructure(cls: type) -> None:
         "`ergon_core.core.infrastructure`. Repositories must stay "
         "framework-agnostic."
     )
+
+
+def _module_name_for_path(path: Path) -> str:
+    rel = path.relative_to(ROOT / "ergon_core")
+    parts = list(rel.with_suffix("").parts)
+    if parts[-1] == "__init__":
+        parts = parts[:-1]
+    return ".".join(parts)
+
+
+def _source_package_parts(path: Path, module_name: str) -> list[str]:
+    parts = module_name.split(".")
+    if path.name == "__init__.py":
+        return parts
+    return parts[:-1]
+
+
+def _resolve_import_from_base(
+    *,
+    path: Path,
+    source_module: str,
+    level: int,
+    module: str | None,
+) -> str:
+    if level == 0:
+        return module or ""
+
+    package_parts = _source_package_parts(path, source_module)
+    kept_parts = package_parts[: len(package_parts) - (level - 1)]
+    base = ".".join(kept_parts)
+    if module:
+        return f"{base}.{module}"
+    return base
+
+
+def _source_application_domain(path: Path) -> str | None:
+    try:
+        return path.relative_to(APPLICATION_ROOT).parts[0]
+    except ValueError:
+        return None
+
+
+def _repository_import_target(base: str, alias: str) -> tuple[str, str] | None:
+    if not base.startswith(f"{APPLICATION_PREFIX}."):
+        return None
+
+    parts = base.split(".")
+    if len(parts) < 4:
+        return None
+
+    domain = parts[3]
+    if len(parts) == 4 and alias == "repository":
+        return domain, f"{base}.repository"
+    if len(parts) >= 5 and parts[4] == "repository":
+        return domain, ".".join(parts[:5])
+    if len(parts) == 4 and alias in _repository_reexports(domain):
+        return domain, f"{base}.{alias}"
+    return None
+
+
+def _repository_reexports(domain: str) -> set[str]:
+    init_path = APPLICATION_ROOT / domain / "__init__.py"
+    if not init_path.exists():
+        return set()
+
+    tree = ast.parse(init_path.read_text(), filename=str(init_path))
+    reexports: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        if not node.module or not node.module.endswith(".repository"):
+            continue
+        reexports.update(alias.asname or alias.name for alias in node.names)
+    return reexports
+
+
+def _application_repository_imports() -> set[tuple[str, str]]:
+    imports: set[tuple[str, str]] = set()
+    for path in CORE_ROOT.rglob("*.py"):
+        if "__pycache__" in path.parts:
+            continue
+
+        source_module = _module_name_for_path(path)
+        source_domain = _source_application_domain(path)
+        tree = ast.parse(path.read_text(), filename=str(path))
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imports.update(_plain_repository_imports(node, source_module, source_domain))
+                continue
+
+            if not isinstance(node, ast.ImportFrom) or node.module == "__future__":
+                continue
+
+            imports.update(_from_repository_imports(path, node, source_module, source_domain))
+
+    return imports
+
+
+def _plain_repository_imports(
+    node: ast.Import,
+    source_module: str,
+    source_domain: str | None,
+) -> set[tuple[str, str]]:
+    imports: set[tuple[str, str]] = set()
+    for alias in node.names:
+        target = _repository_import_target(alias.name, "")
+        if target is None:
+            continue
+        target_domain, target_module = target
+        if source_domain != target_domain:
+            imports.add((source_module, target_module))
+    return imports
+
+
+def _from_repository_imports(
+    path: Path,
+    node: ast.ImportFrom,
+    source_module: str,
+    source_domain: str | None,
+) -> set[tuple[str, str]]:
+    imports: set[tuple[str, str]] = set()
+    base = _resolve_import_from_base(
+        path=path,
+        source_module=source_module,
+        level=node.level,
+        module=node.module,
+    )
+    for alias in node.names:
+        target = _repository_import_target(base, alias.name)
+        if target is None:
+            continue
+        target_domain, target_module = target
+        if source_domain != target_domain:
+            imports.add((source_module, target_module))
+    return imports
+
+
+@pytest.mark.parametrize(
+    ("source_module", "target_module"),
+    _REPOSITORY_REEXPORT_IMPORT_LEDGER,
+)
+def test_ledgered_application_repository_imports_are_removed(
+    source_module: str,
+    target_module: str,
+) -> None:
+    """Strict xfail ledger for repository imports hidden behind package exports."""
+
+    assert (source_module, target_module) not in _application_repository_imports()
+
+
+def test_application_repositories_are_imported_only_within_their_domain() -> None:
+    ledgered = {
+        (param.values[0], param.values[1])
+        for param in _REPOSITORY_REEXPORT_IMPORT_LEDGER
+    }
+    offenders = [
+        f"{source_module} imports repository module {target_module}"
+        for source_module, target_module in sorted(
+            _application_repository_imports() - ledgered
+        )
+    ]
+
+    assert offenders == []
