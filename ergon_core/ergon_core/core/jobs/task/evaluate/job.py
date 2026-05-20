@@ -7,8 +7,8 @@ The payload only carries identity (``run_id`` + ``task_id`` +
 reconstructed locally from the run-tier read boundary:
 
 - execution row + stamped ``sandbox_id`` ← ``session.get(RunTaskExecution)``
-- typed Task view ← ``RuntimeGraphRepository.node(..., sandbox_id=...)``
-- persisted ``WorkerOutput`` ← ``WorkerOutputRepository.load``
+- typed Task view ← ``TaskExecutionService.load_task_view(..., sandbox_id=...)``
+- persisted ``WorkerOutput`` ← ``TaskExecutionService.load_worker_output``
 - evaluator instance ← ``task.evaluators[payload.evaluator_index]``
 
 Criteria run inline via ``EvaluationService.evaluate``: no
@@ -30,10 +30,9 @@ from uuid import UUID
 
 from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.core.application.evaluation.service import EvaluationService
-from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from .contract import EvaluateTaskRunResult, TaskEvaluateRequest
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
-from ergon_core.core.application.runtime.task_execution_repository import WorkerOutputRepository
+from ergon_core.core.application.runtime.task_execution import TaskExecutionService
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
@@ -51,6 +50,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 _evaluation_persistence = EvaluationService()
+_task_execution = TaskExecutionService()
 
 
 def _evaluator_binding_key(evaluator: "Evaluator", evaluator_index: int) -> str:
@@ -80,13 +80,13 @@ async def run_evaluate_task_run_job(
                 task_id=task_id,
                 execution_id=execution_id,
             )
-        view = await RuntimeGraphRepository().node(
+        view = await _task_execution.load_task_view(
             session,
             run_id=run_id,
             task_id=task_id,
             sandbox_id=execution.sandbox_id,
         )
-        worker_output = await WorkerOutputRepository().load(
+        worker_output = await _task_execution.load_worker_output(
             session,
             execution_id=execution_id,
         )

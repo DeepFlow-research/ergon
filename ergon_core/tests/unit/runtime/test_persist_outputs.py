@@ -8,11 +8,11 @@ from ergon_core.core.jobs.resources.persist_outputs.contract import PersistOutpu
 from ergon_core.core.jobs.resources.persist_outputs.job import run_persist_outputs_job
 
 
-class _FakeGraphRepo:
+class _FakeTaskExecutionService:
     def __init__(self, seen: list[str | None]) -> None:
         self._seen = seen
 
-    async def node(self, _session, *, run_id, task_id, sandbox_id=None):
+    async def load_task_view(self, _session, *, run_id, task_id, sandbox_id=None):
         del run_id, task_id
         self._seen.append(sandbox_id)
         sandbox = SimpleNamespace(output_path="/workspace/public-output/")
@@ -50,7 +50,11 @@ async def test_persist_outputs_publishes_public_sandbox_through_resource_service
 
     seen_sandbox_ids: list[str | None] = []
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(object()))
-    monkeypatch.setattr(module, "RuntimeGraphRepository", lambda: _FakeGraphRepo(seen_sandbox_ids))
+    monkeypatch.setattr(
+        module,
+        "TaskExecutionService",
+        lambda: _FakeTaskExecutionService(seen_sandbox_ids),
+    )
     monkeypatch.setattr(composition, "SandboxResourcePublisher", _FakePublisher)
     monkeypatch.setattr(composition, "RunResourcePublishService", _FakePublishService)
 

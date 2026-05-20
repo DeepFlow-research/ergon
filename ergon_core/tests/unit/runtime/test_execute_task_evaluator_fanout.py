@@ -73,11 +73,11 @@ class _OrderedFakeCtx:
         return await fn()
 
 
-def _prepared(execution_id, node_id) -> PreparedTaskExecution:
+def _prepared(execution_id, task_id) -> PreparedTaskExecution:
     return PreparedTaskExecution(
         run_id=uuid4(),
         definition_id=uuid4(),
-        task_id=node_id,
+        task_id=task_id,
         execution_id=execution_id,
         task_slug="t",
         task_description="d",
@@ -89,8 +89,7 @@ def _prepared(execution_id, node_id) -> PreparedTaskExecution:
     )
 
 
-def _ready_event(run_id, definition_id, task_id, node_id) -> TaskReadyEvent:
-    del node_id
+def _ready_event(run_id, definition_id, task_id) -> TaskReadyEvent:
     return TaskReadyEvent(
         run_id=run_id,
         definition_id=definition_id,
@@ -122,11 +121,10 @@ async def test_execute_task_emits_completed_strictly_after_eval_gather(
     run_id = uuid4()
     definition_id = uuid4()
     task_id = uuid4()
-    node_id = uuid4()
     execution_id = uuid4()
 
-    prepared = _prepared(execution_id, node_id)
-    payload = _ready_event(run_id, definition_id, task_id, node_id)
+    prepared = _prepared(execution_id, task_id)
+    payload = _ready_event(run_id, definition_id, task_id)
 
     async def fake_prepare(
         _ctx: inngest.Context,
@@ -179,16 +177,15 @@ async def test_execute_task_emits_completed_strictly_after_eval_gather(
 
     # Two evaluators bound on the task so the parallel fanout sees real work.
     view_task = SimpleNamespace(evaluators=(object(), object()))
-    view = SimpleNamespace(task=view_task)
-    repo = SimpleNamespace(node=AsyncMock(return_value=view))
 
     async def fake_fanout(
         ctx: inngest.Context,
+        svc: TaskExecutionService,
         payload: TaskReadyEvent,
         prepared: PreparedTaskExecution,
         eval_fn: inngest.Function,
     ) -> None:
-        del payload, prepared
+        del svc, payload, prepared
         # Use the real call shape but bypass the session machinery so we
         # don't need a populated database — just count the invokes.
         for i in range(len(view_task.evaluators)):
@@ -211,7 +208,6 @@ async def test_execute_task_emits_completed_strictly_after_eval_gather(
     monkeypatch.setattr(execute_task_module, "_emit_task_completed", fake_emit_completed)
     monkeypatch.setattr(execute_task_module, "_fan_out_evaluators", fake_fanout)
     monkeypatch.setattr(execute_task_module, "TaskExecutionService", lambda: svc)
-    monkeypatch.setattr(execute_task_module.RuntimeGraphRepository, "node", repo.node)
 
     result = await execute_task_module.run_execute_task_job(
         ctx,
@@ -250,7 +246,7 @@ async def test_execute_task_emits_failed_when_worker_fails(
 
     run_id = uuid4()
     prepared = _prepared(uuid4(), uuid4())
-    payload = _ready_event(run_id, uuid4(), uuid4(), prepared.task_id)
+    payload = _ready_event(run_id, uuid4(), prepared.task_id)
 
     async def fake_prepare(
         _ctx: inngest.Context,

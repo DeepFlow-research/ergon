@@ -53,7 +53,6 @@ from functools import partial
 from typing import Any
 from uuid import UUID
 
-from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from .contract import TaskExecuteResult, TaskReadyEvent
 from ergon_core.core.jobs.resources.persist_outputs.contract import (
     PersistOutputsRequest,
@@ -173,6 +172,7 @@ async def _invoke_worker_execute(
 
 async def _fan_out_evaluators(
     ctx: Any,
+    svc: TaskExecutionService,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
     evaluate_task_run_function: Any,
@@ -193,7 +193,7 @@ async def _fan_out_evaluators(
     """
 
     with get_session() as session:
-        view = await RuntimeGraphRepository().node(
+        view = await svc.load_task_view(
             session,
             run_id=payload.run_id,
             task_id=payload.task_id,
@@ -360,7 +360,7 @@ async def run_execute_task_job(
         # orchestrator emits `task/completed` only after all evaluators
         # return, and the sibling sandbox_cleanup function terminates
         # the external sandbox from that terminal event.
-        await _fan_out_evaluators(ctx, payload, prepared, evaluate_task_run_function)
+        await _fan_out_evaluators(ctx, svc, payload, prepared, evaluate_task_run_function)
 
         await svc.finalize_success(
             FinalizeTaskExecutionCommand(

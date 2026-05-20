@@ -20,15 +20,23 @@ class _FakeWorker:
         yield WorkerOutput(output="ok")
 
 
-class _FakeGraphRepo:
+class _FakeTaskExecutionService:
     def __init__(self, seen: list[str | None]) -> None:
         self._seen = seen
+        self.persisted_outputs = []
+        self.attached_sandboxes = []
 
-    async def node(self, _session, *, run_id, task_id, sandbox_id=None):
+    async def load_task_view(self, _session, *, run_id, task_id, sandbox_id=None):
         del run_id, task_id
         self._seen.append(sandbox_id)
         sandbox = SimpleNamespace(is_live=sandbox_id == "sbx-live")
         return SimpleNamespace(task=SimpleNamespace(worker=_FakeWorker(), sandbox=sandbox))
+
+    async def persist_worker_output(self, _session, *, execution_id, output):
+        self.persisted_outputs.append((execution_id, output))
+
+    async def attach_sandbox_to_execution(self, _session, *, execution_id, sandbox_id):
+        self.attached_sandboxes.append((execution_id, sandbox_id))
 
 
 class _FakeSession:
@@ -48,10 +56,10 @@ async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch) -> 
     async def _publish(_event):
         return None
 
+    task_execution = _FakeTaskExecutionService(seen_sandbox_ids)
+
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(_FakeSession()))
-    monkeypatch.setattr(module, "RuntimeGraphRepository", lambda: _FakeGraphRepo(seen_sandbox_ids))
-    monkeypatch.setattr(module.WorkerOutputRepository, "persist", _persist)
-    monkeypatch.setattr(module.TaskExecutionRepository, "set_sandbox_id", _persist)
+    monkeypatch.setattr(module, "TaskExecutionService", lambda: task_execution)
     monkeypatch.setattr(module.ContextEventService, "persist_chunk", _persist)
     monkeypatch.setattr(module, "TaskManagementService", lambda **kwargs: object())
     monkeypatch.setattr(module, "TaskInspectionService", lambda: object())
@@ -88,8 +96,8 @@ async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
 ) -> None:
     from ergon_core.core.jobs.task.worker_execute import job as module
 
-    class _NonLiveRepo:
-        async def node(self, _session, *, run_id, task_id, sandbox_id=None):
+    class _NonLiveTaskExecutionService:
+        async def load_task_view(self, _session, *, run_id, task_id, sandbox_id=None):
             del run_id, task_id, sandbox_id
             return SimpleNamespace(
                 task=SimpleNamespace(
@@ -99,7 +107,7 @@ async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
             )
 
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(object()))
-    monkeypatch.setattr(module, "RuntimeGraphRepository", lambda: _NonLiveRepo())
+    monkeypatch.setattr(module, "TaskExecutionService", lambda: _NonLiveTaskExecutionService())
     monkeypatch.setattr(module, "TaskManagementService", lambda: object())
     monkeypatch.setattr(module, "TaskInspectionService", lambda: object())
     monkeypatch.setattr(module, "RunResourceReadService", lambda: object())

@@ -133,7 +133,7 @@ def test_graph_initialization_writes_concrete_worker_slug_from_definition_bindin
 
 
 @pytest.mark.asyncio
-async def test_workflow_initialization_returns_node_ids_for_initial_ready_static_tasks(
+async def test_workflow_initialization_returns_task_ids_for_initial_ready_static_tasks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     session = _session()
@@ -170,15 +170,15 @@ async def test_dynamic_prepare_uses_node_worker_slug_and_run_model_without_defin
     session = _session()
     definition_id = _definition_with_worker(session, worker_type="minif2f-react")
     run_id = _run(session, definition_id=definition_id, model_target="stub:constant")
-    node_id = uuid4()
+    task_id = uuid4()
     task = task_with_id(
-        node_id,
+        task_id,
         task_slug="dynamic-leaf",
         instance_key="sample-1",
         description="Dynamic specialist task",
     )
     node = RunGraphNode(
-        task_id=node_id,
+        task_id=task_id,
         run_id=run_id,
         instance_key="sample-1",
         task_slug="dynamic-leaf",
