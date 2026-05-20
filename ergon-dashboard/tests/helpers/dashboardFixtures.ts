@@ -460,6 +460,7 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
     experiment: {
       definition_id: FIXTURE_IDS.definitionId,
       name: "minif2f smoke n=3",
+      description: null,
       benchmark_type: "minif2f",
       sample_count: 3,
       status: "completed",
@@ -470,6 +471,20 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
       started_at: "2026-03-18T12:00:00.000Z",
       completed_at: "2026-03-18T12:02:26.000Z",
       run_count: 3,
+      status_counts: {
+        pending: 0,
+        executing: 0,
+        evaluating: 0,
+        completed: 3,
+        failed: 0,
+        cancelled: 0,
+      },
+      failure_count: 0,
+      latest_activity_at: "2026-03-18T12:02:26.000Z",
+      average_score: 1,
+      average_duration_ms: 24_000,
+      average_tasks: 10,
+      total_cost_usd: 0.42,
     },
     runs: [
       {
