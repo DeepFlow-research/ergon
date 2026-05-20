@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).parents[2]
+REPO_ROOT = Path(__file__).parents[3]
 OTEL_COLLECTOR_TEMPLATE = "ergon_infra/ergon_infra/templates/otel-collector.yaml"
 
 

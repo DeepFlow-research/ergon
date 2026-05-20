@@ -18,9 +18,9 @@ def _parse_args(
     parser = build_parser()
     args, unknown = parser.parse_known_args(argv)
     if unknown:
-        if getattr(args, "command", None) != "test":
+        if args.command != "test":
             parser.error(f"unrecognized arguments: {' '.join(unknown)}")
-        args.extra_args = [*(getattr(args, "extra_args", None) or []), *unknown]
+        args.extra_args = [*args.extra_args, *unknown]
     return parser, args
 
 

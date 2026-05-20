@@ -29,7 +29,7 @@ def main() -> None:
     for entry in manifest:
         model_name = entry["modelName"]
         schema_file = entry["schemaFile"]
-        model = getattr(module, model_name, None)
+        model = vars(module).get(model_name)
         if model is None:
             raise RuntimeError(
                 f"Model {model_name!r} not found in {CONTRACTS_MODULE} "

@@ -4,6 +4,7 @@ import ergon_cli.domains.tests.service as test_service
 import ergon_cli.domains.tests.commands as test_commands
 from ergon_cli.domains.tests.commands import handle_test
 from ergon_cli.domains.tests.models import TestCommand as CliTestCommand
+from ergon_core.core.shared.settings import settings
 
 
 def test_unit_cli_resolves_to_cli_pytest_command() -> None:
@@ -11,7 +12,9 @@ def test_unit_cli_resolves_to_cli_pytest_command() -> None:
         CliTestCommand(suite="unit", domain="cli", dry_run=True, extra_args=())
     )
 
-    assert command.commands == (("pnpm", "run", "test:cli:unit"),)
+    assert command.commands == (
+        ("uv", "run", "pytest", "ergon_cli/tests/unit", "-q", "-n", "auto", "--durations=20"),
+    )
 
 
 def test_extra_args_are_appended_to_each_resolved_command() -> None:
@@ -19,7 +22,18 @@ def test_extra_args_are_appended_to_each_resolved_command() -> None:
         CliTestCommand(suite="unit", domain="cli", dry_run=True, extra_args=("-k", "parser"))
     )
 
-    assert command.commands[0] == ("pnpm", "run", "test:cli:unit", "--", "-k", "parser")
+    assert command.commands[0] == (
+        "uv",
+        "run",
+        "pytest",
+        "ergon_cli/tests/unit",
+        "-q",
+        "-n",
+        "auto",
+        "--durations=20",
+        "-k",
+        "parser",
+    )
 
 
 def test_dry_run_prints_command_without_executing(monkeypatch, capsys) -> None:
@@ -31,7 +45,7 @@ def test_dry_run_prints_command_without_executing(monkeypatch, capsys) -> None:
     rc = handle_test(Namespace(test_suite="unit", test_domain="cli", dry_run=True, extra_args=[]))
 
     assert rc == 0
-    assert "pnpm run test:cli:unit" in capsys.readouterr().out
+    assert "uv run pytest ergon_cli/tests/unit" in capsys.readouterr().out
 
 
 def test_handler_strips_pass_through_separator(monkeypatch) -> None:
@@ -110,7 +124,21 @@ def test_full_unit_is_explicit_all_unit_command() -> None:
         CliTestCommand(suite="unit", domain="full", dry_run=True, extra_args=())
     )
 
-    assert command.commands == (("pnpm", "run", "test:full:unit"),)
+    assert command.commands == (
+        (
+            "uv",
+            "run",
+            "pytest",
+            "ergon_core/tests/unit",
+            "ergon_builtins/tests/unit",
+            "ergon_cli/tests/unit",
+            "ergon_ingestion/tests/unit",
+            "-q",
+            "-n",
+            "auto",
+            "--durations=20",
+        ),
+    )
 
 
 def test_benchmark_smoke_target_resolves_to_one_e2e_file() -> None:
@@ -163,15 +191,13 @@ def test_smoke_tests_receive_local_stack_environment(monkeypatch) -> None:
     assert rc == 0
     assert captured["argv"] == ("uv", "run", "pytest", "tests/e2e/test_minif2f_smoke.py", "-v")
     assert captured["check"] is False
-    assert (
-        captured["env"]["ERGON_DATABASE_URL"] == "postgresql://ergon:ergon_dev@localhost:5433/ergon"
-    )
-    assert captured["env"]["ERGON_API_BASE_URL"] == "http://127.0.0.1:9000"
-    assert captured["env"]["ERGON_DASHBOARD_URL"] == "http://127.0.0.1:3001"
-    assert captured["env"]["PLAYWRIGHT_BASE_URL"] == "http://127.0.0.1:3001"
-    assert captured["env"]["INNGEST_API_BASE_URL"] == "http://localhost:8289"
-    assert captured["env"]["INNGEST_DEV"] == "1"
-    assert captured["env"]["INNGEST_EVENT_KEY"] == "dev"
+    assert captured["env"]["ERGON_DATABASE_URL"] == settings.database_url
+    assert captured["env"]["ERGON_API_BASE_URL"] == settings.api_base_url
+    assert captured["env"]["ERGON_DASHBOARD_URL"] == settings.dashboard_base_url
+    assert captured["env"]["PLAYWRIGHT_BASE_URL"] == settings.dashboard_base_url
+    assert captured["env"]["INNGEST_API_BASE_URL"] == settings.inngest_api_base_url
+    assert captured["env"]["INNGEST_DEV"] == ("1" if settings.inngest_dev else "0")
+    assert captured["env"]["INNGEST_EVENT_KEY"] == settings.inngest_event_key
 
 
 def test_smoke_tests_preserve_explicit_environment(monkeypatch) -> None:

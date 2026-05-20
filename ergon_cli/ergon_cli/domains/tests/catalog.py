@@ -1,11 +1,41 @@
 PYTHON_UNIT_COMMANDS = {
-    "core": ("pnpm", "run", "test:core:unit"),
-    "builtins": ("pnpm", "run", "test:builtins:unit"),
-    "cli": ("pnpm", "run", "test:cli:unit"),
-    "ingestion": ("pnpm", "run", "test:ingestion:unit"),
+    "core": ("uv", "run", "pytest", "ergon_core/tests/unit", "-q", "-n", "auto", "--durations=20"),
+    "builtins": (
+        "uv",
+        "run",
+        "pytest",
+        "ergon_builtins/tests/unit",
+        "-q",
+        "-n",
+        "auto",
+        "--durations=20",
+    ),
+    "cli": ("uv", "run", "pytest", "ergon_cli/tests/unit", "-q", "-n", "auto", "--durations=20"),
+    "ingestion": (
+        "uv",
+        "run",
+        "pytest",
+        "ergon_ingestion/tests/unit",
+        "-q",
+        "-n",
+        "auto",
+        "--durations=20",
+    ),
 }
 
-PYTHON_UNIT_ALL = ("pnpm", "run", "test:full:unit")
+PYTHON_UNIT_ALL = (
+    "uv",
+    "run",
+    "pytest",
+    "ergon_core/tests/unit",
+    "ergon_builtins/tests/unit",
+    "ergon_cli/tests/unit",
+    "ergon_ingestion/tests/unit",
+    "-q",
+    "-n",
+    "auto",
+    "--durations=20",
+)
 
 DASHBOARD_UNIT = ("pnpm", "-C", "ergon-dashboard", "run", "test:unit")
 DASHBOARD_CONTRACTS = ("pnpm", "-C", "ergon-dashboard", "run", "test:contracts")
