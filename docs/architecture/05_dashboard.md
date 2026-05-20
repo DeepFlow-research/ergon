@@ -112,7 +112,32 @@ pipeline shape but has no live call sites yet; see Follow-ups.
 - Emitter calls are best-effort. The backend never blocks on dashboard
   delivery, and no business logic depends on emission success.
 
-## 5. Extension points
+## 5. Frontend Quality Invariants
+
+These rules are architecture-level constraints for current dashboard work. The
+canonical refresh RFC and reference screenshots live in
+[`docs/rfcs/active/2026-05-20-frontend-quality-and-design-system-refresh/`](../rfcs/active/2026-05-20-frontend-quality-and-design-system-refresh/).
+The old external `../ergon_fe_design_system` folder is historical only; its
+selected screenshots have been copied into the RFC assets as in-repo
+references.
+
+- User-facing dashboard language uses **experiments**, **runs**, **tasks**,
+  **evaluations**, and **rubrics**. Cohort-era vocabulary is historical or
+  deprecated compatibility language, not current product language.
+- Core surfaces use Ergon tokens for typography, color, borders, shadows, and
+  status treatment. Avoid introducing generic Tailwind `gray-*`, `slate-*`, or
+  `dark:*` palettes on dashboard product surfaces when an Ergon token exists.
+- Evaluation state is structured UI state. Passing, failing, skipped, errored,
+  unavailable, and aggregated evaluation states should be visible through
+  tokenized labels, badges, summaries, and drill-downs, not only raw payloads or
+  log text.
+- The key dashboard surfaces are screenshot-reviewed when changed: experiment
+  detail, run workspace, rubric/evaluation drawer, experiments index, and runs
+  index. Review must include the main interaction state touched by the change,
+  such as drawer-open, timeline-visible, selected-node, empty, error, or
+  loading states.
+
+## 6. Extension points
 
 - New event type: add a Pydantic contract in `event_contracts.py`, a
   method on `DashboardEmitter`, the matching handler under
@@ -126,7 +151,7 @@ pipeline shape but has no live call sites yet; see Follow-ups.
 - New store slice: extend `DashboardStore` and expose a selector. Do
   not read the raw store from JSX.
 
-## 6. Anti-patterns
+## 7. Anti-patterns
 
 - Adding a backend state change without a corresponding
   `DashboardEmitter.*` call. Already the dominant failure mode — most
@@ -142,8 +167,12 @@ pipeline shape but has no live call sites yet; see Follow-ups.
   server does not replay. Tracked in Follow-ups.
 - Hand-editing the Zod contracts without updating the Pydantic source
   (or vice-versa).
+- Porting copy, routes, IDs, or CTAs from the historical design archive without
+  translating cohort-era language into current experiment/run vocabulary.
+- Treating screenshot review as optional for visible changes to the key
+  dashboard surfaces listed above.
 
-## 7. Follow-ups
+## 8. Follow-ups
 
 Known limitations tracked as bugs or RFCs:
 

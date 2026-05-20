@@ -118,6 +118,31 @@ Cross-cutting changes (artifacts, sandbox lifecycle, error propagation) must
 update `docs/architecture/cross_cutting/` explicitly. PRs that leave the
 architecture docs out of date are NAK'd regardless of test state.
 
+## Dashboard frontend quality
+
+For dashboard frontend work, treat
+[`docs/architecture/05_dashboard.md`](docs/architecture/05_dashboard.md) and
+[`docs/rfcs/active/2026-05-20-frontend-quality-and-design-system-refresh/`](docs/rfcs/active/2026-05-20-frontend-quality-and-design-system-refresh/)
+as the canonical product and visual guidance. The external
+`../ergon_fe_design_system` archive is historical only; use the copied RFC
+assets and plans as in-repo references.
+
+Future dashboard changes should naturally run the relevant subset of:
+
+```bash
+ergon start
+ergon test smoke
+pnpm -C ergon-dashboard run test:unit
+pnpm -C ergon-dashboard exec playwright screenshot --full-page --viewport-size=2048,1228 <url> <output.png>
+```
+
+Keep user-facing language on experiments, runs, tasks, evaluations, and rubrics.
+Cohort-era vocabulary is historical/deprecated compatibility language, not
+current product copy. Core dashboard surfaces should use Ergon tokens, expose
+evaluation state as structured UI, and include screenshot review for changed
+experiment detail, run workspace, rubric/evaluation drawer, experiments index,
+or runs index surfaces.
+
 ## RFCs and bugs
 
 **New feature or architectural change:**
