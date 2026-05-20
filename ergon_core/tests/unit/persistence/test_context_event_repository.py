@@ -11,7 +11,7 @@ from ergon_core.core.shared.context_parts import (
     UserMessagePart,
 )
 from ergon_core.core.persistence.context.models import RunContextEvent
-from ergon_core.core.application.context.events import ContextEventService
+from ergon_core.core.application.context.service import ContextEventService
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus

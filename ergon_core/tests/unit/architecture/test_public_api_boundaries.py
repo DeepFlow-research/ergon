@@ -340,7 +340,7 @@ def test_read_context_and_resource_modules_stay_in_application_and_views_layout(
         core_root / "application" / "communication" / "models.py",
         core_root / "application" / "communication" / "errors.py",
         core_root / "application" / "context" / "__init__.py",
-        core_root / "application" / "context" / "events.py",
+        core_root / "application" / "context" / "service.py",
         core_root / "application" / "resources" / "__init__.py",
         core_root / "application" / "resources" / "models.py",
         core_root / "application" / "resources" / "repository.py",

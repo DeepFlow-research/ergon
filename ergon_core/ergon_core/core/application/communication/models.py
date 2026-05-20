@@ -1,51 +1,9 @@
-"""Pydantic DTOs for inter-agent communication services and read models."""
+"""Pydantic DTOs for inter-agent communication service commands and results."""
 
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
-
-
-def _to_camel(value: str) -> str:
-    head, *tail = value.split("_")
-    return head + "".join(part.capitalize() for part in tail)
-
-
-class CamelModel(BaseModel):
-    """Base model that exposes camelCase JSON to the frontend."""
-
-    model_config = ConfigDict(
-        alias_generator=_to_camel,
-        populate_by_name=True,
-        extra="forbid",
-    )
-
-
-class RunCommunicationMessageDto(CamelModel):
-    id: str
-    thread_id: str
-    thread_topic: str
-    run_id: str
-    task_id: str | None = None
-    task_execution_id: str | None = None
-    from_agent_id: str
-    to_agent_id: str
-    content: str
-    sequence_num: int
-    created_at: datetime
-
-
-class RunCommunicationThreadDto(CamelModel):
-    id: str
-    run_id: str
-    task_id: str | None = None
-    topic: str
-    summary: str | None = None
-    agent_a_id: str
-    agent_b_id: str
-    created_at: datetime
-    updated_at: datetime
-    messages: list[RunCommunicationMessageDto] = Field(default_factory=list)
+from pydantic import BaseModel, Field
 
 
 class CreateMessageRequest(BaseModel):

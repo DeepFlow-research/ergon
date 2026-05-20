@@ -7,7 +7,7 @@ Two durable steps:
 
 import logging
 
-from ergon_core.core.application.ports.dashboard import get_dashboard_event_publisher
+from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.application.runtime.task_models import CleanupResult
 from ergon_core.core.application.runtime.task_cleanup import TaskCleanupService
 from ergon_core.core.jobs.sandbox._lifecycle import terminate_external_sandbox

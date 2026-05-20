@@ -11,11 +11,9 @@ from datetime import datetime
 from typing import ClassVar
 from uuid import UUID
 
-from ergon_core.core.application.communication.models import (
+from ergon_core.core.views.runs.models import (
     RunCommunicationMessageDto,
     RunCommunicationThreadDto,
-)
-from ergon_core.core.views.runs.models import (
     RunSnapshotDto,
     RunTaskEvaluationDto,
 )
