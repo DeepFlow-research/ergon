@@ -1,6 +1,5 @@
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 from ergon_cli.domains.examples.models import ExampleCommand, ExampleDefinition
@@ -13,8 +12,17 @@ class ExampleRunError(RuntimeError):
 def run_example_script(example: ExampleDefinition, command: ExampleCommand) -> int:
     repo_root = _repo_root(example.script_path)
     script_path = repo_root / example.script_path
+    examples_project = _examples_project(repo_root)
     process = subprocess.run(
-        [sys.executable, str(script_path), *_script_args(command)],
+        [
+            "uv",
+            "run",
+            "--project",
+            str(examples_project),
+            "python",
+            str(script_path),
+            *_script_args(command),
+        ],
         cwd=repo_root,
         env=os.environ.copy(),
     )
@@ -34,6 +42,24 @@ def _script_args(command: ExampleCommand) -> list[str]:
             args.extend(["--model", command.model])
     if command.max_iterations is not None:
         args.extend(["--max-iterations", str(command.max_iterations)])
+    if command.base_model is not None:
+        args.extend(["--base-model", command.base_model])
+        if command.model_cache_dir is not None:
+            args.extend(["--model-cache-dir", command.model_cache_dir])
+        args.extend(
+            [
+                "--llama-server-bin",
+                command.llama_server_bin,
+                "--host",
+                command.host,
+                "--port",
+                str(command.port),
+                "--startup-timeout",
+                str(command.startup_timeout),
+            ]
+        )
+        if command.keep_llama_server:
+            args.append("--keep-llama-server")
     return args
 
 
@@ -53,4 +79,15 @@ def _repo_root(script_path: str) -> Path:
     raise ExampleRunError(
         "Could not find the example script. Run this command from an Ergon source "
         "checkout, or set ERGON_REPO_ROOT to the repository root."
+    )
+
+
+def _examples_project(repo_root: Path) -> Path:
+    examples_project = repo_root / "examples"
+    if (examples_project / "pyproject.toml").is_file():
+        return examples_project
+
+    raise ExampleRunError(
+        "Could not find examples/pyproject.toml. Run this command from an Ergon source "
+        "checkout with the examples project available."
     )

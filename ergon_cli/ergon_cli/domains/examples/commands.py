@@ -65,6 +65,11 @@ def render_example_info(example: ExampleDefinition) -> str:
 
 def _handle_check(command: ExampleCommand) -> int:
     try:
+        if command.base_model is not None:
+            raise ExampleSetupError(
+                "--base-model starts a managed llama.cpp server and is only supported by "
+                "`ergon examples run`."
+            )
         result = check_example_setup(command)
     except ExampleSetupError as exc:
         _print_setup_error(exc)
@@ -78,11 +83,12 @@ def _handle_check(command: ExampleCommand) -> int:
 
 
 def _handle_run(example: ExampleDefinition, command: ExampleCommand) -> int:
-    try:
-        check_example_setup(command)
-    except ExampleSetupError as exc:
-        _print_setup_error(exc)
-        return exit_codes.RUNTIME_ERROR
+    if command.base_model is None:
+        try:
+            check_example_setup(command)
+        except ExampleSetupError as exc:
+            _print_setup_error(exc)
+            return exit_codes.RUNTIME_ERROR
 
     print(f"Launching {example.slug} via {example.script_path}")
     try:
@@ -94,7 +100,12 @@ def _handle_run(example: ExampleDefinition, command: ExampleCommand) -> int:
 
 def _print_setup_error(exc: ExampleSetupError) -> None:
     print(f"Setup error: {exc}", file=sys.stderr)
-    print(f"Start llama.cpp with: {LLAMA_SERVER_TEMPLATE}", file=sys.stderr)
+    if _should_print_llama_server_hint(exc):
+        print(f"Start llama.cpp with: {LLAMA_SERVER_TEMPLATE}", file=sys.stderr)
+
+
+def _should_print_llama_server_hint(exc: ExampleSetupError) -> bool:
+    return "llama.cpp server" in str(exc)
 
 
 def _command_from_args(args: Namespace) -> ExampleCommand:
@@ -106,5 +117,12 @@ def _command_from_args(args: Namespace) -> ExampleCommand:
         base_url=values.get("base_url"),
         model=values.get("model"),
         model_target=values.get("model_target"),
+        base_model=values.get("base_model"),
+        model_cache_dir=values.get("model_cache_dir"),
+        llama_server_bin=values.get("llama_server_bin") or "llama-server",
+        host=values.get("host") or "127.0.0.1",
+        port=values.get("port") or 8080,
+        startup_timeout=values.get("startup_timeout") or 60,
+        keep_llama_server=bool(values.get("keep_llama_server")),
         max_iterations=values.get("max_iterations"),
     )

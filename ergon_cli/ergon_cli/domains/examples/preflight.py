@@ -1,8 +1,10 @@
 import json
-import os
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+
+from ergon_core.core.shared.settings import settings
 
 from ergon_cli.domains.examples.models import ExampleCommand
 
@@ -37,36 +39,56 @@ def check_example_setup(command: ExampleCommand) -> PreflightResult:
     return preflight_llamacpp_and_e2b(base_url=resolve_preflight_base_url(command))
 
 
+def ensure_e2b_configured() -> None:
+    if not settings.e2b_api_key:
+        raise ExampleSetupError(
+            "Missing E2B_API_KEY. Set it in Ergon's .env file or process environment "
+            "before launching so Ergon can create the Lean sandbox."
+        )
+
+
 def preflight_llamacpp_and_e2b(*, base_url: str) -> PreflightResult:
     """Validate local llama.cpp and E2B setup without importing example files."""
-    if not os.environ.get("E2B_API_KEY"):
-        raise ExampleSetupError(
-            "Missing E2B_API_KEY. Set it before launching so Ergon can create the Lean sandbox."
-        )
+    ensure_e2b_configured()
+    model_id = discover_llamacpp_model(
+        base_url=base_url,
+        timeout_seconds=MODEL_DISCOVERY_TIMEOUT_SECONDS,
+    )
+    return PreflightResult(discovered_model=model_id)
 
+
+def discover_llamacpp_model(*, base_url: str, timeout_seconds: float) -> str:
+    """Poll a llama.cpp OpenAI-compatible server until it reports a model id."""
     endpoint = base_url.rstrip("/")
     url = f"{endpoint}/v1/models"
-    try:
-        with urllib.request.urlopen(url, timeout=MODEL_DISCOVERY_TIMEOUT_SECONDS) as response:
-            body = json.loads(response.read())
-    except (
-        urllib.error.HTTPError,
-        urllib.error.URLError,
-        TimeoutError,
-        OSError,
-        json.JSONDecodeError,
-    ) as exc:
-        raise ExampleSetupError(
-            "Could not reach the llama.cpp server at "
-            f"{url}. Start llama-server on that base URL, or pass --base-url."
-        ) from exc
+    deadline = time.monotonic() + timeout_seconds
+    last_error: BaseException | None = None
+    while time.monotonic() <= deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=MODEL_DISCOVERY_TIMEOUT_SECONDS) as response:
+                body = json.loads(response.read())
+            model_id = _first_model_id(body)
+            if model_id is not None:
+                return model_id
+            raise ExampleSetupError(
+                "The llama.cpp server responded, but /v1/models did not include a model id."
+            )
+        except ExampleSetupError:
+            raise
+        except (
+            urllib.error.HTTPError,
+            urllib.error.URLError,
+            TimeoutError,
+            OSError,
+            json.JSONDecodeError,
+        ) as exc:
+            last_error = exc
+            time.sleep(0.5)
 
-    model_id = _first_model_id(body)
-    if model_id is None:
-        raise ExampleSetupError(
-            "The llama.cpp server responded, but /v1/models did not include a model id."
-        )
-    return PreflightResult(discovered_model=model_id)
+    raise ExampleSetupError(
+        "Could not reach the llama.cpp server at "
+        f"{url}. Start llama-server on that base URL, or pass --base-url."
+    ) from last_error
 
 
 def base_url_from_model_target(model_target: str) -> str | None:
