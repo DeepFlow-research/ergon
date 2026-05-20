@@ -345,13 +345,11 @@ def test_application_domain_directories_keep_approved_layout() -> None:
         for child in sorted(domain_root.iterdir()):
             if child.is_file() and child.name not in allowed_files:
                 offenders.append(
-                    f"{child.relative_to(ROOT)} is not an approved application "
-                    "domain filename"
+                    f"{child.relative_to(ROOT)} is not an approved application domain filename"
                 )
             elif child.is_dir() and child.name not in allowed_dirs:
                 offenders.append(
-                    f"{child.relative_to(ROOT)} is not an approved application "
-                    "domain directory"
+                    f"{child.relative_to(ROOT)} is not an approved application domain directory"
                 )
 
     assert offenders == []

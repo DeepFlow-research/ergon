@@ -374,15 +374,10 @@ def test_ledgered_application_repository_imports_are_removed(
 
 
 def test_application_repositories_are_imported_only_within_their_domain() -> None:
-    ledgered = {
-        (param.values[0], param.values[1])
-        for param in _REPOSITORY_REEXPORT_IMPORT_LEDGER
-    }
+    ledgered = {(param.values[0], param.values[1]) for param in _REPOSITORY_REEXPORT_IMPORT_LEDGER}
     offenders = [
         f"{source_module} imports repository module {target_module}"
-        for source_module, target_module in sorted(
-            _application_repository_imports() - ledgered
-        )
+        for source_module, target_module in sorted(_application_repository_imports() - ledgered)
     ]
 
     assert offenders == []
