@@ -34,6 +34,7 @@ function ContainerNodeComponent(props: ContainerNodeProps) {
     containerHeight,
     layoutDirection = "LR",
     evaluationRollup = null,
+    evaluationLensActive = false,
   } = props;
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -104,12 +105,13 @@ function ContainerNodeComponent(props: ContainerNodeProps) {
           </span>
           {evaluationRollup && (
             <span
-              className="rounded-full bg-[var(--ink)] px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none text-[var(--card)]"
+              className={`h-2 w-2 rounded-full bg-[var(--ink)] ${
+                evaluationLensActive ? "ring-2 ring-white ring-offset-1" : "opacity-60"
+              }`}
               data-testid={`graph-rubric-glyph-${task.id}`}
               title={`${evaluationRollup.status}: ${evaluationRollup.totalCriteria} criteria`}
-            >
-              R
-            </span>
+              aria-label={`${evaluationRollup.status} evaluation`}
+            />
           )}
 
           <button
