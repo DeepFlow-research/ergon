@@ -10,7 +10,7 @@ from uuid import UUID
 
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource
-from ergon_core.core.application.resources import RunResourceRepository
+from ergon_core.core.application.resources.repository import RunResourceRepository
 from ergon_core.core.application.runtime.task_execution_repository import (
     TaskExecutionRepository,
 )
