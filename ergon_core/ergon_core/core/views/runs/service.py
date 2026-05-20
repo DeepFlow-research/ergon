@@ -337,7 +337,7 @@ def _run_summary(
 
 
 def _task_counts_by_run(session: Session, run_ids: list[UUID]) -> dict[UUID, dict[str, object]]:
-    counts = {
+    counts: dict[UUID, dict[str, int]] = {
         run_id: {
             "total": 0,
             "completed": 0,
@@ -348,7 +348,7 @@ def _task_counts_by_run(session: Session, run_ids: list[UUID]) -> dict[UUID, dic
         for run_id in run_ids
     }
     if not run_ids:
-        return counts
+        return {}
 
     nodes = list(
         session.exec(select(RunGraphNode).where(col(RunGraphNode.run_id).in_(run_ids))).all()
@@ -370,9 +370,13 @@ def _task_counts_by_run(session: Session, run_ids: list[UUID]) -> dict[UUID, dic
                 latest_updates.get(node.run_id, node.updated_at),
                 node.updated_at,
             )
+
+    result: dict[UUID, dict[str, object]] = {
+        run_id: dict(run_counts) for run_id, run_counts in counts.items()
+    }
     for run_id, updated_at in latest_updates.items():
-        counts[run_id]["latest_update"] = updated_at
-    return counts
+        result[run_id]["latest_update"] = updated_at
+    return result
 
 
 def _count_value(task_counts: dict[str, object] | None, key: str) -> int:
