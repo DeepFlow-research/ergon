@@ -1,22 +1,19 @@
 """Single front-door service for task evaluation workflow."""
 
+from collections.abc import Iterable
+from datetime import datetime
 from uuid import UUID
 
-from ergon_core.api.benchmark import Task
 from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.api.criterion.outcome import CriterionOutcome
 from ergon_core.api.rubric import Evaluator, TaskEvaluationResult
-from ergon_core.core.application.evaluation.dto_mapping import (
-    build_dashboard_evaluation_dto,
-    evaluation_row_to_dto,
-)
 from ergon_core.core.application.evaluation.models import CriterionSpec
-from ergon_core.core.application.evaluation.scoring import aggregate_evaluation_scores
-from ergon_core.core.application.evaluation.summary import (
-    CriterionOutcomeEntry,
-    EvaluationSummary,
+from ergon_core.core.application.evaluation.scoring import (
+    EvaluationScoreSummary,
+    ScoredEvaluation,
+    aggregate_evaluation_scores,
 )
-from ergon_core.core.views.runs.models import RunTaskEvaluationDto
+from ergon_core.core.application.evaluation.summary import EvaluationSummary
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.persistence.definitions.models import ExperimentDefinitionEvaluator
 from ergon_core.core.persistence.shared.db import get_session
@@ -28,6 +25,8 @@ from ergon_core.core.persistence.telemetry.models import (
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+from .mappers import build_evaluation_summary
+
 
 class EvaluationServiceResult(BaseModel):
     """Internal result carrying both the public evaluation + spec metadata."""
@@ -37,16 +36,28 @@ class EvaluationServiceResult(BaseModel):
 
 
 class PersistedEvaluation(BaseModel):
-    """Evaluation row and dashboard DTO produced by persistence."""
+    """Public fields produced after persisting one task evaluation."""
 
     model_config = {"frozen": True}
 
     summary: EvaluationSummary
-    dashboard_dto: RunTaskEvaluationDto
+    evaluation_id: UUID
+    run_id: UUID
+    task_id: UUID
+    total_score: float
+    created_at: datetime
 
 
 class EvaluationService:
     """Execute and persist task evaluations."""
+
+    @staticmethod
+    def summarize_scores(
+        evaluations: Iterable[ScoredEvaluation],
+    ) -> EvaluationScoreSummary:
+        """Aggregate run-level evaluation scores through the evaluation facade."""
+
+        return aggregate_evaluation_scores(evaluations)
 
     async def evaluate(
         self,
@@ -120,7 +131,11 @@ class EvaluationService:
             session.refresh(evaluation)
             return PersistedEvaluation(
                 summary=summary,
-                dashboard_dto=evaluation_row_to_dto(evaluation),
+                evaluation_id=evaluation.id,
+                run_id=evaluation.run_id,
+                task_id=evaluation.task_id,
+                total_score=0.0 if evaluation.score is None else evaluation.score,
+                created_at=evaluation.created_at,
             )
         finally:
             session.close()
@@ -212,7 +227,7 @@ class EvaluationService:
         if run is None:
             return
         evaluations = _list_task_evaluations(session, run_id)
-        score_summary = aggregate_evaluation_scores(evaluations)
+        score_summary = self.summarize_scores(evaluations)
         existing_summary = dict({} if run.summary_json is None else run.summary_json)
         existing_summary.update(
             {
@@ -257,86 +272,3 @@ async def _create_task_evaluation(
     session.add(evaluation)
     session.flush()
     return evaluation
-
-
-def _criterion_status(*, passed: bool, error: dict | None, skipped_reason: str | None) -> str:
-    # TODO: inline to fix Locality of behavior violation
-    # also investigate if this is even needed, seems messy.
-    if error is not None:
-        return "errored"
-    if skipped_reason is not None:
-        return "skipped"
-    return "passed" if passed else "failed"
-
-
-def _summary_max_score(
-    result: TaskEvaluationResult,
-    specs: list[CriterionSpec],
-) -> float:
-    # TODO: inline to fix Locality of behavior violation
-    # also investigate if this is even needed, seems messy.
-    if result.metadata.get("score_scale") == "normalized_0_1":
-        return 1.0
-    return sum(s.max_score for s in specs) if specs else 1.0
-
-
-def build_evaluation_summary(
-    service_result: EvaluationServiceResult,
-    evaluation_input: str | None,
-) -> EvaluationSummary:
-    result = service_result.result
-    specs = service_result.specs
-    spec_by_idx = {s.criterion_idx: s for s in specs}
-    max_score_total = _summary_max_score(result, specs)
-    entries: list[CriterionOutcomeEntry] = []
-    for i, cr in enumerate(result.criterion_results):
-        spec = spec_by_idx.get(i)
-        if spec is None:
-            raise ContractViolationError(
-                f"Criterion result at index {i} ({cr.slug!r}) has no matching "
-                "CriterionSpec - specs and results are out of sync",
-            )
-        entries.append(
-            CriterionOutcomeEntry(
-                criterion_slug=cr.slug,
-                criterion_name=cr.name or cr.slug,
-                criterion_type=spec.criterion.type_slug,
-                criterion_description=spec.criterion.description,
-                stage_num=spec.stage_idx,
-                stage_name=spec.stage_name,
-                criterion_num=spec.criterion_idx,
-                status=_criterion_status(
-                    passed=cr.passed,
-                    error=cr.error,
-                    skipped_reason=cr.skipped_reason,
-                ),
-                score=cr.score,
-                max_score=spec.max_score,
-                passed=cr.passed,
-                weight=cr.weight,
-                contribution=cr.score,
-                feedback=cr.feedback,
-                model_reasoning=cr.model_reasoning,
-                skipped_reason=cr.skipped_reason,
-                evaluation_input=cr.evaluation_input or evaluation_input,
-                evaluated_action_ids=cr.evaluated_action_ids,
-                evaluated_resource_ids=cr.evaluated_resource_ids,
-                observation=cr.observation,
-                error=cr.error,
-            )
-        )
-    stage_names = {s.stage_name for s in specs}
-    stages_passed = sum(
-        1
-        for stage_name in stage_names
-        if all(e.passed for e in entries if e.stage_name == stage_name)
-    )
-    return EvaluationSummary(
-        evaluator_name=result.evaluator_name,
-        max_score=max_score_total,
-        normalized_score=result.score,
-        stages_evaluated=len(stage_names),
-        stages_passed=stages_passed,
-        metadata=result.metadata,
-        criterion_results=entries,
-    )

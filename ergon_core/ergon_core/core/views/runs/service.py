@@ -28,11 +28,11 @@ from ergon_core.core.persistence.telemetry.models import (
     Thread,
     ThreadMessage,
 )
-from ergon_core.core.application.runtime.models import GraphMutationRecordDto
-from ergon_core.core.application.evaluation.scoring import (
+from ergon_core.core.application.evaluation.service import (
     EvaluationScoreSummary,
-    aggregate_evaluation_scores,
+    EvaluationService,
 )
+from ergon_core.core.application.runtime.models import GraphMutationRecordDto
 from ergon_core.core.views.runs.snapshot import (
     _build_communication_threads,
     _build_task_map,
@@ -160,7 +160,7 @@ class RunReadService:
             execution_task_map,
         )
 
-        score_summary = aggregate_evaluation_scores(evaluations)
+        score_summary = EvaluationService.summarize_scores(evaluations)
 
         duration_seconds: float | None = None
         if run.started_at and run.completed_at:
@@ -248,7 +248,10 @@ class RunReadService:
         )
 
 
-def _display_run_score(score_summary: EvaluationScoreSummary, run_status: str) -> float | None:
+def _display_run_score(
+    score_summary: EvaluationScoreSummary,
+    run_status: str,
+) -> float | None:
     if run_status != RunStatus.COMPLETED:
         return None
     # TODO: this is a hack, we need to fix the calculation / rename variables to make clear that the output score should be normalised by here.

@@ -77,11 +77,6 @@ _PRIVATE_CROSS_DOMAIN_IMPORT_LEDGER = (
         "PR 05: route runtime event collaboration through public runtime facades.",
     ),
     (
-        "ergon_core.core.application.runtime.run_lifecycle",
-        "ergon_core.core.application.evaluation.scoring",
-        "PR 03: keep evaluation scoring behind evaluation public APIs.",
-    ),
-    (
         "ergon_core.core.application.runtime.run_records",
         "ergon_core.core.application.events.runtime",
         "PR 05: route runtime event collaboration through public runtime facades.",
