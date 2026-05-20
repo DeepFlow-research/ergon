@@ -139,7 +139,7 @@ def _build_context(
         sandbox_id="sandbox-test",
         task_mgmt=task_mgmt,
         task_inspect=task_inspect,
-        resource_repo=object(),
+        resource_service=object(),
         session_factory=management_module.get_session,
     )
 

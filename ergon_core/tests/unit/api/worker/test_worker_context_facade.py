@@ -13,7 +13,7 @@ from ergon_core.api.errors import ContainmentViolation
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import AwaitCompletionNotSupportedError, SpawnedTaskHandle
 from ergon_core.core.application.resources.models import RunResourceView
-from ergon_core.core.application.resources.repository import RunResourceRepository
+from ergon_core.core.application.resources.service import RunResourceReadService
 from ergon_core.core.application.runtime.task_models import (
     CancelTaskCommand,
     RefineTaskCommand,
@@ -118,8 +118,8 @@ class _FakeResources:
         self.blob_path = blob_path
         self.calls: list[tuple[str, object]] = []
 
-    def list_for_run(self, session, **kwargs):
-        self.calls.append(("list_for_run", session, kwargs))
+    def list_for_run(self, **kwargs):
+        self.calls.append(("list_for_run", kwargs))
         return [
             RunResourceView(
                 id=uuid4(),
@@ -137,13 +137,18 @@ class _FakeResources:
             )
         ]
 
-    def get(self, session, resource_id):
-        self.calls.append(("get", session, resource_id))
+    def read_bytes(self, *, run_id, current_task_id, resource_id):
+        self.calls.append(("read_bytes", run_id, current_task_id, resource_id))
         run_id = self.other_run_id if str(resource_id).endswith("ffff") else self.run_id
-        return SimpleNamespace(run_id=run_id, file_path=str(self.blob_path))
+        if run_id != self.run_id:
+            raise ContainmentViolation(
+                parent_task_id=current_task_id,
+                target_task_id=resource_id,
+            )
+        return self.blob_path.read_bytes()
 
 
-def _context(*, run_id, task_id, inspect=None, resource_repo=None) -> WorkerContext:
+def _context(*, run_id, task_id, inspect=None, resource_service=None) -> WorkerContext:
     return WorkerContext._for_job(
         run_id=run_id,
         task_id=task_id,
@@ -152,7 +157,7 @@ def _context(*, run_id, task_id, inspect=None, resource_repo=None) -> WorkerCont
         sandbox_id="sbx",
         task_mgmt=_FakeTaskManagement(),
         task_inspect=inspect or _FakeInspection(),
-        resource_repo=resource_repo or SimpleNamespace(),
+        resource_service=resource_service or SimpleNamespace(),
         session_factory=_session_factory,
     )
 
@@ -172,7 +177,7 @@ async def test_facade_mutations_call_current_service_command_signatures() -> Non
         sandbox_id="sbx",
         task_mgmt=mgmt,
         task_inspect=inspect,
-        resource_repo=SimpleNamespace(),
+        resource_service=SimpleNamespace(),
         session_factory=_session_factory,
     )
 
@@ -201,7 +206,7 @@ async def test_spawn_task_uses_empty_tuple_dependency_default() -> None:
         sandbox_id="sbx",
         task_mgmt=mgmt,
         task_inspect=_FakeInspection(),
-        resource_repo=SimpleNamespace(),
+        resource_service=SimpleNamespace(),
         session_factory=_session_factory,
     )
 
@@ -267,14 +272,14 @@ async def test_resources_are_run_scoped_not_descendant_scoped(tmp_path: Path) ->
     blob = tmp_path / "blob.txt"
     blob.write_bytes(b"ok")
     repo = _FakeResources(run_id=run_id, other_run_id=other_run_id, blob_path=blob)
-    context = _context(run_id=run_id, task_id=root_id, resource_repo=repo)
+    context = _context(run_id=run_id, task_id=root_id, resource_service=repo)
 
     resources = await context.resources(task_id=sibling_task_id, execution_id=execution_id)
     data = await context.read_resource(resources[0].id)
 
     assert data == b"ok"
-    assert repo.calls[0][2]["task_id"] == sibling_task_id
-    assert repo.calls[0][2]["task_execution_id"] == execution_id
+    assert repo.calls[0][1]["task_id"] == sibling_task_id
+    assert repo.calls[0][1]["task_execution_id"] == execution_id
 
 
 @pytest.mark.asyncio
@@ -284,7 +289,7 @@ async def test_read_resource_rejects_cross_run_rows(tmp_path: Path) -> None:
     blob = tmp_path / "blob.txt"
     blob.write_bytes(b"ok")
     repo = _FakeResources(run_id=run_id, other_run_id=other_run_id, blob_path=blob)
-    context = _context(run_id=run_id, task_id=uuid4(), resource_repo=repo)
+    context = _context(run_id=run_id, task_id=uuid4(), resource_service=repo)
     cross_run_resource_id = uuid4()
     cross_run_resource_id = type(cross_run_resource_id)(f"{str(cross_run_resource_id)[:-4]}ffff")
 
@@ -381,7 +386,7 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
         sandbox_id="sbx",
         task_mgmt=_FakeTaskManagement(),
         task_inspect=_FakeInspection(),
-        resource_repo=RunResourceRepository(),
+        resource_service=RunResourceReadService(session_factory=session_factory),
         session_factory=session_factory,
     )
 
@@ -408,7 +413,7 @@ def test_context_requires_facade_services_at_construction() -> None:
             sandbox_id="sbx",
             task_mgmt=None,
             task_inspect=_FakeInspection(),
-            resource_repo=SimpleNamespace(),
+            resource_service=SimpleNamespace(),
             session_factory=_session_factory,
         )
 
