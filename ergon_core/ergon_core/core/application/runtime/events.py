@@ -14,7 +14,7 @@ from uuid import UUID
 import inngest
 
 from ergon_core.core.infrastructure.inngest.client import inngest_client
-from ergon_core.core.application.events.runtime import TaskReadyEvent
+from ergon_core.core.application.events import TaskReadyEvent
 
 logger = logging.getLogger(__name__)
 

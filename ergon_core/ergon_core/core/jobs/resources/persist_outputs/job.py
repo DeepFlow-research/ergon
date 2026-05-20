@@ -9,7 +9,7 @@ content-addressed blob store).
 import logging
 from datetime import UTC, datetime
 
-from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime.task_execution import TaskExecutionService
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from .contract import PersistOutputsRequest, PersistOutputsResult
 from .composition import publish_public_sandbox_resources
@@ -45,8 +45,9 @@ async def run_persist_outputs_job(payload: PersistOutputsRequest) -> PersistOutp
             task_id=task_id,
         )
 
+    task_execution = TaskExecutionService()
     with get_session() as session:
-        view = await RuntimeGraphRepository().node(
+        view = await task_execution.load_task_view(
             session,
             run_id=payload.run_id,
             task_id=payload.task_id,

@@ -31,11 +31,11 @@ class _FakeCtx:
         self.group = _FakeGroup()
 
 
-class _FakeGraphRepo:
+class _FakeTaskExecutionService:
     def __init__(self, task: SimpleNamespace) -> None:
         self._task = task
 
-    async def node(self, _session: object, *, run_id, task_id, sandbox_id=None):
+    async def load_task_view(self, _session: object, *, run_id, task_id, sandbox_id=None):
         del run_id, task_id, sandbox_id
         return SimpleNamespace(task=self._task)
 
@@ -54,8 +54,6 @@ def _prepared(run_id, definition_id, task_id, execution_id) -> PreparedTaskExecu
 
 @pytest.mark.asyncio
 async def test_fanout_uses_object_bound_evaluator_count(monkeypatch) -> None:
-    from ergon_core.core.jobs.task.execute import job as module
-
     run_id = uuid4()
     definition_id = uuid4()
     task_id = uuid4()
@@ -65,11 +63,13 @@ async def test_fanout_uses_object_bound_evaluator_count(monkeypatch) -> None:
         evaluators=(object(), object()),
     )
 
+    from ergon_core.core.jobs.task.execute import job as module
+
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(object()))
-    monkeypatch.setattr(module, "RuntimeGraphRepository", lambda: _FakeGraphRepo(task))
 
     await _fan_out_evaluators(
         ctx,
+        _FakeTaskExecutionService(task),
         TaskReadyEvent(
             run_id=run_id,
             definition_id=definition_id,
@@ -84,8 +84,6 @@ async def test_fanout_uses_object_bound_evaluator_count(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_fanout_emits_no_jobs_without_inline_evaluators(monkeypatch) -> None:
-    from ergon_core.core.jobs.task.execute import job as module
-
     run_id = uuid4()
     definition_id = uuid4()
     task_id = uuid4()
@@ -95,11 +93,13 @@ async def test_fanout_emits_no_jobs_without_inline_evaluators(monkeypatch) -> No
         evaluators=(),
     )
 
+    from ergon_core.core.jobs.task.execute import job as module
+
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(object()))
-    monkeypatch.setattr(module, "RuntimeGraphRepository", lambda: _FakeGraphRepo(task))
 
     await _fan_out_evaluators(
         ctx,
+        _FakeTaskExecutionService(task),
         TaskReadyEvent(
             run_id=run_id,
             definition_id=definition_id,

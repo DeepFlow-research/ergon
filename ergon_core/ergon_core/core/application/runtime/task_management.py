@@ -41,7 +41,7 @@ from ergon_core.core.application.runtime.task_errors import (
     TaskNotTerminalError,
     TaskRunningError,
 )
-from ergon_core.core.application.events.runtime import (
+from ergon_core.core.application.events import (
     CancelCause,
     PropagationCancelCause,
     TaskCancelledEvent,

@@ -34,11 +34,11 @@ class _PublicSandbox:
         return "sbx-public"
 
 
-class _FakeGraphRepo:
+class _FakeTaskExecutionService:
     def __init__(self, sandbox: _PublicSandbox) -> None:
         self._sandbox = sandbox
 
-    async def node(self, _session, *, run_id, task_id, sandbox_id=None):
+    async def load_task_view(self, _session, *, run_id, task_id, sandbox_id=None):
         del run_id, task_id, sandbox_id
         return SimpleNamespace(task=SimpleNamespace(sandbox=self._sandbox))
 
@@ -49,7 +49,7 @@ async def test_sandbox_setup_provisions_public_sandbox(monkeypatch) -> None:
 
     sandbox = _PublicSandbox()
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(object()))
-    monkeypatch.setattr(module, "RuntimeGraphRepository", lambda: _FakeGraphRepo(sandbox))
+    monkeypatch.setattr(module, "TaskExecutionService", lambda: _FakeTaskExecutionService(sandbox))
 
     result = await run_sandbox_setup_job(
         _FakeCtx(),

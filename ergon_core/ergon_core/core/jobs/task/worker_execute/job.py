@@ -18,15 +18,11 @@ from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
 from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.jobs._events import send_job_step_event
 from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
-from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.application.resources.service import RunResourceReadService
+from ergon_core.core.application.runtime.task_execution import TaskExecutionService
 from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
 from ergon_core.core.application.runtime.task_management import TaskManagementService
-from ergon_core.core.application.runtime.task_execution_repository import (
-    TaskExecutionRepository,
-    WorkerOutputRepository,
-)
 from ergon_core.core.shared.context_parts import ContextPartChunk
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.application.context.service import ContextEventService
@@ -63,9 +59,10 @@ async def run_worker_execute_job(
     # Read the typed run-tier view instead of rebuilding Task
     # from definition rows. No definition-tier repository, no component
     # catalog, no raw graph row read in this job — all of that lives
-    # inside `graph_repo.node`.
+    # behind TaskExecutionService.
+    task_execution = TaskExecutionService()
     with get_session() as session:
-        view = await RuntimeGraphRepository().node(
+        view = await task_execution.load_task_view(
             session,
             run_id=payload.run_id,
             task_id=payload.task_id,
@@ -150,19 +147,19 @@ async def run_worker_execute_job(
     # receives only a thin `TaskEvaluateRequest` and reloads everything
     # else from the run-tier read boundary:
     #
-    #   WorkerOutput      ← WorkerOutputRepository.load(execution_id)
+    #   WorkerOutput      ← TaskExecutionService.load_worker_output(execution_id)
     #   live sandbox_id   ← session.get(RunTaskExecution, ...).sandbox_id
-    #                       (then fed to graph_repo.node(..., sandbox_id=))
+    #                       (then fed to load_task_view(..., sandbox_id=))
     #
     # Both reads happen *after* the orchestrator's gather starts, so
     # both writes have to commit before this function returns.
     with get_session() as session:
-        await WorkerOutputRepository().persist(
+        await task_execution.persist_worker_output(
             session,
             execution_id=payload.execution_id,
             output=output,
         )
-        await TaskExecutionRepository().set_sandbox_id(
+        await task_execution.attach_sandbox_to_execution(
             session,
             execution_id=payload.execution_id,
             sandbox_id=payload.sandbox_id,
