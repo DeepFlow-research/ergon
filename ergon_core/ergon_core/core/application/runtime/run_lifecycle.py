@@ -17,13 +17,16 @@ from ergon_core.core.persistence.telemetry.models import (
     RunTaskEvaluation,
     RunTaskExecution,
 )
-from ergon_core.core.application.evaluation.service import EvaluationService
 from ergon_core.core.application.runtime.events import (
     RuntimeEventDispatcher,
     TaskReadyDispatcher,
 )
+from ergon_core.core.application.runtime.run_records import (
+    cancel_run,
+    create_run,
+    latest_run_for_definition,
+)
 from ergon_core.core.application.runtime.run_identity import definition_id_for_run
-from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
 from ergon_core.core.application.runtime.graph_lookup import GraphNodeLookup
 from ergon_core.core.application.runtime.lifecycle import (
     get_initial_ready_tasks,
@@ -76,7 +79,7 @@ class WorkflowService:
     def __init__(
         self,
         *,
-        sandbox_manager_factory: Callable[[str], BaseSandboxManager] | None = None,
+        sandbox_manager_factory: Callable[[str], "BaseSandboxManager"] | None = None,
         graph_repository: RuntimeGraphRepository | None = None,
         task_ready_dispatcher: TaskReadyDispatcher | None = None,
     ) -> None:
@@ -151,6 +154,10 @@ class WorkflowService:
 
     def finalize(self, command: FinalizeWorkflowCommand) -> FinalizedWorkflowResult:
         """Aggregate evaluations and close the run."""
+        # reason: importing EvaluationService at module load creates a cycle via
+        # ergon_core.api -> experiments.service -> experiments.launch -> run_lifecycle.
+        from ergon_core.core.application.evaluation.service import EvaluationService
+
         with get_session() as session:
             evaluations = list(
                 session.exec(
@@ -651,7 +658,11 @@ class WorkflowService:
         return result.model_copy(update={"copied_resource_id": copy.id})
 
     @staticmethod
-    def _sandbox_manager_for(benchmark_type: str) -> BaseSandboxManager:
+    def _sandbox_manager_for(benchmark_type: str) -> "BaseSandboxManager":
+        # reason: application runtime should not import the E2B adapter at module load time;
+        # this default factory is only needed when materializing resources into a sandbox.
+        from ergon_core.core.infrastructure.sandbox.manager import DefaultSandboxManager
+
         _ = benchmark_type
         return DefaultSandboxManager()
 

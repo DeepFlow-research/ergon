@@ -14,7 +14,8 @@ from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution
 from ergon_core.core.infrastructure.inngest.errors import ConfigurationError
-from ergon_core.core.application.runtime.models import MutationMeta
+from ergon_core.api.worker.results import WorkerOutput
+from ergon_core.core.application.runtime.models import MutationMeta, RunGraphNodeView
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from ergon_core.core.application.runtime.orchestration import (
     FailTaskExecutionCommand,
@@ -25,7 +26,10 @@ from ergon_core.core.application.runtime.orchestration import (
 from ergon_core.core.application.runtime.lifecycle import (
     mark_task_failed_by_node,
 )
-from ergon_core.core.application.runtime.task_execution_repository import TaskExecutionRepository
+from ergon_core.core.application.runtime.task_execution_repository import (
+    TaskExecutionRepository,
+    WorkerOutputRepository,
+)
 from ergon_core.core.shared.utils import require_not_none, utcnow
 from ergon_core.core.views.dashboard_events.contracts import DashboardTaskStatusChangedEvent
 from sqlmodel import Session, select
@@ -63,9 +67,75 @@ async def _emit_task_status(
 
 
 class TaskExecutionService:
-    def __init__(self) -> None:
-        self._graph_repo = RuntimeGraphRepository()
-        self._task_execution_repo = TaskExecutionRepository()
+    """Public facade for task execution reads and execution-row writes.
+
+    Jobs use this boundary for task view hydration, worker output persistence,
+    and sandbox identity stamping instead of importing runtime repositories.
+    """
+
+    def __init__(
+        self,
+        *,
+        graph_repo: RuntimeGraphRepository | None = None,
+        task_execution_repo: TaskExecutionRepository | None = None,
+        worker_output_repo: WorkerOutputRepository | None = None,
+    ) -> None:
+        self._graph_repo = graph_repo or RuntimeGraphRepository()
+        self._task_execution_repo = task_execution_repo or TaskExecutionRepository()
+        self._worker_output_repo = worker_output_repo or WorkerOutputRepository()
+
+    async def load_task_view(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        task_id: UUID,
+        sandbox_id: str | None = None,
+    ) -> RunGraphNodeView:
+        """Load the object-bound runtime task view by public task_id."""
+        return await self._graph_repo.node(
+            session,
+            run_id=run_id,
+            task_id=task_id,
+            sandbox_id=sandbox_id,
+        )
+
+    async def persist_worker_output(
+        self,
+        session: Session,
+        *,
+        execution_id: UUID,
+        output: WorkerOutput,
+    ) -> None:
+        """Persist terminal worker output for evaluator fanout."""
+        await self._worker_output_repo.persist(
+            session,
+            execution_id=execution_id,
+            output=output,
+        )
+
+    async def load_worker_output(
+        self,
+        session: Session,
+        *,
+        execution_id: UUID,
+    ) -> WorkerOutput:
+        """Load worker output persisted for an execution."""
+        return await self._worker_output_repo.load(session, execution_id=execution_id)
+
+    async def attach_sandbox_to_execution(
+        self,
+        session: Session,
+        *,
+        execution_id: UUID,
+        sandbox_id: str,
+    ) -> None:
+        """Stamp the live sandbox id on an execution row."""
+        await self._task_execution_repo.set_sandbox_id(
+            session,
+            execution_id=execution_id,
+            sandbox_id=sandbox_id,
+        )
 
     async def prepare(self, command: PrepareTaskExecutionCommand) -> PreparedTaskExecution:
         return await self._prepare_run_node(command)

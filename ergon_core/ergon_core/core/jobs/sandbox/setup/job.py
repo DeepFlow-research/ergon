@@ -4,7 +4,7 @@ import logging
 from datetime import UTC, datetime
 from functools import partial
 
-from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime.task_execution import TaskExecutionService
 from ergon_core.core.persistence.shared.db import get_session
 from .contract import SandboxReadyResult, SandboxSetupRequest
 from ergon_core.core.infrastructure.tracing import (
@@ -31,8 +31,9 @@ async def run_sandbox_setup_job(ctx: Any, payload: SandboxSetupRequest) -> Sandb
         benchmark_type,
     )
 
+    task_execution = TaskExecutionService()
     with get_session() as session:
-        view = await RuntimeGraphRepository().node(
+        view = await task_execution.load_task_view(
             session,
             run_id=run_id,
             task_id=task_id,

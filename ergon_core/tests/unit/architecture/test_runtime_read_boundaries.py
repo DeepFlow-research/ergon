@@ -82,9 +82,9 @@ def test_evaluate_task_run_uses_thin_payload_and_run_tier_read() -> None:
     # No registry-based evaluator resolution inside the body.
     assert "ComponentCatalogService" not in body
 
-    # Uses the same run-tier loader the orchestrator uses.
-    assert "RuntimeGraphRepository" in body
-    assert ".node(" in body
+    # Uses the public runtime execution facade for run-tier loading.
+    assert "TaskExecutionService" in body
+    assert "load_task_view(" in body
 
 
 def test_evaluate_task_run_uses_object_bound_evaluators() -> None:

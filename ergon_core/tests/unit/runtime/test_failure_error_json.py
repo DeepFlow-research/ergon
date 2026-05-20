@@ -13,11 +13,11 @@ async def test_finalize_failure_preserves_structured_error_json(monkeypatch) -> 
 
     execution_id = uuid4()
     run_id = uuid4()
-    node_id = uuid4()
+    task_id = uuid4()
     execution = SimpleNamespace(
         id=execution_id,
         run_id=run_id,
-        task_id=node_id,
+        task_id=task_id,
     )
 
     class Session:

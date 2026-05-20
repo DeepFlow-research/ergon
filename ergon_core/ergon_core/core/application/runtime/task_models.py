@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from ergon_core.core.application.events.runtime import TaskCancelledEvent
+from ergon_core.core.application.events import TaskCancelledEvent
 from ergon_core.core.application.runtime.status import NodeStatus
 from ergon_core.core.persistence.shared.types import NodeId, RunId
 from pydantic import BaseModel, Field

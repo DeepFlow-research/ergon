@@ -188,10 +188,10 @@ def test_sandbox_identity_is_preserved_across_worker_to_evaluate_boundary() -> N
     """Δ.5: the sandbox acquired in worker_execute is the one each
     evaluate_task_run invocation attaches to via sandbox_id.
 
-    PR 4 makes this concrete: ``worker_execute`` stamps the live
-    ``sandbox_id`` onto the execution row, and ``evaluate_task_run``
-    reads ``execution.sandbox_id`` and passes it to
-    ``graph_repo.node(..., sandbox_id=...)`` to reattach. The
+    PR 5 keeps this concrete behind the public task execution facade:
+    ``worker_execute`` stamps the live ``sandbox_id`` onto the execution
+    row, and ``evaluate_task_run`` reads ``execution.sandbox_id`` and
+    passes it to ``load_task_view(..., sandbox_id=...)`` to reattach. The
     ``sandbox_id`` field on ``RunTaskExecution`` is the carrier; the
     structural guard checks both halves of the contract.
     """
@@ -205,20 +205,21 @@ def test_sandbox_identity_is_preserved_across_worker_to_evaluate_boundary() -> N
 
     # Carrier: the execution row owns the sandbox_id.
     assert "sandbox_id" in RunTaskExecution.model_fields
-    # Writer: TaskExecutionRepository.set_sandbox_id is the only
-    # writer of that column on the runtime path.
+    # Internal writer still owns the column mutation; jobs reach it through
+    # TaskExecutionService.attach_sandbox_to_execution.
     assert hasattr(TaskExecutionRepository, "set_sandbox_id")
 
     root = Path(__file__).resolve().parents[4]
     worker_text = (root / "ergon_core/ergon_core/core/jobs/task/worker_execute/job.py").read_text()
     eval_text = (root / "ergon_core/ergon_core/core/jobs/task/evaluate/job.py").read_text()
 
-    # Producer side: worker_execute stamps sandbox_id on the row.
-    assert "set_sandbox_id(" in worker_text
+    # Producer side: worker_execute stamps sandbox_id through the facade.
+    assert "attach_sandbox_to_execution(" in worker_text
     assert "sandbox_id=payload.sandbox_id" in worker_text
 
     # Consumer side: evaluate_task_run reads sandbox_id from the
     # execution row and forwards it to the run-tier loader.
+    assert "load_task_view(" in eval_text
     assert "execution.sandbox_id" in eval_text
     assert "sandbox_id=execution.sandbox_id" in eval_text
 
@@ -228,7 +229,7 @@ def test_execution_id_is_unique_per_attempt_and_shared_across_evaluators() -> No
     execution_id; a retry mints a new one.
 
     PR 4 makes execution_id the join key linking
-    ``RunTaskExecution`` ⇄ ``WorkerOutputRepository`` ⇄ each
+    ``RunTaskExecution`` ⇄ ``TaskExecutionService`` ⇄ each
     ``TaskEvaluateRequest`` invocation. The structural guard checks
     that (a) ``TaskEvaluateRequest`` carries ``execution_id``, (b) the
     orchestrator's fanout reuses ``prepared.execution_id`` for every
