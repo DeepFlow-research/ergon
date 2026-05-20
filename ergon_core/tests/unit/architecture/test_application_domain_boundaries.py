@@ -30,6 +30,8 @@ APPROVED_DOMAIN_DIRS = {"policies", "__pycache__"}
 LAYOUT_FILE_EXCEPTIONS = {
     "evaluation": {"scoring.py", "summary.py"},
     "events": {"base.py", "runtime.py"},
+    # Experiments exposes cross-domain application behavior through service.py.
+    # These files are domain-internal implementation modules, not public subfacades.
     "experiments": {"definition_writer.py", "handles.py", "launch.py"},
     "ports": {"dashboard.py", "resources.py"},
     "resources": {"publishing.py"},
@@ -80,11 +82,6 @@ _PRIVATE_CROSS_DOMAIN_IMPORT_LEDGER = (
         "ergon_core.core.application.runtime.run_records",
         "ergon_core.core.application.events.runtime",
         "PR 05: route runtime event collaboration through public runtime facades.",
-    ),
-    (
-        "ergon_core.core.application.runtime.run_records",
-        "ergon_core.core.application.experiments.handles",
-        "PR 04: decide and document experiment handle public surface.",
     ),
     (
         "ergon_core.core.application.runtime.task_management",

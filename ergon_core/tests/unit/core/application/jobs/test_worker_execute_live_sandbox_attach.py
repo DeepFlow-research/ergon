@@ -55,7 +55,7 @@ async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch) -> 
     monkeypatch.setattr(module.ContextEventService, "persist_chunk", _persist)
     monkeypatch.setattr(module, "TaskManagementService", lambda **kwargs: object())
     monkeypatch.setattr(module, "TaskInspectionService", lambda: object())
-    monkeypatch.setattr(module, "RunResourceRepository", lambda: object())
+    monkeypatch.setattr(module, "RunResourceReadService", lambda: object())
     monkeypatch.setattr(
         module,
         "get_dashboard_event_publisher",
@@ -102,7 +102,7 @@ async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
     monkeypatch.setattr(module, "RuntimeGraphRepository", lambda: _NonLiveRepo())
     monkeypatch.setattr(module, "TaskManagementService", lambda: object())
     monkeypatch.setattr(module, "TaskInspectionService", lambda: object())
-    monkeypatch.setattr(module, "RunResourceRepository", lambda: object())
+    monkeypatch.setattr(module, "RunResourceReadService", lambda: object())
 
     with pytest.raises(Exception, match="live sandbox"):
         await run_worker_execute_job(

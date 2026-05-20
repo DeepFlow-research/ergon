@@ -1,7 +1,6 @@
 """Per-execution runtime state passed to Worker.execute()."""
 
 from collections.abc import Callable
-from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, ContextManager, TypeAlias
 from uuid import UUID
 
@@ -17,18 +16,18 @@ from ergon_core.core.persistence.shared.types import NodeId, RunId
 if TYPE_CHECKING:
     from sqlmodel import Session
 
-    from ergon_core.core.application.resources.repository import RunResourceRepository
+    from ergon_core.core.application.resources.service import RunResourceReadService
     from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
     from ergon_core.core.application.runtime.task_management import TaskManagementService
 
     TaskManagementServiceAlias: TypeAlias = TaskManagementService
     TaskInspectionServiceAlias: TypeAlias = TaskInspectionService
-    RunResourceRepositoryAlias: TypeAlias = RunResourceRepository
+    RunResourceReadServiceAlias: TypeAlias = RunResourceReadService
     SessionFactory: TypeAlias = Callable[[], ContextManager[Session]]
 else:
     TaskManagementServiceAlias: TypeAlias = Any
     TaskInspectionServiceAlias: TypeAlias = Any
-    RunResourceRepositoryAlias: TypeAlias = Any
+    RunResourceReadServiceAlias: TypeAlias = Any
     SessionFactory: TypeAlias = Callable[[], ContextManager[Any]]
 
 
@@ -46,8 +45,8 @@ TaskInspectionDependency: TypeAlias = Annotated[
     TaskInspectionServiceAlias,
     AfterValidator(_require_injected_dependency),
 ]
-RunResourceRepositoryDependency: TypeAlias = Annotated[
-    RunResourceRepositoryAlias,
+RunResourceReadServiceDependency: TypeAlias = Annotated[
+    RunResourceReadServiceAlias,
     AfterValidator(_require_injected_dependency),
 ]
 SessionFactoryDependency: TypeAlias = Annotated[
@@ -97,7 +96,7 @@ class WorkerContext(BaseModel):
         exclude=True,
         repr=False,
     )
-    resource_repo: RunResourceRepositoryDependency = Field(
+    resource_service: RunResourceReadServiceDependency = Field(
         exclude=True,
         repr=False,
     )
@@ -114,7 +113,7 @@ class WorkerContext(BaseModel):
         sandbox_id: str,
         task_mgmt: TaskManagementServiceAlias,
         task_inspect: TaskInspectionServiceAlias,
-        resource_repo: RunResourceRepositoryAlias,
+        resource_service: RunResourceReadServiceAlias,
         session_factory: SessionFactory,
     ) -> "WorkerContext":
         """Construct the job runtime ``WorkerContext``.
@@ -132,7 +131,7 @@ class WorkerContext(BaseModel):
             sandbox_id=sandbox_id,
             task_mgmt=task_mgmt,
             task_inspect=task_inspect,
-            resource_repo=resource_repo,
+            resource_service=resource_service,
             session_factory=session_factory,
         )
 
@@ -257,28 +256,22 @@ class WorkerContext(BaseModel):
         run. Lifecycle methods remain descendant-contained.
         """
 
-        with self.session_factory() as session:
-            rows = self.resource_repo.list_for_run(
-                session,
-                run_id=self.run_id,
-                task_id=task_id,
-                task_execution_id=execution_id,
-                kind=kind,
-                name=name,
-            )
-        return tuple(rows)
+        return self.resource_service.list_for_run(
+            run_id=self.run_id,
+            task_id=task_id,
+            task_execution_id=execution_id,
+            kind=kind,
+            name=name,
+        )
 
     async def read_resource(self, resource_id: UUID) -> bytes:
         """Read a visible resource blob from this run."""
 
-        with self.session_factory() as session:
-            resource = self.resource_repo.get(session, resource_id)
-            if resource.run_id != self.run_id:
-                raise ContainmentViolation(
-                    parent_task_id=self.task_id,
-                    target_task_id=resource_id,
-                )
-            return Path(resource.file_path).read_bytes()
+        return self.resource_service.read_bytes(
+            run_id=self.run_id,
+            current_task_id=self.task_id,
+            resource_id=resource_id,
+        )
 
     async def _assert_descendant(self, task_id: UUID) -> None:
         """Raise ``ContainmentViolation`` if ``task_id`` is not self.task_id or a descendant."""

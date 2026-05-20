@@ -33,23 +33,7 @@ CORE_ROOT = PRODUCTION_ROOT / "core"
 APPLICATION_ROOT = CORE_ROOT / "application"
 APPLICATION_PREFIX = "ergon_core.core.application"
 
-_REPOSITORY_REEXPORT_IMPORT_LEDGER = (
-    pytest.param(
-        "ergon_core.core.jobs.task.worker_execute.job",
-        "ergon_core.core.application.resources.RunResourceRepository",
-        marks=pytest.mark.xfail(
-            strict=True,
-            reason=(
-                "PR 04: route worker output resource writes through the resources "
-                "facade instead of the repository re-export."
-            ),
-        ),
-        id=(
-            "ergon_core.core.jobs.task.worker_execute.job -> "
-            "ergon_core.core.application.resources.RunResourceRepository"
-        ),
-    ),
-)
+_REPOSITORY_REEXPORT_IMPORT_LEDGER = ()
 
 
 _WRITE_PREFIXES = (

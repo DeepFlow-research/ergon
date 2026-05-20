@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.errors import SandboxKindMismatch
-from ergon_core.core.application.experiments.handles import DefinitionHandle
+from ergon_core.core.application.experiments.models import DefinitionHandle
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionEvaluator,

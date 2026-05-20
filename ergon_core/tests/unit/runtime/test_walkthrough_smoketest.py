@@ -426,7 +426,7 @@ async def test_dynamic_spawn_writes_only_to_run_graph_nodes(
         sandbox_id="sandbox-smoke",
         task_mgmt=task_mgmt,
         task_inspect=task_inspect,
-        resource_repo=object(),
+        resource_service=object(),
         session_factory=management_module.get_session,
     )
 
