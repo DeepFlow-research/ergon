@@ -52,7 +52,7 @@ class _SessionContext:
         return None
 
 
-class _ResourceRepository:
+class _ResourceService:
     pass
 
 
@@ -179,7 +179,7 @@ def make_toy_workflow_harness(monkeypatch: pytest.MonkeyPatch) -> ToyWorkflowHar
             task_ready_dispatcher=_dispatch_task_ready,
         ),
         task_inspect=TaskInspectionService(),
-        resource_repo=_ResourceRepository(),
+        resource_service=_ResourceService(),
         session_factory=lambda: _SessionContext(session),
     )
     return ToyWorkflowHarness(

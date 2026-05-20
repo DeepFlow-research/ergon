@@ -4,7 +4,6 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from ergon_core.core.application.experiments.launch import launch_run
 from ergon_core.core.application.experiments.models import (
     DefinitionHandle,
     ExperimentRunRequest,
@@ -33,6 +32,9 @@ async def run_experiment(
     emit_workflow_started: WorkflowStartedEmitter | None = None,
 ) -> ExperimentRunResult:
     """Materialize one run directly from an ExperimentDefinition row."""
+
+    # reason: keep HTTP app imports from cycling through runtime models and public API exports.
+    from ergon_core.core.application.experiments.launch import launch_run
 
     return await launch_run(
         request.definition_id,
