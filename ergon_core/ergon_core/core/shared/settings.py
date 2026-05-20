@@ -25,9 +25,27 @@ class Settings(BaseSettings):
     e2b_api_key: str = ""  # slopcop: ignore[no-str-empty-default]
     exa_api_key: str = ""  # slopcop: ignore[no-str-empty-default]
 
-    inngest_event_key: str = "dev"
-    inngest_dev: bool = True
-    inngest_api_base_url: str = "http://localhost:8289"
+    api_base_url: str = Field(
+        default="http://127.0.0.1:9000",
+        validation_alias=AliasChoices("ERGON_API_BASE_URL"),
+    )
+    dashboard_base_url: str = Field(
+        default="http://127.0.0.1:3001",
+        validation_alias=AliasChoices("ERGON_DASHBOARD_URL", "PLAYWRIGHT_BASE_URL"),
+    )
+
+    inngest_event_key: str = Field(
+        default="dev",
+        validation_alias=AliasChoices("INNGEST_EVENT_KEY"),
+    )
+    inngest_dev: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("INNGEST_DEV"),
+    )
+    inngest_api_base_url: str = Field(
+        default="http://localhost:8289",
+        validation_alias=AliasChoices("INNGEST_API_BASE_URL"),
+    )
 
     default_tokenizer: str = "HuggingFaceTB/SmolLM2-135M-Instruct"
 

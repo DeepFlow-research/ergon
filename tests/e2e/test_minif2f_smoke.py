@@ -1,4 +1,4 @@
-"""MiniF2F canonical happy/sad smoke experiment group against real E2B."""
+"""MiniF2F canonical three-run smoke experiment group against real E2B."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ ENV = "minif2f"
 HAPPY_WORKER = f"{ENV}-smoke-worker"
 SAD_WORKER = f"{ENV}-sadpath-smoke-worker"
 CRITERION = f"{ENV}-smoke-criterion"
-# ``SMOKE_EXPERIMENT_GROUP_SIZE`` override for local/dev deep checks; CI uses default 1.
+# ``SMOKE_EXPERIMENT_GROUP_SIZE`` repeats the three-run experiment for local deep checks.
 EXPERIMENT_GROUP_SIZE = int(os.environ.get("SMOKE_EXPERIMENT_GROUP_SIZE", "1"))
 PER_RUN_TIMEOUT = 270
 SmokeSlot = tuple[str, str, str]
@@ -47,6 +47,7 @@ def _smoke_slots(group_size: int) -> list[SmokeSlot]:
         slot
         for _ in range(group_size)
         for slot in (
+            ("happy", HAPPY_WORKER, CRITERION),
             ("happy", HAPPY_WORKER, CRITERION),
             ("sad", SAD_WORKER, CRITERION),
         )

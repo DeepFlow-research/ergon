@@ -1,12 +1,12 @@
 """Re-run smoke assertions against an already-completed run_id.
 
 Lets you iterate on assertion logic (or debug a failing assertion) without
-re-submitting the whole cohort through E2B — a 60s sandbox run becomes a
+re-submitting the whole experiment through E2B — a 60s sandbox run becomes a
 sub-second assertion pass.
 
 Usage::
 
-    uv run python scripts/smoke_reassert.py \\
+    uv run python -m tests.e2e.reassert \\
         --run-id 8f3a… \\
         --env researchrubrics \\
         --kind happy
@@ -31,7 +31,7 @@ from uuid import UUID
 
 # Prepend repo root so ``tests.e2e.*`` imports resolve when running as
 # a standalone script (pytest adds rootdir automatically; we don't).
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 

@@ -20,10 +20,10 @@ jobs:
         run: uv sync --frozen --all-packages --group dev
 
       - name: Ruff check
-        run: uv run ruff check ergon_core ergon_builtins ergon_cli ergon_infra ergon_ingestion tests scripts
+        run: uv run ruff check ergon_core ergon_builtins ergon_cli ergon_infra ergon_ingestion tests
 
       - name: Ruff format check
-        run: uv run ruff format --check ergon_core ergon_builtins ergon_cli ergon_infra ergon_ingestion tests scripts
+        run: uv run ruff format --check ergon_core ergon_builtins ergon_cli ergon_infra ergon_ingestion tests
 
       - name: Type check (ty)
         run: uv run ty check ergon_core/ergon_core ergon_builtins/ergon_builtins ergon_cli/ergon_cli ergon_infra ergon_ingestion/ergon_ingestion
@@ -32,7 +32,7 @@ jobs:
         run: uv run slopcop --warn-only ergon_core/ergon_core ergon_builtins/ergon_builtins ergon_cli/ergon_cli ergon_infra ergon_ingestion/ergon_ingestion
 
       - name: Suppression budget
-        run: uv run python scripts/check_suppression_budget.py
+        run: uv run python -m ergon_core.core.application.testing.suppression_budget
 
       - name: Cyclomatic complexity check (xenon)
         # Thresholds reflect current baseline; tighten as complexity debt is paid down.
@@ -151,7 +151,7 @@ jobs:
           # Python 3.12+ sys.monitoring backend — faster than the default
           # sys.settrace() tracer for ORM-heavy workloads like SQLAlchemy.
           COVERAGE_CORE: sysmon
-        run: uv run pytest ergon_core/tests/unit ergon_builtins/tests/unit ergon_cli/tests/unit ergon_ingestion/tests/unit -n auto --cov=ergon_core --cov=ergon_builtins --cov-report=xml:coverage.xml
+        run: uv run ergon test full unit -- --cov=ergon_core --cov=ergon_builtins --cov-report=xml:coverage.xml
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -199,7 +199,7 @@ jobs:
           INNGEST_API_BASE_URL: http://localhost:8289
           INNGEST_DEV: "1"
           INNGEST_EVENT_KEY: dev
-        run: uv run pytest tests/integration -v --timeout=300
+        run: uv run ergon test backend integration
 
       - name: Dump API logs on failure
         if: failure()

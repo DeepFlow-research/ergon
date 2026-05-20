@@ -1,15 +1,14 @@
-#!/usr/bin/env python3
 """On-VM entry point for TRL GRPO training with Ergon environments.
 
 Parses CLI args into a TrainingConfig and delegates to ergon_infra.
-This is the script that SkyPilot YAMLs call on the GPU node.
+This is the module entrypoint SkyPilot YAMLs can call on the GPU node.
 
 For local development, prefer ``ergon train local`` which handles
 definition creation and service checks automatically.
 
 Example::
 
-    python scripts/train_trl_grpo.py \\
+    python -m ergon_infra.training \\
         --benchmark smoke-test \\
         --definition-id <uuid> \\
         --model Qwen/Qwen2.5-1.5B \\

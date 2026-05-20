@@ -2,8 +2,8 @@
 
 Every contract here must match the corresponding Zod schema in
 ergon-dashboard/src/generated/events/*.ts — the latter is generated from
-these models via scripts/export_contract_schemas.py +
-json-schema-to-zod (see package.json ``generate:contracts``).  Any
+these models via ``ergon_core.core.views.dashboard_events.export_schemas`` +
+json-schema-to-zod (see package.json ``generate:contracts``). Any
 change here that isn't regenerated will fail the CI drift check.
 """
 

@@ -107,9 +107,11 @@ class TestHandleStart:
 
         out = capsys.readouterr().out
         assert "Ergon dev stack is up." in out
-        assert "http://localhost:9000" in out
-        assert "http://localhost:3001" in out
-        assert "http://localhost:8289" in out
+        assert "Services" in out
+        assert "Dashboard  http://localhost:3001" in out
+        assert "API        http://localhost:9000" in out
+        assert "Inngest    http://localhost:8289" in out
+        assert "Postgres   postgresql://ergon:ergon_dev@localhost:5433/ergon" in out
         assert "ergon doctor" in out
 
     def test_fails_when_no_compose_file(

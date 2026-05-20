@@ -24,7 +24,6 @@ UV workspace with four Python packages and a Next.js dashboard:
 - `ergon_infra/` — Infrastructure: TRL training runner, SkyPilot provisioning, deployment templates
 - `ergon-dashboard/` — Next.js frontend dashboard (pnpm)
 - `tests/` — Integration, e2e, and state tests
-- `scripts/` — Standalone entrypoints (e.g. TRL GRPO training)
 
 ## Checks (`package.json`)
 
@@ -43,16 +42,51 @@ Individual backend scripts: `check:be:lint`, `check:be:fmt`, `check:be:type`, `c
 Ruff autofix:
 
 ```bash
-uv run ruff check --fix ergon_core ergon_builtins ergon_cli ergon_infra tests scripts
-uv run ruff format ergon_core ergon_builtins ergon_cli ergon_infra tests scripts
+uv run ruff check --fix ergon_core ergon_builtins ergon_cli ergon_infra tests
+uv run ruff format ergon_core ergon_builtins ergon_cli ergon_infra tests
 ```
 
-## Tests
+## Local stack and tests
+
+Use the Ergon CLI as the canonical local interface for app startup and tests.
+Reach for these before raw `docker compose`, `pytest`, or dashboard package
+commands unless you are debugging the wrapper itself.
 
 ```bash
-pnpm run test:be:fast   # Fast unit/state tests
-pnpm run test:be:e2e    # E2E tests (requires Docker stack)
+ergon start   # Start Postgres, API, Inngest, and dashboard
+ergon doctor  # Verify local dependencies and service reachability
+ergon stop    # Stop the local stack
 ```
+
+Common test entrypoints:
+
+```bash
+ergon test cli unit
+ergon test core unit
+ergon test full unit
+ergon test backend integration
+ergon test smoke
+ergon test smoke minif2f
+ergon test dashboard unit
+ergon test full full
+```
+
+Use `--dry-run` to see the underlying command:
+
+```bash
+ergon test cli unit --dry-run
+```
+
+Use `--` to pass pytest or package-runner flags through:
+
+```bash
+ergon test core unit -- -k persistence
+ergon test smoke swebench-verified -- --timeout=330 --tb=short
+```
+
+Root `package.json` test scripts are thin aliases for `ergon test`; CI also
+uses `ergon test` as a first customer. Keep these surfaces aligned when adding
+or moving tests.
 
 ## Git workflow
 
@@ -64,7 +98,7 @@ pnpm run test:be:e2e    # E2E tests (requires Docker stack)
 - Ruff for linting and formatting (no black/isort/flake8)
 - `ty` for type checking (not mypy)
 - New workspace members: add paths in `package.json` and `.github/workflows/ci-fast.yml`
-- `slopcop`: `no-print` is ignored in CLI, infra, rendering, tests, and scripts (see `[tool.slopcop]` in `pyproject.toml`)
+- `slopcop`: `no-print` is ignored in CLI, rendering, tests, and narrow command entrypoints (see `[tool.slopcop]` in `pyproject.toml`)
 - **Lazy imports are banned.** The only acceptable reason to defer an import
   to call-site scope is a genuine circular import that cannot be resolved by
   restructuring modules. "Keeping the import graph narrow", "faster startup",

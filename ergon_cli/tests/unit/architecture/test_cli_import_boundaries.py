@@ -23,7 +23,7 @@ def _imports(path: Path) -> list[str]:
 
 
 def test_deleted_cli_compatibility_packages_stay_deleted() -> None:
-    for package in ("commands", "discovery", "onboarding", "rendering"):
+    for package in ("commands", "composition", "discovery", "onboarding", "rendering"):
         assert not (CLI_ROOT / package).exists()
 
 
@@ -47,6 +47,7 @@ def test_builtins_production_code_does_not_import_cli() -> None:
 def test_cli_production_code_does_not_import_deleted_compatibility_paths() -> None:
     deleted_prefixes = (
         "ergon_cli.commands",
+        "ergon_cli.composition",
         "ergon_cli.discovery",
         "ergon_cli.onboarding",
         "ergon_cli.rendering",
