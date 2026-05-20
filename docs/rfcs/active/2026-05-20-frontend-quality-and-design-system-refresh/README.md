@@ -60,25 +60,34 @@ The supporting screenshots live in
 `docs/rfcs/active/2026-05-20-frontend-quality-and-design-system-refresh/assets/`.
 Codex cannot directly extract the binary images attached to this chat, so these
 are local equivalents captured from the live dashboard and the old local design
-archive.
+archive. These RFC assets, together with this RFC and the stack plan in
+`docs/superpowers/plans/frontend-quality-refresh/`, are the canonical in-repo
+references for future work.
+
+The external `../ergon_fe_design_system` folder remains a historical archive.
+Do not move, delete, or port from it directly in this refresh stack unless a
+separate cleanup task explicitly asks for that. When archive screenshots or
+ideas are useful, copy the durable reference into this RFC or an implementation
+plan and translate any cohort-era language into current experiment/run
+language.
 
 Experiment page:
 
-![Current experiment page](/Users/charliemasters/Desktop/synced_vm_002/ergon/docs/rfcs/active/2026-05-20-frontend-quality-and-design-system-refresh/assets/current-experiment-page.png)
+![Current experiment page](assets/current-experiment-page.png)
 
-![Archive experiment page](/Users/charliemasters/Desktop/synced_vm_002/ergon/docs/rfcs/active/2026-05-20-frontend-quality-and-design-system-refresh/assets/archive-experiment-page.png)
+![Archive experiment page](assets/archive-experiment-page.png)
 
 Run workspace:
 
-![Current run workspace](/Users/charliemasters/Desktop/synced_vm_002/ergon/docs/rfcs/active/2026-05-20-frontend-quality-and-design-system-refresh/assets/current-run-workspace.png)
+![Current run workspace](assets/current-run-workspace.png)
 
-![Archive run workspace](/Users/charliemasters/Desktop/synced_vm_002/ergon/docs/rfcs/active/2026-05-20-frontend-quality-and-design-system-refresh/assets/archive-run-workspace.png)
+![Archive run workspace](assets/archive-run-workspace.png)
 
 Rubric drawer:
 
-![Current rubric drawer](/Users/charliemasters/Desktop/synced_vm_002/ergon/docs/rfcs/active/2026-05-20-frontend-quality-and-design-system-refresh/assets/current-rubric-drawer.png)
+![Current rubric drawer](assets/current-rubric-drawer.png)
 
-![Archive rubric drawer](/Users/charliemasters/Desktop/synced_vm_002/ergon/docs/rfcs/active/2026-05-20-frontend-quality-and-design-system-refresh/assets/archive-rubric-drawer.png)
+![Archive rubric drawer](assets/archive-rubric-drawer.png)
 
 ## Comparison Tracks
 
@@ -573,8 +582,10 @@ Acceptance:
 Close the loop so the old archive remains useful without confusing future
 implementation:
 
-- Decide whether `ergon_fe_design_system` stays as a local archive, moves into
-  docs screenshots, or is deleted after the useful patterns are ported.
+- Preserve `../ergon_fe_design_system` as a historical local archive outside
+  this PR stack.
+- Keep the copied RFC screenshots and frontend-quality plans as the canonical
+  in-repo references for future implementation.
 - Add explicit frontend quality invariants to dashboard architecture docs if
   accepted.
 - Add an LLM-facing note that future frontend work should compare against the
@@ -670,8 +681,8 @@ runs index or richer rubric coverage strips, should be called out explicitly.
   until backend endpoints exist, or hidden until real behavior is wired?
 - Should `/runs` wait for the paginated runs API RFC, or ship against the
   current available data first?
-- Do we want to maintain `ergon_fe_design_system` as an archive, or move the
-  good screenshots into this RFC and delete the folder later?
+- Resolved for this stack: `../ergon_fe_design_system` remains a historical
+  archive, while the copied RFC assets are the canonical in-repo references.
 
 ## On Acceptance
 
@@ -684,5 +695,6 @@ When this RFC is accepted:
   invariants if they are accepted as architecture-level rules.
 - Add screenshot/e2e acceptance checks for the experiment detail and run
   workspace.
-- Decide whether `ergon_fe_design_system` remains an archive or is migrated
-  into repo docs and deleted.
+- Keep `../ergon_fe_design_system` as historical unless a later cleanup task
+  explicitly deletes it; rely on this RFC's copied assets for canonical in-repo
+  references.

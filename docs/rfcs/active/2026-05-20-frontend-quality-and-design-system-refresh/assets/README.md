@@ -4,7 +4,10 @@ These images support
 `../README.md`.
 
 The chat attachment binaries are not directly available to Codex as files, so
-these assets are local equivalents:
+these assets are local equivalents. Treat the files in this directory as the
+canonical in-repo references for the frontend quality refresh. The external
+`../ergon_fe_design_system` folder remains a historical archive only; cohort-era
+copy in those source materials is not current product language.
 
 - `current-experiment-page.png`: captured from the live dashboard at
   `http://localhost:3001/experiments/52287ee2-8868-4959-951e-053f1a94c992`.
@@ -24,9 +27,9 @@ Refresh commands used for the live screenshots:
 ```sh
 pnpm -C ergon-dashboard exec playwright screenshot --full-page --viewport-size=2048,1228 \
   http://localhost:3001/experiments/52287ee2-8868-4959-951e-053f1a94c992 \
-  /Users/charliemasters/Desktop/synced_vm_002/ergon/docs/rfcs/active/2026-05-20-frontend-quality-and-design-system-refresh/assets/current-experiment-page.png
+  docs/rfcs/active/2026-05-20-frontend-quality-and-design-system-refresh/assets/current-experiment-page.png
 
 pnpm -C ergon-dashboard exec playwright screenshot --full-page --viewport-size=2048,1228 \
   http://localhost:3001/run/2709c08b-de67-402c-b081-18ee5994ee33 \
-  /Users/charliemasters/Desktop/synced_vm_002/ergon/docs/rfcs/active/2026-05-20-frontend-quality-and-design-system-refresh/assets/current-run-workspace.png
+  docs/rfcs/active/2026-05-20-frontend-quality-and-design-system-refresh/assets/current-run-workspace.png
 ```
