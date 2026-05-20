@@ -57,7 +57,7 @@ Top-level `l_3` depends on `l_2`, so the smoke proves dependency propagation wai
 
 Topology is enforced by `ergon_core/test_support/smoke_fixtures/smoke_base/worker_base.py::SmokeWorkerBase.execute` being decorated `@typing.final`. Subclasses supply the leaf slug via `leaf_slug` and override `_spec_for(slug, deps, desc)` only to route specific slugs elsewhere. They cannot change the direct-child DAG itself.
 
-The single source of truth for the direct-child topology is [`ergon_core/test_support/smoke_fixtures/smoke_base/constants.py`](../../ergon_core/ergon_core/test_support/smoke_fixtures/smoke_base/constants.py):
+The single source of truth for the direct-child topology is [`tests/fixtures/smoke_components/smoke_base/constants.py`](../../tests/fixtures/smoke_components/smoke_base/constants.py):
 
 ```python
 EXPECTED_SUBTASK_SLUGS = (
@@ -123,7 +123,7 @@ Sad-path adds: partial artifact persisted (partial_*.md exists as RunResource), 
 
 ## 5. Harness
 
-`/api/test/*` FastAPI router at [`ergon_core/core/api/test_harness.py`](../../ergon_core/ergon_core/core/api/test_harness.py). Mounted only when `ENABLE_TEST_HARNESS=1`; write endpoints additionally gated by `X-Test-Secret: ${TEST_HARNESS_SECRET}`.
+`/api/test/*` FastAPI router at [`ergon_core/core/infrastructure/http/routes/test_harness.py`](../../ergon_core/ergon_core/core/infrastructure/http/routes/test_harness.py). Mounted only when `ENABLE_TEST_HARNESS=1`; write endpoints additionally gated by `X-Test-Secret: ${TEST_HARNESS_SECRET}`.
 
 Read endpoints (Playwright + pytest consume):
 
@@ -150,6 +150,43 @@ Required `data-testid` attributes: `run-status`, `task-node-{slug}` (one per `EX
 ### 6.1 Dashboard harness job (`ci-fast.yml` → `frontend-e2e`)
 
 This job runs `docker compose up -d --wait postgres api inngest-dev`, then `pnpm -C ergon-dashboard run e2e` (Playwright starts `pnpm dev:test` locally). The dashboard route `GET /api/health` probes the Ergon API (`GET /experiments?limit=1`), so Compose `--wait` must not return until the API process is actually serving HTTP. The **`api`** service therefore carries a **Docker `healthcheck`** that curls `http://127.0.0.1:9000/health` inside the container; without it, only Postgres had a healthcheck and CI could hit `/api/health` while Uvicorn was still importing, yielding **503**. Playwright specs that drag `react-resizable-panels` separators poll for non-null `boundingBox()` after `toBeVisible` because layout geometry can trail visibility in headless Chromium.
+
+### 6.2 Local dashboard quality workflow
+
+For dashboard UI or dashboard-contract changes, use the smallest gate that
+proves the changed layer, then add screenshot review for visible surfaces:
+
+```sh
+ergon start
+ergon test smoke
+pnpm -C ergon-dashboard run test:unit
+```
+
+Use `ergon start` when the local Postgres/API/Inngest/dashboard stack is not
+already healthy. Use `ergon test smoke` for the canonical smoke path when the
+change can affect cross-service dashboard truth, experiment/run grouping, or
+Playwright smoke assertions. Use dashboard unit tests for pure frontend helpers,
+selectors, reducers, contracts, graph layout, activity stack, and formatting.
+
+Visible dashboard changes also need fixed-viewport screenshot checks for the
+affected key surface:
+
+```sh
+pnpm -C ergon-dashboard exec playwright screenshot --full-page --viewport-size=2048,1228 \
+  http://localhost:3001/experiments/<experiment-id> \
+  /tmp/ergon-experiment-detail.png
+
+pnpm -C ergon-dashboard exec playwright screenshot --full-page --viewport-size=2048,1228 \
+  http://localhost:3001/run/<run-id> \
+  /tmp/ergon-run-workspace.png
+```
+
+Review screenshots for the frontend quality invariants in
+[`05_dashboard.md`](05_dashboard.md): experiment language, tokenized surfaces,
+structured evaluation state, and no overlap, blank graph, serif fallback, or
+missing drawer content. Prefer screenshots of the meaningful interaction state
+over idle defaults when the change touches selection, timeline, drawer,
+evaluation, loading, empty, or error behavior.
 
 ## 7. CI workflow
 
