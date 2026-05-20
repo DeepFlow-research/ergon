@@ -9,8 +9,8 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from ergon_core.core.shared.context_parts import ContextEventType, ContextPartChunkLog
 from ergon_core.core.application.evaluation.summary import EvalCriterionStatus
+from ergon_core.core.shared.context_parts import ContextEventType, ContextPartChunkLog
 from pydantic import BaseModel, ConfigDict, Field
 
 
