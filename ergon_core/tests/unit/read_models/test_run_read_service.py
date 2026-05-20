@@ -102,16 +102,16 @@ def test_list_runs_filters_offsets_and_projects_index_summary(monkeypatch, sessi
         )
         for status in ("completed", "failed", "running"):
             session.add(
-                    RunGraphNode(
-                        run_id=matching_run_id,
-                        instance_key="task-1",
-                        task_slug=status,
-                        description="Task",
-                        status=status,
-                        created_at=now - timedelta(minutes=50),
-                        updated_at=now - timedelta(minutes=10),
-                    )
+                RunGraphNode(
+                    run_id=matching_run_id,
+                    instance_key="task-1",
+                    task_slug=status,
+                    description="Task",
+                    status=status,
+                    created_at=now - timedelta(minutes=50),
+                    updated_at=now - timedelta(minutes=10),
                 )
+            )
         session.commit()
 
     monkeypatch.setattr(module, "get_session", session_factory)

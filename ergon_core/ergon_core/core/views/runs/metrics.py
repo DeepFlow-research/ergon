@@ -69,7 +69,7 @@ def aggregate_run_metrics(
 
 
 def observed_cost_from_summary(summary: dict[str, Any]) -> tuple[float | None, bool]:
-    """Return observed run cost, never treating legacy default zero as observed."""
+    """Return observed run cost, never treating historical default zero as observed."""
     nested = summary.get("cost")
     if isinstance(nested, dict) and nested.get("observed") is True:
         value = nested.get("total_cost_usd")
@@ -79,9 +79,9 @@ def observed_cost_from_summary(summary: dict[str, Any]) -> tuple[float | None, b
         value = summary.get("total_cost_usd")
         return (_number(value), True) if _number(value) is not None else (None, False)
 
-    legacy_value = _number(summary.get("total_cost_usd"))
-    if legacy_value is not None and legacy_value != 0:
-        return legacy_value, True
+    fallback_value = _number(summary.get("total_cost_usd"))
+    if fallback_value is not None and fallback_value != 0:
+        return fallback_value, True
 
     return None, False
 

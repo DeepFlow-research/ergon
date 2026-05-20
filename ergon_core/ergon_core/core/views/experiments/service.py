@@ -258,7 +258,9 @@ def _context_events_by_run(
     if not run_ids:
         return {}
 
-    rows = list(session.exec(select(RunContextEvent).where(col(RunContextEvent.run_id).in_(run_ids))))
+    rows = list(
+        session.exec(select(RunContextEvent).where(col(RunContextEvent.run_id).in_(run_ids)))
+    )
     result: dict[UUID, list[RunContextEvent]] = {run_id: [] for run_id in run_ids}
     for row in rows:
         result.setdefault(row.run_id, []).append(row)

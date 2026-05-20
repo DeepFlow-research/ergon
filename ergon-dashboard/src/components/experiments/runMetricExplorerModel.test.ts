@@ -83,7 +83,7 @@ test("normalizes row metrics once for cards, table, and explorer", () => {
   assert.deepEqual(normalized.metrics.tool_call_count, { value: 7, available: true });
 });
 
-test("does not treat legacy cost defaults as observed cost", () => {
+test("does not treat historical cost defaults as observed cost", () => {
   const normalized = normalizeRunMetricPoint(runRow({ total_cost_usd: 0.12 }));
 
   assert.equal(normalized.metrics.total_cost_usd.available, false);
