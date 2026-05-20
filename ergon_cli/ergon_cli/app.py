@@ -6,6 +6,7 @@ import inspect
 from ergon_cli.domains.benchmarks.parser import register_benchmark_parser
 from ergon_cli.domains.doctor.parser import register_doctor_parser
 from ergon_cli.domains.evaluators.parser import register_evaluator_parser
+from ergon_cli.domains.examples.parser import register_examples_parser
 from ergon_cli.domains.experiments.parser import register_experiment_parser
 from ergon_cli.domains.ingestion.parser import register_ingest_parser
 from ergon_cli.domains.onboarding.parser import register_onboard_parser
@@ -25,6 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     register_ingest_parser(subparsers)
     register_worker_parser(subparsers)
     register_evaluator_parser(subparsers)
+    register_examples_parser(subparsers)
     register_onboard_parser(subparsers)
     register_doctor_parser(subparsers)
     register_stack_parser(subparsers)

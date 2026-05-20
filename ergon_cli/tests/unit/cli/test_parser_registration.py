@@ -19,6 +19,7 @@ from ergon_cli.main import build_parser
         (["evaluator", "list"], {"command": "evaluator", "evaluator_action": "list"}),
         (["onboard"], {"command": "onboard"}),
         (["doctor"], {"command": "doctor"}),
+        (["examples", "list"], {"command": "examples", "examples_action": "list"}),
         (["start"], {"command": "start"}),
         (["stop"], {"command": "stop"}),
         (["test", "cli", "unit"], {"command": "test", "test_domain": "cli", "test_suite": "unit"}),
