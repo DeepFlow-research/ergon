@@ -32,4 +32,11 @@ class ExampleCommand(BaseModel):
     base_url: str | None = None
     model: str | None = None
     model_target: str | None = None
+    base_model: str | None = None
+    model_cache_dir: str | None = None
+    llama_server_bin: str = "llama-server"
+    host: str = "127.0.0.1"
+    port: int = 8080
+    startup_timeout: int = 60
+    keep_llama_server: bool = False
     max_iterations: int | None = None

@@ -6,20 +6,13 @@ import argparse
 import asyncio
 import sys
 from collections.abc import Sequence
-from pathlib import Path
 from uuid import UUID
-
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
-
-from ergon_core.api import Worker, persist_benchmark
-from ergon_core.core.application.experiments.service import launch_run
 
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
 from ergon_builtins.benchmarks.minif2f.worker_factory import make_minif2f_worker
-
-from examples.getting_started._shared.env import (
+from ergon_core.api.worker import Worker
+from ergon_core.core.application.experiments.service import launch_run, persist_benchmark
+from getting_started._shared.env import (
     DEFAULT_LLAMA_CPP_BASE_URL,
     DEFAULT_MINIF2F_LIMIT,
     DEFAULT_MINIF2F_MAX_ITERATIONS,
@@ -31,8 +24,10 @@ from examples.getting_started._shared.env import (
     env_str,
     preflight_llamacpp_and_e2b,
 )
-from examples.getting_started._shared.launch import first_run_id
-from examples.getting_started._shared.observe import cli_status_command, dashboard_run_url
+from getting_started._shared.llamacpp import ManagedLlamaServer, start_llama_server
+from getting_started._shared.launch import first_run_id
+from getting_started._shared.model_cache import resolve_base_model
+from getting_started._shared.observe import cli_status_command, dashboard_run_url
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -70,7 +65,49 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
         help="Maximum ReAct tool iterations per MiniF2F task.",
     )
-    return parser.parse_args(argv)
+    parser.add_argument(
+        "--base-model",
+        default=None,
+        help=(
+            "Local GGUF path or Hugging Face '<repo-id>:<filename.gguf>' ref. "
+            "Starts a managed llama.cpp server for this run."
+        ),
+    )
+    parser.add_argument(
+        "--model-cache-dir",
+        default=None,
+        help="Directory for downloaded Hugging Face GGUF files.",
+    )
+    parser.add_argument(
+        "--llama-server-bin",
+        default="llama-server",
+        help="llama.cpp server command to run with --base-model.",
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host for the managed llama.cpp server.",
+    )
+    parser.add_argument(
+        "--port",
+        type=_positive_int,
+        default=8080,
+        help="Port for the managed llama.cpp server.",
+    )
+    parser.add_argument(
+        "--startup-timeout",
+        type=_positive_int,
+        default=60,
+        help="Seconds to wait for a managed llama.cpp server to become ready.",
+    )
+    parser.add_argument(
+        "--keep-llama-server",
+        action="store_true",
+        help="Leave the managed llama.cpp server running after the example exits.",
+    )
+    args = parser.parse_args(argv)
+    _validate_model_routing(args, parser)
+    return args
 
 
 def model_target_from_args(args: argparse.Namespace) -> str:
@@ -96,11 +133,34 @@ def preflight_base_url_from_args(args: argparse.Namespace) -> str:
 
 async def async_main(argv: Sequence[str] | None = None) -> int:
     """Run the example and return a process exit code."""
+    server: ManagedLlamaServer | None = None
+    keep_llama_server = False
     try:
         args = parse_args(argv)
+        keep_llama_server = args.keep_llama_server
+        if args.base_model is not None:
+            print(f"Resolving base model: {args.base_model}")
+            base_model_path = resolve_base_model(
+                args.base_model,
+                cache_dir=args.model_cache_dir,
+            )
+            print(f"Using base model: {base_model_path}")
+            print(f"Starting llama.cpp on {args.host}:{args.port}")
+            server = start_llama_server(
+                base_model=str(base_model_path),
+                llama_server_bin=args.llama_server_bin,
+                host=args.host,
+                port=args.port,
+                startup_timeout=args.startup_timeout,
+            )
+            args.base_url = server.base_url
+            args.model = server.discovered_model
+
         model_target = model_target_from_args(args)
         preflight_llamacpp_and_e2b(base_url=preflight_base_url_from_args(args))
     except ExampleSetupError as exc:
+        if server is not None:
+            server.close(keep_running=keep_llama_server)
         print(f"Setup error: {exc}", file=sys.stderr)
         return 2
 
@@ -110,18 +170,22 @@ async def async_main(argv: Sequence[str] | None = None) -> int:
             max_iterations=args.max_iterations,
         )
 
-    benchmark = MiniF2FBenchmark(limit=args.limit, worker_factory=make_worker)
-    handle = persist_benchmark(benchmark)
-    run_result = await launch_run(handle.definition_id)
-    run_id = first_run_id(run_result)
-    _print_launch_summary(
-        definition_id=handle.definition_id,
-        run_id=run_id,
-        model_target=model_target,
-        limit=args.limit,
-        max_iterations=args.max_iterations,
-    )
-    return 0
+    try:
+        benchmark = MiniF2FBenchmark(limit=args.limit, worker_factory=make_worker)
+        handle = persist_benchmark(benchmark)
+        run_result = await launch_run(handle.definition_id)
+        run_id = first_run_id(run_result)
+        _print_launch_summary(
+            definition_id=handle.definition_id,
+            run_id=run_id,
+            model_target=model_target,
+            limit=args.limit,
+            max_iterations=args.max_iterations,
+        )
+        return 0
+    finally:
+        if server is not None:
+            server.close(keep_running=keep_llama_server)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -137,6 +201,18 @@ def _positive_int(value: str) -> int:
     if parsed < 1:
         raise argparse.ArgumentTypeError(f"{value!r} is not a positive integer")
     return parsed
+
+
+def _validate_model_routing(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    if args.base_model is None:
+        return
+    conflicts = {
+        "--model": args.model is not None,
+        "--model-target": args.model_target is not None,
+    }
+    for flag, is_set in conflicts.items():
+        if is_set:
+            parser.error(f"--base-model cannot be combined with {flag}")
 
 
 def _print_launch_summary(

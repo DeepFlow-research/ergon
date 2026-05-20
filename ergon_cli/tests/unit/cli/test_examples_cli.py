@@ -1,8 +1,10 @@
 """Tests for the ``ergon examples`` CLI domain."""
 
 from argparse import Namespace
+import json
 from pathlib import Path
 from unittest.mock import MagicMock
+import urllib.request
 
 import pytest
 
@@ -11,6 +13,20 @@ import ergon_cli.domains.examples.runner as examples_runner
 from ergon_cli.domains.examples.commands import handle_examples
 from ergon_cli.main import build_parser
 from ergon_cli.domains.examples.preflight import ExampleSetupError, PreflightResult
+
+
+class _FakeModelsResponse:
+    def __init__(self, model_id: str) -> None:
+        self._body = json.dumps({"data": [{"id": model_id}]}).encode()
+
+    def __enter__(self) -> "_FakeModelsResponse":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self._body
 
 
 def test_examples_subcommands_are_registered_in_main_parser() -> None:
@@ -50,6 +66,57 @@ def test_examples_subcommands_are_registered_in_main_parser() -> None:
     assert run_args.limit == 3
     assert run_args.model == "local-proof-model"
     assert run_args.max_iterations == 4
+
+
+def test_examples_run_accepts_base_model_for_single_command_launch() -> None:
+    args = build_parser().parse_args(
+        [
+            "examples",
+            "run",
+            "minif2f-local-llamacpp",
+            "--base-model",
+            "unsloth/DeepSeek-Prover-V2-7B-GGUF:Q4_K_M.gguf",
+            "--model-cache-dir",
+            "/tmp/ergon-models",
+            "--limit",
+            "3",
+        ]
+    )
+
+    assert args.examples_action == "run"
+    assert args.base_model == "unsloth/DeepSeek-Prover-V2-7B-GGUF:Q4_K_M.gguf"
+    assert args.model_cache_dir == "/tmp/ergon-models"
+    assert args.llama_server_bin == "llama-server"
+    assert args.host == "127.0.0.1"
+    assert args.port == 8080
+    assert args.startup_timeout == 60
+    assert args.keep_llama_server is False
+
+
+@pytest.mark.parametrize(
+    "extra_args",
+    [
+        ["--base-url", "http://localhost:8080"],
+        ["--model", "served-model"],
+        ["--model-target", "llamacpp:http://localhost:8080#served-model"],
+    ],
+)
+def test_base_model_conflicts_with_manual_model_routing(extra_args: list[str]) -> None:
+    parser = build_parser()
+
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args(
+            [
+                "examples",
+                "run",
+                "minif2f-local-llamacpp",
+                "--base-model",
+                "/models/prover.gguf",
+                *extra_args,
+            ]
+        )
+
+    assert exc_info.value.code == 2
 
 
 def test_console_entrypoint_help_does_not_import_examples_package(
@@ -154,6 +221,50 @@ def test_check_reports_llama_server_template_when_preflight_fails(
     assert "llama-server --model /path/to/model.gguf --host 127.0.0.1 --port 8080" in err
 
 
+def test_check_does_not_print_llama_server_template_for_missing_e2b(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def fake_preflight(*, base_url: str) -> PreflightResult:
+        raise ExampleSetupError("Missing E2B_API_KEY. Set it before launching.")
+
+    monkeypatch.setattr(examples_preflight, "preflight_llamacpp_and_e2b", fake_preflight)
+
+    rc = handle_examples(
+        Namespace(
+            examples_action="check",
+            example="minif2f-local-llamacpp",
+            base_url="http://localhost:8080",
+            model=None,
+            model_target=None,
+            limit=None,
+            max_iterations=None,
+        )
+    )
+
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "Missing E2B_API_KEY" in err
+    assert "llama-server --model" not in err
+
+
+def test_preflight_reads_e2b_from_core_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("E2B_API_KEY", raising=False)
+    monkeypatch.setattr(examples_preflight.settings, "e2b_api_key", "settings-key")
+
+    def fake_urlopen(url: str, timeout: int) -> _FakeModelsResponse:
+        assert url == "http://localhost:8080/v1/models"
+        return _FakeModelsResponse("mini-proof-local")
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+    result = examples_preflight.preflight_llamacpp_and_e2b(base_url="http://localhost:8080")
+
+    assert result.discovered_model == "mini-proof-local"
+
+
 def test_run_invokes_example_script_with_translated_args(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -186,12 +297,13 @@ def test_run_invokes_example_script_with_translated_args(
     subprocess_run.assert_called_once()
     args, kwargs = subprocess_run.call_args
     command = args[0]
+    assert command[:5] == ["uv", "run", "--project", str(kwargs["cwd"] / "examples"), "python"]
     assert (
-        Path(command[1])
+        Path(command[5])
         .as_posix()
         .endswith("examples/getting_started/01_minif2f_local_llamacpp/run.py")
     )
-    assert command[2:] == [
+    assert command[6:] == [
         "--limit",
         "3",
         "--base-url",
@@ -241,6 +353,7 @@ def test_run_can_use_configured_repo_root(
     fake_repo = tmp_path / "repo"
     script = fake_repo / "examples/getting_started/01_minif2f_local_llamacpp/run.py"
     script.parent.mkdir(parents=True)
+    (fake_repo / "examples/pyproject.toml").write_text("[project]\nname='fake'\nversion='0'\n")
     script.write_text("print('ok')\n")
 
     def fake_preflight(*, base_url: str) -> PreflightResult:
@@ -265,6 +378,8 @@ def test_run_can_use_configured_repo_root(
 
     assert rc == 0
     assert examples_runner.subprocess.run.call_args.kwargs["cwd"] == fake_repo
+    command = examples_runner.subprocess.run.call_args.args[0]
+    assert command[:5] == ["uv", "run", "--project", str(fake_repo / "examples"), "python"]
 
 
 def test_run_uses_model_target_for_preflight_and_script_args(
@@ -295,7 +410,7 @@ def test_run_uses_model_target_for_preflight_and_script_args(
     assert rc == 0
     assert calls == ["http://model-router:9090"]
     command = examples_runner.subprocess.run.call_args.args[0]
-    assert command[2:] == [
+    assert command[6:] == [
         "--limit",
         "2",
         "--model-target",
@@ -303,3 +418,56 @@ def test_run_uses_model_target_for_preflight_and_script_args(
         "--max-iterations",
         "5",
     ]
+
+
+def test_run_with_base_model_delegates_managed_server_to_example_script(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    completed = MagicMock(returncode=0)
+    preflight = MagicMock()
+    monkeypatch.setattr(examples_preflight, "preflight_llamacpp_and_e2b", preflight)
+    monkeypatch.setattr(examples_runner.subprocess, "run", MagicMock(return_value=completed))
+
+    rc = handle_examples(
+        Namespace(
+            examples_action="run",
+            example="minif2f-local-llamacpp",
+            base_url=None,
+            model=None,
+            model_target=None,
+            base_model="unsloth/DeepSeek-Prover-V2-7B-GGUF:Q4_K_M.gguf",
+            model_cache_dir="/tmp/ergon-models",
+            llama_server_bin="llama-server",
+            host="127.0.0.1",
+            port=8123,
+            startup_timeout=15,
+            keep_llama_server=True,
+            limit=3,
+            max_iterations=4,
+        )
+    )
+
+    assert rc == 0
+    preflight.assert_not_called()
+    command = examples_runner.subprocess.run.call_args.args[0]
+    assert command[6:] == [
+        "--limit",
+        "3",
+        "--max-iterations",
+        "4",
+        "--base-model",
+        "unsloth/DeepSeek-Prover-V2-7B-GGUF:Q4_K_M.gguf",
+        "--model-cache-dir",
+        "/tmp/ergon-models",
+        "--llama-server-bin",
+        "llama-server",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8123",
+        "--startup-timeout",
+        "15",
+        "--keep-llama-server",
+    ]
+    assert "Launching minif2f-local-llamacpp" in capsys.readouterr().out

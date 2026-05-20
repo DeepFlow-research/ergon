@@ -30,7 +30,14 @@ build-backend = "setuptools.build_meta"
 include = []
 
 [tool.uv.workspace]
-members = ["ergon_core", "ergon_builtins", "ergon_cli", "ergon_infra", "ergon_ingestion"]
+members = [
+    "ergon_core",
+    "ergon_builtins",
+    "ergon_cli",
+    "ergon_infra",
+    "ergon_ingestion",
+    "examples",
+]
 
 [tool.uv.sources]
 ergon-core = { workspace = true }
@@ -38,6 +45,7 @@ ergon-builtins = { workspace = true }
 ergon-cli = { workspace = true }
 ergon-infra = { workspace = true }
 ergon-ingestion = { workspace = true }
+ergon-examples = { workspace = true }
 
 [tool.ruff]
 line-length = 100
@@ -289,7 +297,14 @@ redundant-cast = "ignore"
 unused-ignore-comment = "ignore"
 
 [tool.ty.environment]
-extra-paths = ["ergon_core", "ergon_builtins", "ergon_cli", "ergon_infra", "ergon_ingestion"]
+extra-paths = [
+    "ergon_core",
+    "ergon_builtins",
+    "ergon_cli",
+    "ergon_infra",
+    "ergon_ingestion",
+    "examples",
+]
 
 [tool.ty.analysis]
 allowed-unresolved-imports = [
@@ -308,7 +323,7 @@ allowed-unresolved-imports = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-pythonpath = ["."]
+pythonpath = [".", "examples"]
 testpaths = ["ergon_core/tests", "ergon_builtins/tests", "ergon_cli/tests", "tests"]
 timeout = 600
 markers = [

@@ -16,4 +16,4 @@ def dashboard_run_url(run_id: UUID, environ: Mapping[str, str] | None = None) ->
 
 def cli_status_command(run_id: UUID) -> str:
     """Build the CLI command for checking a run's status."""
-    return f"ergon run status {run_id}"
+    return f"uv run ergon run status {run_id}"
