@@ -44,7 +44,7 @@ ergon start            # thin wrapper for `docker compose up -d --wait`
 ergon doctor           # verify connectivity
 
 # Define and launch a benchmark run from Python (authoring is Python-only)
-# See ergon_builtins/ergon_builtins/benchmarks/README.md for an example.
+# See examples/getting_started/ for runnable getting-started examples.
 
 # Observe runs via the CLI
 ergon run list                          # list recent runs
