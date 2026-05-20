@@ -1,6 +1,7 @@
 """ResearchRubrics canonical happy/sad smoke experiment group against real E2B.
 
-Per-run assertion dispatch on slot ``kind``:
+Per-run assertion dispatch on slot ``kind``. The default smoke experiment is
+three runs: two happy-path runs plus one sad-path run.
 
 - ``happy`` uses the old fully-completing smoke worker.
 - ``sad`` routes ``l_2`` to a failing leaf; ``l_3`` remains blocked.
@@ -58,6 +59,7 @@ def _smoke_slots(group_size: int) -> list[SmokeSlot]:
         slot
         for _ in range(group_size)
         for slot in (
+            ("happy", HAPPY_WORKER, CRITERION),
             ("happy", HAPPY_WORKER, CRITERION),
             ("sad", SAD_WORKER, CRITERION),
         )

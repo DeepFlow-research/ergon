@@ -24,7 +24,7 @@ def test_runtime_and_tooling_do_not_import_process_local_registry() -> None:
             "ergon_core/ergon_core",
             "ergon_cli/ergon_cli",
             "tests/fixtures/smoke_components",
-            "scripts/smoke_reassert.py",
+            "tests/e2e/reassert.py",
         )
         if path.relative_to(ROOT).as_posix() != "ergon_core/ergon_core/api/registry.py"
         and forbidden in path.read_text()

@@ -28,6 +28,7 @@ def test_active_code_has_no_legacy_compatibility_references() -> None:
                 or path.resolve() in EXCLUDED_FILES
                 or "node_modules" in path.parts
                 or "__pycache__" in path.parts
+                or any(part.startswith(".") for part in path.parts)
             ):
                 continue
             try:

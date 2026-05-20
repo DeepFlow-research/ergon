@@ -25,7 +25,7 @@ WHAT THIS SPIKE DOES
 
 USAGE
 -----
-    uv run python scripts/spike_logprob_splitting.py
+    uv run python -m tests.real_llm.spikes.logprob_splitting
 
 The script uses two approaches:
   [MOCK]  Constructs synthetic responses to test the splitting algorithm.
@@ -469,7 +469,7 @@ This script tests the splitting algorithm using mocks. The [LIVE] section
         print("""
 To verify against a real vLLM instance:
 
-    VLLM_BASE_URL=http://localhost:8000 uv run python scripts/spike_logprob_splitting.py
+    VLLM_BASE_URL=http://localhost:8000 uv run python -m tests.real_llm.spikes.logprob_splitting
 
 The live path will:
   1. Make a real vLLM call with a tool-use prompt and logprobs=True

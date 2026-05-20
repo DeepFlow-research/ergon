@@ -7,7 +7,7 @@ turns these into the dashboard's Zod validators (see package.json's
 generate:contracts:events step).
 
 Usage:
-    PYTHONPATH=. python scripts/export_contract_schemas.py
+    uv run python -m ergon_core.core.views.dashboard_events.export_schemas
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import importlib
 import json
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[5]
 SCHEMA_DIR = REPO_ROOT / "ergon-dashboard" / "src" / "generated" / "events" / "schemas"
 MANIFEST_PATH = SCHEMA_DIR / "manifest.json"
 CONTRACTS_MODULE = "ergon_core.core.views.dashboard_events.contracts"
@@ -29,7 +29,7 @@ def main() -> None:
     for entry in manifest:
         model_name = entry["modelName"]
         schema_file = entry["schemaFile"]
-        model = getattr(module, model_name, None)
+        model = vars(module).get(model_name)
         if model is None:
             raise RuntimeError(
                 f"Model {model_name!r} not found in {CONTRACTS_MODULE} "

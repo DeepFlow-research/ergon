@@ -58,8 +58,7 @@ max-complexity = 10
 
 [tool.ruff.lint.per-file-ignores]
 # Pre-existing complexity debt — tracked for future refactor PRs, not introduced now.
-# main (13): spike script, not library code
-"scripts/**" = ["C901", "ANN001", "ANN201", "ANN202", "ANN204", "ANN206"]
+"tests/real_llm/spikes/logprob_splitting.py" = ["C901"]
 # persist_definition (28): orchestrates full experiment graph persistence in one method
 "ergon_core/ergon_core/core/application/experiments/definition_writer.py" = ["C901"]
 # extract_agent_trajectories (13), _extract_trajectories (11)
@@ -86,9 +85,10 @@ max-complexity = 10
 # Per-rule excludes only when a rule is wrong for the whole repo (do not disable no-print / no-typing-any globally).
 
 [tool.slopcop.per-file-ignores]
-# Print is acceptable in standalone scripts and tests; library code under ergon_core (especially core/) should use logging.
-"scripts/**" = ["no-print"]
+# Print is acceptable in tests and narrowly-scoped command entrypoints.
 "tests/**" = ["no-print"]
+"ergon_core/ergon_core/core/application/testing/suppression_budget.py" = ["no-print"]
+"ergon_core/ergon_core/core/views/dashboard_events/export_schemas.py" = ["no-print"]
 # User-facing CLI output and dashboard render helpers.
 "**/ergon_cli/**" = ["no-print"]
 "**/rendering/**" = ["no-print"]

@@ -46,7 +46,7 @@ def _require_infra():
     if not url:
         pytest.fail(
             "E2E tests require ERGON_DATABASE_URL pointing at a live Postgres. "
-            "Run with docker-compose.yml (or scripts/smoke_local_up.sh)."
+            "Run with docker compose up -d."
         )
 
     db_parsed = urlparse(url)

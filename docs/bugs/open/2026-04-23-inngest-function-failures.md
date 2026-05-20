@@ -56,9 +56,10 @@ corresponding `task-execute` invocation ~1 s after `task/ready` fires.
 ### Repro
 
 ```bash
-bash scripts/smoke_local_up.sh
-# export env vars from the script's stanza
-SMOKE_COHORT_SIZE=1 scripts/smoke_local_run.sh minif2f
+docker compose up -d --build --wait postgres api inngest-dev
+ERGON_DATABASE_URL=postgresql://ergon:ergon_dev@localhost:5433/ergon \
+ERGON_API_BASE_URL=http://127.0.0.1:9000 \
+uv run pytest tests/e2e/test_minif2f_smoke.py -v
 # Watch:
 docker compose exec postgres psql -U ergon -d ergon -c \
   "SELECT task_slug, status FROM run_graph_nodes WHERE run_id=<id> ORDER BY level;"
@@ -330,7 +331,7 @@ Grep: `find . -name "*.py" -exec grep -l 'dict\[str, Any\]' {} \;` on
 dashboard event contracts returns several opaque fields.  Try
 `pnpm run generate:contracts` in `ergon-dashboard/` — step 1
 (`generate:contracts:schemas`) fails because
-`scripts/export_contract_schemas.py` does not exist in the repo.
+the schema exporter is not available.
 
 ### Root cause
 
@@ -338,15 +339,16 @@ The pipeline that *should* give end-to-end type safety:
 
 ```
 Python pydantic model (source of truth)
-  → scripts/export_contract_schemas.py               → events/schemas/*.schema.json
+  → ergon_core.core.views.dashboard_events.export_schemas
+                                                      → events/schemas/*.schema.json
   → pnpm exec json-schema-to-zod                     → events/<Name>.ts  (generated Zod)
   → dashboard imports from "@/generated/events"      → parser used at runtime
 ```
 
 Three independent failures stack:
 
-1. **The exporter script is missing.**  `package.json:12` references
-   `scripts/export_contract_schemas.py`; that file is not in the repo.
+1. **The exporter entrypoint is missing.**  `package.json:12` references
+   a schema exporter entrypoint that is not available.
    Either never committed or deleted.  Tracked `.schema.json` files
    under `ergon-dashboard/src/generated/events/schemas/` are stale
    snapshots — no one can regenerate them.
@@ -379,7 +381,7 @@ test exercises the boundary."  Recurring symptom, no structural fix.
 
 Four-step restore-and-tighten:
 
-1. **Restore `scripts/export_contract_schemas.py`.**  Walk every
+1. **Restore the dashboard event schema exporter.**  Walk every
    `InngestEventContract` subclass under
    `ergon_core.core.dashboard.event_contracts`, call
    `model.model_json_schema()`, write to the path named in

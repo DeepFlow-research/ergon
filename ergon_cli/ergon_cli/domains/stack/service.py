@@ -6,10 +6,10 @@ from ergon_cli.domains.stack.models import StackCommand, StackResult
 from ergon_cli.shared import exit_codes
 
 SERVICE_URLS: tuple[tuple[str, str], ...] = (
-    ("API", "http://localhost:9000"),
     ("Dashboard", "http://localhost:3001"),
+    ("API", "http://localhost:9000"),
     ("Inngest", "http://localhost:8289"),
-    ("Postgres", "localhost:5433 (user=ergon, db=ergon)"),
+    ("Postgres", "postgresql://ergon:ergon_dev@localhost:5433/ergon"),
 )
 
 
@@ -85,7 +85,7 @@ def start_stack(command: StackCommand) -> StackResult:
             ),
         )
 
-    stdout.extend(["", "Ergon dev stack is up."])
+    stdout.extend(["", "Ergon dev stack is up.", "", "Services"])
     width = max(len(label) for label, _ in SERVICE_URLS)
     stdout.extend(f"  {label:<{width}}  {url}" for label, url in SERVICE_URLS)
     stdout.extend(["", "Run `ergon doctor` to verify connectivity."])
