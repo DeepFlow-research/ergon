@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import { ExperimentIndexTable } from "@/components/indexes/ExperimentIndexTable";
 import { loadExperimentList, type ExperimentSummary } from "@/lib/server-data/experiments";
 
 export default async function ExperimentsPage() {
@@ -14,68 +13,50 @@ export default async function ExperimentsPage() {
     error = detail ?? `API returned ${result.status}`;
   }
 
+  const runningCount = experiments.reduce(
+    (sum, experiment) =>
+      sum + experiment.status_counts.executing + experiment.status_counts.evaluating,
+    0,
+  );
+  const failedCount = experiments.reduce(
+    (sum, experiment) => sum + experiment.failure_count,
+    0,
+  );
+  const totalRuns = experiments.reduce((sum, experiment) => sum + experiment.run_count, 0);
+
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-8">
-      <div className="mb-6">
+    <main className="mx-auto w-full max-w-7xl px-6 py-8">
+      <div className="mb-5">
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--faint)]">
           Experiment Index
         </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-[var(--ink)]">
+        <h1 className="mt-2 text-3xl font-semibold text-[var(--ink)]">
           Experiments
         </h1>
-        <p className="mt-2 text-sm text-[var(--muted)]">
-          One experiment is a launched design; each row can own multiple workflow runs.
-        </p>
       </div>
 
       {error ? (
-        <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] p-4 text-sm text-[var(--muted)]">
+        <div className="mb-4 border border-[var(--line)] bg-[var(--card)] p-4 text-sm text-[var(--muted)]">
           {error}
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] shadow-card">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-[var(--line)] text-xs uppercase tracking-[0.08em] text-[var(--faint)]">
-            <tr>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Benchmark</th>
-              <th className="px-4 py-3">Samples</th>
-              <th className="px-4 py-3">Runs</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Model</th>
-            </tr>
-          </thead>
-          <tbody>
-            {experiments.map((experiment) => (
-              <tr key={experiment.definition_id} className="border-b border-[var(--line)] last:border-0">
-                <td className="px-4 py-3">
-                  <Link
-                    href={`/experiments/${experiment.definition_id}`}
-                    className="font-medium text-[var(--ink)] underline-offset-2 hover:underline"
-                  >
-                    {experiment.name}
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-[var(--muted)]">{experiment.benchmark_type}</td>
-                <td className="px-4 py-3 text-[var(--muted)]">{experiment.sample_count}</td>
-                <td className="px-4 py-3 text-[var(--muted)]">{experiment.run_count}</td>
-                <td className="px-4 py-3 text-[var(--muted)]">{experiment.status}</td>
-                <td className="px-4 py-3 text-[var(--muted)]">
-                  {experiment.default_model_target ?? "—"}
-                </td>
-              </tr>
-            ))}
-            {experiments.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-[var(--muted)]">
-                  No experiments yet.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+      <div className="mb-5 grid gap-3 sm:grid-cols-3">
+        <div className="border border-[var(--line)] bg-[var(--card)] px-4 py-3">
+          <div className="text-xs uppercase tracking-[0.08em] text-[var(--faint)]">Running</div>
+          <div className="mt-1 font-mono text-2xl text-[var(--ink)]">{runningCount}</div>
+        </div>
+        <div className="border border-[var(--line)] bg-[var(--card)] px-4 py-3">
+          <div className="text-xs uppercase tracking-[0.08em] text-[var(--faint)]">Failures</div>
+          <div className="mt-1 font-mono text-2xl text-[var(--ink)]">{failedCount}</div>
+        </div>
+        <div className="border border-[var(--line)] bg-[var(--card)] px-4 py-3">
+          <div className="text-xs uppercase tracking-[0.08em] text-[var(--faint)]">Runs</div>
+          <div className="mt-1 font-mono text-2xl text-[var(--ink)]">{totalRuns}</div>
+        </div>
       </div>
+
+      <ExperimentIndexTable experiments={experiments} />
     </main>
   );
 }
