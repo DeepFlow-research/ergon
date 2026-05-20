@@ -15,6 +15,20 @@ APPLICATION_ROOT = PACKAGE_ROOT / "ergon_core" / "core" / "application"
 APPLICATION_PREFIX = "ergon_core.core.application"
 
 PUBLIC_CROSS_DOMAIN_MODULES = {"service", "models", "errors"}
+# Runtime is intentionally split into small public subfacades rather than a
+# single god service: run lifecycle, task execution, task management, resource
+# views, read-only task inspection, and orchestration command/result DTOs each
+# have distinct collaborators.
+PUBLIC_CROSS_DOMAIN_MODULES_BY_DOMAIN = {
+    "runtime": {
+        "orchestration",
+        "resources",
+        "run_lifecycle",
+        "task_execution",
+        "task_inspection",
+        "task_management",
+    }
+}
 APPROVED_DOMAIN_FILES = {
     "__init__.py",
     "service.py",
@@ -62,38 +76,7 @@ LAYOUT_FILE_EXCEPTIONS = {
 }
 LAYOUT_DIR_EXCEPTIONS: dict[str, set[str]] = {}
 
-_PRIVATE_CROSS_DOMAIN_IMPORT_LEDGER = (
-    (
-        "ergon_core.core.application.experiments.launch",
-        "ergon_core.core.application.events.runtime",
-        "PR 05: route runtime event collaboration through public runtime facades.",
-    ),
-    (
-        "ergon_core.core.application.experiments.launch",
-        "ergon_core.core.application.runtime.run_records",
-        "PR 05: route run-record access through public runtime facades.",
-    ),
-    (
-        "ergon_core.core.application.runtime.events",
-        "ergon_core.core.application.events.runtime",
-        "PR 05: route runtime event collaboration through public runtime facades.",
-    ),
-    (
-        "ergon_core.core.application.runtime.run_records",
-        "ergon_core.core.application.events.runtime",
-        "PR 05: route runtime event collaboration through public runtime facades.",
-    ),
-    (
-        "ergon_core.core.application.runtime.task_management",
-        "ergon_core.core.application.events.runtime",
-        "PR 05: route runtime event collaboration through public runtime facades.",
-    ),
-    (
-        "ergon_core.core.application.runtime.task_models",
-        "ergon_core.core.application.events.runtime",
-        "PR 05: route runtime event collaboration through public runtime facades.",
-    ),
-)
+_PRIVATE_CROSS_DOMAIN_IMPORT_LEDGER = ()
 
 PRIVATE_CROSS_DOMAIN_IMPORT_LEDGER = tuple(
     pytest.param(
@@ -235,14 +218,21 @@ def _application_import_edges() -> set[ImportEdge]:
 def _private_cross_domain_imports() -> set[ImportEdge]:
     private_edges: set[ImportEdge] = set()
     for edge in _application_import_edges():
-        _target_domain, leaf = _application_domain_and_leaf(edge.target_module) or (
+        target_domain, leaf = _application_domain_and_leaf(edge.target_module) or (
             "",
             None,
         )
-        if leaf is None or leaf in PUBLIC_CROSS_DOMAIN_MODULES:
+        if leaf is None or leaf in _public_cross_domain_modules(target_domain):
             continue
         private_edges.add(edge)
     return private_edges
+
+
+def _public_cross_domain_modules(target_domain: str) -> set[str]:
+    return PUBLIC_CROSS_DOMAIN_MODULES | PUBLIC_CROSS_DOMAIN_MODULES_BY_DOMAIN.get(
+        target_domain,
+        set(),
+    )
 
 
 @pytest.mark.parametrize(
@@ -276,11 +266,11 @@ def test_no_unledgered_private_cross_domain_imports() -> None:
 def test_cross_domain_imports_only_target_public_domain_modules() -> None:
     offenders: list[str] = []
     for edge in sorted(_application_import_edges()):
-        _target_domain, leaf = _application_domain_and_leaf(edge.target_module) or (
+        target_domain, leaf = _application_domain_and_leaf(edge.target_module) or (
             "",
             None,
         )
-        if leaf is None or leaf in PUBLIC_CROSS_DOMAIN_MODULES:
+        if leaf is None or leaf in _public_cross_domain_modules(target_domain):
             continue
         if any(
             (edge.source_module, edge.target_module) == (source_module, target_module)
