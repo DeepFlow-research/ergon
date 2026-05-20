@@ -142,7 +142,7 @@ export function evaluationToViewModel(
         status,
         stateLabel: criterionStateLabel(status),
         stageLabel: `${criterion.stageName} · #${criterion.criterionNum + 1}`,
-        title: criterion.criterionName || criterion.criterionDescription,
+        title: criterion.criterionDescription || criterion.criterionName,
         typeLabel: criterion.criterionType,
         scoreLabel: `${criterion.score} / ${criterion.maxScore}`,
         contributionLabel: String(criterion.contribution),
