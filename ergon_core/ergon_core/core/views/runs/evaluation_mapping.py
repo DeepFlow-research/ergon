@@ -1,14 +1,14 @@
-"""Mapping helpers for persisted evaluation rows."""
+"""Dashboard DTO mapping for persisted evaluation rows."""
 
 from datetime import datetime
 from uuid import UUID
 
 from ergon_core.core.application.evaluation.summary import EvaluationSummary
+from ergon_core.core.persistence.telemetry.models import RunTaskEvaluation
 from ergon_core.core.views.runs.models import (
     RunEvaluationCriterionDto,
     RunTaskEvaluationDto,
 )
-from ergon_core.core.persistence.telemetry.models import RunTaskEvaluation
 
 
 def build_dashboard_evaluation_dto(

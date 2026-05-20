@@ -1,10 +1,10 @@
 from types import SimpleNamespace
 
-from ergon_core.core.application.evaluation.scoring import aggregate_evaluation_scores
+from ergon_core.core.application.evaluation.service import EvaluationService
 
 
 def test_aggregate_evaluation_scores_counts_all_evaluators_and_averages_scored_rows() -> None:
-    summary = aggregate_evaluation_scores(
+    summary = EvaluationService.summarize_scores(
         [
             SimpleNamespace(score=2.0),
             SimpleNamespace(score=None),
@@ -18,7 +18,7 @@ def test_aggregate_evaluation_scores_counts_all_evaluators_and_averages_scored_r
 
 
 def test_aggregate_evaluation_scores_returns_none_scores_when_nothing_scored() -> None:
-    summary = aggregate_evaluation_scores([SimpleNamespace(score=None)])
+    summary = EvaluationService.summarize_scores([SimpleNamespace(score=None)])
 
     assert summary.final_score is None
     assert summary.normalized_score is None

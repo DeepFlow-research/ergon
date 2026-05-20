@@ -17,7 +17,7 @@ from ergon_core.core.persistence.telemetry.models import (
     RunTaskEvaluation,
     RunTaskExecution,
 )
-from ergon_core.core.application.evaluation.scoring import aggregate_evaluation_scores
+from ergon_core.core.application.evaluation.service import EvaluationService
 from ergon_core.core.application.runtime.events import (
     RuntimeEventDispatcher,
     TaskReadyDispatcher,
@@ -157,7 +157,7 @@ class WorkflowService:
                     select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == command.run_id)
                 ).all()
             )
-            score_summary = aggregate_evaluation_scores(evaluations)
+            score_summary = EvaluationService.summarize_scores(evaluations)
             completion = RunCompletionData(
                 completed_at=utcnow(),
                 final_score=score_summary.final_score,

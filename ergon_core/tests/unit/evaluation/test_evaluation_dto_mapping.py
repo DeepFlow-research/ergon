@@ -1,8 +1,8 @@
 from uuid import uuid4
 
-from ergon_core.core.application.evaluation.dto_mapping import evaluation_row_to_dto
 from ergon_core.core.application.evaluation.summary import EvaluationSummary
 from ergon_core.core.persistence.telemetry.models import RunTaskEvaluation
+from ergon_core.core.views.runs.evaluation_mapping import evaluation_row_to_dto
 
 
 def test_evaluation_row_to_dto_maps_multiple_criterion_outcomes() -> None:

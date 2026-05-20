@@ -15,11 +15,9 @@ from ergon_core.api.criterion import (
 from ergon_core.api.rubric import TaskEvaluationResult
 from ergon_core.core.application.evaluation.summary import CriterionOutcomeEntry
 from ergon_core.core.application.evaluation.models import CriterionSpec
-from ergon_core.core.application.evaluation.service import (
-    build_dashboard_evaluation_dto,
-    build_evaluation_summary,
-)
+from ergon_core.core.application.evaluation.mappers import build_evaluation_summary
 from ergon_core.core.application.evaluation.service import EvaluationServiceResult
+from ergon_core.core.views.runs.evaluation_mapping import build_dashboard_evaluation_dto
 from pydantic import ValidationError
 
 
