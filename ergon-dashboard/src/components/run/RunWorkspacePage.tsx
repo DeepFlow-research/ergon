@@ -7,6 +7,7 @@ import { Group, Panel, Separator } from "react-resizable-panels";
 import { DAGCanvas } from "@/components/dag/DAGCanvas";
 import { StatusBadge } from "@/components/common/StatusBadge";
 
+import { RunHeaderMetrics, type RunHeaderMetricValues } from "@/components/run/RunHeaderMetrics";
 import { UnifiedEventStream } from "@/components/run/UnifiedEventStream";
 import { TaskWorkspace } from "@/components/workspace/TaskWorkspace";
 import { ActivityStackTimeline } from "@/features/activity/components/ActivityStackTimeline";
@@ -19,23 +20,33 @@ import {
 } from "@/features/graph/contracts/graphMutations";
 import { useRunState } from "@/hooks/useRunState";
 import { buildRunEvents } from "@/lib/runEvents";
-import { RunLifecycleStatus, SerializedWorkflowRunState, TaskStatus } from "@/lib/types";
+import { RunLifecycleStatus, SerializedWorkflowRunState, TaskStatus, type WorkflowRunState } from "@/lib/types";
 import {
   nearestMutationAtOrBefore,
   useRunDisplayState,
 } from "@/components/run/useRunDisplayState";
 import { useRunKeyboardShortcuts } from "@/components/run/useRunKeyboardShortcuts";
 import { panelPercent, useRunPanelLayout } from "@/components/run/useRunPanelLayout";
+import { formatDuration } from "@/lib/run-state/formatters";
 
-function formatSeconds(value: number | null): string {
-  if (value == null) return "—";
-  if (value < 60) return `${value.toFixed(1)}s`;
-  return `${(value / 60).toFixed(1)}m`;
-}
+type OptionalRunMetrics = {
+  totalTokens?: number | null;
+  totalCostUsd?: number | null;
+  costObserved?: boolean | null;
+};
 
-function formatPercent(value: number | null): string {
-  if (value == null) return "—";
-  return `${(value * 100).toFixed(1)}%`;
+function countObservedTokens(runState: WorkflowRunState | null): number | null {
+  if (!runState) return null;
+  let tokenCount = 0;
+  for (const events of runState.contextEventsByTask.values()) {
+    for (const event of events) {
+      const payload = event.payload;
+      if ("turn_token_ids" in payload && payload.turn_token_ids) {
+        tokenCount += payload.turn_token_ids.length;
+      }
+    }
+  }
+  return tokenCount > 0 ? tokenCount : null;
 }
 
 export function RunWorkspacePage({
@@ -128,7 +139,7 @@ export function RunWorkspacePage({
 
   // Status counts shown in the run header. Only leaf tasks so the totals
   // match the "units of work" the user is tracking (parents double-count).
-  const { leafStatusCounts } = useMemo(() => {
+  const { leafStatusCounts, leafTotal } = useMemo(() => {
     const empty: Record<TaskStatus, number> = {
       [TaskStatus.PENDING]: 0,
       [TaskStatus.READY]: 0,
@@ -146,6 +157,22 @@ export function RunWorkspacePage({
     }
     return { leafStatusCounts: empty, leafTotal: total };
   }, [displayState]);
+
+  const runHeaderMetrics: RunHeaderMetricValues = useMemo(() => {
+    const optionalMetrics = runState as (WorkflowRunState & OptionalRunMetrics) | null;
+    return {
+      tasks: {
+        completed: leafStatusCounts[TaskStatus.COMPLETED],
+        running: leafStatusCounts[TaskStatus.RUNNING],
+        failed: leafStatusCounts[TaskStatus.FAILED],
+        total: leafTotal,
+      },
+      tokens: optionalMetrics?.totalTokens ?? countObservedTokens(runState),
+      costUsd: optionalMetrics?.totalCostUsd ?? null,
+      costObserved: optionalMetrics?.costObserved ?? false,
+      score: runState?.finalScore ?? null,
+    };
+  }, [leafStatusCounts, leafTotal, runState]);
 
   // D4: Unified event log for the replayed inspector view.
   const events = useMemo(() => buildRunEvents(displayState), [displayState]);
@@ -233,7 +260,7 @@ export function RunWorkspacePage({
     <div className="flex h-full min-h-0 flex-col bg-[var(--paper)] text-[var(--ink)]">
       {/* Run header strip */}
       <header
-        className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--card)] px-8 py-3"
+        className="flex items-center justify-between gap-5 border-b border-[var(--line)] bg-[var(--card)] px-8 py-3 shadow-card"
         data-testid="run-header"
       >
         <div className="min-w-0">
@@ -248,35 +275,13 @@ export function RunWorkspacePage({
             </h1>
             <StatusBadge status={status as RunLifecycleStatus} />
             <span className="rounded bg-[var(--paper-2)] px-2 py-0.5 font-mono text-xs text-[var(--muted)]">
-              {snapshotSequence === null ? "live" : `snapshot · seq ${snapshotSequence}`} · {formatSeconds(runState?.durationSeconds ?? null)}
+              {snapshotSequence === null ? "live" : `snapshot · seq ${snapshotSequence}`} · {formatDuration(runState?.durationSeconds ?? null).value}
             </span>
           </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-3">
-          {/* Key metrics */}
-          <div className="hidden items-center gap-5 border-r border-[var(--line)] pr-3 lg:flex">
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">Tasks</div>
-              <span className="font-mono text-sm text-[var(--ink)]" data-testid="stat-tasks">
-                {leafStatusCounts[TaskStatus.COMPLETED]}·{leafStatusCounts[TaskStatus.RUNNING]}·{leafStatusCounts[TaskStatus.READY]}·{leafStatusCounts[TaskStatus.PENDING]}
-              </span>
-            </div>
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">Tokens</div>
-              <span className="font-mono text-sm text-[var(--ink)]" data-testid="stat-tokens">—</span>
-            </div>
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">Cost</div>
-              <span className="font-mono text-sm text-[var(--ink)]" data-testid="stat-cost">—</span>
-            </div>
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">Score</div>
-              <span className="font-mono text-sm text-[var(--ink)]" data-testid="stat-score">
-                {formatPercent(runState?.finalScore ?? null)}
-              </span>
-            </div>
-          </div>
+          <RunHeaderMetrics metrics={runHeaderMetrics} />
 
           <button
             type="button"
