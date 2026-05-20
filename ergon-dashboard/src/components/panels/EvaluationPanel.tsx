@@ -1,10 +1,9 @@
 "use client";
 
-import { TaskEvaluationState } from "@/lib/types";
+import React from "react";
 
-function formatPercent(score: number): string {
-  return `${(score * 100).toFixed(1)}%`;
-}
+import { evaluationToViewModel } from "@/features/evaluation/selectors";
+import type { TaskEvaluationState } from "@/lib/types";
 
 function statusBadgeClass(status: string): string {
   switch (status) {
@@ -40,89 +39,119 @@ export function EvaluationPanel({
 }: {
   evaluation: TaskEvaluationState | null;
 }) {
-  if (!evaluation) {
+  const view = evaluationToViewModel(evaluation);
+
+  if (!view) {
     return (
       <EvaluationCriteriaEmpty detail="Evaluation details will appear when a persisted evaluation payload is available." />
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-4">
-        <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-gray-800/50">
-          <div className="text-xs text-gray-500 dark:text-gray-400">Evaluator</div>
-          <div className="text-sm font-semibold text-gray-900 dark:text-white">
-            {evaluation.evaluatorName}
+    <div className="space-y-3">
+      <section
+        className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--paper)] p-3"
+        data-testid="evaluation-summary"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">
+              Rubric summary
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <span
+                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${statusBadgeClass(
+                  view.summary.status === "passing"
+                    ? "passed"
+                    : view.summary.status === "failing"
+                      ? "failed"
+                      : view.summary.status,
+                )}`}
+                data-testid="evaluation-summary-status"
+              >
+                {view.summary.status}
+              </span>
+              <span className="text-sm font-semibold text-[var(--ink)]">
+                {view.summary.criteriaLabel}
+              </span>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="font-mono text-2xl font-semibold tabular-nums text-[var(--ink)]">
+              {view.summary.scoreLabel}
+            </div>
+            <div className="text-[10px] text-[var(--muted)]">normalized score</div>
           </div>
         </div>
-        <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-gray-800/50">
-          <div className="text-xs text-gray-500 dark:text-gray-400">Aggregation</div>
-          <div className="text-sm font-semibold text-gray-900 dark:text-white">
-            {evaluation.aggregationRule}
-          </div>
-        </div>
-        <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-gray-800/50">
-          <div className="text-xs text-gray-500 dark:text-gray-400">Normalized</div>
-          <div className="text-sm font-semibold text-gray-900 dark:text-white">
-            {formatPercent(evaluation.normalizedScore)}
-          </div>
-        </div>
-        <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-gray-800/50">
-          <div className="text-xs text-gray-500 dark:text-gray-400">Total score</div>
-          <div className="text-sm font-semibold text-gray-900 dark:text-white">
-            {evaluation.totalScore} / {evaluation.maxScore}
-          </div>
-        </div>
-        <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-gray-800/50">
-          <div className="text-xs text-gray-500 dark:text-gray-400">Stages passed</div>
-          <div className="text-sm font-semibold text-gray-900 dark:text-white">
-            {evaluation.stagesPassed} / {evaluation.stagesEvaluated}
-          </div>
-        </div>
-        <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-gray-800/50">
-          <div className="text-xs text-gray-500 dark:text-gray-400">Failed gate</div>
-          <div className="text-sm font-semibold text-gray-900 dark:text-white">
-            {evaluation.failedGate ?? "none"}
-          </div>
-        </div>
-      </div>
+      </section>
 
-      {evaluation.criterionResults.length === 0 ? (
+      <section
+        className="grid gap-2 sm:grid-cols-3"
+        aria-label="Score composition"
+        data-testid="evaluation-composition"
+      >
+        <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--card)] px-3 py-2">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">
+            Score composition
+          </div>
+          <div className="mt-1 font-mono text-sm font-semibold text-[var(--ink)]">
+            {view.composition.totalScoreLabel}
+          </div>
+        </div>
+        <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--card)] px-3 py-2">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">
+            Aggregation
+          </div>
+          <div className="mt-1 truncate text-sm font-semibold text-[var(--ink)]">
+            {view.composition.aggregationRule}
+          </div>
+        </div>
+        <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--card)] px-3 py-2">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">
+            Stages / gate
+          </div>
+          <div className="mt-1 text-sm font-semibold text-[var(--ink)]">
+            {view.composition.stagesLabel} · {view.summary.failedGateLabel}
+          </div>
+        </div>
+      </section>
+
+      {view.criteria.length === 0 ? (
         <EvaluationCriteriaEmpty detail="This task has no criterionResults in the persisted evaluation payload." />
       ) : (
-        <div className="space-y-3">
-          {evaluation.criterionResults.map((criterion) => (
+        <div className="space-y-2" data-testid="evaluation-criteria">
+          {view.criteria.map((criterion) => (
             <div
               key={criterion.id}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-3 dark:border-gray-700 dark:bg-gray-900/40"
+              className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--card)] px-3 py-2"
               data-testid={`evaluation-criterion-${criterion.id}`}
             >
-              <div className="flex items-start justify-between gap-4">
-                <div>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ring-1 ${statusBadgeClass(criterion.status)}`}
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${statusBadgeClass(criterion.status)}`}
                       data-testid={`evaluation-criterion-status-${criterion.id}`}
                     >
-                      {criterion.status}
+                      {criterion.stateLabel}
                     </span>
-                    <div className="font-medium text-gray-900 dark:text-white">
-                      {criterion.stageName}: {criterion.criterionDescription}
+                    <div className="truncate font-medium text-[var(--ink)]">
+                      {criterion.title}
                     </div>
                   </div>
-                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {criterion.criterionName} · {criterion.criterionType} · weight {criterion.weight}
+                  <div className="mt-1 text-xs text-[var(--muted)]">
+                    {criterion.stageLabel} · {criterion.typeLabel} · weight {criterion.weightLabel}
                   </div>
                 </div>
-                <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {criterion.score} / {criterion.maxScore}
+                <div className="shrink-0 text-right text-sm font-semibold text-[var(--ink)]">
+                  {criterion.scoreLabel}
                   <div className="text-right text-[11px] font-normal text-gray-500 dark:text-gray-400">
-                    contribution {criterion.contribution}
+                    contribution {criterion.contributionLabel}
                   </div>
                 </div>
               </div>
               {criterion.modelReasoning ? (
-                <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:bg-gray-800/50 dark:text-gray-200">
+                <div className="mt-2 rounded-[var(--radius-sm)] bg-[var(--paper)] px-3 py-2 text-sm text-[var(--ink)]">
                   <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                     Reasoning
                   </div>
@@ -130,7 +159,7 @@ export function EvaluationPanel({
                 </div>
               ) : null}
               {criterion.skippedReason ? (
-                <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                <div className="mt-2 rounded-[var(--radius-sm)] border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                   Skipped: {criterion.skippedReason}
                 </div>
               ) : null}
@@ -143,7 +172,7 @@ export function EvaluationPanel({
                 </pre>
               ) : null}
               {criterion.feedback ? (
-                <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-200">
+                <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--ink)]">
                   {criterion.feedback}
                 </p>
               ) : null}

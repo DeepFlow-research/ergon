@@ -6,6 +6,7 @@ import { TaskStatus } from "@/lib/types";
 import {
   buildContainerEvaluationRollup,
   combineEvaluationStatuses,
+  evaluationToViewModel,
   evaluationToRollup,
   isEvaluationBearingTask,
 } from "./selectors";
@@ -148,4 +149,22 @@ test("combineEvaluationStatuses prioritizes errored then failing before mixed", 
   assert.equal(combineEvaluationStatuses(["passing", "failing", "mixed"]), "failing");
   assert.equal(combineEvaluationStatuses(["passing", "skipped"]), "mixed");
   assert.equal(combineEvaluationStatuses(["skipped", "skipped"]), "skipped");
+});
+
+test("evaluationToViewModel summarizes composition and criterion display states", () => {
+  const view = evaluationToViewModel(evaluation("child-a", ["passed", "failed", "skipped", "errored"]));
+
+  assert.equal(view?.summary.status, "errored");
+  assert.equal(view?.summary.scoreLabel, "25.0%");
+  assert.equal(view?.summary.criteriaLabel, "1 passed, 1 failed, 1 skipped, 1 errored");
+  assert.equal(view?.composition.totalScoreLabel, "1 / 4");
+  assert.deepEqual(
+    view?.criteria.map((criterion) => [criterion.status, criterion.stateLabel]),
+    [
+      ["passed", "Pass"],
+      ["failed", "Fail"],
+      ["skipped", "Skipped"],
+      ["errored", "Error"],
+    ],
+  );
 });
