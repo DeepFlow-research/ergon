@@ -33,8 +33,6 @@ CORE_ROOT = PRODUCTION_ROOT / "core"
 APPLICATION_ROOT = CORE_ROOT / "application"
 APPLICATION_PREFIX = "ergon_core.core.application"
 
-_REPOSITORY_REEXPORT_IMPORT_LEDGER = ()
-
 
 _WRITE_PREFIXES = (
     "add_",
@@ -344,24 +342,10 @@ def _from_repository_imports(
     return imports
 
 
-@pytest.mark.parametrize(
-    ("source_module", "target_module"),
-    _REPOSITORY_REEXPORT_IMPORT_LEDGER,
-)
-def test_ledgered_application_repository_imports_are_removed(
-    source_module: str,
-    target_module: str,
-) -> None:
-    """Strict xfail ledger for repository imports hidden behind package exports."""
-
-    assert (source_module, target_module) not in _application_repository_imports()
-
-
 def test_application_repositories_are_imported_only_within_their_domain() -> None:
-    ledgered = {(param.values[0], param.values[1]) for param in _REPOSITORY_REEXPORT_IMPORT_LEDGER}
     offenders = [
         f"{source_module} imports repository module {target_module}"
-        for source_module, target_module in sorted(_application_repository_imports() - ledgered)
+        for source_module, target_module in sorted(_application_repository_imports())
     ]
 
     assert offenders == []

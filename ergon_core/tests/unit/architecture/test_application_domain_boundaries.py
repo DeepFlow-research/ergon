@@ -6,11 +6,10 @@ import ast
 from dataclasses import dataclass
 from pathlib import Path
 
-import pytest
-
 
 ROOT = Path(__file__).resolve().parents[4]
 PACKAGE_ROOT = ROOT / "ergon_core"
+CORE_ROOT = PACKAGE_ROOT / "ergon_core" / "core"
 APPLICATION_ROOT = PACKAGE_ROOT / "ergon_core" / "core" / "application"
 APPLICATION_PREFIX = "ergon_core.core.application"
 
@@ -76,19 +75,13 @@ LAYOUT_FILE_EXCEPTIONS = {
 }
 LAYOUT_DIR_EXCEPTIONS: dict[str, set[str]] = {}
 
-_PRIVATE_CROSS_DOMAIN_IMPORT_LEDGER = ()
-
-PRIVATE_CROSS_DOMAIN_IMPORT_LEDGER = tuple(
-    pytest.param(
-        source_module,
-        target_module,
-        marks=pytest.mark.xfail(
-            strict=True,
-            reason=reason,
-        ),
-        id=f"{source_module} -> {target_module}",
-    )
-    for source_module, target_module, reason in _PRIVATE_CROSS_DOMAIN_IMPORT_LEDGER
+RETIRED_APPLICATION_MODULES = (
+    "ergon_core.core.application.context.events",
+    "ergon_core.core.application.graph",
+    "ergon_core.core.application.tasks",
+    "ergon_core.core.application.workflows",
+    "ergon_core.core.application.jobs",
+    "ergon_core.core.application.read_models",
 )
 
 
@@ -235,29 +228,10 @@ def _public_cross_domain_modules(target_domain: str) -> set[str]:
     )
 
 
-@pytest.mark.parametrize(
-    ("source_module", "target_module"),
-    PRIVATE_CROSS_DOMAIN_IMPORT_LEDGER,
-)
-def test_ledgered_private_cross_domain_imports_are_removed(
-    source_module: str,
-    target_module: str,
-) -> None:
-    """Strict xfail ledger: XPASS means a future cleanup removed the import."""
-
-    assert ImportEdge(source_module, target_module) not in _private_cross_domain_imports()
-
-
 def test_no_unledgered_private_cross_domain_imports() -> None:
-    current = _private_cross_domain_imports()
-    ledgered = {
-        ImportEdge(source_module, target_module)
-        for source_module, target_module, _reason in _PRIVATE_CROSS_DOMAIN_IMPORT_LEDGER
-    }
-
     offenders = [
         f"{edge.source_module} imports private {edge.target_module}"
-        for edge in sorted(current - ledgered)
+        for edge in sorted(_private_cross_domain_imports())
     ]
 
     assert offenders == []
@@ -272,12 +246,28 @@ def test_cross_domain_imports_only_target_public_domain_modules() -> None:
         )
         if leaf is None or leaf in _public_cross_domain_modules(target_domain):
             continue
-        if any(
-            (edge.source_module, edge.target_module) == (source_module, target_module)
-            for source_module, target_module, _reason in _PRIVATE_CROSS_DOMAIN_IMPORT_LEDGER
-        ):
-            continue
         offenders.append(f"{edge.source_module} imports {edge.target_module}")
+
+    assert offenders == []
+
+
+def test_retired_application_paths_are_absent_from_source_and_filesystem() -> None:
+    offenders: list[str] = []
+
+    for module_name in RETIRED_APPLICATION_MODULES:
+        module_path = PACKAGE_ROOT.joinpath(*module_name.split("."))
+        for path in (module_path.with_suffix(".py"), module_path):
+            if path.exists():
+                offenders.append(f"{path.relative_to(ROOT)} still exists")
+
+    for path in CORE_ROOT.rglob("*.py"):
+        if "__pycache__" in path.parts:
+            continue
+
+        source = path.read_text()
+        for module_name in RETIRED_APPLICATION_MODULES:
+            if module_name in source:
+                offenders.append(f"{path.relative_to(ROOT)} still references {module_name}")
 
     assert offenders == []
 
