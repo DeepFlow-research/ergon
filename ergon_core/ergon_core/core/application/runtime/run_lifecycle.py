@@ -192,6 +192,7 @@ class WorkflowService:
                 "normalized_score": completion.normalized_score,
                 "evaluators_count": score_summary.evaluators_count,
                 "total_cost_usd": completion.total_cost_usd,
+                "cost_observed": completion.cost_observed,
             }
             session.add(run_record)
             session.commit()

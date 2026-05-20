@@ -8,6 +8,51 @@ type JsonScalar =
   | (string | number | number | boolean | null)
   | Array<string | number | number | boolean | null>;
 
+const status = z.union([z.string(), z.null()]).optional();
+const RunSummaryDto = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string(),
+    status: z.string(),
+    created_at: z.union([z.string(), z.null()]).optional(),
+    started_at: z.union([z.string(), z.null()]).optional(),
+    completed_at: z.union([z.string(), z.null()]).optional(),
+    latest_activity_at: z.union([z.string(), z.null()]).optional(),
+    duration_seconds: z.union([z.number(), z.null()]).optional(),
+    definition_id: z.string().uuid(),
+    definition_name: z.union([z.string(), z.null()]).optional(),
+    experiment: z.union([z.string(), z.null()]).optional(),
+    benchmark_type: z.string(),
+    instance_key: z.string(),
+    sample_id: z.union([z.string(), z.null()]).optional(),
+    sample_label: z.string(),
+    evaluator_slug: z.union([z.string(), z.null()]).optional(),
+    model_target: z.union([z.string(), z.null()]).optional(),
+    final_score: z.union([z.number(), z.null()]).optional(),
+    return: z.union([z.number(), z.null()]).optional(),
+    total_tasks: z.number().int().optional().default(0),
+    completed_tasks: z.number().int().optional().default(0),
+    failed_tasks: z.number().int().optional().default(0),
+    running_tasks: z.number().int().optional().default(0),
+    cancelled_tasks: z.number().int().optional().default(0),
+    total_cost_usd: z.union([z.number(), z.null()]).optional(),
+    error_message: z.union([z.string(), z.null()]).optional(),
+    metrics: z.object({}).partial().passthrough().optional(),
+  })
+  .passthrough();
+const ValidationError = z
+  .object({
+    loc: z.array(z.union([z.string(), z.number()])),
+    msg: z.string(),
+    type: z.string(),
+    input: z.unknown().optional(),
+    ctx: z.object({}).partial().passthrough().optional(),
+  })
+  .passthrough();
+const HTTPValidationError = z
+  .object({ detail: z.array(ValidationError) })
+  .partial()
+  .passthrough();
 const RunTaskDto = z.object({
   id: z.string(),
   name: z.string(),
@@ -169,6 +214,19 @@ const TokenLogprob = z
     top_logprobs: z.array(JsonObject).optional(),
   })
   .passthrough();
+const ProviderTokenUsage = z
+  .object({
+    prompt_tokens: z.union([z.number(), z.null()]),
+    completion_tokens: z.union([z.number(), z.null()]),
+    reasoning_tokens: z.union([z.number(), z.null()]),
+    tool_call_tokens: z.union([z.number(), z.null()]),
+    tool_result_tokens: z.union([z.number(), z.null()]),
+    cached_tokens: z.union([z.number(), z.null()]),
+    total_tokens: z.union([z.number(), z.null()]),
+    total_cost_usd: z.union([z.number(), z.null()]),
+  })
+  .partial()
+  .passthrough();
 const ContextPartChunkLog = z
   .object({
     part: z.discriminatedUnion("part_kind", [
@@ -181,6 +239,7 @@ const ContextPartChunkLog = z
     ]),
     token_ids: z.union([z.array(z.number().int()), z.null()]).optional(),
     logprobs: z.union([z.array(TokenLogprob), z.null()]).optional(),
+    provider_usage: z.union([ProviderTokenUsage, z.null()]).optional(),
     sequence: z.number().int(),
     worker_binding_key: z.string(),
     turn_id: z.union([z.string(), z.null()]).optional(),
@@ -234,6 +293,17 @@ const RunCommunicationThreadDto = z.object({
   updatedAt: z.string().datetime({ offset: true }),
   messages: z.array(RunCommunicationMessageDto).optional(),
 });
+const RunSnapshotMetricsDto = z.object({
+  runId: z.string(),
+  status: z.string(),
+  durationMs: z.union([z.number(), z.null()]).optional(),
+  totalTasks: z.number().int().optional().default(0),
+  toolCallCount: z.number().int().optional().default(0),
+  totalTokens: z.union([z.number(), z.null()]).optional(),
+  tokenBreakdown: z.record(z.string(), z.number().int()).optional(),
+  totalCostUsd: z.union([z.number(), z.null()]).optional(),
+  costObserved: z.boolean().optional().default(false),
+});
 const RunSnapshotDto = z.object({
   id: z.string(),
   definitionId: z.string(),
@@ -257,21 +327,9 @@ const RunSnapshotDto = z.object({
   runningTasks: z.number().int().optional().default(0),
   cancelledTasks: z.number().int().optional().default(0),
   finalScore: z.union([z.number(), z.null()]).optional(),
+  metrics: z.union([RunSnapshotMetricsDto, z.null()]).optional(),
   error: z.union([z.string(), z.null()]).optional(),
 });
-const ValidationError = z
-  .object({
-    loc: z.array(z.union([z.string(), z.number()])),
-    msg: z.string(),
-    type: z.string(),
-    input: z.unknown().optional(),
-    ctx: z.object({}).partial().passthrough().optional(),
-  })
-  .passthrough();
-const HTTPValidationError = z
-  .object({ detail: z.array(ValidationError) })
-  .partial()
-  .passthrough();
 const NodeAddedMutation = z
   .object({
     mutation_type: z.string().optional().default("node.added"),
@@ -389,6 +447,17 @@ const GraphMutationRecordDto = z
     created_at: z.string().datetime({ offset: true }),
   })
   .passthrough();
+const ExperimentStatusCountsDto = z
+  .object({
+    pending: z.number().int().default(0),
+    executing: z.number().int().default(0),
+    evaluating: z.number().int().default(0),
+    completed: z.number().int().default(0),
+    failed: z.number().int().default(0),
+    cancelled: z.number().int().default(0),
+  })
+  .partial()
+  .passthrough();
 const ExperimentSummaryDto = z
   .object({
     definition_id: z.string().uuid(),
@@ -405,6 +474,34 @@ const ExperimentSummaryDto = z
     started_at: z.union([z.string(), z.null()]).optional(),
     completed_at: z.union([z.string(), z.null()]).optional(),
     run_count: z.number().int().optional().default(0),
+    status_counts: ExperimentStatusCountsDto.optional(),
+    failure_count: z.number().int().optional().default(0),
+    latest_activity_at: z.union([z.string(), z.null()]).optional(),
+    average_score: z.union([z.number(), z.null()]).optional(),
+    average_duration_ms: z.union([z.number(), z.null()]).optional(),
+    average_tasks: z.union([z.number(), z.null()]).optional(),
+    total_cost_usd: z.union([z.number(), z.null()]).optional(),
+  })
+  .passthrough();
+const ExperimentRunMetricsDto = z
+  .object({
+    run_id: z.string().uuid(),
+    run_name: z.union([z.string(), z.null()]).optional(),
+    status: z.string(),
+    sample_label: z.union([z.string(), z.null()]).optional(),
+    instance_key: z.string(),
+    score: z.union([z.number(), z.null()]).optional(),
+    return_value: z.union([z.number(), z.null()]).optional(),
+    duration_ms: z.union([z.number(), z.null()]).optional(),
+    total_tasks: z.union([z.number(), z.null()]).optional(),
+    tool_call_count: z.number().int().optional().default(0),
+    total_tokens: z.union([z.number(), z.null()]).optional(),
+    token_breakdown: z.record(z.string(), z.number().int()).optional(),
+    total_cost_usd: z.union([z.number(), z.null()]).optional(),
+    cost_observed: z.boolean().optional().default(false),
+    model_target: z.union([z.string(), z.null()]).optional(),
+    evaluator_slug: z.union([z.string(), z.null()]).optional(),
+    error_summary: z.union([z.string(), z.null()]).optional(),
   })
   .passthrough();
 const ExperimentRunRowDto = z
@@ -426,18 +523,8 @@ const ExperimentRunRowDto = z
     total_tasks: z.union([z.number(), z.null()]).optional(),
     total_cost_usd: z.union([z.number(), z.null()]).optional(),
     error_message: z.union([z.string(), z.null()]).optional(),
+    metrics: ExperimentRunMetricsDto,
   })
-  .passthrough();
-const ExperimentStatusCountsDto = z
-  .object({
-    pending: z.number().int().default(0),
-    executing: z.number().int().default(0),
-    evaluating: z.number().int().default(0),
-    completed: z.number().int().default(0),
-    failed: z.number().int().default(0),
-    cancelled: z.number().int().default(0),
-  })
-  .partial()
   .passthrough();
 const ExperimentAnalyticsDto = z
   .object({
@@ -618,6 +705,10 @@ const SubmitExperimentRunsResponse = z
   .passthrough();
 
 export const schemas = {
+  status,
+  RunSummaryDto,
+  ValidationError,
+  HTTPValidationError,
   RunTaskDto,
   RunResourceDto,
   RunExecutionAttemptDto,
@@ -635,13 +726,13 @@ export const schemas = {
   JsonValue,
   JsonObject,
   TokenLogprob,
+  ProviderTokenUsage,
   ContextPartChunkLog,
   RunContextEventDto,
   RunCommunicationMessageDto,
   RunCommunicationThreadDto,
+  RunSnapshotMetricsDto,
   RunSnapshotDto,
-  ValidationError,
-  HTTPValidationError,
   NodeAddedMutation,
   NodeRemovedMutation,
   NodeStatusChangedMutation,
@@ -652,9 +743,10 @@ export const schemas = {
   AnnotationSetMutation,
   AnnotationDeletedMutation,
   GraphMutationRecordDto,
-  ExperimentSummaryDto,
-  ExperimentRunRowDto,
   ExperimentStatusCountsDto,
+  ExperimentSummaryDto,
+  ExperimentRunMetricsDto,
+  ExperimentRunRowDto,
   ExperimentAnalyticsDto,
   ExperimentDetailDto,
   ExperimentRunRequest,

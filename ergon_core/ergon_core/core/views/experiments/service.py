@@ -6,11 +6,13 @@ from uuid import UUID
 from ergon_core.core.views.experiments.models import (
     ExperimentAnalyticsDto,
     ExperimentDetailDto,
+    ExperimentRunMetricsDto,
     ExperimentRunRowDto,
     ExperimentStatusCountsDto,
     ExperimentSummaryDto,
     ExperimentTagDefinitionDto,
 )
+from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
@@ -18,6 +20,7 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.views.runs.metrics import aggregate_run_metrics
 from sqlmodel import Session, col, select
 
 
@@ -104,11 +107,11 @@ def _definition_summary(
     derived: ``RunRecord.experiment`` indexes grouped runs, and
     ``ExperimentDefinitionInstance`` rows index instances.
     """
-    run_count = (
-        len(runs) if runs is not None else len(_runs_for_definition_view(session, definition))
-    )
+    runs = runs if runs is not None else _runs_for_definition_view(session, definition)
+    run_count = len(runs)
     sample_count = _instance_count(session, definition.id)
     metadata = definition.parsed_metadata()
+    analytics = _analytics([_run_row(run, context_events=[]) for run in runs])
     return ExperimentSummaryDto(
         definition_id=definition.id,
         name=definition.name,
@@ -124,6 +127,13 @@ def _definition_summary(
         started_at=None,
         completed_at=None,
         run_count=run_count,
+        status_counts=analytics.status_counts,
+        failure_count=analytics.status_counts.failed,
+        latest_activity_at=analytics.latest_activity_at,
+        average_score=analytics.average_score,
+        average_duration_ms=analytics.average_duration_ms,
+        average_tasks=analytics.average_tasks,
+        total_cost_usd=analytics.total_cost_usd,
     )
 
 
@@ -134,7 +144,15 @@ def _definition_detail(
     """Build a detail DTO from an ``ExperimentDefinition`` row."""
     runs = _runs_for_definition_view(session, definition)
     task_counts = _task_counts_by_run(session, [run.id for run in runs])
-    run_rows = [_run_row(run, total_tasks=task_counts.get(run.id)) for run in runs]
+    context_events = _context_events_by_run(session, [run.id for run in runs])
+    run_rows = [
+        _run_row(
+            run,
+            total_tasks=task_counts.get(run.id),
+            context_events=context_events.get(run.id, []),
+        )
+        for run in runs
+    ]
     return ExperimentDetailDto(
         definition_id=definition.id,
         name=definition.name,
@@ -173,8 +191,17 @@ def _instance_count(session: Session, definition_id: UUID) -> int:
     )
 
 
-def _run_row(run: RunRecord, *, total_tasks: int | None = None) -> ExperimentRunRowDto:
+def _run_row(
+    run: RunRecord,
+    *,
+    total_tasks: int | None = None,
+    context_events: list[RunContextEvent],
+) -> ExperimentRunRowDto:
     summary = run.parsed_summary()
+    duration_ms = _duration_ms(run)
+    score = _summary_number(summary, "normalized_score") or _summary_number(summary, "final_score")
+    error_summary = _error_summary(run, summary)
+    aggregated = aggregate_run_metrics(context_events, summary=summary)
     return ExperimentRunRowDto(
         run_id=run.id,
         definition_id=run.definition_id,
@@ -188,12 +215,30 @@ def _run_row(run: RunRecord, *, total_tasks: int | None = None) -> ExperimentRun
         model_target=run.model_target,
         worker_team=run.parsed_worker_team(),
         seed=run.seed,
-        running_time_ms=_duration_ms(run),
-        final_score=_summary_number(summary, "normalized_score")
-        or _summary_number(summary, "final_score"),
+        running_time_ms=duration_ms,
+        final_score=score,
         total_tasks=total_tasks,
-        total_cost_usd=_summary_number(summary, "total_cost_usd"),
-        error_message=run.error_message or _summary_text(summary, "error_message"),
+        total_cost_usd=aggregated.total_cost_usd,
+        error_message=error_summary,
+        metrics=ExperimentRunMetricsDto(
+            run_id=run.id,
+            run_name=run.sample_id or run.instance_key,
+            status=str(run.status),
+            sample_label=run.sample_id,
+            instance_key=run.instance_key,
+            score=score,
+            return_value=score,
+            duration_ms=duration_ms,
+            total_tasks=total_tasks,
+            tool_call_count=aggregated.tool_call_count,
+            total_tokens=aggregated.total_tokens,
+            token_breakdown=aggregated.token_breakdown,
+            total_cost_usd=aggregated.total_cost_usd,
+            cost_observed=aggregated.cost_observed,
+            model_target=run.model_target,
+            evaluator_slug=run.evaluator_slug,
+            error_summary=error_summary,
+        ),
     )
 
 
@@ -204,6 +249,20 @@ def _task_counts_by_run(session: Session, run_ids: list[UUID]) -> dict[UUID, int
         )
         for run_id in run_ids
     }
+
+
+def _context_events_by_run(
+    session: Session,
+    run_ids: list[UUID],
+) -> dict[UUID, list[RunContextEvent]]:
+    if not run_ids:
+        return {}
+
+    rows = list(session.exec(select(RunContextEvent).where(col(RunContextEvent.run_id).in_(run_ids))))
+    result: dict[UUID, list[RunContextEvent]] = {run_id: [] for run_id in run_ids}
+    for row in rows:
+        result.setdefault(row.run_id, []).append(row)
+    return result
 
 
 def _analytics(rows: list[ExperimentRunRowDto]) -> ExperimentAnalyticsDto:
@@ -223,7 +282,7 @@ def _analytics(rows: list[ExperimentRunRowDto]) -> ExperimentAnalyticsDto:
             durations.append(row.running_time_ms)
         if row.total_tasks is not None:
             task_counts.append(row.total_tasks)
-        if row.total_cost_usd is not None:
+        if row.metrics.cost_observed and row.total_cost_usd is not None:
             total_cost_usd = (total_cost_usd or 0.0) + row.total_cost_usd
         if row.error_message:
             error_count += 1
@@ -288,6 +347,14 @@ def _summary_text(summary: dict, key: str) -> str | None:
     if isinstance(value, str) and value:
         return value
     return None
+
+
+def _error_summary(run: RunRecord, summary: dict) -> str | None:
+    if run.error_message:
+        return run.error_message
+    if str(run.status) not in {"failed", "cancelled"}:
+        return None
+    return _summary_text(summary, "error_message")
 
 
 def dict_metadata(metadata: dict, key: str) -> dict:

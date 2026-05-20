@@ -3,6 +3,7 @@
 from uuid import UUID
 
 from ergon_core.core.views.runs.models import (
+    RunSummaryDto,
     RunSnapshotDto,
 )
 from ergon_core.core.application.runtime.models import GraphMutationRecordDto
@@ -12,6 +13,24 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
 router = APIRouter(prefix="/runs", tags=["runs"])
+
+
+@router.get("", response_model=list[RunSummaryDto])
+def list_runs(
+    limit: int = 20,
+    status: str | None = None,
+    definition_id: UUID | None = None,
+    experiment: str | None = None,
+    offset: int = 0,
+) -> list[RunSummaryDto]:
+    """List persisted run summaries for dashboard indexes."""
+    return RunReadService().list_runs(
+        limit=limit,
+        status=status,
+        definition_id=definition_id,
+        experiment=experiment,
+        offset=offset,
+    )
 
 
 @router.get("/{run_id}", response_model=RunSnapshotDto)

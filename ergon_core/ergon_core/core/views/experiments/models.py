@@ -30,6 +30,33 @@ class ExperimentSummaryDto(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     run_count: int = 0
+    status_counts: ExperimentStatusCountsDto = Field(default_factory=ExperimentStatusCountsDto)
+    failure_count: int = 0
+    latest_activity_at: datetime | None = None
+    average_score: float | None = None
+    average_duration_ms: int | None = None
+    average_tasks: float | None = None
+    total_cost_usd: float | None = None
+
+
+class ExperimentRunMetricsDto(BaseModel):
+    run_id: UUID
+    run_name: str | None = None
+    status: str
+    sample_label: str | None = None
+    instance_key: str
+    score: float | None = None
+    return_value: float | None = None
+    duration_ms: int | None = None
+    total_tasks: int | None = None
+    tool_call_count: int = 0
+    total_tokens: int | None = None
+    token_breakdown: dict[str, int] = Field(default_factory=dict)
+    total_cost_usd: float | None = None
+    cost_observed: bool = False
+    model_target: str | None = None
+    evaluator_slug: str | None = None
+    error_summary: str | None = None
 
 
 class ExperimentRunRowDto(BaseModel):
@@ -50,6 +77,7 @@ class ExperimentRunRowDto(BaseModel):
     total_tasks: int | None = None
     total_cost_usd: float | None = None
     error_message: str | None = None
+    metrics: ExperimentRunMetricsDto
 
 
 class ExperimentAnalyticsDto(BaseModel):

@@ -2,7 +2,7 @@
 
 import { RunLifecycleStatus, TaskStatus } from "@/lib/types";
 
-type StatusType = TaskStatus | RunLifecycleStatus;
+type StatusType = TaskStatus | RunLifecycleStatus | string;
 
 interface StatusConfig {
   label: string;

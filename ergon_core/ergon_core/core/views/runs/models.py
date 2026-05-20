@@ -181,6 +181,18 @@ class RunContextEventDto(CamelModel):
     completed_at: datetime | None = None
 
 
+class RunSnapshotMetricsDto(CamelModel):
+    run_id: str
+    status: str
+    duration_ms: int | None = None
+    total_tasks: int = 0
+    tool_call_count: int = 0
+    total_tokens: int | None = None
+    token_breakdown: dict[str, int] = Field(default_factory=dict)
+    total_cost_usd: float | None = None
+    cost_observed: bool = False
+
+
 class RunSnapshotDto(CamelModel):
     id: str
     definition_id: str
@@ -204,18 +216,37 @@ class RunSnapshotDto(CamelModel):
     running_tasks: int = 0
     cancelled_tasks: int = 0
     final_score: float | None = None
+    metrics: RunSnapshotMetricsDto | None = None
     error: str | None = None
 
 
 class RunSummaryDto(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: UUID
+    name: str
     status: str
     created_at: datetime | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
+    latest_activity_at: datetime | None = None
+    duration_seconds: float | None = None
     definition_id: UUID
+    definition_name: str | None = None
+    experiment: str | None = None
     benchmark_type: str
     instance_key: str
+    sample_id: str | None = None
+    sample_label: str
     evaluator_slug: str | None = None
     model_target: str | None = None
+    final_score: float | None = None
+    return_value: float | None = Field(default=None, alias="return")
+    total_tasks: int = 0
+    completed_tasks: int = 0
+    failed_tasks: int = 0
+    running_tasks: int = 0
+    cancelled_tasks: int = 0
+    total_cost_usd: float | None = None
     error_message: str | None = None
+    metrics: dict[str, Any] = Field(default_factory=dict)
