@@ -229,8 +229,15 @@ so run lists and experiment-definition views group by the same stable string.
 If no tags are set, `ergon experiment tags` returns an empty list with a message
 pointing at v2 experiment definitions.
 
-All CLI commands are read-only against persisted state.  Authoring (defining a benchmark,
-persisting it, launching a run) is Python-only; see `ergon_core.api`.
+Most CLI commands are read-only against persisted state. Authoring (defining a benchmark,
+persisting it, launching a run) is Python-first; see `ergon_core.api`.
+
+`ergon examples` is the narrow exception for getting-started examples. It is a
+catalogue and validate-only convenience wrapper around ordinary Python files
+under `examples/`: `list` and `info` describe shipped examples, `check` reuses
+the example preflight helpers, and `run` subprocesses the Python script with
+translated args. It must not reimplement benchmark construction logic; the
+example file remains the source of authoring behavior.
 
 ## 8. Follow-ups
 
