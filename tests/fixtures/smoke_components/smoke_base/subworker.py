@@ -1,6 +1,6 @@
 """Env-agnostic leaf worker Protocol for canonical smoke runs.
 
-The per-env smoke parent worker spawns 9 subtasks via ``plan_subtasks``.
+The per-env smoke parent worker spawns 9 object-bound child tasks.
 Each subtask resolves to ``{env}-smoke-leaf`` — a ``BaseSmokeLeafWorker``
 subclass that binds a concrete ``SmokeSubworker`` via ``subworker_cls``.
 
@@ -43,4 +43,4 @@ class SubworkerResult(BaseModel):
 class SmokeSubworker(Protocol):
     """The pluggable env-specific leaf.  One implementation per env."""
 
-    async def work(self, node_id: str, sandbox: AsyncSandbox) -> SubworkerResult: ...
+    async def work(self, task_id: str, sandbox: AsyncSandbox) -> SubworkerResult: ...

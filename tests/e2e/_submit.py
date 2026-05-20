@@ -1,6 +1,6 @@
-"""Cohort submission helper for canonical smoke drivers.
+"""Experiment-group submission helper for canonical smoke drivers.
 
-POSTs ``/api/__danger__/test-harness/write/cohort`` on the api container; returns the
+POSTs ``/api/__danger__/test-harness/write/experiment-runs`` on the api container; returns the
 run_ids in the same order as the slots passed in.
 
 Tests are a pure black-box client of the stack: they do not import any
@@ -26,9 +26,9 @@ import pytest
 _DEFAULT_API = "http://127.0.0.1:9000"
 
 
-def smoke_cohort_key(env: str) -> str:
-    """Return a shared QA cohort key when provided, otherwise an env-scoped one."""
-    override = os.environ.get("E2E_COHORT_KEY")
+def smoke_experiment_key(env: str) -> str:
+    """Return a shared QA experiment key when provided, otherwise an env-scoped one."""
+    override = os.environ.get("E2E_EXPERIMENT_KEY")
     if override is not None and override:
         return override
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
@@ -39,11 +39,11 @@ def _api_base() -> str:
     return os.environ.get("ERGON_API_BASE_URL", _DEFAULT_API)
 
 
-def build_cohort_payload(
+def build_experiment_payload(
     *,
     benchmark_slug: str,
     slots: list[tuple[str, str]],
-    cohort_key: str,
+    experiment: str,
     sandbox_slug: str,
     dependency_extras: tuple[str, ...],
     model: str = "openai:gpt-4o",
@@ -53,29 +53,29 @@ def build_cohort_payload(
         "slots": [
             {"worker_slug": worker, "evaluator_slug": criterion} for worker, criterion in slots
         ],
-        "cohort_key": cohort_key,
+        "experiment": experiment,
         "sandbox_slug": sandbox_slug,
         "dependency_extras": list(dependency_extras),
         "model": model,
     }
 
 
-async def submit_cohort(
+async def submit_experiment_runs(
     *,
     benchmark_slug: str,
     slots: list[tuple[str, str]],
-    cohort_key: str,
+    experiment: str,
     sandbox_slug: str,
     dependency_extras: tuple[str, ...],
     model: str = "openai:gpt-4o",
     timeout: int = 300,  # reserved — server-side per-run timeout
 ) -> list[UUID]:
-    """Submit one run per slot under ``cohort_key``; return run_ids in order.
+    """Submit one run per slot under ``experiment``; return run_ids in order.
 
     Args:
         benchmark_slug:  e.g. ``"researchrubrics"``
         slots:           list of ``(worker_slug, criterion_slug)`` tuples
-        cohort_key:      shared cohort name (all runs group under this)
+        experiment:      shared experiment tag (all runs group under this)
         sandbox_slug:    explicit sandbox manager slug for the run
         dependency_extras: explicit dependency intent; smoke uses ``("none",)``
         model:           explicit model target used by the test harness
@@ -83,19 +83,21 @@ async def submit_cohort(
                          not block on run completion, so there is no
                          client-side timeout to propagate.
     """
-    payload = build_cohort_payload(
+    payload = build_experiment_payload(
         benchmark_slug=benchmark_slug,
         slots=slots,
-        cohort_key=cohort_key,
+        experiment=experiment,
         sandbox_slug=sandbox_slug,
         dependency_extras=dependency_extras,
         model=model,
     )
     async with httpx.AsyncClient(base_url=_api_base(), timeout=30.0) as client:
-        response = await client.post("/api/__danger__/test-harness/write/cohort", json=payload)
+        response = await client.post(
+            "/api/__danger__/test-harness/write/experiment-runs", json=payload
+        )
         if response.status_code >= 400:
             pytest.fail(
-                "cohort submission failed: "
+                "experiment-run submission failed: "
                 f"{response.status_code} {response.reason_phrase} "
                 f"for {response.request.url}\n"
                 f"response body:\n{response.text[:4000]}",
@@ -104,4 +106,4 @@ async def submit_cohort(
     return [UUID(rid) for rid in body["run_ids"]]
 
 
-__all__ = ["build_cohort_payload", "smoke_cohort_key", "submit_cohort"]
+__all__ = ["build_experiment_payload", "smoke_experiment_key", "submit_experiment_runs"]

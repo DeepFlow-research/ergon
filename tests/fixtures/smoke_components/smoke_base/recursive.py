@@ -18,8 +18,10 @@ from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
 from ergon_core.core.application.communication.models import CreateMessageRequest
 from ergon_core.core.application.communication.service import communication_service
-from ergon_core.core.application.tasks.models import SubtaskSpec
-from tests.fixtures.smoke_components.smoke_base.dynamic_tasks import smoke_task_from_spec
+from tests.fixtures.smoke_components.smoke_base.dynamic_tasks import (
+    SmokeChildTaskSpec,
+    smoke_task_from_spec,
+)
 from sqlmodel import select
 
 NESTED_LINE_SLUGS: tuple[str, ...] = ("l_2_a", "l_2_b")
@@ -54,7 +56,7 @@ class RecursiveSmokeWorkerBase(Worker):
         )
 
         specs = [
-            SubtaskSpec(
+            SmokeChildTaskSpec(
                 task_slug=TaskSlug(slug),
                 description=desc,
                 assigned_worker_slug=AssignedWorkerSlug(self.leaf_slug),
@@ -135,7 +137,7 @@ class RecursiveSmokeWorkerMixin:
 
     def _spec_for(self, slug, deps, desc):
         worker_slug = self.RECURSIVE_WORKER_SLUG if slug in self.RECURSIVE_SLUGS else self.leaf_slug
-        return SubtaskSpec(
+        return SmokeChildTaskSpec(
             task_slug=TaskSlug(slug),
             description=desc,
             assigned_worker_slug=AssignedWorkerSlug(worker_slug),

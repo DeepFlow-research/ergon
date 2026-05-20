@@ -4,10 +4,10 @@ from collections.abc import Awaitable, Callable, Mapping
 from uuid import UUID
 
 import inngest
-from ergon_core.core.application.events.task_events import WorkflowStartedEvent
+from ergon_core.core.application.events.runtime import WorkflowStartedEvent
 from ergon_core.core.application.experiments.errors import DefinitionNotFoundError
 from ergon_core.core.application.experiments.models import ExperimentRunResult
-from ergon_core.core.application.workflows.runs import create_run
+from ergon_core.core.application.runtime.run_records import create_run
 from ergon_core.core.application.experiments.handles import DefinitionHandle
 from ergon_core.core.infrastructure.inngest.client import inngest_client
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
@@ -30,6 +30,8 @@ async def launch_run(
         definition = session.get(ExperimentDefinition, definition_id)
         if definition is None:
             raise DefinitionNotFoundError(definition_id)
+        metadata = definition.parsed_metadata()
+        experiment = metadata.get("experiment")
         run = create_run(
             DefinitionHandle(
                 definition_id=definition.id,
@@ -44,6 +46,7 @@ async def launch_run(
             dependency_extras_json={},
             assignment_json=dict(assignment_metadata or {}),
             seed=None,
+            experiment=experiment if isinstance(experiment, str) else None,
         )
     await emitter(run.id, definition_id)
     return ExperimentRunResult(

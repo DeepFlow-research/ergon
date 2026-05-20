@@ -18,8 +18,8 @@ from ergon_core.core.application.runtime.status import CANCELLED, EDGE_PENDING
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.application.workflows.orchestration import PropagateTaskCompletionCommand
-from ergon_core.core.application.workflows.service import WorkflowService
+from ergon_core.core.application.runtime.orchestration import PropagateTaskCompletionCommand
+from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
 from sqlmodel import select
 
 from tests.integration.propagation._helpers import (
@@ -71,7 +71,6 @@ async def test_cancelled_managed_subtask_reactivates_when_dep_completes() -> Non
                 definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
-                node_id=node_a_id,
             )
         )
 
@@ -113,7 +112,6 @@ async def test_cancelled_static_node_does_not_reactivate() -> None:
                 definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
-                node_id=node_a_id,
             )
         )
 
@@ -169,7 +167,6 @@ async def test_fan_in_managed_subtask_reactivates_only_when_all_deps_complete() 
                 definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
-                node_id=node_a_id,
             )
         )
 
@@ -187,7 +184,6 @@ async def test_fan_in_managed_subtask_reactivates_only_when_all_deps_complete() 
                 definition_id=defn_id,
                 task_id=node_b_id,
                 execution_id=node_b_id,
-                node_id=node_b_id,
             )
         )
 

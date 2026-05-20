@@ -4,8 +4,8 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.core.application.jobs.models import SandboxSetupRequest
-from ergon_core.core.application.jobs.sandbox_setup import run_sandbox_setup_job
+from ergon_core.core.jobs.sandbox.setup.contract import SandboxSetupRequest
+from ergon_core.core.jobs.sandbox.setup.job import run_sandbox_setup_job
 
 
 class _FakeStep:
@@ -45,11 +45,11 @@ class _FakeGraphRepo:
 
 @pytest.mark.asyncio
 async def test_sandbox_setup_provisions_public_sandbox(monkeypatch) -> None:
-    from ergon_core.core.application.jobs import sandbox_setup as module
+    from ergon_core.core.jobs.sandbox.setup import job as module
 
     sandbox = _PublicSandbox()
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(object()))
-    monkeypatch.setattr(module, "WorkflowGraphRepository", lambda: _FakeGraphRepo(sandbox))
+    monkeypatch.setattr(module, "RuntimeGraphRepository", lambda: _FakeGraphRepo(sandbox))
 
     result = await run_sandbox_setup_job(
         _FakeCtx(),

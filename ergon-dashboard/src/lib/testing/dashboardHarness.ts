@@ -1,5 +1,4 @@
 import {
-  broadcastCohortUpdated,
   broadcastContextEvent,
   broadcastRunCompleted,
   broadcastTaskEvaluation,
@@ -10,11 +9,8 @@ import { config } from "@/lib/config";
 import { store } from "@/lib/state/store";
 import {
   CommunicationThreadState,
-  CohortDetail,
-  CohortSummary,
   ContextEventState,
   ExperimentDetail,
-  ExperimentCohortStatus,
   SerializedWorkflowRunState,
   TaskEvaluationState,
   TaskStatus,
@@ -25,8 +21,6 @@ declare global {
   // eslint-disable-next-line no-var
   var __dashboardHarness:
     | {
-        cohorts: CohortSummary[];
-        cohortDetails: Record<string, CohortDetail>;
         experimentDetails: Record<string, ExperimentDetail>;
         mutationsByRun: Record<string, unknown[]>;
         seededRunIds: Set<string>;
@@ -35,8 +29,6 @@ declare global {
 }
 
 export interface DashboardHarnessSeedPayload {
-  cohorts?: CohortSummary[];
-  cohortDetails?: Record<string, CohortDetail>;
   experimentDetails?: Record<string, ExperimentDetail>;
   runs?: SerializedWorkflowRunState[];
   mutations?: Record<string, unknown[]>;
@@ -45,8 +37,6 @@ export interface DashboardHarnessSeedPayload {
 function getHarnessState() {
   if (!global.__dashboardHarness) {
     global.__dashboardHarness = {
-      cohorts: [],
-      cohortDetails: {},
       experimentDetails: {},
       mutationsByRun: {},
       seededRunIds: new Set(),
@@ -65,8 +55,6 @@ export function resetDashboardHarness(): void {
   requireHarnessEnabled();
   store.reset();
   const harness = getHarnessState();
-  harness.cohorts = [];
-  harness.cohortDetails = {};
   harness.experimentDetails = {};
   harness.mutationsByRun = {};
   harness.seededRunIds.clear();
@@ -77,8 +65,6 @@ export function seedDashboardHarness(payload: DashboardHarnessSeedPayload): void
   resetDashboardHarness();
 
   const harness = getHarnessState();
-  harness.cohorts = payload.cohorts ?? [];
-  harness.cohortDetails = payload.cohortDetails ?? {};
   harness.experimentDetails = payload.experimentDetails ?? {};
   harness.mutationsByRun = payload.mutations ?? {};
 
@@ -88,50 +74,9 @@ export function seedDashboardHarness(payload: DashboardHarnessSeedPayload): void
   }
 }
 
-export function listHarnessCohorts(): CohortSummary[] {
-  requireHarnessEnabled();
-  return getHarnessState().cohorts;
-}
-
-export function getHarnessCohort(cohortId: string): CohortDetail | null {
-  requireHarnessEnabled();
-  return getHarnessState().cohortDetails[cohortId] ?? null;
-}
-
 export function getHarnessExperiment(definitionId: string): ExperimentDetail | null {
   requireHarnessEnabled();
   return getHarnessState().experimentDetails[definitionId] ?? null;
-}
-
-export function updateHarnessCohortStatus(
-  cohortId: string,
-  status: ExperimentCohortStatus,
-): CohortSummary | null {
-  requireHarnessEnabled();
-  const harness = getHarnessState();
-  const summary = harness.cohorts.find((cohort) => cohort.cohort_id === cohortId);
-  if (!summary) {
-    return null;
-  }
-
-  const updatedSummary: CohortSummary = {
-    ...summary,
-    status,
-  };
-  harness.cohorts = harness.cohorts.map((cohort) =>
-    cohort.cohort_id === cohortId ? updatedSummary : cohort,
-  );
-
-  const detail = harness.cohortDetails[cohortId];
-  if (detail) {
-    harness.cohortDetails[cohortId] = {
-      ...detail,
-      summary: updatedSummary,
-    };
-  }
-
-  broadcastCohortUpdated({ cohort_id: cohortId, summary: updatedSummary });
-  return updatedSummary;
 }
 
 export function getHarnessRun(runId: string): SerializedWorkflowRunState | null {
@@ -154,7 +99,6 @@ export function emitHarnessRunCompleted(data: {
   durationSeconds: number;
   finalScore: number | null;
   error: string | null;
-  cohortId?: string | null;
 }): void {
   requireHarnessEnabled();
   store.completeRun(
@@ -174,36 +118,6 @@ export function emitHarnessRunCompleted(data: {
     data.error,
   );
 
-  if (data.cohortId) {
-    const harness = getHarnessState();
-    const detail = harness.cohortDetails[data.cohortId];
-    if (detail) {
-      const summary: CohortSummary = {
-        ...detail.summary,
-        total_runs: detail.summary.total_runs,
-        status_counts: {
-          ...detail.summary.status_counts,
-          completed:
-            data.status === "completed"
-              ? detail.summary.status_counts.completed + 1
-              : detail.summary.status_counts.completed,
-          failed:
-            data.status === "failed"
-              ? detail.summary.status_counts.failed + 1
-              : detail.summary.status_counts.failed,
-        },
-      };
-      const updatedDetail: CohortDetail = {
-        ...detail,
-        summary,
-      };
-      harness.cohortDetails[data.cohortId] = updatedDetail;
-      harness.cohorts = harness.cohorts.map((cohort) =>
-        cohort.cohort_id === data.cohortId ? summary : cohort,
-      );
-      broadcastCohortUpdated({ cohort_id: data.cohortId, summary });
-    }
-  }
 }
 
 export function emitHarnessTaskStatus(data: {

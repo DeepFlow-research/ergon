@@ -3,13 +3,13 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from ergon_core.core.application.workflows.orchestration import FailTaskExecutionCommand
+from ergon_core.core.application.runtime.orchestration import FailTaskExecutionCommand
 
 
 @pytest.mark.asyncio
 async def test_finalize_failure_preserves_structured_error_json(monkeypatch) -> None:
-    from ergon_core.core.application.tasks import execution as module
-    from ergon_core.core.application.tasks.execution import TaskExecutionService
+    from ergon_core.core.application.runtime import execution as module
+    from ergon_core.core.application.runtime.task_execution import TaskExecutionService
 
     execution_id = uuid4()
     run_id = uuid4()
@@ -17,8 +17,7 @@ async def test_finalize_failure_preserves_structured_error_json(monkeypatch) -> 
     execution = SimpleNamespace(
         id=execution_id,
         run_id=run_id,
-        node_id=node_id,
-        task_id=None,
+        task_id=node_id,
     )
 
     class Session:

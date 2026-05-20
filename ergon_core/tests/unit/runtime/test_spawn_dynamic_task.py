@@ -16,9 +16,9 @@ from uuid import UUID, uuid4
 import pytest
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker.results import SpawnedTaskHandle
-from ergon_core.core.application.jobs.worker_execute import _StepAwareTaskManagementService
-from ergon_core.core.application.tasks import management as management_module
-from ergon_core.core.application.tasks.management import TaskManagementService
+from ergon_core.core.jobs.task.worker_execute.job import _StepAwareTaskManagementService
+from ergon_core.core.application.runtime import management as management_module
+from ergon_core.core.application.runtime.task_management import TaskManagementService
 from ergon_core.core.persistence.definitions.models import ExperimentDefinitionTask
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
@@ -121,9 +121,10 @@ def _service(session: Session, monkeypatch: pytest.MonkeyPatch) -> TaskManagemen
         "get_session",
         lambda: _SessionContext(session),
     )
-    svc = TaskManagementService(dashboard_emitter=SimpleNamespace(graph_mutation=AsyncMock()))
-    monkeypatch.setattr(svc, "_dispatch_task_ready", AsyncMock())
-    return svc
+    return TaskManagementService(
+        dashboard_emitter=SimpleNamespace(graph_mutation=AsyncMock()),
+        task_ready_dispatcher=AsyncMock(),
+    )
 
 
 class _FakeStep:
@@ -290,8 +291,8 @@ async def test_step_aware_spawn_dynamic_task_is_replay_safe(
     _patch(management_module, "get_session", lambda: _SessionContext(session))
     _patch(
         management_module,
-        "get_dashboard_emitter",
-        lambda: SimpleNamespace(graph_mutation=AsyncMock()),
+        "get_dashboard_event_publisher",
+        lambda: SimpleNamespace(publish=AsyncMock()),
     )
 
     step = _FakeStep()

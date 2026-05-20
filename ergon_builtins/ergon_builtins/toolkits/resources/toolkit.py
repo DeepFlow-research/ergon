@@ -11,7 +11,9 @@ from uuid import UUID
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource
 from ergon_core.core.application.resources import RunResourceRepository
-from ergon_core.core.application.tasks.repository import TaskExecutionRepository
+from ergon_core.core.application.runtime.task_execution_repository import (
+    TaskExecutionRepository,
+)
 from pydantic_ai import RunContext
 from pydantic_ai.tools import Tool
 

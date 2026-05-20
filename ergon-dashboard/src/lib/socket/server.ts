@@ -14,7 +14,6 @@ import {
   ContextEventState,
   ServerToClientEvents,
   ClientToServerEvents,
-  DashboardCohortUpdatedData,
   DashboardTaskEvaluationUpdatedData,
   DashboardThreadMessageCreatedData,
   ResourceState,
@@ -157,11 +156,6 @@ export function broadcastRunStarted(runId: string, name: string): void {
   } else {
     console.warn("[Socket.io] WARNING: Cannot broadcast run:started - io is null! Check that initSocketServer was called.");
   }
-}
-
-export function broadcastCohortUpdated(data: DashboardCohortUpdatedData): void {
-  const io = getIO();
-  io?.emit("cohort:updated", data);
 }
 
 /**

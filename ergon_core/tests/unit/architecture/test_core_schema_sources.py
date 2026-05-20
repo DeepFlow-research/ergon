@@ -58,18 +58,18 @@ def test_run_task_dto_does_not_label_worker_slug_as_name() -> None:
 
 
 def test_workflow_task_ref_does_not_duplicate_graph_task_ref() -> None:
-    path = ROOT / "ergon_core/ergon_core/core/application/workflows/models.py"
+    path = ROOT / "ergon_core/ergon_core/core/application/runtime/workflow_models.py"
     assert "class WorkflowTaskRef" not in path.read_text()
 
 
-def test_cancel_cause_literals_live_in_task_events() -> None:
+def test_cancel_cause_literals_live_in_application_event_contracts() -> None:
     offenders: list[str] = []
     snippets = (
         'Literal["parent_terminal", "dep_invalidated"]',
         'Literal["dep_invalidated", "parent_terminal"]',
     )
     allowed = {
-        ROOT / "ergon_core/ergon_core/core/application/events/task_events.py",
+        ROOT / "ergon_core/ergon_core/core/application/events/runtime.py",
     }
 
     for path in (ROOT / "ergon_core/ergon_core/core").rglob("*.py"):
@@ -90,7 +90,7 @@ def test_core_schema_source_imports_are_directional() -> None:
             "EvalCriterionStatus = Literal",
             "GraphMutationValue =",
         ),
-        "ergon_core.core.infrastructure.dashboard.event_contracts": (
+        "ergon_core.core.views.dashboard_events.contracts": (
             "GraphMutationValue =",
             "CancelCause = Literal",
         ),
@@ -107,6 +107,109 @@ def test_core_schema_source_imports_are_directional() -> None:
     assert offenders == []
 
 
+def test_legacy_experiment_record_is_deleted() -> None:
+    allowed_tests = {
+        ROOT / "ergon_core/tests/unit/architecture/test_core_schema_sources.py",
+    }
+    offenders: list[str] = []
+
+    for base in (
+        ROOT / "ergon_core/ergon_core/core",
+        ROOT / "ergon_cli/ergon_cli",
+        ROOT / "ergon_core/tests/unit",
+        ROOT / "ergon_cli/tests/unit",
+    ):
+        for path in base.rglob("*.py"):
+            if path in allowed_tests or "__pycache__" in path.parts:
+                continue
+            if ("Benchmark" + "DefinitionRecord") in path.read_text():
+                offenders.append(str(path.relative_to(ROOT)))
+
+    assert offenders == []
+
+
+def test_deprecated_cohort_tables_are_deleted() -> None:
+    allowed_tests = {
+        ROOT / "ergon_core/tests/unit/architecture/test_core_schema_sources.py",
+    }
+    snippets = (
+        "Experiment" + "Cohort",
+        "Experiment" + "CohortStats",
+        "Experiment" + "CohortStatus",
+    )
+    offenders: list[str] = []
+
+    for base in (
+        ROOT / "ergon_core/ergon_core/core",
+        ROOT / "ergon_core/tests/unit",
+    ):
+        for path in base.rglob("*.py"):
+            if path in allowed_tests or "__pycache__" in path.parts:
+                continue
+            text = path.read_text()
+            for snippet in snippets:
+                if snippet in text:
+                    offenders.append(f"{path.relative_to(ROOT)} references {snippet}")
+
+    assert offenders == []
+
+
+def test_deprecated_cohort_compat_modules_are_deleted() -> None:
+    for removed_path in (
+        ROOT / ("ergon_core/ergon_core/core/application/compat/co" + "horts.py"),
+        ROOT / "ergon_core/ergon_core/core/application/compat/legacy_experiments.py",
+        ROOT / ("ergon_core/ergon_core/core/application/read_models/co" + "horts.py"),
+        ROOT / ("ergon_core/ergon_core/core/views/compat/co" + "horts.py"),
+        ROOT / ("ergon_core/ergon_core/core/views/dashboard_events/co" + "horts.py"),
+        ROOT / ("ergon_core/ergon_core/core/infrastructure/http/routes/co" + "horts.py"),
+    ):
+        assert not removed_path.exists()
+
+
+def test_deprecated_cohort_metadata_behavior_is_deleted() -> None:
+    snippets = (
+        'parsed_metadata().get("cohort_id")',
+        "parsed_metadata().get('cohort_id')",
+        "cohort_id_from_metadata",
+        "build_legacy_cohort_marker_metadata",
+        "write_legacy_cohort_marker",
+    )
+    offenders: list[str] = []
+
+    for path in (ROOT / "ergon_core/ergon_core/core").rglob("*.py"):
+        if "__pycache__" in path.parts:
+            continue
+        text = path.read_text()
+        for snippet in snippets:
+            if snippet in text:
+                offenders.append(f"{path.relative_to(ROOT)} contains {snippet}")
+
+    assert offenders == []
+
+
+def test_production_callers_do_not_use_deprecated_cohort_read_model_path() -> None:
+    offenders: list[str] = []
+
+    for base in (
+        ROOT / "ergon_core/ergon_core/core",
+        ROOT / "ergon_cli/ergon_cli",
+    ):
+        for path in base.rglob("*.py"):
+            if "__pycache__" in path.parts:
+                continue
+            if ("application.read_models.co" + "horts") in path.read_text():
+                offenders.append(str(path.relative_to(ROOT)))
+
+    assert offenders == []
+
+
+def test_dashboard_event_contracts_live_under_views_not_infrastructure() -> None:
+    core_root = ROOT / "ergon_core/ergon_core/core"
+
+    assert (core_root / "views" / "dashboard_events" / "contracts.py").exists()
+    assert not (core_root / "infrastructure" / "dashboard" / "event_contracts.py").exists()
+
+
 def test_core_uses_hybrid_layout_roots_without_nominal_domain() -> None:
     core = ROOT / "ergon_core/ergon_core/core"
 
@@ -114,9 +217,9 @@ def test_core_uses_hybrid_layout_roots_without_nominal_domain() -> None:
         "application",
         "infrastructure",
         "persistence",
-        "rest_api",
         "rl",
         "shared",
+        "views",
     }
     removed_dirs = {
         "runtime",
@@ -141,11 +244,11 @@ def test_core_hybrid_layout_import_directions() -> None:
         "persistence": (
             "ergon_core.core.application",
             "ergon_core.core.infrastructure",
-            "ergon_core.core.rest_api",
+            "ergon_core.core.infrastructure.http",
         ),
         "application": (
-            "ergon_core.core.rest_api",
-            "ergon_core.core.infrastructure.inngest.handlers",
+            "ergon_core.core.infrastructure.http",
+            "ergon_core.core.infrastructure.inngest" + ".handlers",
         ),
     }
 
@@ -168,7 +271,7 @@ def test_application_event_contracts_do_not_import_outer_layers() -> None:
     forbidden_imports = (
         "ergon_core.core.infrastructure",
         "ergon_core.core.persistence",
-        "ergon_core.core.rest_api",
+        "ergon_core.core.infrastructure.http",
     )
 
     offenders: list[str] = []
@@ -302,18 +405,21 @@ def test_graph_domain_modules_do_not_live_in_services_package() -> None:
 
     for module in (
         "models",
-        "lookup",
-        "repository",
-        "propagation",
+        "graph_lookup",
+        "graph_repository",
+        "lifecycle",
     ):
-        assert importlib.util.find_spec(f"ergon_core.core.application.graph.{module}") is not None
+        assert importlib.util.find_spec(f"ergon_core.core.application.runtime.{module}") is not None
 
 
 def test_runtime_services_do_not_import_api_schema_modules() -> None:
     offenders: list[str] = []
     for path in (ROOT / "ergon_core/ergon_core/core/runtime").rglob("*.py"):
         text = path.read_text()
-        if "ergon_core.core.rest_api.schemas" in text or "ergon_core.core.rest_api.runs" in text:
+        if (
+            "ergon_core.core.infrastructure.http.routes.schemas" in text
+            or "ergon_core.core.infrastructure.http.routes.runs" in text
+        ):
             offenders.append(str(path.relative_to(ROOT)))
 
     assert offenders == []
@@ -356,9 +462,9 @@ def test_runtime_errors_are_domain_local() -> None:
     assert not old_errors_dir.exists()
 
     for module_name in (
-        "ergon_core.core.application.graph.errors",
-        "ergon_core.core.application.tasks.errors",
-        "ergon_core.core.application.workflows.errors",
+        "ergon_core.core.application.runtime.errors",
+        "ergon_core.core.application.runtime.task_errors",
+        "ergon_core.core.application.runtime.workflow_errors",
         "ergon_core.core.application.evaluation.errors",
         "ergon_core.core.views.errors",
         "ergon_core.core.infrastructure.inngest.errors",
@@ -388,7 +494,9 @@ def test_runtime_domain_contract_files_use_consistent_names() -> None:
 
 def test_task_latest_execution_selection_lives_in_task_repository() -> None:
     queries_path = ROOT / "ergon_core/ergon_core/core/persistence/queries.py"
-    repository_path = ROOT / "ergon_core/ergon_core/core/application/tasks/repository.py"
+    repository_path = ROOT / (
+        "ergon_core/ergon_core/core/application/runtime/task_execution_repository.py"
+    )
 
     assert not queries_path.exists()
     assert "def latest_for_node" in repository_path.read_text()
@@ -413,7 +521,7 @@ def test_runtime_and_builtins_do_not_use_task_execution_query_bag_for_domain_rea
 
 
 def test_resource_viewer_limits_live_with_read_model_resources() -> None:
-    api_path = ROOT / "ergon_core/ergon_core/core/rest_api/runs.py"
+    api_path = ROOT / "ergon_core/ergon_core/core/infrastructure/http/routes/runs.py"
     resource_path = ROOT / "ergon_core/ergon_core/core/views/resources.py"
 
     assert "_RESOURCE_CONTENT_MAX_BYTES" not in api_path.read_text()
@@ -432,13 +540,13 @@ def test_task_lifecycle_has_one_front_door_service() -> None:
             spec = None
         assert spec is None
 
-    management = ROOT / "ergon_core/ergon_core/core/application/tasks/management.py"
+    management = ROOT / "ergon_core/ergon_core/core/application/runtime/task_management.py"
     text = management.read_text()
     assert "def cancel_orphans(" in text
     assert "def block_pending_descendants(" in text
 
 
-def test_cohort_read_model_has_one_front_door_service() -> None:
+def test_deprecated_cohort_compatibility_has_one_front_door_service() -> None:
     old_module = "ergon_core.core.application.read_models.cohort_stats"
     try:
         spec = importlib.util.find_spec(old_module)
@@ -446,8 +554,10 @@ def test_cohort_read_model_has_one_front_door_service() -> None:
         spec = None
     assert spec is None
 
-    cohorts = ROOT / "ergon_core/ergon_core/core/application/read_models/cohorts.py"
-    assert "def recompute(" in cohorts.read_text()
+    removed_grouping_module = ROOT / (
+        "ergon_core/ergon_core/core/application/compat/co" + "horts.py"
+    )
+    assert not removed_grouping_module.exists()
 
 
 def test_workflow_lifecycle_has_one_front_door_service() -> None:
@@ -463,7 +573,7 @@ def test_workflow_lifecycle_has_one_front_door_service() -> None:
             spec = None
         assert spec is None
 
-    workflow_service = ROOT / "ergon_core/ergon_core/core/application/workflows/service.py"
+    workflow_service = ROOT / "ergon_core/ergon_core/core/application/runtime/run_lifecycle.py"
     text = workflow_service.read_text()
     for method_name in ("initialize", "propagate", "propagate_failure", "finalize"):
         assert f"def {method_name}(" in text

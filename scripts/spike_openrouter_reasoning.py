@@ -14,14 +14,15 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import importlib
 import os
 from collections import Counter
 from typing import Any
 
 # Register production model backends before resolving OpenRouter targets.
-importlib.import_module("ergon_builtins.registry")
-from ergon_builtins.models.resolution import resolve_model_target
+from ergon_builtins.models.cloud_passthrough import resolve_cloud
+from ergon_builtins.models.openrouter_backend import resolve_openrouter
+from ergon_builtins.models.openrouter_responses_backend import resolve_openrouter_responses
+from ergon_builtins.models.resolution import register_model_backend, resolve_model_target
 from pydantic_ai import Agent
 from pydantic_ai.messages import (
     PartDeltaEvent,
@@ -31,6 +32,11 @@ from pydantic_ai.messages import (
     ThinkingPart,
     ThinkingPartDelta,
 )
+
+register_model_backend("openrouter", resolve_openrouter)
+register_model_backend("openai-responses", resolve_openrouter_responses)
+for _cloud_prefix in ("anthropic", "google", "openai"):
+    register_model_backend(_cloud_prefix, resolve_cloud)
 
 
 def _thinking_content(part: ThinkingPart) -> str:

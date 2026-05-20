@@ -14,7 +14,7 @@ from ergon_core.core.persistence.telemetry.models import (
     RunResource,
     RunTaskExecution,
 )
-from ergon_core.core.application.workflows.service import WorkflowService
+from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -63,15 +63,14 @@ def _edge(*, run_id: UUID, source_task_id: UUID, target_task_id: UUID) -> RunGra
 def _execution(
     *,
     run_id: UUID,
-    node_id: UUID,
+    task_id: UUID,
     status: TaskExecutionStatus = TaskExecutionStatus.COMPLETED,
 ) -> RunTaskExecution:
     return RunTaskExecution(
         run_id=run_id,
-        task_id=node_id,
-        node_id=node_id,
+        task_id=task_id,
         status=status,
-        final_assistant_message=f"output for {node_id}",
+        final_assistant_message=f"output for {task_id}",
     )
 
 
@@ -137,8 +136,8 @@ def test_input_scope_uses_immediate_upstream_resources_only(tmp_path: Path) -> N
             ),
         ]
     )
-    exec_a = _execution(run_id=run_id, node_id=a.task_id)
-    exec_b = _execution(run_id=run_id, node_id=b.task_id)
+    exec_a = _execution(run_id=run_id, task_id=a.task_id)
+    exec_b = _execution(run_id=run_id, task_id=b.task_id)
     session.add_all([exec_a, exec_b])
     session.flush()
     session.add_all(
@@ -164,7 +163,7 @@ def test_input_scope_uses_immediate_upstream_resources_only(tmp_path: Path) -> N
     resources = WorkflowService().list_resources(
         session,
         run_id=run_id,
-        node_id=c.task_id,
+        task_id=c.task_id,
         scope="input",
     )
 
@@ -180,8 +179,8 @@ def test_visible_scope_stays_inside_current_run(tmp_path: Path) -> None:
     other = _node(run_id=other_run_id, slug="other")
     session.add_all([current, peer, other])
     session.flush()
-    peer_exec = _execution(run_id=run_id, node_id=peer.task_id)
-    other_exec = _execution(run_id=other_run_id, node_id=other.task_id)
+    peer_exec = _execution(run_id=run_id, task_id=peer.task_id)
+    other_exec = _execution(run_id=other_run_id, task_id=other.task_id)
     session.add_all([peer_exec, other_exec])
     session.flush()
     session.add_all(
@@ -207,7 +206,7 @@ def test_visible_scope_stays_inside_current_run(tmp_path: Path) -> None:
     resources = WorkflowService().list_resources(
         session,
         run_id=run_id,
-        node_id=current.task_id,
+        task_id=current.task_id,
         scope="visible",
     )
 
@@ -222,9 +221,9 @@ async def test_materialize_resource_creates_current_task_owned_copy(tmp_path: Pa
     consumer = _node(run_id=run_id, slug="consumer")
     session.add_all([producer, consumer])
     session.flush()
-    producer_exec = _execution(run_id=run_id, node_id=producer.task_id)
+    producer_exec = _execution(run_id=run_id, task_id=producer.task_id)
     consumer_exec = _execution(
-        run_id=run_id, node_id=consumer.task_id, status=TaskExecutionStatus.RUNNING
+        run_id=run_id, task_id=consumer.task_id, status=TaskExecutionStatus.RUNNING
     )
     session.add_all([producer_exec, consumer_exec])
     session.flush()
@@ -251,7 +250,7 @@ async def test_materialize_resource_creates_current_task_owned_copy(tmp_path: Pa
     ).materialize_resource(
         session,
         run_id=run_id,
-        current_node_id=consumer.task_id,
+        current_task_id=consumer.task_id,
         current_execution_id=consumer_exec.id,
         sandbox_task_key=consumer.task_id,
         benchmark_type="test",
@@ -289,9 +288,9 @@ async def test_materialize_resource_dry_run_keeps_copy_name_for_explicit_destina
     consumer = _node(run_id=run_id, slug="consumer")
     session.add_all([producer, consumer])
     session.flush()
-    producer_exec = _execution(run_id=run_id, node_id=producer.task_id)
+    producer_exec = _execution(run_id=run_id, task_id=producer.task_id)
     consumer_exec = _execution(
-        run_id=run_id, node_id=consumer.task_id, status=TaskExecutionStatus.RUNNING
+        run_id=run_id, task_id=consumer.task_id, status=TaskExecutionStatus.RUNNING
     )
     session.add_all([producer_exec, consumer_exec])
     session.flush()
@@ -308,7 +307,7 @@ async def test_materialize_resource_dry_run_keeps_copy_name_for_explicit_destina
     result = await WorkflowService().materialize_resource(
         session,
         run_id=run_id,
-        current_node_id=consumer.task_id,
+        current_task_id=consumer.task_id,
         current_execution_id=consumer_exec.id,
         sandbox_task_key=consumer.task_id,
         benchmark_type="test",
@@ -327,7 +326,7 @@ def test_resource_location_describes_producer_and_workspace_destination(tmp_path
     producer = _node(run_id=run_id, slug="producer")
     session.add(producer)
     session.flush()
-    producer_exec = _execution(run_id=run_id, node_id=producer.task_id)
+    producer_exec = _execution(run_id=run_id, task_id=producer.task_id)
     session.add(producer_exec)
     session.flush()
     source = _resource(
@@ -361,10 +360,10 @@ def test_task_workspace_reports_latest_execution_and_resources(tmp_path: Path) -
     session.flush()
     current_exec = _execution(
         run_id=run_id,
-        node_id=current.task_id,
+        task_id=current.task_id,
         status=TaskExecutionStatus.RUNNING,
     )
-    upstream_exec = _execution(run_id=run_id, node_id=upstream.task_id)
+    upstream_exec = _execution(run_id=run_id, task_id=upstream.task_id)
     session.add_all([current_exec, upstream_exec])
     session.flush()
     session.add(
@@ -393,7 +392,7 @@ def test_task_workspace_reports_latest_execution_and_resources(tmp_path: Path) -
     workspace = WorkflowService().get_task_workspace(
         session,
         run_id=run_id,
-        node_id=current.task_id,
+        task_id=current.task_id,
     )
 
     assert workspace.task.task_slug == "current"
@@ -413,10 +412,10 @@ async def test_materialize_resource_rejects_parent_directory_destination(
     consumer = _node(run_id=run_id, slug="consumer")
     session.add_all([producer, consumer])
     session.flush()
-    producer_exec = _execution(run_id=run_id, node_id=producer.task_id)
+    producer_exec = _execution(run_id=run_id, task_id=producer.task_id)
     consumer_exec = _execution(
         run_id=run_id,
-        node_id=consumer.task_id,
+        task_id=consumer.task_id,
         status=TaskExecutionStatus.RUNNING,
     )
     session.add_all([producer_exec, consumer_exec])
@@ -435,7 +434,7 @@ async def test_materialize_resource_rejects_parent_directory_destination(
         await WorkflowService().materialize_resource(
             session,
             run_id=run_id,
-            current_node_id=consumer.task_id,
+            current_task_id=consumer.task_id,
             current_execution_id=consumer_exec.id,
             sandbox_task_key=consumer.task_id,
             benchmark_type="test",
@@ -443,98 +442,6 @@ async def test_materialize_resource_rejects_parent_directory_destination(
             destination="../escape/paper.pdf",
             dry_run=True,
         )
-
-
-@pytest.mark.asyncio
-async def test_add_task_dry_run_does_not_write_node() -> None:
-    session = _session()
-    run_id = _run(session)
-    parent = _node(run_id=run_id, slug="parent", level=1)
-    session.add(parent)
-    session.commit()
-
-    result = await WorkflowService().add_task(
-        session,
-        run_id=run_id,
-        parent_task_id=parent.task_id,
-        task_slug="child",
-        description="Child task",
-        assigned_worker_slug="minif2f-react",
-        dry_run=True,
-    )
-
-    nodes = session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all()
-    assert len(nodes) == 1
-    assert result.action == "add-task"
-    assert result.dry_run is True
-    assert result.node is not None
-    assert result.node.task_slug == "child"
-    assert result.node.parent_task_id == parent.task_id
-    assert result.node.level == 2
-
-
-@pytest.mark.asyncio
-async def test_add_task_non_dry_run_requires_object_bound_task() -> None:
-    session = _session()
-    run_id = _run(session)
-    parent = _node(run_id=run_id, slug="parent", level=1)
-    session.add(parent)
-    session.commit()
-    dispatched = []
-
-    async def dispatch_task_ready(run_id, definition_id, node_id):
-        dispatched.append((run_id, definition_id, node_id))
-
-    with pytest.raises(ValueError, match="requires an object-bound Task"):
-        await WorkflowService(task_ready_dispatcher=dispatch_task_ready).add_task(
-            session,
-            run_id=run_id,
-            parent_task_id=parent.task_id,
-            task_slug="child",
-            description="Child task",
-            assigned_worker_slug="minif2f-react",
-            dry_run=False,
-        )
-
-    inserted = session.exec(
-        select(RunGraphNode).where(
-            RunGraphNode.run_id == run_id,
-            RunGraphNode.task_slug == "child",
-        )
-    ).first()
-    assert inserted is None
-    assert dispatched == []
-
-
-@pytest.mark.asyncio
-async def test_add_task_rejects_unknown_worker_slug_before_creating_node() -> None:
-    session = _session()
-    run_id = _run(session)
-    parent = _node(run_id=run_id, slug="parent", status="running")
-    session.add(parent)
-    session.commit()
-
-    async def dispatch_task_ready(run_id: UUID, definition_id: UUID, node_id: UUID) -> None:
-        raise AssertionError("invalid worker should not dispatch")
-
-    with pytest.raises(ValueError, match="requires an object-bound Task"):
-        await WorkflowService(task_ready_dispatcher=dispatch_task_ready).add_task(
-            session,
-            run_id=run_id,
-            parent_task_id=parent.task_id,
-            task_slug="bad-worker",
-            description="Should not be inserted",
-            assigned_worker_slug="not-a-real-worker",
-            dry_run=False,
-        )
-
-    inserted = session.exec(
-        select(RunGraphNode).where(
-            RunGraphNode.run_id == run_id,
-            RunGraphNode.task_slug == "bad-worker",
-        )
-    ).first()
-    assert inserted is None
 
 
 @pytest.mark.asyncio

@@ -1,6 +1,6 @@
 """Architecture guards for persistence boundaries."""
 
-from importlib import import_module
+import importlib
 from pathlib import Path
 
 from sqlmodel import SQLModel
@@ -15,26 +15,29 @@ FORBIDDEN_PATTERNS = (
 ALLOWLIST = {
     # Test harness endpoints are explicitly debug/dev-only and expose raw state
     # for rollout inspection. They should remain isolated behind settings gates.
-    Path("ergon_core/ergon_core/core/rest_api/test_harness.py"),
+    Path("ergon_core/ergon_core/core/infrastructure/http/routes/test_harness.py"),
     # Context events are streamed from the application job as each model turn
     # lands; this older path is intentionally deferred until the context
     # event repository owns its transaction boundary.
-    Path("ergon_core/ergon_core/core/application/jobs/worker_execute.py"),
+    Path("ergon_core/ergon_core/core/jobs/task/worker_execute/job.py"),
     # Workflow lifecycle jobs still own small transactional updates.
     # New jobs should use repositories/services instead.
-    Path("ergon_core/ergon_core/core/application/jobs/start_workflow.py"),
-    Path("ergon_core/ergon_core/core/application/jobs/run_cleanup.py"),
-    Path("ergon_core/ergon_core/core/application/jobs/cleanup_cancelled_task.py"),
-    Path("ergon_core/ergon_core/core/application/jobs/cancel_orphan_subtasks.py"),
-    Path("ergon_core/ergon_core/core/application/jobs/complete_workflow.py"),
-    Path("ergon_core/ergon_core/core/application/jobs/sandbox_setup.py"),
-    Path("ergon_core/ergon_core/core/application/jobs/fail_workflow.py"),
+    Path("ergon_core/ergon_core/core/jobs/workflow/start/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/run/cleanup/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/task/cleanup_cancelled/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/task/cancel_orphans/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/workflow/complete/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/sandbox/setup/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/workflow/fail/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/resources/persist_outputs/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/task/evaluate/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/task/execute/job.py"),
 }
 
 CHECKED_ROOTS = (
-    Path("ergon_core/ergon_core/core/rest_api"),
+    Path("ergon_core/ergon_core/core/infrastructure/http/routes"),
     Path("ergon_core/ergon_core/core/infrastructure/dashboard"),
-    Path("ergon_core/ergon_core/core/infrastructure/inngest/handlers"),
+    Path("ergon_core/ergon_core/core/jobs"),
 )
 
 
@@ -71,7 +74,7 @@ def test_persistence_foreign_keys_reference_existing_columns() -> None:
         "ergon_core.core.persistence.graph.models",
         "ergon_core.core.persistence.telemetry.models",
     ):
-        import_module(module_name)
+        importlib.import_module(module_name)
 
     missing_targets: list[str] = []
     for table in SQLModel.metadata.tables.values():

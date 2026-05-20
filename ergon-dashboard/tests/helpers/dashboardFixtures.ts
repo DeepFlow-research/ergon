@@ -10,7 +10,6 @@ import type {
 import { TaskStatus } from "../../src/lib/types";
 
 export const FIXTURE_IDS = {
-  cohortId: "11111111-1111-4111-8111-111111111111",
   runId: "22222222-2222-4222-8222-222222222222",
   definitionId: "33333333-3333-4333-8333-333333333333",
   rootTaskId: "task-root",
@@ -31,7 +30,6 @@ export const FIXTURE_IDS = {
 } as const;
 
 export const CONCURRENT_MAS_FIXTURE_IDS = {
-  cohortId: "12121212-1212-4121-8121-121212121212",
   definitionId: "33333333-3333-4333-8333-333333333333",
   runId: "99999999-9999-4999-8999-999999999999",
   searchTaskId: "10000000-0000-4000-8000-000000000002",
@@ -458,82 +456,9 @@ export function createEmptyCriteriaEvaluation(): TaskEvaluationState {
 
 export function createDashboardSeed(): DashboardHarnessSeedPayload {
   const runState = serializedRunState();
-  const summary = {
-    cohort_id: FIXTURE_IDS.cohortId,
-    name: "minif2f-react-worker-gpt5v3",
-    description: "Deterministic fixture cohort for browser tests.",
-    created_by: "playwright",
-    created_at: "2026-03-18T11:59:00.000Z",
-    status: "active" as const,
-    total_runs: 3,
-    status_counts: {
-      pending: 0,
-      executing: 0,
-      evaluating: 0,
-      completed: 3,
-      failed: 0,
-    },
-    average_score: 1,
-    best_score: 1,
-    worst_score: 1,
-    average_duration_ms: 24_000,
-    failure_rate: 0,
-    metadata_summary: {
-      code_commit_sha: "abc1234",
-      repo_dirty: false,
-      prompt_version: "v1",
-      worker_version: "react-worker-v3",
-      model_provider: "openai",
-      model_name: "gpt-5",
-      sandbox_config: {
-        template: "lean4",
-        timeout_minutes: 30,
-      },
-      dispatch_config: {
-        worker_model: "gpt-5",
-        max_questions: 8,
-      },
-    },
-    stats_updated_at: "2026-03-18T12:00:20.000Z",
-    extras: {
-      benchmark_counts: {
-        minif2f: 1,
-      },
-      latest_run_at: "2026-03-18T12:00:00.000Z",
-    },
-  };
-
-  const detail = {
-    summary,
-    experiments: [
-      {
-        definition_id: FIXTURE_IDS.definitionId,
-        name: "minif2f smoke n=3",
-        benchmark_type: "minif2f",
-        sample_count: 3,
-        total_runs: 3,
-        status_counts: {
-          pending: 0,
-          executing: 0,
-          evaluating: 0,
-          completed: 3,
-          failed: 0,
-        },
-        status: "completed",
-        created_at: "2026-03-18T11:59:30.000Z",
-        default_model_target: "openai:gpt-5",
-        default_evaluator_slug: "lean-evaluator",
-        final_score: 1,
-        total_cost_usd: 0.42,
-        error_message: null,
-      },
-    ],
-  };
-
   const experimentDetail = {
     experiment: {
       definition_id: FIXTURE_IDS.definitionId,
-      cohort_id: FIXTURE_IDS.cohortId,
       name: "minif2f smoke n=3",
       benchmark_type: "minif2f",
       sample_count: 3,
@@ -591,11 +516,6 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
 
   const concurrent = createConcurrentMasSeedOnly();
   return {
-    cohorts: [summary, ...(concurrent.cohorts ?? [])],
-    cohortDetails: {
-      [FIXTURE_IDS.cohortId]: detail,
-      ...(concurrent.cohortDetails ?? {}),
-    },
     experimentDetails: {
       [FIXTURE_IDS.definitionId]: experimentDetail,
       ...(concurrent.experimentDetails ?? {}),
@@ -606,82 +526,7 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
 }
 
 function createConcurrentMasSeedOnly(): DashboardHarnessSeedPayload {
-  const summary = {
-    cohort_id: CONCURRENT_MAS_FIXTURE_IDS.cohortId,
-    name: "concurrent-mas-visual-debugger",
-    description: "Deterministic concurrent MAS fixture for visual debugger tests.",
-    created_by: "playwright",
-    created_at: "2026-04-26T11:59:00.000Z",
-    status: "active" as const,
-    total_runs: 1,
-    status_counts: {
-      pending: 0,
-      executing: 1,
-      evaluating: 0,
-      completed: 0,
-      failed: 0,
-    },
-    average_score: null,
-    best_score: null,
-    worst_score: null,
-    average_duration_ms: null,
-    failure_rate: 0,
-    metadata_summary: {
-      code_commit_sha: "visual-debugger",
-      repo_dirty: false,
-      prompt_version: "visual-debugger-fixture",
-      worker_version: "fixture",
-      model_provider: "fixture",
-      model_name: "fixture",
-      sandbox_config: {
-        template: "research",
-        timeout_minutes: 30,
-      },
-      dispatch_config: {
-        scenario: "concurrent-mas",
-      },
-    },
-    stats_updated_at: "2026-04-26T12:00:30.000Z",
-    extras: {
-      benchmark_counts: {
-        visual_debugger: 1,
-      },
-      latest_run_at: "2026-04-26T12:00:00.000Z",
-    },
-  };
-
-  const detail = {
-    summary,
-    experiments: [
-      {
-        definition_id: CONCURRENT_MAS_FIXTURE_IDS.definitionId,
-        name: "visual debugger n=1",
-        benchmark_type: "visual_debugger",
-        sample_count: 1,
-        total_runs: 1,
-        status_counts: {
-          pending: 0,
-          executing: 1,
-          evaluating: 0,
-          completed: 0,
-          failed: 0,
-        },
-        status: "executing",
-        created_at: "2026-04-26T11:59:30.000Z",
-        default_model_target: "fixture",
-        default_evaluator_slug: null,
-        final_score: null,
-        total_cost_usd: null,
-        error_message: null,
-      },
-    ],
-  };
-
   return {
-    cohorts: [summary],
-    cohortDetails: {
-      [CONCURRENT_MAS_FIXTURE_IDS.cohortId]: detail,
-    },
     experimentDetails: {},
     runs: [concurrentMasFixture.runState as unknown as SerializedWorkflowRunState],
     mutations: {

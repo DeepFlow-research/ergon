@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from ergon_core.core.persistence.telemetry.models import RunTaskEvaluation
 from ergon_core.core.views.runs.snapshot import _task_keyed_evaluations
-from ergon_core.core.application.jobs.evaluate_task_run import _evaluator_binding_key
+from ergon_core.core.jobs.task.evaluate.job import _evaluator_binding_key
 
 
 def _summary_json() -> dict:

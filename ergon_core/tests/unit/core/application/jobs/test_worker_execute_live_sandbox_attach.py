@@ -4,10 +4,10 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.core.application.events.task_events import TaskReadyEvent
+from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.api.worker.results import WorkerOutput
-from ergon_core.core.application.jobs.models import WorkerExecuteJobRequest
-from ergon_core.core.application.jobs.worker_execute import run_worker_execute_job
+from ergon_core.core.jobs.task.worker_execute.contract import WorkerExecuteJobRequest
+from ergon_core.core.jobs.task.worker_execute.job import run_worker_execute_job
 
 
 class _FakeWorker:
@@ -38,15 +38,18 @@ class _FakeSession:
 
 @pytest.mark.asyncio
 async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch) -> None:
-    from ergon_core.core.application.jobs import worker_execute as module
+    from ergon_core.core.jobs.task.worker_execute import job as module
 
     seen_sandbox_ids: list[str | None] = []
 
     async def _persist(*args, **kwargs):
         pass
 
+    async def _publish(_event):
+        return None
+
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(_FakeSession()))
-    monkeypatch.setattr(module, "WorkflowGraphRepository", lambda: _FakeGraphRepo(seen_sandbox_ids))
+    monkeypatch.setattr(module, "RuntimeGraphRepository", lambda: _FakeGraphRepo(seen_sandbox_ids))
     monkeypatch.setattr(module.WorkerOutputRepository, "persist", _persist)
     monkeypatch.setattr(module.TaskExecutionRepository, "set_sandbox_id", _persist)
     monkeypatch.setattr(module.ContextEventService, "persist_chunk", _persist)
@@ -55,11 +58,8 @@ async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch) -> 
     monkeypatch.setattr(module, "RunResourceRepository", lambda: object())
     monkeypatch.setattr(
         module,
-        "get_dashboard_emitter",
-        lambda: SimpleNamespace(
-            on_context_event=lambda event: None,
-            register_execution=lambda **kwargs: None,
-        ),
+        "get_dashboard_event_publisher",
+        lambda: SimpleNamespace(publish=_publish),
     )
 
     result = await run_worker_execute_job(
@@ -67,7 +67,6 @@ async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch) -> 
             run_id=uuid4(),
             definition_id=uuid4(),
             task_id=uuid4(),
-            node_id=uuid4(),
             execution_id=uuid4(),
             sandbox_id="sbx-live",
             task_slug="root",
@@ -87,7 +86,7 @@ async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch) -> 
 async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
     monkeypatch,
 ) -> None:
-    from ergon_core.core.application.jobs import worker_execute as module
+    from ergon_core.core.jobs.task.worker_execute import job as module
 
     class _NonLiveRepo:
         async def node(self, _session, *, run_id, task_id, sandbox_id=None):
@@ -100,7 +99,7 @@ async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
             )
 
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(object()))
-    monkeypatch.setattr(module, "WorkflowGraphRepository", lambda: _NonLiveRepo())
+    monkeypatch.setattr(module, "RuntimeGraphRepository", lambda: _NonLiveRepo())
     monkeypatch.setattr(module, "TaskManagementService", lambda: object())
     monkeypatch.setattr(module, "TaskInspectionService", lambda: object())
     monkeypatch.setattr(module, "RunResourceRepository", lambda: object())
@@ -111,7 +110,6 @@ async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
                 run_id=uuid4(),
                 definition_id=uuid4(),
                 task_id=uuid4(),
-                node_id=uuid4(),
                 execution_id=uuid4(),
                 sandbox_id="sbx-live",
                 task_slug="root",
@@ -126,8 +124,8 @@ async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
 
 @pytest.mark.asyncio
 async def test_step_aware_task_management_sends_collected_ready_events(monkeypatch) -> None:
-    from ergon_core.core.application.jobs import worker_execute as module
-    from ergon_core.core.application.tasks import management
+    from ergon_core.core.jobs.task.worker_execute import job as module
+    from ergon_core.core.application.runtime import management
 
     sent: list[tuple[str, object]] = []
 
@@ -139,10 +137,13 @@ async def test_step_aware_task_management_sends_collected_ready_events(monkeypat
     run_id = uuid4()
     definition_id = uuid4()
 
+    async def _publish(_event):
+        return None
+
     monkeypatch.setattr(
         management,
-        "get_dashboard_emitter",
-        lambda: SimpleNamespace(graph_mutation=lambda mutation: None),
+        "get_dashboard_event_publisher",
+        lambda: SimpleNamespace(publish=_publish),
     )
     service = module._StepAwareTaskManagementService(SimpleNamespace(step=_Step()))
     await service._dispatch_collected_ready_events(

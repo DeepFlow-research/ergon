@@ -1,7 +1,1153 @@
 {
   "$defs": {
-    "TaskTreeNode": {
-      "description": "Recursive task tree node embedded in workflow.started.\n\nShape matches the dashboard Zod ``TaskTreeNodeSchema``.  Built from\n``RunGraphNode`` + ``RunGraphEdge`` + ``ExperimentDefinitionWorker``\nat emit time; see ``start_workflow._build_task_tree_for_run``.",
+    "AssistantTextPart": {
+      "properties": {
+        "part_kind": {
+          "const": "assistant_text",
+          "default": "assistant_text",
+          "description": "Discriminator identifying this context part as assistant text.",
+          "title": "Part Kind",
+          "type": "string"
+        },
+        "content": {
+          "description": "Assistant response text emitted by the worker.",
+          "title": "Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "title": "AssistantTextPart",
+      "type": "object"
+    },
+    "ContextPartChunkLog": {
+      "description": "Core-enriched context stream item suitable for API/dashboard projection.",
+      "properties": {
+        "part": {
+          "description": "Typed context stream payload.",
+          "discriminator": {
+            "mapping": {
+              "assistant_text": "#/$defs/AssistantTextPart",
+              "system_prompt": "#/$defs/SystemPromptPart",
+              "thinking": "#/$defs/ThinkingPart",
+              "tool_call": "#/$defs/ToolCallPart",
+              "tool_result": "#/$defs/ToolResultPart",
+              "user_message": "#/$defs/UserMessagePart"
+            },
+            "propertyName": "part_kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SystemPromptPart"
+            },
+            {
+              "$ref": "#/$defs/UserMessagePart"
+            },
+            {
+              "$ref": "#/$defs/AssistantTextPart"
+            },
+            {
+              "$ref": "#/$defs/ToolCallPart"
+            },
+            {
+              "$ref": "#/$defs/ToolResultPart"
+            },
+            {
+              "$ref": "#/$defs/ThinkingPart"
+            }
+          ],
+          "title": "Part"
+        },
+        "token_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Token IDs associated with this context part when provided by the backend.",
+          "title": "Token Ids"
+        },
+        "logprobs": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TokenLogprob"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per-token log probabilities associated with this context part.",
+          "title": "Logprobs"
+        },
+        "sequence": {
+          "description": "Monotonic sequence number within the execution stream.",
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "worker_binding_key": {
+          "description": "Worker binding that emitted this context part.",
+          "title": "Worker Binding Key",
+          "type": "string"
+        },
+        "turn_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Stable generation turn identifier shared by related streamed parts.",
+          "title": "Turn Id"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Timestamp when generation for this part started.",
+          "title": "Started At"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Timestamp when generation for this part completed.",
+          "title": "Completed At"
+        },
+        "policy_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional worker or policy version that produced the part.",
+          "title": "Policy Version"
+        }
+      },
+      "required": [
+        "part",
+        "sequence",
+        "worker_binding_key"
+      ],
+      "title": "ContextPartChunkLog",
+      "type": "object"
+    },
+    "JsonObject": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "type": "object"
+    },
+    "JsonScalar": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "JsonValue": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/JsonScalar"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "RunCommunicationMessageDto": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "threadId": {
+          "title": "Threadid",
+          "type": "string"
+        },
+        "threadTopic": {
+          "title": "Threadtopic",
+          "type": "string"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "taskId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Taskid"
+        },
+        "taskExecutionId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Taskexecutionid"
+        },
+        "fromAgentId": {
+          "title": "Fromagentid",
+          "type": "string"
+        },
+        "toAgentId": {
+          "title": "Toagentid",
+          "type": "string"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "sequenceNum": {
+          "title": "Sequencenum",
+          "type": "integer"
+        },
+        "createdAt": {
+          "format": "date-time",
+          "title": "Createdat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "threadId",
+        "threadTopic",
+        "runId",
+        "fromAgentId",
+        "toAgentId",
+        "content",
+        "sequenceNum",
+        "createdAt"
+      ],
+      "title": "RunCommunicationMessageDto",
+      "type": "object"
+    },
+    "RunCommunicationThreadDto": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "taskId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Taskid"
+        },
+        "topic": {
+          "title": "Topic",
+          "type": "string"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        },
+        "agentAId": {
+          "title": "Agentaid",
+          "type": "string"
+        },
+        "agentBId": {
+          "title": "Agentbid",
+          "type": "string"
+        },
+        "createdAt": {
+          "format": "date-time",
+          "title": "Createdat",
+          "type": "string"
+        },
+        "updatedAt": {
+          "format": "date-time",
+          "title": "Updatedat",
+          "type": "string"
+        },
+        "messages": {
+          "items": {
+            "$ref": "#/$defs/RunCommunicationMessageDto"
+          },
+          "title": "Messages",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "runId",
+        "topic",
+        "agentAId",
+        "agentBId",
+        "createdAt",
+        "updatedAt"
+      ],
+      "title": "RunCommunicationThreadDto",
+      "type": "object"
+    },
+    "RunContextEventDto": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "runId": {
+          "format": "uuid",
+          "title": "Runid",
+          "type": "string"
+        },
+        "taskExecutionId": {
+          "format": "uuid",
+          "title": "Taskexecutionid",
+          "type": "string"
+        },
+        "taskId": {
+          "format": "uuid",
+          "title": "Taskid",
+          "type": "string"
+        },
+        "workerBindingKey": {
+          "title": "Workerbindingkey",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "eventType": {
+          "enum": [
+            "system_prompt",
+            "user_message",
+            "assistant_text",
+            "tool_call",
+            "tool_result",
+            "thinking"
+          ],
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ContextPartChunkLog"
+        },
+        "createdAt": {
+          "format": "date-time",
+          "title": "Createdat",
+          "type": "string"
+        },
+        "startedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Startedat"
+        },
+        "completedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completedat"
+        }
+      },
+      "required": [
+        "id",
+        "runId",
+        "taskExecutionId",
+        "taskId",
+        "workerBindingKey",
+        "sequence",
+        "eventType",
+        "payload",
+        "createdAt"
+      ],
+      "title": "RunContextEventDto",
+      "type": "object"
+    },
+    "RunEvaluationCriterionDto": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "stageNum": {
+          "title": "Stagenum",
+          "type": "integer"
+        },
+        "stageName": {
+          "title": "Stagename",
+          "type": "string"
+        },
+        "criterionNum": {
+          "title": "Criterionnum",
+          "type": "integer"
+        },
+        "criterionSlug": {
+          "title": "Criterionslug",
+          "type": "string"
+        },
+        "criterionType": {
+          "title": "Criteriontype",
+          "type": "string"
+        },
+        "criterionDescription": {
+          "title": "Criteriondescription",
+          "type": "string"
+        },
+        "criterionName": {
+          "title": "Criterionname",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed",
+            "errored",
+            "skipped"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "weight": {
+          "title": "Weight",
+          "type": "number"
+        },
+        "contribution": {
+          "title": "Contribution",
+          "type": "number"
+        },
+        "evaluationInput": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evaluationinput"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        },
+        "maxScore": {
+          "title": "Maxscore",
+          "type": "number"
+        },
+        "feedback": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Feedback"
+        },
+        "modelReasoning": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Modelreasoning"
+        },
+        "skippedReason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skippedreason"
+        },
+        "evaluatedActionIds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evaluatedactionids",
+          "type": "array"
+        },
+        "evaluatedResourceIds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evaluatedresourceids",
+          "type": "array"
+        },
+        "observation": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "required": [
+        "id",
+        "stageNum",
+        "stageName",
+        "criterionNum",
+        "criterionSlug",
+        "criterionType",
+        "criterionDescription",
+        "criterionName",
+        "status",
+        "passed",
+        "weight",
+        "contribution",
+        "score",
+        "maxScore"
+      ],
+      "title": "RunEvaluationCriterionDto",
+      "type": "object"
+    },
+    "RunExecutionAttemptDto": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "attemptNumber": {
+          "title": "Attemptnumber",
+          "type": "integer"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "startedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Startedat"
+        },
+        "completedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completedat"
+        },
+        "finalAssistantMessage": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finalassistantmessage"
+        },
+        "errorMessage": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Errormessage"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score"
+        },
+        "agentId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agentid"
+        },
+        "agentName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agentname"
+        },
+        "evaluationDetails": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evaluationdetails"
+        },
+        "outputResourceIds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Outputresourceids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "taskId",
+        "attemptNumber",
+        "status"
+      ],
+      "title": "RunExecutionAttemptDto",
+      "type": "object"
+    },
+    "RunResourceDto": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "taskExecutionId": {
+          "title": "Taskexecutionid",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "mimeType": {
+          "title": "Mimetype",
+          "type": "string"
+        },
+        "filePath": {
+          "title": "Filepath",
+          "type": "string"
+        },
+        "sizeBytes": {
+          "title": "Sizebytes",
+          "type": "integer"
+        },
+        "createdAt": {
+          "format": "date-time",
+          "title": "Createdat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "taskId",
+        "taskExecutionId",
+        "name",
+        "mimeType",
+        "filePath",
+        "sizeBytes",
+        "createdAt"
+      ],
+      "title": "RunResourceDto",
+      "type": "object"
+    },
+    "RunSandboxCommandDto": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "title": "Command",
+          "type": "string"
+        },
+        "stdout": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stdout"
+        },
+        "stderr": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stderr"
+        },
+        "exitCode": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exitcode"
+        },
+        "durationMs": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Durationms"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "timestamp"
+      ],
+      "title": "RunSandboxCommandDto",
+      "type": "object"
+    },
+    "RunSandboxDto": {
+      "additionalProperties": false,
+      "properties": {
+        "sandboxId": {
+          "title": "Sandboxid",
+          "type": "string"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "template": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Template"
+        },
+        "timeoutMinutes": {
+          "title": "Timeoutminutes",
+          "type": "integer"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "createdAt": {
+          "format": "date-time",
+          "title": "Createdat",
+          "type": "string"
+        },
+        "closedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Closedat"
+        },
+        "closeReason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Closereason"
+        },
+        "commands": {
+          "items": {
+            "$ref": "#/$defs/RunSandboxCommandDto"
+          },
+          "title": "Commands",
+          "type": "array"
+        }
+      },
+      "required": [
+        "sandboxId",
+        "taskId",
+        "timeoutMinutes",
+        "status",
+        "createdAt"
+      ],
+      "title": "RunSandboxDto",
+      "type": "object"
+    },
+    "RunSnapshotDto": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "definitionId": {
+          "title": "Definitionid",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "tasks": {
+          "additionalProperties": {
+            "$ref": "#/$defs/RunTaskDto"
+          },
+          "title": "Tasks",
+          "type": "object"
+        },
+        "rootTaskId": {
+          "default": "",
+          "title": "Roottaskid",
+          "type": "string"
+        },
+        "resourcesByTask": {
+          "additionalProperties": {
+            "items": {
+              "$ref": "#/$defs/RunResourceDto"
+            },
+            "type": "array"
+          },
+          "title": "Resourcesbytask",
+          "type": "object"
+        },
+        "executionsByTask": {
+          "additionalProperties": {
+            "items": {
+              "$ref": "#/$defs/RunExecutionAttemptDto"
+            },
+            "type": "array"
+          },
+          "title": "Executionsbytask",
+          "type": "object"
+        },
+        "evaluationsByTask": {
+          "additionalProperties": {
+            "$ref": "#/$defs/RunTaskEvaluationDto"
+          },
+          "title": "Evaluationsbytask",
+          "type": "object"
+        },
+        "sandboxesByTask": {
+          "additionalProperties": {
+            "$ref": "#/$defs/RunSandboxDto"
+          },
+          "title": "Sandboxesbytask",
+          "type": "object"
+        },
+        "contextEventsByTask": {
+          "additionalProperties": {
+            "items": {
+              "$ref": "#/$defs/RunContextEventDto"
+            },
+            "type": "array"
+          },
+          "title": "Contexteventsbytask",
+          "type": "object"
+        },
+        "threads": {
+          "items": {
+            "$ref": "#/$defs/RunCommunicationThreadDto"
+          },
+          "title": "Threads",
+          "type": "array"
+        },
+        "startedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Startedat"
+        },
+        "completedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completedat"
+        },
+        "durationSeconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Durationseconds"
+        },
+        "totalTasks": {
+          "default": 0,
+          "title": "Totaltasks",
+          "type": "integer"
+        },
+        "totalLeafTasks": {
+          "default": 0,
+          "title": "Totalleaftasks",
+          "type": "integer"
+        },
+        "completedTasks": {
+          "default": 0,
+          "title": "Completedtasks",
+          "type": "integer"
+        },
+        "failedTasks": {
+          "default": 0,
+          "title": "Failedtasks",
+          "type": "integer"
+        },
+        "runningTasks": {
+          "default": 0,
+          "title": "Runningtasks",
+          "type": "integer"
+        },
+        "cancelledTasks": {
+          "default": 0,
+          "title": "Cancelledtasks",
+          "type": "integer"
+        },
+        "finalScore": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finalscore"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "required": [
+        "id",
+        "definitionId",
+        "name",
+        "status"
+      ],
+      "title": "RunSnapshotDto",
+      "type": "object"
+    },
+    "RunTaskDto": {
+      "additionalProperties": false,
+      "description": "REST projection of RunGraphNode for run detail pages.\n\nThis is not the canonical graph schema; graph semantics live in\napplication/graph/models.py and application/runtime/status.py.",
       "properties": {
         "id": {
           "title": "Id",
@@ -16,23 +1162,44 @@
           "type": "string"
         },
         "status": {
-          "enum": [
-            "pending",
-            "ready",
-            "running",
-            "completed",
-            "failed",
-            "cancelled",
-            "blocked"
-          ],
           "title": "Status",
           "type": "string"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parentid"
+        },
+        "childIds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Childids",
+          "type": "array"
+        },
+        "dependsOnIds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependsonids",
+          "type": "array"
+        },
+        "isLeaf": {
+          "title": "Isleaf",
+          "type": "boolean"
         },
         "level": {
           "title": "Level",
           "type": "integer"
         },
-        "assigned_worker_slug": {
+        "assignedWorkerId": {
           "anyOf": [
             {
               "type": "string"
@@ -42,40 +1209,9 @@
             }
           ],
           "default": null,
-          "title": "Assigned Worker Slug"
+          "title": "Assignedworkerid"
         },
-        "assigned_to": {
-          "$ref": "#/$defs/WorkerRef"
-        },
-        "children": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/TaskTreeNode"
-          },
-          "title": "Children",
-          "type": "array"
-        },
-        "depends_on": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "title": "Depends On",
-          "type": "array"
-        },
-        "is_leaf": {
-          "title": "Is Leaf",
-          "type": "boolean"
-        },
-        "resources": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "title": "Resources",
-          "type": "array"
-        },
-        "parent_id": {
+        "assignedWorkerSlug": {
           "anyOf": [
             {
               "type": "string"
@@ -85,7 +1221,33 @@
             }
           ],
           "default": null,
-          "title": "Parent Id"
+          "title": "Assignedworkerslug"
+        },
+        "startedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Startedat"
+        },
+        "completedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completedat"
         }
       },
       "required": [
@@ -93,35 +1255,266 @@
         "name",
         "description",
         "status",
-        "level",
-        "assigned_to",
-        "is_leaf"
+        "isLeaf",
+        "level"
       ],
-      "title": "TaskTreeNode",
+      "title": "RunTaskDto",
       "type": "object"
     },
-    "WorkerRef": {
-      "description": "Reference to an ``ExperimentDefinitionWorker`` row as seen by the\ndashboard \u2014 matches the Zod ``WorkerRefSchema``.",
+    "RunTaskEvaluationDto": {
+      "additionalProperties": false,
       "properties": {
         "id": {
           "title": "Id",
           "type": "string"
         },
-        "name": {
-          "title": "Name",
+        "runId": {
+          "title": "Runid",
           "type": "string"
         },
-        "type": {
-          "title": "Type",
+        "taskId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Taskid"
+        },
+        "evaluatorName": {
+          "title": "Evaluatorname",
           "type": "string"
+        },
+        "aggregationRule": {
+          "title": "Aggregationrule",
+          "type": "string"
+        },
+        "totalScore": {
+          "title": "Totalscore",
+          "type": "number"
+        },
+        "maxScore": {
+          "title": "Maxscore",
+          "type": "number"
+        },
+        "normalizedScore": {
+          "title": "Normalizedscore",
+          "type": "number"
+        },
+        "stagesEvaluated": {
+          "title": "Stagesevaluated",
+          "type": "integer"
+        },
+        "stagesPassed": {
+          "title": "Stagespassed",
+          "type": "integer"
+        },
+        "failedGate": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failedgate"
+        },
+        "createdAt": {
+          "format": "date-time",
+          "title": "Createdat",
+          "type": "string"
+        },
+        "criterionResults": {
+          "items": {
+            "$ref": "#/$defs/RunEvaluationCriterionDto"
+          },
+          "title": "Criterionresults",
+          "type": "array"
         }
       },
       "required": [
         "id",
-        "name",
-        "type"
+        "runId",
+        "evaluatorName",
+        "aggregationRule",
+        "totalScore",
+        "maxScore",
+        "normalizedScore",
+        "stagesEvaluated",
+        "stagesPassed",
+        "createdAt"
       ],
-      "title": "WorkerRef",
+      "title": "RunTaskEvaluationDto",
+      "type": "object"
+    },
+    "SystemPromptPart": {
+      "properties": {
+        "part_kind": {
+          "const": "system_prompt",
+          "default": "system_prompt",
+          "description": "Discriminator identifying this context part as a system prompt.",
+          "title": "Part Kind",
+          "type": "string"
+        },
+        "content": {
+          "description": "System instructions supplied to the worker.",
+          "title": "Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "title": "SystemPromptPart",
+      "type": "object"
+    },
+    "ThinkingPart": {
+      "properties": {
+        "part_kind": {
+          "const": "thinking",
+          "default": "thinking",
+          "description": "Discriminator identifying this context part as private thinking.",
+          "title": "Part Kind",
+          "type": "string"
+        },
+        "content": {
+          "description": "Reasoning or thinking text emitted by the model.",
+          "title": "Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "title": "ThinkingPart",
+      "type": "object"
+    },
+    "TokenLogprob": {
+      "description": "Per-token log probability from the serving backend.",
+      "properties": {
+        "token": {
+          "description": "Generated token text.",
+          "title": "Token",
+          "type": "string"
+        },
+        "logprob": {
+          "description": "Natural-log probability assigned to the token.",
+          "title": "Logprob",
+          "type": "number"
+        },
+        "top_logprobs": {
+          "description": "Optional model-provider alternatives and probabilities for this position.",
+          "items": {
+            "$ref": "#/$defs/JsonObject"
+          },
+          "title": "Top Logprobs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "token",
+        "logprob"
+      ],
+      "title": "TokenLogprob",
+      "type": "object"
+    },
+    "ToolCallPart": {
+      "properties": {
+        "part_kind": {
+          "const": "tool_call",
+          "default": "tool_call",
+          "description": "Discriminator identifying this context part as a tool call.",
+          "title": "Part Kind",
+          "type": "string"
+        },
+        "tool_name": {
+          "description": "Name of the tool requested by the worker.",
+          "title": "Tool Name",
+          "type": "string"
+        },
+        "tool_call_id": {
+          "description": "Provider-stable identifier for this tool call.",
+          "title": "Tool Call Id",
+          "type": "string"
+        },
+        "args": {
+          "additionalProperties": true,
+          "description": "JSON-like tool input arguments.",
+          "title": "Args",
+          "type": "object"
+        }
+      },
+      "required": [
+        "tool_name",
+        "tool_call_id",
+        "args"
+      ],
+      "title": "ToolCallPart",
+      "type": "object"
+    },
+    "ToolResultPart": {
+      "properties": {
+        "part_kind": {
+          "const": "tool_result",
+          "default": "tool_result",
+          "description": "Discriminator identifying this context part as a tool result.",
+          "title": "Part Kind",
+          "type": "string"
+        },
+        "tool_call_id": {
+          "description": "Identifier of the tool call this result answers.",
+          "title": "Tool Call Id",
+          "type": "string"
+        },
+        "tool_name": {
+          "description": "Name of the tool that produced this result.",
+          "title": "Tool Name",
+          "type": "string"
+        },
+        "content": {
+          "description": "Serialized tool result content.",
+          "title": "Content",
+          "type": "string"
+        },
+        "is_error": {
+          "default": false,
+          "description": "Whether the tool result represents an error response.",
+          "title": "Is Error",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "tool_call_id",
+        "tool_name",
+        "content"
+      ],
+      "title": "ToolResultPart",
+      "type": "object"
+    },
+    "UserMessagePart": {
+      "properties": {
+        "part_kind": {
+          "const": "user_message",
+          "default": "user_message",
+          "description": "Discriminator identifying this context part as a user message.",
+          "title": "Part Kind",
+          "type": "string"
+        },
+        "content": {
+          "description": "User or upstream task message content.",
+          "title": "Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "title": "UserMessagePart",
       "type": "object"
     }
   },
@@ -141,8 +1534,8 @@
       "title": "Workflow Name",
       "type": "string"
     },
-    "task_tree": {
-      "$ref": "#/$defs/TaskTreeNode"
+    "snapshot": {
+      "$ref": "#/$defs/RunSnapshotDto"
     },
     "started_at": {
       "format": "date-time",
@@ -162,7 +1555,7 @@
     "run_id",
     "definition_id",
     "workflow_name",
-    "task_tree",
+    "snapshot",
     "started_at",
     "total_tasks",
     "total_leaf_tasks"

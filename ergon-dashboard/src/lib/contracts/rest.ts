@@ -3,14 +3,10 @@ import { z } from "zod";
 import { schemas } from "@/generated/rest/contracts";
 
 export const BenchmarkNameSchema = z.string();
-export const ExperimentCohortStatusSchema = schemas.ExperimentCohortStatus;
 export const RunStatusSchema = z.enum(["pending", "executing", "evaluating", "completed", "failed", "cancelled"]);
 export const TaskStatusSchema = z.string();
 
-export const CohortSummarySchema = schemas.CohortSummaryDto;
-export const CohortDetailSchema = schemas.CohortDetailDto;
 export const ExperimentDetailSchema = schemas.ExperimentDetailDto;
-export const UpdateCohortRequestSchema = schemas.UpdateCohortRequest;
 
 export const RunExecutionAttemptSchema = schemas.RunExecutionAttemptDto;
 export const RunResourceSchema = schemas.RunResourceDto;
@@ -22,8 +18,6 @@ export const RunCommunicationThreadSchema = schemas.RunCommunicationThreadDto;
 export const RunTaskEvaluationSchema = schemas.RunTaskEvaluationDto;
 export const RunSnapshotSchema = schemas.RunSnapshotDto;
 
-export const CohortSummaryListSchema = z.array(CohortSummarySchema);
-
 type KnownKeys<T> = {
   [K in keyof T as string extends K ? never : number extends K ? never : symbol extends K
     ? never
@@ -31,13 +25,9 @@ type KnownKeys<T> = {
 };
 
 export type BenchmarkName = z.infer<typeof BenchmarkNameSchema>;
-export type ExperimentCohortStatusValue = z.infer<typeof ExperimentCohortStatusSchema>;
 export type RunLifecycleStatus = z.infer<typeof RunStatusSchema>;
 export type TaskStatusValue = z.infer<typeof TaskStatusSchema>;
 
-type RawCohortSummary = KnownKeys<z.infer<typeof CohortSummarySchema>>;
-type RawCohortDetail = KnownKeys<z.infer<typeof CohortDetailSchema>>;
-type RawCohortExperimentRow = KnownKeys<NonNullable<RawCohortDetail["experiments"]>[number]>;
 type RawExperimentDetail = KnownKeys<z.infer<typeof ExperimentDetailSchema>>;
 type RawExperimentRunRow = KnownKeys<NonNullable<RawExperimentDetail["runs"]>[number]>;
 type RawRunExecutionAttempt = KnownKeys<z.infer<typeof RunExecutionAttemptSchema>>;
@@ -51,87 +41,16 @@ type RawRunTaskEvaluation = KnownKeys<z.infer<typeof RunTaskEvaluationSchema>>;
 type RawRunEvaluationCriterion = KnownKeys<NonNullable<RawRunTaskEvaluation["criterionResults"]>[number]>;
 type RawRunSnapshot = KnownKeys<z.infer<typeof RunSnapshotSchema>>;
 
-export type UpdateCohortRequest = z.infer<typeof UpdateCohortRequestSchema>;
 export type RawRunSandboxType = RawRunSandbox;
 export type RawRunSandboxCommandType = RawRunSandboxCommand;
 
-export interface CohortMetadataSummary {
-  code_commit_sha: string | null;
-  repo_dirty: boolean | null;
-  prompt_version: string | null;
-  worker_version: string | null;
-  model_provider: string | null;
-  model_name: string | null;
-  sandbox_config: Record<string, unknown>;
-  dispatch_config: Record<string, unknown>;
-}
-
-export interface CohortStatusCounts {
+export interface ExperimentStatusCounts {
   pending: number;
   executing: number;
   evaluating: number;
   completed: number;
   failed: number;
-}
-
-export interface ExperimentStatusCounts extends CohortStatusCounts {
   cancelled: number;
-}
-
-export interface CohortStatsExtras {
-  benchmark_counts?: Record<string, number>;
-  latest_run_at?: string | null;
-}
-
-export interface CohortSummary
-  extends Omit<
-    RawCohortSummary,
-    | "average_duration_ms"
-    | "average_score"
-    | "best_score"
-    | "created_by"
-    | "description"
-    | "extras"
-    | "metadata_summary"
-    | "stats_updated_at"
-    | "status_counts"
-    | "total_runs"
-    | "worst_score"
-  > {
-  average_duration_ms: number | null;
-  average_score: number | null;
-  best_score: number | null;
-  created_by: string | null;
-  description: string | null;
-  extras: CohortStatsExtras;
-  metadata_summary: CohortMetadataSummary;
-  stats_updated_at: string | null;
-  status_counts: CohortStatusCounts;
-  total_runs: number;
-  worst_score: number | null;
-}
-
-export interface CohortExperimentRow
-  extends Omit<
-    RawCohortExperimentRow,
-    | "default_evaluator_slug"
-    | "default_model_target"
-    | "error_message"
-    | "final_score"
-    | "status_counts"
-    | "total_cost_usd"
-  > {
-  default_evaluator_slug: string | null;
-  default_model_target: string | null;
-  error_message: string | null;
-  final_score: number | null;
-  status_counts: CohortStatusCounts;
-  total_cost_usd: number | null;
-}
-
-export interface CohortDetail {
-  summary: CohortSummary;
-  experiments: CohortExperimentRow[];
 }
 
 export interface ExperimentRunRow
@@ -284,44 +203,6 @@ export interface RunSnapshot
   threads: RunCommunicationThread[];
 }
 
-function normalizeCohortSummary(summary: RawCohortSummary): CohortSummary {
-  // extras and metadata_summary arrive via .passthrough() on the generated Zod
-  // schema, so KnownKeys strips them. Cast once to access safely.
-  const pt = summary as RawCohortSummary & {
-    extras?: CohortStatsExtras;
-    metadata_summary?: Partial<CohortMetadataSummary>;
-  };
-  return {
-    ...summary,
-    average_duration_ms: summary.average_duration_ms ?? null,
-    average_score: summary.average_score ?? null,
-    best_score: summary.best_score ?? null,
-    created_by: summary.created_by ?? null,
-    description: summary.description ?? null,
-    extras: pt.extras ?? {},
-    metadata_summary: {
-      code_commit_sha: pt.metadata_summary?.code_commit_sha ?? null,
-      repo_dirty: pt.metadata_summary?.repo_dirty ?? null,
-      prompt_version: pt.metadata_summary?.prompt_version ?? null,
-      worker_version: pt.metadata_summary?.worker_version ?? null,
-      model_provider: pt.metadata_summary?.model_provider ?? null,
-      model_name: pt.metadata_summary?.model_name ?? null,
-      sandbox_config: pt.metadata_summary?.sandbox_config ?? {},
-      dispatch_config: pt.metadata_summary?.dispatch_config ?? {},
-    },
-    stats_updated_at: summary.stats_updated_at ?? null,
-    status_counts: {
-      pending: summary.status_counts?.pending ?? 0,
-      executing: summary.status_counts?.executing ?? 0,
-      evaluating: summary.status_counts?.evaluating ?? 0,
-      completed: summary.status_counts?.completed ?? 0,
-      failed: summary.status_counts?.failed ?? 0,
-    },
-    total_runs: summary.total_runs ?? 0,
-    worst_score: summary.worst_score ?? null,
-  };
-}
-
 function normalizeRunExecutionAttempt(execution: RawRunExecutionAttempt): RunExecutionAttempt {
   return {
     ...execution,
@@ -399,32 +280,6 @@ function normalizeRunTaskEvaluation(evaluation: RawRunTaskEvaluation): RunTaskEv
   };
 }
 
-export function parseCohortSummaryList(input: unknown): CohortSummary[] {
-  return CohortSummaryListSchema.parse(input).map(normalizeCohortSummary);
-}
-
-export function parseCohortDetail(input: unknown): CohortDetail {
-  const detail = CohortDetailSchema.parse(input);
-  return {
-    summary: normalizeCohortSummary(detail.summary),
-    experiments: (detail.experiments ?? []).map((experiment) => ({
-      ...experiment,
-      default_evaluator_slug: experiment.default_evaluator_slug ?? null,
-      default_model_target: experiment.default_model_target ?? null,
-      error_message: experiment.error_message ?? null,
-      final_score: experiment.final_score ?? null,
-      status_counts: {
-        pending: experiment.status_counts?.pending ?? 0,
-        executing: experiment.status_counts?.executing ?? 0,
-        evaluating: experiment.status_counts?.evaluating ?? 0,
-        completed: experiment.status_counts?.completed ?? 0,
-        failed: experiment.status_counts?.failed ?? 0,
-      },
-      total_cost_usd: experiment.total_cost_usd ?? null,
-    })),
-  };
-}
-
 export function parseExperimentDetail(input: unknown): ExperimentDetail {
   const detail = ExperimentDetailSchema.parse(input);
   return {
@@ -461,14 +316,6 @@ export function parseExperimentDetail(input: unknown): ExperimentDetail {
       worker_team: run.worker_team ?? {},
     })),
   };
-}
-
-export function parseCohortSummary(input: unknown): CohortSummary {
-  return normalizeCohortSummary(CohortSummarySchema.parse(input));
-}
-
-export function parseUpdateCohortRequest(input: unknown): UpdateCohortRequest {
-  return UpdateCohortRequestSchema.parse(input);
 }
 
 export function parseRunSandbox(input: unknown): RunSandbox {

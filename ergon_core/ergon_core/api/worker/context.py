@@ -11,15 +11,15 @@ from ergon_core.api.benchmark.task import Task
 from ergon_core.api.errors import ContainmentViolation
 from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.application.resources.models import RunResourceView
-from ergon_core.core.application.tasks.models import SubtaskInfo
+from ergon_core.core.application.runtime.task_models import SubtaskInfo
 from ergon_core.core.persistence.shared.types import NodeId, RunId
 
 if TYPE_CHECKING:
     from sqlmodel import Session
 
     from ergon_core.core.application.resources.repository import RunResourceRepository
-    from ergon_core.core.application.tasks.inspection import TaskInspectionService
-    from ergon_core.core.application.tasks.management import TaskManagementService
+    from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
+    from ergon_core.core.application.runtime.task_management import TaskManagementService
 
     TaskManagementServiceAlias: TypeAlias = TaskManagementService
     TaskInspectionServiceAlias: TypeAlias = TaskInspectionService
@@ -164,7 +164,7 @@ class WorkerContext(BaseModel):
         del reason
         await self._assert_descendant(task_id)
         # reason: keep runtime task command imports out of public API module import time.
-        from ergon_core.core.application.tasks.models import CancelTaskCommand
+        from ergon_core.core.application.runtime.task_models import CancelTaskCommand
 
         with self.session_factory() as session:
             await self.task_mgmt.cancel_task(
@@ -177,7 +177,7 @@ class WorkerContext(BaseModel):
 
         await self._assert_descendant(task_id)
         # reason: keep runtime task command imports out of public API module import time.
-        from ergon_core.core.application.tasks.models import RefineTaskCommand
+        from ergon_core.core.application.runtime.task_models import RefineTaskCommand
 
         with self.session_factory() as session:
             await self.task_mgmt.refine_task(
@@ -194,7 +194,7 @@ class WorkerContext(BaseModel):
 
         await self._assert_descendant(task_id)
         # reason: keep runtime task command imports out of public API module import time.
-        from ergon_core.core.application.tasks.models import RestartTaskCommand
+        from ergon_core.core.application.runtime.task_models import RestartTaskCommand
 
         with self.session_factory() as session:
             result = await self.task_mgmt.restart_task(
@@ -226,7 +226,7 @@ class WorkerContext(BaseModel):
                 self.task_inspect.get_subtask(
                     session,
                     run_id=self.run_id,
-                    node_id=task_id,
+                    task_id=task_id,
                 )
                 for task_id in descendant_ids
             )
@@ -239,7 +239,7 @@ class WorkerContext(BaseModel):
             return self.task_inspect.get_subtask(
                 session,
                 run_id=self.run_id,
-                node_id=task_id,
+                task_id=task_id,
             )
 
     async def resources(

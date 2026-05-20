@@ -19,9 +19,6 @@ from ergon_core.core.persistence.shared.enums import (
     TaskExecutionStatus,
 )
 from ergon_core.core.persistence.telemetry.models import (
-    ExperimentCohort,
-    ExperimentCohortStatus,
-    BenchmarkDefinitionRecord,
     RolloutBatch,
     RunRecord,
     RunResource,
@@ -57,11 +54,6 @@ from pydantic import ValidationError
             ),
             "status",
             TaskExecutionStatus.RUNNING,
-        ),
-        (
-            lambda: ExperimentCohort(name="test-cohort", status=ExperimentCohortStatus.ACTIVE),
-            "status",
-            ExperimentCohortStatus.ACTIVE,
         ),
         (
             lambda: RunResource(
@@ -132,25 +124,6 @@ def test_task_execution_rejects_missing_static_or_dynamic_identity():
         )
 
 
-def test_experiment_record_accepts_optional_cohort_and_required_name():
-    experiment = BenchmarkDefinitionRecord.model_validate(
-        {
-            "name": "ci experiment",
-            "benchmark_type": "ci-benchmark",
-            "sample_count": 1,
-            "sample_selection_json": {"instance_keys": ["sample-1"]},
-            "default_worker_team_json": {"primary": "test-worker"},
-            "design_json": {},
-            "metadata_json": {},
-        }
-    )
-
-    assert experiment.cohort_id is None
-    assert experiment.name == "ci experiment"
-    assert experiment.parsed_sample_selection() == {"instance_keys": ["sample-1"]}
-    assert experiment.parsed_default_worker_team() == {"primary": "test-worker"}
-
-
 def test_run_record_uses_definition_identity():
     definition_id = uuid4()
 
@@ -219,12 +192,6 @@ def test_enum_value_matches_string():
             },
             "kind",
             "invalid-kind",
-        ),
-        (
-            ExperimentCohort,
-            {"name": "test-cohort"},
-            "status",
-            "unknown-status",
         ),
         (
             RolloutBatch,

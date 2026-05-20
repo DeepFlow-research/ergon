@@ -21,12 +21,12 @@ import pytest
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import SpawnedTaskHandle
-from ergon_core.core.application.graph.models import MutationMeta
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
-from ergon_core.core.application.tasks import inspection as inspection_module
-from ergon_core.core.application.tasks import management as management_module
-from ergon_core.core.application.tasks.inspection import TaskInspectionService
-from ergon_core.core.application.tasks.management import TaskManagementService
+from ergon_core.core.application.runtime.models import MutationMeta
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime import inspection as inspection_module
+from ergon_core.core.application.runtime import management as management_module
+from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
+from ergon_core.core.application.runtime.task_management import TaskManagementService
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
@@ -34,10 +34,7 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import (
-    BenchmarkDefinitionRecord,
-    RunRecord,
-)
+from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.pool import StaticPool
@@ -53,7 +50,6 @@ class _IdentityTask(Task[_EmptyPayload]):
 
 
 def _session() -> Session:
-    _ = BenchmarkDefinitionRecord
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -73,12 +69,6 @@ def _seed_definition(session: Session) -> tuple[UUID, UUID, set[UUID]]:
     run_id = uuid4()
     session.add_all(
         [
-            BenchmarkDefinitionRecord(
-                id=definition_id,
-                name="identity",
-                benchmark_type="test",
-                sample_count=1,
-            ),
             ExperimentDefinition(
                 id=definition_id, benchmark_type="test", name="test", metadata_json={}
             ),
@@ -136,7 +126,7 @@ def test_task_id_is_preserved_from_definition_to_run_tier() -> None:
     session = _session()
     definition_id, run_id, defn_task_ids = _seed_definition(session)
 
-    repo = WorkflowGraphRepository()
+    repo = RuntimeGraphRepository()
     repo.initialize_from_definition(
         session,
         run_id=run_id,
@@ -169,7 +159,7 @@ async def test_task_id_propagates_into_runtime_task_instance() -> None:
     session = _session()
     definition_id, run_id, defn_task_ids = _seed_definition(session)
 
-    repo = WorkflowGraphRepository()
+    repo = RuntimeGraphRepository()
     repo.initialize_from_definition(
         session,
         run_id=run_id,
@@ -208,7 +198,9 @@ def test_sandbox_identity_is_preserved_across_worker_to_evaluate_boundary() -> N
 
     from pathlib import Path
 
-    from ergon_core.core.application.tasks.repository import TaskExecutionRepository
+    from ergon_core.core.application.runtime.task_execution_repository import (
+        TaskExecutionRepository,
+    )
     from ergon_core.core.persistence.telemetry.models import RunTaskExecution
 
     # Carrier: the execution row owns the sandbox_id.
@@ -218,12 +210,8 @@ def test_sandbox_identity_is_preserved_across_worker_to_evaluate_boundary() -> N
     assert hasattr(TaskExecutionRepository, "set_sandbox_id")
 
     root = Path(__file__).resolve().parents[4]
-    worker_text = (
-        root / "ergon_core/ergon_core/core/application/jobs/worker_execute.py"
-    ).read_text()
-    eval_text = (
-        root / "ergon_core/ergon_core/core/application/jobs/evaluate_task_run.py"
-    ).read_text()
+    worker_text = (root / "ergon_core/ergon_core/core/jobs/task/worker_execute/job.py").read_text()
+    eval_text = (root / "ergon_core/ergon_core/core/jobs/task/evaluate/job.py").read_text()
 
     # Producer side: worker_execute stamps sandbox_id on the row.
     assert "set_sandbox_id(" in worker_text
@@ -252,17 +240,17 @@ def test_execution_id_is_unique_per_attempt_and_shared_across_evaluators() -> No
     import inspect
     from pathlib import Path
 
-    from ergon_core.core.application.jobs.models import TaskEvaluateRequest
-    from ergon_core.core.application.tasks.repository import TaskExecutionRepository
+    from ergon_core.core.jobs.task.evaluate.contract import TaskEvaluateRequest
+    from ergon_core.core.application.runtime.task_execution_repository import (
+        TaskExecutionRepository,
+    )
 
     # (a) execution_id is on the payload.
     assert "execution_id" in TaskEvaluateRequest.model_fields
 
     # (b) the fanout reuses the same execution_id across evaluator_indices.
     root = Path(__file__).resolve().parents[4]
-    orchestrator = (
-        root / "ergon_core/ergon_core/core/application/jobs/execute_task.py"
-    ).read_text()
+    orchestrator = (root / "ergon_core/ergon_core/core/jobs/task/execute/job.py").read_text()
     fanout_start = orchestrator.find("def _fan_out_evaluators")
     assert fanout_start != -1, "fanout helper must exist on the orchestrator"
     # Slice until the next top-level `def `; the docstring length isn't
@@ -341,7 +329,6 @@ async def test_dynamic_task_id_has_no_definition_row(
     """Δ.3: dynamic spawn writes only to run_graph_nodes."""
 
     # 1. In-memory SQLite with all tables.
-    _ = BenchmarkDefinitionRecord  # ensure telemetry models are registered
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -354,9 +341,14 @@ async def test_dynamic_task_id_has_no_definition_row(
     parent = _seed_identity_parent(session, run_id=run_id)
 
     _patch_get_session_identity(monkeypatch, session)
+    monkeypatch.setattr(
+        management_module, "definition_id_for_run", lambda _session, _run_id: uuid4()
+    )
 
-    task_mgmt = TaskManagementService(dashboard_emitter=SimpleNamespace(graph_mutation=AsyncMock()))
-    monkeypatch.setattr(task_mgmt, "_dispatch_task_ready", AsyncMock())
+    task_mgmt = TaskManagementService(
+        dashboard_emitter=SimpleNamespace(graph_mutation=AsyncMock()),
+        task_ready_dispatcher=AsyncMock(),
+    )
     task_inspect = TaskInspectionService()
     context = WorkerContext._for_job(
         run_id=run_id,

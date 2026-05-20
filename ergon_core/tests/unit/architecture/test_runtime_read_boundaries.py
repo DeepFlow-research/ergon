@@ -18,7 +18,7 @@ def test_worker_execute_does_not_read_definition_repository() -> None:
     final-state ledger's `worker_execute_imports_only_run_tier` check;
     this guard is the per-PR version that PR 3 flips green."""
 
-    text = (ROOT / "ergon_core/ergon_core/core/application/jobs/worker_execute.py").read_text()
+    text = (ROOT / "ergon_core/ergon_core/core/jobs/task/worker_execute/job.py").read_text()
     assert "DefinitionRepository" not in text, (
         "worker_execute imports DefinitionRepository; the run-tier read "
         "boundary (Δ.2) forbids this."
@@ -46,7 +46,7 @@ def test_worker_execute_prefers_task_worker_over_payload_bridge() -> None:
     the sibling module and the ``if worker is None:`` branch.
     """
 
-    text = (ROOT / "ergon_core/ergon_core/core/application/jobs/worker_execute.py").read_text()
+    text = (ROOT / "ergon_core/ergon_core/core/jobs/task/worker_execute/job.py").read_text()
     assert "ComponentCatalogService" not in text, (
         "worker_execute body must not import the registry directly — "
         "runtime code must read object-bound workers from task.worker."
@@ -65,7 +65,7 @@ def test_worker_execute_prefers_task_worker_over_payload_bridge() -> None:
 def test_evaluate_task_run_uses_thin_payload_and_run_tier_read() -> None:
     """`evaluate_task_run.py` reads from the run tier via id-only payload."""
 
-    body = (ROOT / "ergon_core/ergon_core/core/application/jobs/evaluate_task_run.py").read_text()
+    body = (ROOT / "ergon_core/ergon_core/core/jobs/task/evaluate/job.py").read_text()
 
     # Thin payload only.
     assert "TaskEvaluateRequest" in body
@@ -83,17 +83,17 @@ def test_evaluate_task_run_uses_thin_payload_and_run_tier_read() -> None:
     assert "ComponentCatalogService" not in body
 
     # Uses the same run-tier loader the orchestrator uses.
-    assert "WorkflowGraphRepository" in body
+    assert "RuntimeGraphRepository" in body
     assert ".node(" in body
 
 
 def test_evaluate_task_run_uses_object_bound_evaluators() -> None:
     """The eval body dispatches on ``task.evaluators[index]``."""
 
-    import ergon_core.core.application.jobs as jobs_pkg
+    import ergon_core.core.jobs.task.evaluate as jobs_pkg
     from pathlib import Path
 
-    body = (ROOT / "ergon_core/ergon_core/core/application/jobs/evaluate_task_run.py").read_text()
+    body = (ROOT / "ergon_core/ergon_core/core/jobs/task/evaluate/job.py").read_text()
     assert "task.evaluators[" in body, (
         "PR 5 binds evaluators directly to the Task; the eval worker "
         "must dispatch on task.evaluators[index]."
@@ -108,7 +108,7 @@ def test_evaluate_task_run_uses_object_bound_evaluators() -> None:
 def test_evaluate_task_run_detaches_sandbox() -> None:
     """The eval body releases its local sandbox handle on the way out."""
 
-    body = (ROOT / "ergon_core/ergon_core/core/application/jobs/evaluate_task_run.py").read_text()
+    body = (ROOT / "ergon_core/ergon_core/core/jobs/task/evaluate/job.py").read_text()
     assert "task.sandbox.detach()" in body, (
         "PR 5 wires Sandbox.detach() into the eval body's finally so "
         "the local runtime handle is always released."
@@ -126,7 +126,7 @@ def test_execute_task_fans_out_via_step_invoke() -> None:
     sibling sandbox_cleanup functions gated on terminal task events.
     """
 
-    body = (ROOT / "ergon_core/ergon_core/core/application/jobs/execute_task.py").read_text()
+    body = (ROOT / "ergon_core/ergon_core/core/jobs/task/execute/job.py").read_text()
     assert "ctx.step.invoke" in body
     assert "evaluate_task_run_function" in body
     assert "ctx.group.parallel" in body, (

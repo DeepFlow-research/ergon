@@ -4,8 +4,8 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.core.application.jobs.models import PersistOutputsRequest
-from ergon_core.core.application.jobs.persist_outputs import run_persist_outputs_job
+from ergon_core.core.jobs.resources.persist_outputs.contract import PersistOutputsRequest
+from ergon_core.core.jobs.resources.persist_outputs.job import run_persist_outputs_job
 
 
 class _FakeGraphRepo:
@@ -35,18 +35,22 @@ class _FakePublisher:
         cls.sandbox = kwargs["sandbox"]
         return cls(**kwargs)
 
-    async def sync(self):
+
+class _FakePublishService:
+    async def publish_sandbox_files(self, **kwargs):
         return [object(), object()]
 
 
 @pytest.mark.asyncio
 async def test_persist_outputs_publishes_from_public_sandbox_output_path(monkeypatch) -> None:
-    from ergon_core.core.application.jobs import persist_outputs as module
+    from ergon_core.core.jobs.resources.persist_outputs import composition
+    from ergon_core.core.jobs.resources.persist_outputs import job as module
 
     seen_sandbox_ids: list[str | None] = []
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(object()))
-    monkeypatch.setattr(module, "WorkflowGraphRepository", lambda: _FakeGraphRepo(seen_sandbox_ids))
-    monkeypatch.setattr(module, "SandboxResourcePublisher", _FakePublisher)
+    monkeypatch.setattr(module, "RuntimeGraphRepository", lambda: _FakeGraphRepo(seen_sandbox_ids))
+    monkeypatch.setattr(composition, "SandboxResourcePublisher", _FakePublisher)
+    monkeypatch.setattr(composition, "RunResourcePublishService", _FakePublishService)
 
     result = await run_persist_outputs_job(
         PersistOutputsRequest(

@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution
-from ergon_core.core.application.tasks.repository import TaskExecutionRepository
+from ergon_core.core.application.runtime.task_execution_repository import TaskExecutionRepository
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -50,16 +50,14 @@ def _node(session: Session, run_id: UUID) -> UUID:
 def _execution(
     *,
     run_id: UUID,
-    node_id: UUID,
+    task_id: UUID,
     attempt_number: int,
     started_at: datetime,
-    task_id: UUID | None = None,
     message: str = "output",
 ) -> RunTaskExecution:
     return RunTaskExecution(
         run_id=run_id,
-        node_id=node_id,
-        task_id=task_id or node_id,
+        task_id=task_id,
         attempt_number=attempt_number,
         status=TaskExecutionStatus.COMPLETED,
         started_at=started_at,
@@ -74,21 +72,21 @@ def test_latest_for_node_orders_by_attempt_then_started_at() -> None:
     now = datetime(2026, 4, 28, 12, 0, tzinfo=UTC)
     older_attempt_two = _execution(
         run_id=run_id,
-        node_id=node_id,
+        task_id=node_id,
         attempt_number=2,
         started_at=now,
         message="attempt-two-old",
     )
     newer_attempt_one = _execution(
         run_id=run_id,
-        node_id=node_id,
+        task_id=node_id,
         attempt_number=1,
         started_at=now + timedelta(minutes=10),
         message="attempt-one-newer",
     )
     newer_attempt_two = _execution(
         run_id=run_id,
-        node_id=node_id,
+        task_id=node_id,
         attempt_number=2,
         started_at=now + timedelta(minutes=5),
         message="attempt-two-new",
@@ -110,8 +108,8 @@ def test_next_attempt_counts_existing_node_executions() -> None:
     now = datetime(2026, 4, 28, 12, 0, tzinfo=UTC)
     session.add_all(
         [
-            _execution(run_id=run_id, node_id=node_id, attempt_number=1, started_at=now),
-            _execution(run_id=run_id, node_id=node_id, attempt_number=2, started_at=now),
+            _execution(run_id=run_id, task_id=node_id, attempt_number=1, started_at=now),
+            _execution(run_id=run_id, task_id=node_id, attempt_number=2, started_at=now),
         ]
     )
     session.commit()

@@ -14,9 +14,9 @@ import pytest
 from ergon_core.core.application.runtime.status import BLOCKED
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
-from ergon_core.core.application.tasks.errors import TaskNotTerminalError
-from ergon_core.core.application.tasks.models import RestartTaskCommand
-from ergon_core.core.application.tasks.management import TaskManagementService
+from ergon_core.core.application.runtime.task_errors import TaskNotTerminalError
+from ergon_core.core.application.runtime.task_models import RestartTaskCommand
+from ergon_core.core.application.runtime.task_management import TaskManagementService
 
 from tests.integration.propagation._helpers import (
     get_node_status,
@@ -29,7 +29,7 @@ from tests.integration.restart._helpers import cleanup_run
 
 pytestmark = pytest.mark.integration
 
-_TMS_INNGEST = "ergon_core.core.application.tasks.management.inngest_client"
+_TMS_INNGEST = "ergon_core.core.application.runtime.task_management.inngest_client"
 _EMITTER_INNGEST = "ergon_core.core.infrastructure.dashboard.emitter.inngest_client"
 
 

@@ -42,8 +42,8 @@ class MiniF2FSmokeWorker(RecursiveSmokeWorkerMixin, SmokeWorkerBase):
 class MiniF2FSubworker:
     """Writes a trivial .lean proof + runs ``lean --check`` as the probe."""
 
-    async def work(self, node_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
-        proof_path = f"/workspace/final_output/proof_{node_id}.lean"
+    async def work(self, task_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
+        proof_path = f"/workspace/final_output/proof_{task_id}.lean"
         await sandbox.files.write(proof_path, LEAN_SOURCE)
 
         # ``|| true`` keeps the leaf-side probe exit deterministic even if
@@ -54,7 +54,7 @@ class MiniF2FSubworker:
             timeout=60,
         )
         probe_stdout = ("" if probe.stdout is None else probe.stdout).strip()[:4096]
-        probe_path = f"/workspace/final_output/probe_{node_id}.json"
+        probe_path = f"/workspace/final_output/probe_{task_id}.json"
         await sandbox.files.write(
             probe_path,
             json.dumps({"exit_code": probe.exit_code, "stdout": probe_stdout}),

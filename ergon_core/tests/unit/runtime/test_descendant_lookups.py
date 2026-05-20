@@ -1,14 +1,12 @@
-"""Tests for WorkflowGraphRepository.descendants_by_parent and
-TaskInspectionService.descendant_ids.
-"""
+"""Tests for runtime containment traversal and TaskInspectionService.descendant_ids."""
 
 from uuid import UUID, uuid4
 
 import pytest
 from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
-from ergon_core.core.application.tasks import inspection as inspection_module
-from ergon_core.core.application.tasks.inspection import TaskInspectionService
+from ergon_core.core.application.runtime import inspection as inspection_module
+from ergon_core.core.application.runtime.graph_traversal import descendants
+from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -51,16 +49,15 @@ def _node(
 
 
 # ---------------------------------------------------------------------------
-# WorkflowGraphRepository.descendants_by_parent tests
+# runtime graph_traversal.descendants tests
 # ---------------------------------------------------------------------------
 
 
-class TestDescendantsByParent:
+class TestContainmentDescendants:
     def test_returns_direct_and_transitive_children(self) -> None:
         """root → child1, root → child2, child1 → grandchild: 3 rows returned."""
         session = _make_session()
         run_id = uuid4()
-        repo = WorkflowGraphRepository()
 
         root = _node(session, run_id=run_id, slug="root")
         child1 = _node(session, run_id=run_id, slug="child1", parent_task_id=root.task_id)
@@ -68,7 +65,7 @@ class TestDescendantsByParent:
         grandchild = _node(session, run_id=run_id, slug="grandchild", parent_task_id=child1.task_id)
         session.commit()
 
-        rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=root.task_id)
+        rows = descendants(session, run_id=run_id, root_task_id=root.task_id)
         result_ids = {row.task_id for row in rows}
 
         assert result_ids == {child1.task_id, child2.task_id, grandchild.task_id}
@@ -77,14 +74,13 @@ class TestDescendantsByParent:
         """root and an unrelated sibling at run root level are excluded."""
         session = _make_session()
         run_id = uuid4()
-        repo = WorkflowGraphRepository()
 
         root = _node(session, run_id=run_id, slug="root")
         child1 = _node(session, run_id=run_id, slug="child1", parent_task_id=root.task_id)
         sibling = _node(session, run_id=run_id, slug="sibling")  # no parent_task_id
         session.commit()
 
-        rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=root.task_id)
+        rows = descendants(session, run_id=run_id, root_task_id=root.task_id)
         result_ids = {row.task_id for row in rows}
 
         assert root.task_id not in result_ids
@@ -95,19 +91,17 @@ class TestDescendantsByParent:
         """A leaf node returns ()."""
         session = _make_session()
         run_id = uuid4()
-        repo = WorkflowGraphRepository()
 
         leaf = _node(session, run_id=run_id, slug="leaf")
         session.commit()
 
-        rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=leaf.task_id)
-        assert rows == ()
+        rows = descendants(session, run_id=run_id, root_task_id=leaf.task_id)
+        assert rows == []
 
     def test_depth_greater_than_two(self) -> None:
         """Recursion works past depth 2: root → A → B → C → D."""
         session = _make_session()
         run_id = uuid4()
-        repo = WorkflowGraphRepository()
 
         root = _node(session, run_id=run_id, slug="root")
         a = _node(session, run_id=run_id, slug="a", parent_task_id=root.task_id)
@@ -116,7 +110,7 @@ class TestDescendantsByParent:
         d = _node(session, run_id=run_id, slug="d", parent_task_id=c.task_id)
         session.commit()
 
-        rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=root.task_id)
+        rows = descendants(session, run_id=run_id, root_task_id=root.task_id)
         result_ids = {row.task_id for row in rows}
 
         assert result_ids == {a.task_id, b.task_id, c.task_id, d.task_id}
@@ -126,7 +120,6 @@ class TestDescendantsByParent:
         session = _make_session()
         run_id = uuid4()
         other_run_id = uuid4()
-        repo = WorkflowGraphRepository()
 
         root = _node(session, run_id=run_id, slug="root")
         child = _node(session, run_id=run_id, slug="child", parent_task_id=root.task_id)
@@ -134,7 +127,7 @@ class TestDescendantsByParent:
         other = _node(session, run_id=other_run_id, slug="other", parent_task_id=root.task_id)
         session.commit()
 
-        rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=root.task_id)
+        rows = descendants(session, run_id=run_id, root_task_id=root.task_id)
         result_ids = {row.task_id for row in rows}
 
         assert result_ids == {child.task_id}
@@ -148,7 +141,7 @@ class TestDescendantsByParent:
 
 class TestTaskInspectionServiceDescendantIds:
     async def test_returns_same_set_as_repository(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """descendant_ids returns a frozenset matching descendants_by_parent."""
+        """descendant_ids returns a frozenset matching runtime traversal."""
         session = _make_session()
         run_id = uuid4()
 
@@ -161,8 +154,7 @@ class TestTaskInspectionServiceDescendantIds:
         # Patch get_session in the inspection module to return the test session
         monkeypatch.setattr(inspection_module, "get_session", lambda: session)
 
-        repo = WorkflowGraphRepository()
-        svc = TaskInspectionService(graph_repo=repo)
+        svc = TaskInspectionService()
 
         result = await svc.descendant_ids(run_id=run_id, root_task_id=root.task_id)
 
@@ -181,8 +173,7 @@ class TestTaskInspectionServiceDescendantIds:
 
         monkeypatch.setattr(inspection_module, "get_session", lambda: session)
 
-        repo = WorkflowGraphRepository()
-        svc = TaskInspectionService(graph_repo=repo)
+        svc = TaskInspectionService()
 
         result = await svc.descendant_ids(run_id=run_id, root_task_id=leaf.task_id)
 
@@ -201,8 +192,7 @@ class TestTaskInspectionServiceDescendantIds:
 
         monkeypatch.setattr(inspection_module, "get_session", lambda: session)
 
-        repo = WorkflowGraphRepository()
-        svc = TaskInspectionService(graph_repo=repo)
+        svc = TaskInspectionService()
 
         result = await svc.descendant_ids(run_id=run_id, root_task_id=root.task_id)
 

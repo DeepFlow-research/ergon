@@ -24,11 +24,11 @@ from ergon_core.core.persistence.shared.types import (
     AssignedWorkerSlug,
     TaskSlug,
 )
-from ergon_core.core.application.tasks.models import (
-    SubtaskSpec,
-)
 from tests.fixtures.smoke_components.smoke_base.constants import SUBTASK_GRAPH
-from tests.fixtures.smoke_components.smoke_base.dynamic_tasks import smoke_task_from_spec
+from tests.fixtures.smoke_components.smoke_base.dynamic_tasks import (
+    SmokeChildTaskSpec,
+    smoke_task_from_spec,
+)
 
 
 class SmokeWorkerBase(Worker):
@@ -41,7 +41,7 @@ class SmokeWorkerBase(Worker):
 
     # Subclasses set this to the env-specific leaf slug,
     # e.g. ``"researchrubrics-smoke-leaf"``.  ``_spec_for`` returns
-    # ``SubtaskSpec(assigned_worker_slug=AssignedWorkerSlug(self.leaf_slug))``
+    # ``SmokeChildTaskSpec(assigned_worker_slug=AssignedWorkerSlug(self.leaf_slug))``
     # by default.
     leaf_slug: ClassVar[str]
 
@@ -124,7 +124,7 @@ class SmokeWorkerBase(Worker):
         slug: str,
         deps: tuple[str, ...],
         desc: str,
-    ) -> SubtaskSpec:
+    ) -> SmokeChildTaskSpec:
         """Overridable per-slug → (assigned_worker_slug, deps) mapping.
 
         Default routes every slug to ``self.leaf_slug``.  Sad-path
@@ -133,7 +133,7 @@ class SmokeWorkerBase(Worker):
         ``execute`` stays ``@final`` so topology is never changed; only
         the leaf binding is.
         """
-        return SubtaskSpec(
+        return SmokeChildTaskSpec(
             task_slug=TaskSlug(slug),
             description=desc,
             assigned_worker_slug=AssignedWorkerSlug(self.leaf_slug),

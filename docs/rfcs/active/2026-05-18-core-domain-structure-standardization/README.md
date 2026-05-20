@@ -1,5 +1,5 @@
 ---
-status: active
+status: landed
 opened: 2026-05-18
 author: charlie + agent
 architecture_refs:
@@ -112,6 +112,14 @@ The engineering PR stack lives in
 Each PR plan is intentionally separate from the PRDs and includes the "what",
 "why", "how", planned implementation steps, acceptance criteria, and test gates
 for that slice.
+
+## Implementation Status
+
+The implementation-plan stack has landed as of 2026-05-19. PR12 added the
+final architecture gates for the accepted `ergon_core.core` folder shape,
+deleted roots, deleted compatibility names, import boundaries, and the docs
+status recorded here. Future changes should update `docs/architecture/*` and
+the architecture gates when they intentionally alter the landed layout.
 
 ## Evidence
 

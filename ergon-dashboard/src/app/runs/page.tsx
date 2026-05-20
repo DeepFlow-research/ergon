@@ -10,7 +10,7 @@ export default function RunsPage() {
             Runs
           </h1>
           <p className="mt-1.5 text-[13px] text-[var(--muted)]">
-            Browse all runs across cohorts. Filter by status, benchmark, or time range.
+            Browse all runs across experiment groups. Filter by status, benchmark, or time range.
           </p>
         </div>
       </header>
@@ -19,7 +19,7 @@ export default function RunsPage() {
           <div className="mx-auto mb-3 text-3xl text-[var(--faint)]">⊘</div>
           <h2 className="text-lg font-medium text-[var(--ink)]">Coming soon</h2>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            The cross-cohort runs view is under development. For now, access runs through individual cohort pages.
+            The grouped runs view is under development. For now, access runs through experiment pages.
           </p>
         </div>
       </main>

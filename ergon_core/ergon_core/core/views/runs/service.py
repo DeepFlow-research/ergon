@@ -2,10 +2,10 @@
 
 import os
 from pathlib import Path
-from typing import cast
 from uuid import UUID
 
 from ergon_core.core.views.runs.models import (
+    RunSummaryDto,
     RunSnapshotDto,
 )
 from ergon_core.core.persistence.context.models import RunContextEvent
@@ -14,15 +14,12 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionWorker,
 )
 from ergon_core.core.persistence.graph.models import (
-    GraphTargetType,
-    MutationType,
     RunGraphEdge,
     RunGraphMutation,
     RunGraphNode,
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.shared.types import RunId
 from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunResource,
@@ -31,7 +28,7 @@ from ergon_core.core.persistence.telemetry.models import (
     Thread,
     ThreadMessage,
 )
-from ergon_core.core.application.graph.models import GraphMutationRecordDto, GraphMutationValue
+from ergon_core.core.application.runtime.models import GraphMutationRecordDto
 from ergon_core.core.application.evaluation.scoring import (
     EvaluationScoreSummary,
     aggregate_evaluation_scores,
@@ -47,6 +44,7 @@ from ergon_core.core.views.runs.snapshot import (
     _task_timestamps,
 )
 from ergon_core.core.views.resources import require_viewable_resource_size
+from ergon_core.core.views.dashboard_events.graph_mutations import graph_mutation_record_from_row
 from pydantic import BaseModel
 from sqlmodel import col, select
 
@@ -61,6 +59,31 @@ class RunResourceBlob(BaseModel):
 
 class RunReadService:
     """Owns database reads and DTO shaping for run API endpoints."""
+
+    def list_runs(
+        self,
+        *,
+        limit: int = 20,
+        status: str | None = None,
+        definition_id: UUID | None = None,
+        experiment: str | None = None,
+    ) -> list[RunSummaryDto]:
+        with get_session() as session:
+            stmt = select(RunRecord).order_by(col(RunRecord.created_at).desc())
+            if status:
+                stmt = stmt.where(RunRecord.status == status)
+            if definition_id:
+                stmt = stmt.where(RunRecord.definition_id == definition_id)
+            if experiment:
+                stmt = stmt.where(RunRecord.experiment == experiment)
+            stmt = stmt.limit(limit)
+            rows = list(session.exec(stmt).all())
+        return [_run_summary(row) for row in rows]
+
+    def get_run_summary(self, run_id: UUID) -> RunSummaryDto | None:
+        with get_session() as session:
+            run = session.get(RunRecord, run_id)
+        return _run_summary(run) if run is not None else None
 
     def build_run_snapshot(self, run_id: UUID) -> RunSnapshotDto | None:
         with get_session() as session:
@@ -200,22 +223,7 @@ class RunReadService:
                 ).all()
             )
 
-        return [
-            GraphMutationRecordDto(
-                id=m.id,
-                run_id=cast(RunId, m.run_id),
-                sequence=m.sequence,
-                mutation_type=cast(MutationType, m.mutation_type),
-                target_type=cast(GraphTargetType, m.target_type),
-                target_id=m.target_id,
-                actor=m.actor,
-                old_value=cast("GraphMutationValue | None", m.old_value),
-                new_value=cast(GraphMutationValue, m.new_value),
-                reason=m.reason,
-                created_at=m.created_at,
-            )
-            for m in mutations
-        ]
+        return [graph_mutation_record_from_row(m) for m in mutations]
 
     def get_resource_blob(self, run_id: UUID, resource_id: UUID) -> RunResourceBlob | None:
         with get_session() as session:
@@ -245,6 +253,22 @@ def _display_run_score(score_summary: EvaluationScoreSummary, run_status: str) -
         return None
     # TODO: this is a hack, we need to fix the calculation / rename variables to make clear that the output score should be normalised by here.
     return score_summary.normalized_score
+
+
+def _run_summary(run: RunRecord) -> RunSummaryDto:
+    return RunSummaryDto(
+        id=run.id,
+        status=str(run.status),
+        created_at=run.created_at,
+        started_at=run.started_at,
+        completed_at=run.completed_at,
+        definition_id=run.definition_id,
+        benchmark_type=run.benchmark_type,
+        instance_key=run.instance_key,
+        evaluator_slug=run.evaluator_slug,
+        model_target=run.model_target,
+        error_message=run.error_message,
+    )
 
 
 def _blob_root() -> Path:

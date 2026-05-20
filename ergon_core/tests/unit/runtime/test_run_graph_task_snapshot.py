@@ -1,6 +1,6 @@
 """PR 1 focused tests — run-tier task snapshot foundation.
 
-Asserts that `WorkflowGraphRepository.initialize_from_definition`
+Asserts that `RuntimeGraphRepository.initialize_from_definition`
 populates `task_json` and `is_dynamic` correctly, and that `add_node`
 can accept dynamic task JSON for graph-native spawns.
 """
@@ -10,8 +10,8 @@ from __future__ import annotations
 from uuid import UUID, uuid4
 
 import pytest
-from ergon_core.core.application.graph.models import MutationMeta
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.runtime.models import MutationMeta
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
@@ -113,7 +113,7 @@ def test_initialize_from_definition_copies_task_json() -> None:
         run_id=run_id,
     )
 
-    repo = WorkflowGraphRepository()
+    repo = RuntimeGraphRepository()
     repo.initialize_from_definition(
         session,
         run_id=run_id,
@@ -151,7 +151,7 @@ async def test_graph_repo_node_inflates_task_from_run_tier() -> None:
         run_id=run_id,
     )
 
-    repo = WorkflowGraphRepository()
+    repo = RuntimeGraphRepository()
     # Populate task_json via the PR 1 path so the view has something to
     # inflate.
     repo.initialize_from_definition(
@@ -183,7 +183,7 @@ def test_graph_repo_node_does_not_reference_definition_tier_models() -> None:
 
     import inspect
 
-    source = inspect.getsource(WorkflowGraphRepository.node)
+    source = inspect.getsource(RuntimeGraphRepository.node)
     forbidden = (
         "DefinitionRepository",
         "ExperimentDefinitionTask",
@@ -192,7 +192,7 @@ def test_graph_repo_node_does_not_reference_definition_tier_models() -> None:
     )
     offenders = [symbol for symbol in forbidden if symbol in source]
     assert offenders == [], (
-        f"WorkflowGraphRepository.node references definition-tier symbols "
+        f"RuntimeGraphRepository.node references definition-tier symbols "
         f"{offenders}; the run-tier read boundary forbids these."
     )
 
@@ -208,7 +208,7 @@ async def test_add_node_can_write_dynamic_task_json() -> None:
         run_id=run_id,
     )
 
-    repo = WorkflowGraphRepository()
+    repo = RuntimeGraphRepository()
     payload = {
         "_type": "ergon_core.api.benchmark.task:Task",
         "task_slug": "child",
@@ -242,7 +242,7 @@ def test_initialize_from_definition_can_seed_same_task_ids_for_multiple_runs() -
     _seed_run(session, definition_id=definition_id, run_id=run_a)
     _seed_run(session, definition_id=definition_id, run_id=run_b)
 
-    repo = WorkflowGraphRepository()
+    repo = RuntimeGraphRepository()
     for run_id in (run_a, run_b):
         repo.initialize_from_definition(
             session,

@@ -30,9 +30,11 @@ Each Inngest function is a thin wrapper around one service. The services are uni
 
 ### Inngest fabric
 
-- **`inngest_client`** (`inngest_client.py:6`) — singleton app. All runtime functions register against it and are collected in `inngest_registry.ALL_FUNCTIONS`.
-- **`RUN_CANCEL`** / **`TASK_CANCEL`** matchers (`inngest_client.py:17-32`) — declarative cancel predicates attached to every long-running function decorator. When a `run/cancelled` event arrives, Inngest kills every in-flight function whose trigger payload carries the matching `run_id`.
-- **Event contracts** under `runtime/events/` — `WorkflowStartedEvent`, `TaskReadyEvent`, `TaskCompletedEvent`, `TaskFailedEvent`, `TaskCancelledEvent`, `WorkflowCompletedEvent`, `WorkflowFailedEvent`, `RunCancelledEvent`, `RunCleanupEvent`. Each defines its own Inngest event name and Pydantic payload; nothing else is allowed to trigger a transition.
+- **`core/jobs/**/{contract,job,inngest}.py`** — every durable job owns its orchestration body and Inngest adapter together. `contract.py` is a compatibility export for the canonical application event DTOs. `job.py` owns business orchestration. `inngest.py` owns framework registration and decorator metadata.
+- **`inngest_client`** (`core/infrastructure/inngest/client.py`) — singleton app. Job-local `inngest.py` modules register functions against it and `core/infrastructure/inngest/registry.py::ALL_FUNCTIONS` lists the serving order.
+- **`RUN_CANCEL`** / **`TASK_CANCEL`** matchers — declarative cancel predicates attached to long-running function decorators. When a `run/cancelled` event arrives, Inngest kills every in-flight function whose trigger payload carries the matching `run_id`.
+- **Runtime event contracts** under `core/application/events/runtime.py` — `WorkflowStartedEvent`, `TaskReadyEvent`, `TaskCompletedEvent`, `TaskFailedEvent`, `TaskCancelledEvent`, `WorkflowCompletedEvent`, `WorkflowFailedEvent`, and `RunCleanupEvent`. Each defines its own Inngest event name and Pydantic payload; job-local `contract.py` files re-export those application-owned DTOs so existing imports stay narrow while runtime services can depend on event shapes without importing jobs.
+- **Composition boundary** — concrete Inngest client sends and sandbox adapter wiring live in `inngest.py` or job-local composition helpers such as `core/jobs/_events.py`, not in `job.py`. Architecture tests enforce this narrower PR10 boundary while PR11 finishes moving runtime data access behind services.
 
 ### Freeze status
 
@@ -67,14 +69,14 @@ benchmark-run-start ─► workflow/started                               │  f
                               │
            ┌──────────────────┼──────────────────────┐
            ▼                  ▼                      ▼
-   task-propagate     task-check-evaluators     cancel-orphans-on-completed
-     • edges→SAT        • one evaluate-task-run    • BFS subtree →
-     • deps-sat           per binding               CANCELLED
-       node→PENDING     • terminate sandbox          (emits task/cancelled
-     • workflow         after last criterion         per transitioned node)
-       terminal?                  │
-           │                      ▼
-           ▼               RunTaskEvaluation row
+   task-propagate       sandbox-cleanup       cancel-orphans-on-cancelled
+     • edges→SAT        • terminal task event  • BFS subtree →
+     • deps-sat           releases sandbox       CANCELLED
+       node→PENDING                             (emits task/cancelled
+     • workflow                                  per transitioned node)
+       terminal?
+           │
+           ▼
    workflow/completed
      or workflow/failed
            │
@@ -85,11 +87,11 @@ benchmark-run-start ─► workflow/started                               │  f
            │
            ▼
    run-cleanup
-     • BaseSandboxManager.terminate_by_sandbox_id
+     • terminate external sandbox if present
      • reconcile RunRecord.status
 ```
 
-Three fan-out levels, each owned by a distinct function: `workflow-start` fans out ready tasks, `task-check-evaluators` fans out per-binding evaluator runs, and each evaluator's own criteria are executed as durable steps inside `evaluate-task-run`. The only synchronization point is `is_workflow_complete_v2` / `is_workflow_failed_v2`, which `task-propagate` consults on every terminal to decide whether to emit `workflow/completed` or `workflow/failed`.
+Three fan-out levels remain, but PR10 colocates them under `core/jobs`: `workflow-start` fans out ready tasks, `task-execute` invokes `evaluate-task-run` once per evaluator binding after worker output persistence, and each evaluator's own criteria are executed inside `evaluate-task-run`. The workflow synchronization point lives in propagation services that `task-propagate` consults on every terminal to decide whether to emit `workflow/completed` or `workflow/failed`.
 
 Dashboard delivery hangs off state mutation (see `05_dashboard.md`); it is not a gating concern for runtime correctness — if the dashboard is down, runs still finish.
 
@@ -107,19 +109,19 @@ Dashboard delivery hangs off state mutation (see `05_dashboard.md`); it is not a
 
 6. **Cascade cancellation is one transaction, not an event chain.** `SubtaskCancellationService.cancel_orphans` walks the entire descendant subtree via BFS on `parent_node_id` in a single DB transaction (`subtask_cancellation_service.py:66-111`). A dropped or delayed Inngest event cannot leave a grandchild running under a cancelled parent. The subsequent `task/cancelled` events are for per-node cleanup, not recursion.
 
-7. **Sandbox lifecycle is per-task, teardown happens after evaluators.** `task-execute` provisions a sandbox through the benchmark's manager; the sandbox stays alive through worker execution, output persistence, the evaluator fan-out, and every criterion run. `task-check-evaluators` calls `BaseSandboxManager.terminate_by_sandbox_id` after the last criterion terminates (`check_evaluators.py:82`). `run-cleanup` terminates any residual sandbox recorded on the `RunRecord.summary_json`. See `03_providers.md` §4 for the definitive treatment.
+7. **Sandbox lifecycle is per-task, teardown happens after evaluators.** `task-execute` invokes `sandbox-setup`, then keeps that sandbox id alive through worker execution, output persistence, evaluator fan-out, and every criterion run. Only after those steps finish does it emit `task/completed`; `sandbox-cleanup-on-completed` and `sandbox-cleanup-on-failed` own teardown from terminal task events. `run-cleanup` remains a run-level reconciliation leg for residual sandbox ids recorded on the `RunRecord.summary_json`. See `03_providers.md` §4 for the definitive treatment.
 
 8. **Workflow finalization is replay-safe.** `workflow-complete` and `workflow-failed` re-read the current `RunRecord` and evaluation rows each invocation; repeated delivery writes the same terminal status with the same completion timestamp logic. `run-cleanup` checks the status before overwriting.
 
 ### 4.1 Known limits
 
 - **Static-sibling failure auto-cancels today.** When a static task (no `parent_node_id`) fails, `propagation.on_task_completed_or_failed` marks its siblings CANCELLED (`execution/propagation.py:515-526`). The intended fractal-OS semantic is that static siblings stay PENDING so a higher-level manager can adapt — matching managed-subtask behavior. Changing this also requires teaching `is_workflow_complete_v2` to terminate on blocked-by-failed chains, otherwise workflows hang. Tracked in `docs/rfcs/active/2026-04-17-static-sibling-failure-semantics.md`.
-- **Cancellation does not release sandboxes.** `cleanup-cancelled-task` updates the execution row but its `release-sandbox` step is a stub (`services/task_cleanup_service.py:53-54`). Cancelled runs leak sandboxes until the E2B idle timeout fires, or until `run-cleanup` terminates the run-level sandbox id. Tracked in `docs/rfcs/active/2026-04-17-cleanup-cancelled-task-release-sandbox.md`.
+- **Cancellation cleanup is still being consolidated.** `cleanup-cancelled-task` releases a sandbox when the cleanup service can identify one, but cancel payloads still do not carry first-class sandbox/benchmark identity. PR11 should finish this handoff so cancellation cleanup no longer depends on execution-row lookup.
 - **`RunTaskStateEvent` is deprecated and unread.** Propagation no longer writes to it (`propagation.py:7-8`). `StateEventsQueries` is the last reader and goes away with the table in `docs/rfcs/active/2026-04-17-delete-run-task-state-event.md`. New code must read state from `RunGraphNode` via `GraphNodeLookup`.
 
 ## 5. Extension points
 
-- **Adding a new Inngest function.** Define the event payload in `runtime/events/` (subclass `InngestEventContract` with a `ClassVar[str] name`). Write the function in `runtime/inngest/<name>.py` as a thin wrapper around a service in `runtime/services/`. Import it in `inngest_registry.py` and append to `ALL_FUNCTIONS`. Give each function exactly one responsibility — either a single step or an explicitly durable multi-step sequence where every step is idempotent on replay. Attach `cancel=RUN_CANCEL` (or include `TASK_CANCEL` for per-task work) unless the function is explicitly the cleanup leg that must run after a cancel. Pick `retries` by blast radius: 0 for side-effect-bearing, 1 for idempotent orchestration, 3 for best-effort cleanup.
+- **Adding a new Inngest function.** Add a package under `core/jobs/<area>/<name>/` with `contract.py`, `job.py`, and `inngest.py`. Define new runtime event payloads in `core/application/events/runtime.py` with a `ClassVar[str] name`; keep job-local `contract.py` as a DTO-only re-export when callers need the old job-local import path. Put framework registration, trigger, retry, cancel, concurrency, and output metadata in `inngest.py`. Put orchestration in `job.py`; if it must send Inngest events or touch concrete sandbox adapters, route that through job-local composition helpers rather than importing concrete infrastructure in the job body. Import the function in `core/infrastructure/inngest/registry.py` and append it to `ALL_FUNCTIONS`. Pick `retries` by blast radius: 0 for side-effect-bearing, 1 for idempotent orchestration, 3 for best-effort cleanup.
 
 - **Adding a new task status.** Add the value to `TaskExecutionStatus` and the graph `status_conventions`. Update `TERMINAL_STATUSES` if terminal. Teach `on_task_completed_or_failed` the new transition, update `is_workflow_complete_v2` / `is_workflow_failed_v2`, and update the `is_reactivatable_cancelled` guard if the new status should be re-activatable. Every write goes through `WorkflowGraphRepository.update_node_status` with a `MutationMeta`.
 
@@ -156,15 +158,15 @@ A brief index of where runtime functions live. The architectural claims above st
 
 | Concern | File |
 | --- | --- |
-| Entry + init | `runtime/services/experiment_launch_service.py`, `runtime/inngest/start_workflow.py` |
-| Task orchestration | `runtime/inngest/execute_task.py` |
-| Task child steps | `runtime/inngest/sandbox_setup.py`, `runtime/inngest/worker_execute.py`, `runtime/inngest/persist_outputs.py` |
-| Propagation | `runtime/inngest/propagate_execution.py` |
-| Evaluator fan-out | `runtime/inngest/check_evaluators.py`, `runtime/inngest/evaluate_task_run.py` |
-| Cancellation cascade | `runtime/inngest/cancel_orphan_subtasks.py`, `runtime/inngest/cleanup_cancelled_task.py` |
-| Finalization | `runtime/inngest/complete_workflow.py`, `runtime/inngest/fail_workflow.py`, `runtime/inngest/run_cleanup.py` |
-| Registry | `runtime/inngest_registry.py` |
-| Client + cancel matchers | `runtime/inngest_client.py` |
-| Event contracts | `runtime/events/task_events.py`, `runtime/events/infrastructure_events.py` |
+| Entry + init | `core/jobs/workflow/start/` |
+| Task orchestration | `core/jobs/task/execute/` |
+| Task child steps | `core/jobs/sandbox/setup/`, `core/jobs/task/worker_execute/`, `core/jobs/resources/persist_outputs/` |
+| Propagation | `core/jobs/task/propagate/` |
+| Evaluator execution | `core/jobs/task/evaluate/` |
+| Cancellation cascade | `core/jobs/task/cancel_orphans/`, `core/jobs/task/cleanup_cancelled/` |
+| Finalization | `core/jobs/workflow/complete/`, `core/jobs/workflow/fail/`, `core/jobs/run/cleanup/` |
+| Registry | `core/infrastructure/inngest/registry.py` |
+| Client + cancel matchers | `core/infrastructure/inngest/client.py` |
+| Runtime event contracts | `core/application/events/runtime.py` |
 | State-machine core | `runtime/execution/propagation.py` |
-| Services | `runtime/services/` |
+| Services | `core/application/**` |

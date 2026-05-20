@@ -1,12 +1,12 @@
 from ergon_core.core.application.runtime import status as graph_status
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.application.tasks import execution as task_execution_service
-from ergon_core.core.application.graph.propagation import on_task_completed_or_failed
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
-from ergon_core.core.application.workflows import service as workflow_service
-from ergon_core.core.application.workflows.orchestration import PropagationResult
-from ergon_core.core.application.graph import propagation as workflow_propagation_service
+from ergon_core.core.application.runtime import execution as task_execution_service
+from ergon_core.core.application.runtime.lifecycle import on_task_completed_or_failed
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime import service as workflow_service
+from ergon_core.core.application.runtime.orchestration import PropagationResult
+from ergon_core.core.application.runtime import propagation as workflow_propagation_service
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel, Session, create_engine
 from uuid import uuid4
@@ -100,7 +100,7 @@ async def test_parent_completion_readies_dependency_free_dynamic_children() -> N
         run_id,
         parent.task_id,
         graph_status.COMPLETED,
-        graph_repo=WorkflowGraphRepository(),
+        graph_repo=RuntimeGraphRepository(),
     )
 
     assert ready == [root_child.task_id]

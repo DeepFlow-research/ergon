@@ -3,12 +3,9 @@
 from uuid import uuid4
 
 import pytest
-from ergon_core.core.application.events.task_events import (
-    TaskCompletedEvent,
-    TaskFailedEvent,
-    TaskReadyEvent,
-)
-from ergon_core.core.application.workflows.orchestration import (
+from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
+from ergon_core.core.jobs.task.propagate.contract import TaskCompletedEvent, TaskFailedEvent
+from ergon_core.core.application.runtime.orchestration import (
     PreparedTaskExecution,
     PrepareTaskExecutionCommand,
     PropagateTaskCompletionCommand,

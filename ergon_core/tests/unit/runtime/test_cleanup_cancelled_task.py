@@ -2,9 +2,9 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.core.application.events.task_events import TaskCancelledEvent
-from ergon_core.core.application.jobs import cleanup_cancelled_task as cleanup_module
-from ergon_core.core.application.tasks.models import CleanupResult
+from ergon_core.core.jobs.task.cleanup_cancelled.contract import TaskCancelledEvent
+from ergon_core.core.jobs.task.cleanup_cancelled import job as cleanup_module
+from ergon_core.core.application.runtime.task_models import CleanupResult
 
 
 class _FakeStepCtx:
@@ -47,7 +47,7 @@ async def test_cleanup_cancelled_task_marks_execution_without_releasing_sandbox(
             return cleanup
 
     class Emitter:
-        async def task_cancelled(self, _payload):
+        async def publish(self, _event):
             return None
 
     class SessionContext:
@@ -59,7 +59,7 @@ async def test_cleanup_cancelled_task_marks_execution_without_releasing_sandbox(
 
     monkeypatch.setattr(cleanup_module, "TaskCleanupService", lambda: Service())
     monkeypatch.setattr(cleanup_module, "get_session", lambda: SessionContext())
-    monkeypatch.setattr(cleanup_module, "get_dashboard_emitter", lambda: Emitter())
+    monkeypatch.setattr(cleanup_module, "get_dashboard_event_publisher", lambda: Emitter())
 
     result = await cleanup_module.run_cleanup_cancelled_task_job(_FakeStepCtx(), payload)
 

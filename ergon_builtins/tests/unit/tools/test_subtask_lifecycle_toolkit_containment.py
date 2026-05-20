@@ -39,7 +39,7 @@ class _FakeContext:
         if task_id != self.allowed_id:
             raise RuntimeError("not contained")
         return {
-            "node_id": task_id,
+            "task_id": task_id,
             "task_slug": "child",
             "description": "child",
             "status": "pending",

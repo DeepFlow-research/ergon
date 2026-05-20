@@ -17,12 +17,12 @@ from uuid import UUID, uuid4
 import pytest
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker.context import WorkerContext
-from ergon_core.core.application.graph.models import MutationMeta
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
-from ergon_core.core.application.tasks import inspection as inspection_module
-from ergon_core.core.application.tasks import management as management_module
-from ergon_core.core.application.tasks.inspection import TaskInspectionService
-from ergon_core.core.application.tasks.management import TaskManagementService
+from ergon_core.core.application.runtime.models import MutationMeta
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime import inspection as inspection_module
+from ergon_core.core.application.runtime import management as management_module
+from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
+from ergon_core.core.application.runtime.task_management import TaskManagementService
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
@@ -32,10 +32,7 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import (
-    BenchmarkDefinitionRecord,
-    RunRecord,
-)
+from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.pool import StaticPool
@@ -51,7 +48,6 @@ class _SmokeTask(Task[_EmptyPayload]):
 
 
 def _session() -> Session:
-    _ = BenchmarkDefinitionRecord
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -79,12 +75,6 @@ def _seed_run(session: Session) -> tuple[UUID, UUID]:
     ).model_dump(mode="json")
     session.add_all(
         [
-            BenchmarkDefinitionRecord(
-                id=definition_id,
-                name="smoke",
-                benchmark_type="test",
-                sample_count=1,
-            ),
             ExperimentDefinition(
                 id=definition_id, benchmark_type="test", name="test", metadata_json={}
             ),
@@ -127,7 +117,7 @@ def test_prepare_run_populates_task_json_for_every_node() -> None:
     session = _session()
     run_id, definition_id = _seed_run(session)
 
-    repo = WorkflowGraphRepository()
+    repo = RuntimeGraphRepository()
     repo.initialize_from_definition(
         session,
         run_id=run_id,
@@ -152,9 +142,7 @@ def test_prepare_run_populates_task_json_for_every_node() -> None:
 def test_persist_definition_writes_only_intended_tables(monkeypatch) -> None:
     """PR 7 invariant: persist_benchmark writes experiment_definitions
     plus experiment_definition_tasks (and related instance / task-
-    evaluator rows). It must NOT write to the older
-    BenchmarkDefinitionRecord table — identity comes from
-    ExperimentDefinition only after PR 7's persistence collapse."""
+    evaluator rows). Identity comes from ``ExperimentDefinition`` only."""
 
     from collections.abc import Mapping, Sequence
     from typing import ClassVar
@@ -220,11 +208,6 @@ def test_persist_definition_writes_only_intended_tables(monkeypatch) -> None:
     assignments = session.exec(select(ExperimentDefinitionTaskAssignment)).all()
     assert [row.worker_binding_key for row in assignments] == ["echo"]
 
-    # PR 7 invariant: persist_benchmark must NOT write to the older
-    # BenchmarkDefinitionRecord table at all.
-    bdr_rows = session.exec(select(BenchmarkDefinitionRecord)).all()
-    assert bdr_rows == []
-
 
 def test_worker_execute_reads_task_from_run_tier_only() -> None:
     """PR 3 invariant: ``worker_execute.py`` source does not reference
@@ -241,7 +224,7 @@ def test_worker_execute_reads_task_from_run_tier_only() -> None:
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[4]
-    text = (root / "ergon_core/ergon_core/core/application/jobs/worker_execute.py").read_text()
+    text = (root / "ergon_core/ergon_core/core/jobs/task/worker_execute/job.py").read_text()
     forbidden = ("DefinitionRepository", "task_with_instance", "ExperimentDefinitionTask")
     offenders = [s for s in forbidden if s in text]
     assert offenders == [], (
@@ -267,7 +250,7 @@ def test_worker_execute_emits_one_evaluate_invocation_per_evaluator() -> None:
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[4]
-    text = (root / "ergon_core/ergon_core/core/application/jobs/execute_task.py").read_text()
+    text = (root / "ergon_core/ergon_core/core/jobs/task/execute/job.py").read_text()
     assert "ctx.step.invoke" in text
     assert "ctx.group.parallel" in text, (
         "Use the Inngest-native parallel-step primitive, not `asyncio.gather`."
@@ -282,7 +265,7 @@ def test_evaluate_task_run_payload_is_id_only() -> None:
     """PR 4 invariant: TaskEvaluateRequest has exactly four fields:
     run_id, task_id, execution_id, evaluator_index."""
 
-    from ergon_core.core.application.jobs.models import TaskEvaluateRequest
+    from ergon_core.core.jobs.task.evaluate.contract import TaskEvaluateRequest
 
     assert set(TaskEvaluateRequest.model_fields) == {
         "run_id",
@@ -320,9 +303,7 @@ def test_sandbox_release_happens_after_all_evaluators_complete() -> None:
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[4]
-    execute_task_text = (
-        root / "ergon_core/ergon_core/core/application/jobs/execute_task.py"
-    ).read_text()
+    execute_task_text = (root / "ergon_core/ergon_core/core/jobs/task/execute/job.py").read_text()
     parallel_idx = execute_task_text.find("ctx.group.parallel")
     emit_completed_idx = execute_task_text.find("_emit_task_completed(payload")
     assert parallel_idx != -1, "orchestrator must use ctx.group.parallel for the evaluator fanout"
@@ -338,16 +319,14 @@ def test_sandbox_release_happens_after_all_evaluators_complete() -> None:
         "the sibling sandbox_cleanup function does it on terminal events"
     )
 
-    cleanup_path = root / "ergon_core/ergon_core/core/application/jobs/sandbox_cleanup.py"
+    cleanup_path = root / "ergon_core/ergon_core/core/jobs/sandbox/cleanup/job.py"
     assert cleanup_path.exists(), "sandbox_cleanup job module must exist"
     cleanup_text = cleanup_path.read_text()
     assert "terminate_external_sandbox" in cleanup_text, (
         "sandbox_cleanup must call terminate_external_sandbox"
     )
 
-    handler_path = (
-        root / "ergon_core/ergon_core/core/infrastructure/inngest/handlers/sandbox_cleanup.py"
-    )
+    handler_path = root / "ergon_core/ergon_core/core/jobs/sandbox/cleanup/inngest.py"
     assert handler_path.exists(), "sandbox_cleanup Inngest handler module must exist"
     handler_text = handler_path.read_text()
     assert 'event="task/completed"' in handler_text, (
@@ -416,7 +395,6 @@ async def test_dynamic_spawn_writes_only_to_run_graph_nodes(
     """Δ.3 / PR 9 invariant: dynamic subtasks are graph-native."""
 
     # 1. In-memory SQLite with all tables.
-    _ = BenchmarkDefinitionRecord  # ensure telemetry models are registered
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -431,9 +409,14 @@ async def test_dynamic_spawn_writes_only_to_run_graph_nodes(
 
     # 3. Patch get_session so service writes stay in the test session.
     _patch_get_session_smoke(monkeypatch, session)
+    monkeypatch.setattr(
+        management_module, "definition_id_for_run", lambda _session, _run_id: uuid4()
+    )
 
-    task_mgmt = TaskManagementService(dashboard_emitter=SimpleNamespace(graph_mutation=AsyncMock()))
-    monkeypatch.setattr(task_mgmt, "_dispatch_task_ready", AsyncMock())
+    task_mgmt = TaskManagementService(
+        dashboard_emitter=SimpleNamespace(graph_mutation=AsyncMock()),
+        task_ready_dispatcher=AsyncMock(),
+    )
     task_inspect = TaskInspectionService()
     context = WorkerContext._for_job(
         run_id=run_id,
@@ -487,11 +470,9 @@ def test_run_completion_releases_every_acquired_sandbox() -> None:
 
     root = Path(__file__).resolve().parents[4]
     sandbox_cleanup_text = (
-        root / "ergon_core/ergon_core/core/application/jobs/sandbox_cleanup.py"
+        root / "ergon_core/ergon_core/core/jobs/sandbox/cleanup/job.py"
     ).read_text()
-    handler_text = (
-        root / "ergon_core/ergon_core/core/infrastructure/inngest/handlers/sandbox_cleanup.py"
-    ).read_text()
+    handler_text = (root / "ergon_core/ergon_core/core/jobs/sandbox/cleanup/inngest.py").read_text()
 
     assert "terminate_external_sandbox" in sandbox_cleanup_text
     assert "run_sandbox_cleanup_on_completed" in sandbox_cleanup_text

@@ -30,7 +30,7 @@ EXPECTED_SUBTASK_SLUGS: tuple[str, ...] = (
 
 # (slug, depends_on_slugs, description) — shape of the DAG in one place.
 # Order is authoritative: ``SmokeWorkerBase.execute`` iterates this tuple
-# in-order when calling ``plan_subtasks``.  Leaves appear before anything
+# in-order when spawning object-bound child tasks. Leaves appear before anything
 # that depends on them so slug-level forward refs are avoided.
 SUBTASK_GRAPH: Sequence[tuple[str, tuple[str, ...], str]] = (
     ("d_root", (), "Diamond root"),

@@ -20,15 +20,13 @@ from uuid import uuid4
 import inngest
 import pytest
 
-from ergon_core.core.application.events.task_events import TaskReadyEvent
-from ergon_core.core.application.jobs import execute_task as execute_task_module
-from ergon_core.core.application.jobs.models import (
-    PersistOutputsResult,
-    SandboxReadyResult,
-    WorkerExecuteJobResult,
-)
-from ergon_core.core.application.tasks.execution import TaskExecutionService
-from ergon_core.core.application.workflows.orchestration import PreparedTaskExecution
+from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
+from ergon_core.core.jobs.task.execute import job as execute_task_module
+from ergon_core.core.jobs.resources.persist_outputs.contract import PersistOutputsResult
+from ergon_core.core.jobs.sandbox.setup.contract import SandboxReadyResult
+from ergon_core.core.jobs.task.worker_execute.contract import WorkerExecuteJobResult
+from ergon_core.core.application.runtime.task_execution import TaskExecutionService
+from ergon_core.core.application.runtime.orchestration import PreparedTaskExecution
 
 # A typed stand-in for any `inngest.Function` the orchestrator would
 # normally hand to `ctx.step.invoke(function=...)`. The fakes below
@@ -79,8 +77,7 @@ def _prepared(execution_id, node_id) -> PreparedTaskExecution:
     return PreparedTaskExecution(
         run_id=uuid4(),
         definition_id=uuid4(),
-        task_id=uuid4(),
-        node_id=node_id,
+        task_id=node_id,
         execution_id=execution_id,
         task_slug="t",
         task_description="d",
@@ -93,11 +90,11 @@ def _prepared(execution_id, node_id) -> PreparedTaskExecution:
 
 
 def _ready_event(run_id, definition_id, task_id, node_id) -> TaskReadyEvent:
+    del node_id
     return TaskReadyEvent(
         run_id=run_id,
         definition_id=definition_id,
         task_id=task_id,
-        node_id=node_id,
     )
 
 
@@ -214,7 +211,7 @@ async def test_execute_task_emits_completed_strictly_after_eval_gather(
     monkeypatch.setattr(execute_task_module, "_emit_task_completed", fake_emit_completed)
     monkeypatch.setattr(execute_task_module, "_fan_out_evaluators", fake_fanout)
     monkeypatch.setattr(execute_task_module, "TaskExecutionService", lambda: svc)
-    monkeypatch.setattr(execute_task_module.WorkflowGraphRepository, "node", repo.node)
+    monkeypatch.setattr(execute_task_module.RuntimeGraphRepository, "node", repo.node)
 
     result = await execute_task_module.run_execute_task_job(
         ctx,

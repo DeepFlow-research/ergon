@@ -222,11 +222,12 @@ After kicking off a run from Python, observe it via the CLI:
 - `ergon experiment tags` — list distinct experiment-tag strings
 - `ergon experiment by-tag <tag>` — list definitions sharing a tag, with latest run status
 
-The `--experiment=<tag>` filter and the `tags` / `by-tag` commands operate on the
-`BenchmarkDefinitionRecord.experiment` column.  That column is populated today only
-by the cohort / test harness — there is no public `Benchmark(experiment=...)` constructor
-kwarg yet.  If no tags are set, `ergon experiment tags` returns an empty list with a
-message pointing at the cohort harness.
+The `--experiment=<tag>` filter operates on `RunRecord.experiment`. The `tags`
+and `by-tag` commands operate on v2 `ExperimentDefinition.metadata_json["experiment"]`.
+Launch and test-harness paths copy that metadata tag onto `RunRecord.experiment`
+so run lists and experiment-definition views group by the same stable string.
+If no tags are set, `ergon experiment tags` returns an empty list with a message
+pointing at v2 experiment definitions.
 
 All CLI commands are read-only against persisted state.  Authoring (defining a benchmark,
 persisting it, launching a run) is Python-only; see `ergon_core.api`.

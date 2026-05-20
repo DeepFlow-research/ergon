@@ -14,7 +14,7 @@ from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import AwaitCompletionNotSupportedError, SpawnedTaskHandle
 from ergon_core.core.application.resources.models import RunResourceView
 from ergon_core.core.application.resources.repository import RunResourceRepository
-from ergon_core.core.application.tasks.models import (
+from ergon_core.core.application.runtime.task_models import (
     CancelTaskCommand,
     RefineTaskCommand,
     RestartTaskCommand,
@@ -22,9 +22,9 @@ from ergon_core.core.application.tasks.models import (
 )
 from ergon_core.core.persistence.shared.enums import RunResourceKind
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
+from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.telemetry.models import (
-    BenchmarkDefinitionRecord,
     RunRecord,
     RunResource,
     RunTaskExecution,
@@ -94,10 +94,10 @@ class _FakeInspection:
             )
         ]
 
-    def get_subtask(self, session, *, run_id, node_id):
-        self.calls.append(("get_subtask", session, run_id, node_id))
+    def get_subtask(self, session, *, run_id, task_id):
+        self.calls.append(("get_subtask", session, run_id, task_id))
         return SubtaskInfo(
-            task_id=node_id,
+            task_id=task_id,
             task_slug="target",
             description="target",
             status="pending",
@@ -306,11 +306,11 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
     blob.write_bytes(b"report")
     session.add_all(
         [
-            BenchmarkDefinitionRecord(
+            ExperimentDefinition(
                 id=definition_id,
-                name="bench",
                 benchmark_type="bench",
-                sample_count=1,
+                name="bench",
+                metadata_json={},
             ),
             RunRecord(
                 id=run_id,

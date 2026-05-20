@@ -2,11 +2,17 @@
 
 from pathlib import Path
 
-from ergon_cli.onboarding.env_writer import write_env
-from ergon_cli.onboarding.profile import LLMProvider, OnboardProfile
+import pytest
+
+from ergon_cli.domains.onboarding.env_writer import write_env
+from ergon_cli.domains.onboarding.env_writer import _known_env_keys
+from ergon_cli.domains.onboarding.profile import ENV_KEY_OWNERS, LLMProvider, OnboardProfile
 
 
 class TestWriteEnv:
+    def test_all_known_env_keys_have_owner_category(self) -> None:
+        assert _known_env_keys() <= set(ENV_KEY_OWNERS)
+
     def test_creates_env_from_empty(self, tmp_path: Path) -> None:
         env_path = tmp_path / ".env"
         profile = OnboardProfile(
@@ -23,7 +29,7 @@ class TestWriteEnv:
 
     def test_preserves_existing_unknown_keys(self, tmp_path: Path) -> None:
         env_path = tmp_path / ".env"
-        env_path.write_text("MY_CUSTOM_VAR=hello\nOPENAI_API_KEY=old-key\n")
+        env_path.write_text("TAILSCALE_AUTH_KEY=hello\nOPENAI_API_KEY=old-key\n")
 
         profile = OnboardProfile(
             keys={"OPENAI_API_KEY": "new-key"},
@@ -33,7 +39,22 @@ class TestWriteEnv:
         content = env_path.read_text()
         assert "OPENAI_API_KEY=new-key" in content
         assert "old-key" not in content
-        assert "MY_CUSTOM_VAR=hello" in content
+        assert "TAILSCALE_AUTH_KEY=hello" in content
+
+    def test_rejects_written_keys_without_owner_category(self, tmp_path: Path) -> None:
+        env_path = tmp_path / ".env"
+        profile = OnboardProfile(keys={"MY_CUSTOM_VAR": "hello"})
+
+        with pytest.raises(ValueError, match="missing owner category"):
+            write_env(profile, env_path)
+
+    def test_preserves_existing_unknown_keys_without_owner_category(self, tmp_path: Path) -> None:
+        env_path = tmp_path / ".env"
+        env_path.write_text("MY_CUSTOM_VAR=hello\n")
+
+        write_env(OnboardProfile(), env_path)
+
+        assert "MY_CUSTOM_VAR=hello" in env_path.read_text()
 
     def test_sections_are_labeled(self, tmp_path: Path) -> None:
         env_path = tmp_path / ".env"

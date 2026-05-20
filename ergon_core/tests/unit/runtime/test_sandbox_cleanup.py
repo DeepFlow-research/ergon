@@ -9,11 +9,8 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.core.application.events.task_events import (
-    TaskCompletedEvent,
-    TaskFailedEvent,
-)
-from ergon_core.core.application.jobs import sandbox_cleanup as sandbox_cleanup_module
+from ergon_core.core.jobs.task.propagate.contract import TaskCompletedEvent, TaskFailedEvent
+from ergon_core.core.jobs.sandbox.cleanup import job as sandbox_cleanup_module
 from ergon_core.core.infrastructure.sandbox.lifecycle import (
     SandboxTerminationReason,
     SandboxTerminationResult,
@@ -44,7 +41,6 @@ async def test_cleanup_on_completed_terminates_sandbox(monkeypatch: pytest.Monke
         task_id=uuid4(),
         execution_id=uuid4(),
         sandbox_id="sbx-completed",
-        node_id=uuid4(),
     )
 
     captured: dict[str, str | None] = {"sandbox_id": None}
@@ -75,7 +71,6 @@ async def test_cleanup_on_failed_terminates_sandbox(monkeypatch: pytest.MonkeyPa
         execution_id=uuid4(),
         error="boom",
         sandbox_id="sbx-failed",
-        node_id=uuid4(),
     )
 
     captured: dict[str, str | None] = {"sandbox_id": None}
@@ -108,7 +103,6 @@ async def test_cleanup_on_failed_skips_when_sandbox_id_missing(
         execution_id=uuid4(),
         error="prepare-failed",
         sandbox_id=None,
-        node_id=uuid4(),
     )
 
     called = False

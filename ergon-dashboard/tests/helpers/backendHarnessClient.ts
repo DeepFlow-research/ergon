@@ -43,7 +43,7 @@ export interface BackendRunState {
   context_event_count: number;
 }
 
-export interface BackendCohortRun {
+export interface BackendExperimentRun {
   run_id: string;
   status: string;
 }
@@ -61,24 +61,13 @@ export class BackendHarnessClient {
     return r.json() as Promise<BackendRunState>;
   }
 
-  async getCohortRuns(cohortKey: string): Promise<BackendCohortRun[]> {
+  async getExperimentRuns(experiment: string): Promise<BackendExperimentRun[]> {
     const r = await fetch(
-      `${this.baseUrl}/api/__danger__/test-harness/read/cohort/${encodeURIComponent(cohortKey)}/runs`,
+      `${this.baseUrl}/api/__danger__/test-harness/read/experiment/${encodeURIComponent(experiment)}/runs`,
     );
     if (!r.ok) {
       throw new Error(`harness ${r.status}: ${await r.text()}`);
     }
-    return r.json() as Promise<BackendCohortRun[]>;
-  }
-
-  async getCohortId(cohortKey: string): Promise<string> {
-    const r = await fetch(
-      `${this.baseUrl}/api/__danger__/test-harness/read/cohort/${encodeURIComponent(cohortKey)}/id`,
-    );
-    if (!r.ok) {
-      throw new Error(`harness ${r.status}: ${await r.text()}`);
-    }
-    const body = (await r.json()) as { cohort_id: string };
-    return body.cohort_id;
+    return r.json() as Promise<BackendExperimentRun[]>;
   }
 }

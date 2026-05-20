@@ -3,9 +3,9 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.core.application.events.task_events import TaskFailedEvent
-from ergon_core.core.application.jobs.propagate_execution import run_propagate_task_failure_job
-from ergon_core.core.application.workflows.orchestration import (
+from ergon_core.core.jobs.task.propagate.contract import TaskFailedEvent
+from ergon_core.core.jobs.task.propagate.job import run_propagate_task_failure_job
+from ergon_core.core.application.runtime.orchestration import (
     PropagateTaskCompletionCommand,
     PropagationResult,
     WorkflowTerminalState,
@@ -35,15 +35,13 @@ async def test_failed_task_propagation_does_not_terminate_sandbox_directly() -> 
         return propagation
 
     with (
+        patch("ergon_core.core.jobs.task.propagate.job.WorkflowService") as workflow_service,
         patch(
-            "ergon_core.core.application.jobs.propagate_execution.WorkflowService"
-        ) as workflow_service,
-        patch(
-            "ergon_core.core.application.jobs.propagate_execution.inngest_client.send",
+            "ergon_core.core.jobs.task.propagate.job.send_job_events",
             new=AsyncMock(),
         ) as send,
     ):
         workflow_service.return_value.propagate_failure = fake_propagate_failure
         await run_propagate_task_failure_job(payload)
 
-    send.assert_not_awaited()
+    send.assert_awaited_once_with([])

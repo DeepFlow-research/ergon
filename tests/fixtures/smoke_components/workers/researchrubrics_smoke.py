@@ -50,17 +50,17 @@ class ResearchRubricsSubworker:
     - ``probe_<node>.json``   — ``{exit_code, stdout}`` from ``wc -l``
     """
 
-    async def work(self, node_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
-        report_path = f"/workspace/final_output/report_{node_id}.md"
+    async def work(self, task_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
+        report_path = f"/workspace/final_output/report_{task_id}.md"
         contents = (
-            f"# Research report {node_id}\n\n"
+            f"# Research report {task_id}\n\n"
             "Deterministic smoke output. Non-empty body required by criterion.\n"
         )
         await sandbox.files.write(report_path, contents)
 
         probe = await sandbox.commands.run(f"wc -l {report_path}", timeout=10)
         probe_stdout = ("" if probe.stdout is None else probe.stdout).strip()
-        probe_path = f"/workspace/final_output/probe_{node_id}.json"
+        probe_path = f"/workspace/final_output/probe_{task_id}.json"
         await sandbox.files.write(
             probe_path,
             json.dumps({"exit_code": probe.exit_code, "stdout": probe_stdout}),

@@ -3,17 +3,13 @@
 from datetime import datetime
 from uuid import UUID
 
-from ergon_core.core.application.compat.legacy_experiments import (
-    cohort_id_from_metadata,
-    dict_metadata,
-    optional_str_metadata,
-)
 from ergon_core.core.views.experiments.models import (
     ExperimentAnalyticsDto,
     ExperimentDetailDto,
     ExperimentRunRowDto,
     ExperimentStatusCountsDto,
     ExperimentSummaryDto,
+    ExperimentTagDefinitionDto,
 )
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
@@ -57,6 +53,43 @@ class ExperimentReadService:
 
             return None
 
+    def distinct_tags(self) -> list[str]:
+        with get_session() as session:
+            tags = {
+                tag
+                for tag in session.exec(select(RunRecord.experiment)).all()
+                if isinstance(tag, str) and tag
+            }
+        return sorted(tags)
+
+    def definitions_by_tag(self, tag: str) -> list[ExperimentTagDefinitionDto]:
+        with get_session() as session:
+            runs = list(
+                session.exec(
+                    select(RunRecord)
+                    .where(RunRecord.experiment == tag)
+                    .order_by(col(RunRecord.created_at).desc())
+                ).all()
+            )
+            latest_by_definition: dict[UUID, RunRecord] = {}
+            for run in runs:
+                latest_by_definition.setdefault(run.definition_id, run)
+
+            rows: list[ExperimentTagDefinitionDto] = []
+            for definition_id, latest_run in latest_by_definition.items():
+                definition = session.get(ExperimentDefinition, definition_id)
+                if definition is None:
+                    continue
+                rows.append(
+                    ExperimentTagDefinitionDto(
+                        definition_id=definition.id,
+                        name=definition.name,
+                        benchmark_type=definition.benchmark_type,
+                        latest_run_status=str(latest_run.status),
+                    )
+                )
+        return rows
+
 
 def _definition_summary(
     session: Session,
@@ -68,15 +101,16 @@ def _definition_summary(
 
     Identity fields (``name``/``description``/``benchmark_type``/``created_by``)
     come directly from the columns Task 1 added.  Run / sample bookkeeping is
-    derived: ``RunRecord.definition_id`` indexes runs, and
+    derived: ``RunRecord.experiment`` indexes grouped runs, and
     ``ExperimentDefinitionInstance`` rows index instances.
     """
-    run_count = len(runs) if runs is not None else _run_count_by_definition(session, definition.id)
+    run_count = (
+        len(runs) if runs is not None else len(_runs_for_definition_view(session, definition))
+    )
     sample_count = _instance_count(session, definition.id)
     metadata = definition.parsed_metadata()
     return ExperimentSummaryDto(
         definition_id=definition.id,
-        cohort_id=cohort_id_from_metadata(metadata),
         name=definition.name,
         description=definition.description,
         benchmark_type=definition.benchmark_type,
@@ -98,9 +132,7 @@ def _definition_detail(
     definition: ExperimentDefinition,
 ) -> ExperimentDetailDto:
     """Build a detail DTO from an ``ExperimentDefinition`` row."""
-    runs = list(
-        session.exec(select(RunRecord).where(RunRecord.definition_id == definition.id)).all()
-    )
+    runs = _runs_for_definition_view(session, definition)
     task_counts = _task_counts_by_run(session, [run.id for run in runs])
     run_rows = [_run_row(run, total_tasks=task_counts.get(run.id)) for run in runs]
     return ExperimentDetailDto(
@@ -117,9 +149,15 @@ def _definition_detail(
     )
 
 
-def _run_count_by_definition(session: Session, definition_id: UUID) -> int:
-    return len(
-        list(session.exec(select(RunRecord.id).where(RunRecord.definition_id == definition_id)))
+def _runs_for_definition_view(
+    session: Session,
+    definition: ExperimentDefinition,
+) -> list[RunRecord]:
+    experiment = optional_str_metadata(definition.parsed_metadata(), "experiment")
+    if experiment:
+        return list(session.exec(select(RunRecord).where(RunRecord.experiment == experiment)).all())
+    return list(
+        session.exec(select(RunRecord).where(RunRecord.definition_id == definition.id)).all()
     )
 
 
@@ -193,12 +231,11 @@ def _analytics(rows: list[ExperimentRunRowDto]) -> ExperimentAnalyticsDto:
         if latest_activity_at is None or activity_at > latest_activity_at:
             latest_activity_at = activity_at
 
-    average_duration = _average(durations)
     return ExperimentAnalyticsDto(
         total_runs=len(rows),
         status_counts=status_counts,
         average_score=_average(scores),
-        average_duration_ms=round(average_duration) if average_duration is not None else None,
+        average_duration_ms=_rounded_average(durations),
         average_tasks=_average(task_counts),
         total_cost_usd=total_cost_usd,
         latest_activity_at=latest_activity_at,
@@ -228,6 +265,11 @@ def _average(values: list[float] | list[int]) -> float | None:
     return sum(values) / len(values)
 
 
+def _rounded_average(values: list[int]) -> int | None:
+    average = _average(values)
+    return None if average is None else round(average)
+
+
 def _duration_ms(run: RunRecord) -> int | None:
     if run.started_at is None or run.completed_at is None:
         return None
@@ -246,3 +288,13 @@ def _summary_text(summary: dict, key: str) -> str | None:
     if isinstance(value, str) and value:
         return value
     return None
+
+
+def dict_metadata(metadata: dict, key: str) -> dict:
+    value = metadata.get(key)
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def optional_str_metadata(metadata: dict, key: str) -> str | None:
+    value = metadata.get(key)
+    return value if isinstance(value, str) else None

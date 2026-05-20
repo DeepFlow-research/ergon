@@ -40,14 +40,14 @@ class FinalStateAssertion:
 
 
 def _assert_no_definition_repository_in_worker_execute() -> None:
-    text = _read("ergon_core/ergon_core/core/application/jobs/worker_execute.py")
+    text = _read("ergon_core/ergon_core/core/jobs/task/worker_execute/job.py")
     assert "DefinitionRepository" not in text
     assert "task_with_instance" not in text
     assert "ExperimentDefinitionTask" not in text
 
 
 def _assert_no_prepare_definition_method() -> None:
-    text = _read("ergon_core/ergon_core/core/application/tasks/execution.py")
+    text = _read("ergon_core/ergon_core/core/application/runtime/task_execution.py")
     assert "_prepare_definition" not in text
     assert "_prepare_legacy_definition" not in text
 
@@ -70,9 +70,7 @@ def _assert_evaluate_task_run_takes_thin_payload() -> None:
 
     import inspect
 
-    from ergon_core.core.application.jobs.evaluate_task_run import (
-        run_evaluate_task_run_job,
-    )
+    from ergon_core.core.jobs.task.evaluate.job import run_evaluate_task_run_job
 
     sig = inspect.signature(run_evaluate_task_run_job)
     assert "TaskEvaluateRequest" in repr(sig), (

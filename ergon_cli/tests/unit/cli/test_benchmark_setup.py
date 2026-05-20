@@ -5,18 +5,16 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import e2b
-import ergon_cli.commands.benchmark as _bench_mod
+import ergon_cli.domains.benchmarks.service as _bench_service
 import pytest
-from ergon_cli.commands.benchmark import setup_benchmark
+from ergon_cli.domains.benchmarks.templates import sandbox_template_for
+from ergon_cli.domains.benchmarks.commands import setup_benchmark_service
+from ergon_cli.domains.benchmarks.models import BenchmarkCommand
 from ergon_core.core.shared.settings import settings
 
 
-def _make_args(slug: str = "minif2f", *, force: bool = False):
-    """Return a minimal argparse-like Namespace."""
-    ns = MagicMock()
-    ns.slug = slug
-    ns.force = force
-    return ns
+def _setup_command(slug: str = "minif2f", *, force: bool = False) -> BenchmarkCommand:
+    return BenchmarkCommand(action="setup", slug=slug, force=force)
 
 
 class _FakeBuildInfo:
@@ -52,8 +50,8 @@ def _patch_sdk(
         fake_template_cls.build.return_value = build_info or _FakeBuildInfo()
 
     monkeypatch.setattr(e2b, "Template", fake_template_cls)
-    # Also patch the already-imported name in the benchmark module.
-    monkeypatch.setattr(_bench_mod, "Template", fake_template_cls)
+    # Also patch the already-imported name in the benchmark domain service.
+    monkeypatch.setattr(_bench_service, "Template", fake_template_cls)
     return fake_template_cls
 
 
@@ -90,7 +88,7 @@ def test_error_scenarios(
     else:
         monkeypatch.setenv("E2B_API_KEY", "test-key")
 
-    rc = setup_benchmark(_make_args(**args_kwargs))
+    rc = setup_benchmark_service(_setup_command(**args_kwargs))
     assert rc != 0
 
     if expected_message is not None:
@@ -117,7 +115,7 @@ def test_idempotent_skip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
         json.dumps({"minif2f": {"template_id": "abc123", "template_name": "ergon-minif2f-v1"}})
     )
 
-    rc = setup_benchmark(_make_args())
+    rc = setup_benchmark_service(_setup_command())
     assert rc == 0
     fake.build.assert_not_called()
 
@@ -133,7 +131,7 @@ def test_happy_path_creates_registry(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     monkeypatch.setattr(settings, "e2b_api_key", "test-key")
     fake = _patch_sdk(monkeypatch)
 
-    rc = setup_benchmark(_make_args())
+    rc = setup_benchmark_service(_setup_command())
     assert rc == 0
 
     fake.build.assert_called_once()
@@ -160,7 +158,7 @@ def test_success_message_does_not_include_run_hint(
     monkeypatch.setattr(settings, "e2b_api_key", "test-key")
     _patch_sdk(monkeypatch)
 
-    rc = setup_benchmark(_make_args())
+    rc = setup_benchmark_service(_setup_command())
 
     assert rc == 0
     out = capsys.readouterr().out
@@ -181,7 +179,7 @@ def test_force_rebuild_overwrites(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
         json.dumps({"minif2f": {"template_id": "old_id", "template_name": "ergon-minif2f-v1"}})
     )
 
-    rc = setup_benchmark(_make_args(force=True))
+    rc = setup_benchmark_service(_setup_command(force=True))
     assert rc == 0
 
     data = json.loads(registry.read_text())
@@ -199,5 +197,17 @@ def test_build_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings, "e2b_api_key", "test-key")
     _patch_sdk(monkeypatch, raise_on_build=RuntimeError("simulated build failure"))
 
-    rc = setup_benchmark(_make_args())
+    rc = setup_benchmark_service(_setup_command())
     assert rc != 0
+
+
+def test_sandbox_template_for_known_slug_returns_template_path() -> None:
+    path = sandbox_template_for("minif2f")
+
+    assert path.name == "sandbox_template"
+    assert path.parent.name == "minif2f"
+
+
+def test_sandbox_template_for_unknown_slug_raises_key_error() -> None:
+    with pytest.raises(KeyError):
+        sandbox_template_for("not-a-benchmark")
