@@ -234,7 +234,7 @@ async def submit_experiment_runs(
     by launch. Slots submit sequentially — typical N ≤ 3, so the
     parallel-gather savings are negligible.
     """
-    from ergon_core.core.application.experiments.definition_writer import persist_benchmark
+    from ergon_core.core.application.experiments.service import persist_benchmark
 
     run_ids: list[UUID] = []
     for slot in body.slots:

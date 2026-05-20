@@ -358,7 +358,7 @@ async def test_dynamic_task_id_has_no_definition_row(
         sandbox_id="sandbox-identity",
         task_mgmt=task_mgmt,
         task_inspect=task_inspect,
-        resource_repo=object(),
+        resource_service=object(),
         session_factory=management_module.get_session,
     )
 
@@ -398,7 +398,7 @@ async def test_dynamic_task_id_has_no_definition_row(
         sandbox_id="sandbox-child",
         task_mgmt=task_mgmt,
         task_inspect=task_inspect,
-        resource_repo=object(),
+        resource_service=object(),
         session_factory=management_module.get_session,
     )
     assert child_context.task_id == handle.task_id

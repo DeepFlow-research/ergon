@@ -20,7 +20,7 @@ from ergon_core.core.jobs._events import send_job_step_event
 from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
-from ergon_core.core.application.resources import RunResourceRepository
+from ergon_core.core.application.resources.service import RunResourceReadService
 from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
 from ergon_core.core.application.runtime.task_management import TaskManagementService
 from ergon_core.core.application.runtime.task_execution_repository import (
@@ -92,7 +92,7 @@ async def run_worker_execute_job(
         sandbox_id=payload.sandbox_id,
         task_mgmt=_task_management_service_for_context(ctx),
         task_inspect=TaskInspectionService(),
-        resource_repo=RunResourceRepository(),
+        resource_service=RunResourceReadService(),
         session_factory=get_session,
     )
 
