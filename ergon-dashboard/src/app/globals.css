@@ -43,8 +43,8 @@
   --shadow-pop: 0 8px 24px rgb(12 17 24 / 0.08), 0 1px 2px rgb(12 17 24 / 0.05);
 
   /* Fonts — resolved by next/font CSS variables */
-  --font: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font: var(--font-inter, Inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --mono: var(--font-jetbrains-mono, "JetBrains Mono"), ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* App shell color aliases */
   --background: var(--paper);
