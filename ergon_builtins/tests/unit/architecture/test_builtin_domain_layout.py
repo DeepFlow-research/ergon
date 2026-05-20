@@ -61,6 +61,8 @@ def test_llm_provider_implementation_lives_under_llm_package() -> None:
         "llm/capture_settings.py",
         "llm/providers/openrouter.py",
         "llm/providers/openrouter_responses.py",
+        "llm/providers/openai_compatible.py",
+        "llm/providers/llamacpp.py",
         "llm/providers/transformers.py",
         "llm/providers/vllm.py",
     ]:
