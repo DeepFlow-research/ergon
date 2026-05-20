@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import type { ExperimentDetail } from "@/lib/contracts/rest";
-import { loadExperimentDetail } from "@/lib/server-data/experiments";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { RunMetricExplorer } from "@/components/experiments/RunMetricExplorer";
+import { formatRunMetricValue, metricDescriptor } from "@/components/experiments/runMetricExplorerModel";
+import { formatDurationMs } from "@/lib/formatDuration";
+import { loadExperimentDetail, type ExperimentDetailWithRunMetrics } from "@/lib/server-data/experiments";
 
 interface ExperimentPageProps {
   params: Promise<{ definitionId: string }>;
@@ -11,19 +14,6 @@ interface ExperimentPageProps {
 function formatNumber(value: number | null | undefined, fallback = "—") {
   if (value === null || value === undefined) return fallback;
   return Number.isInteger(value) ? value.toString() : value.toFixed(2);
-}
-
-function formatCurrency(value: number | null | undefined) {
-  if (value === null || value === undefined) return "—";
-  return `$${value.toFixed(2)}`;
-}
-
-function formatDuration(ms: number | null | undefined) {
-  if (ms === null || ms === undefined) return "—";
-  if (ms < 1000) return `${ms}ms`;
-  const seconds = ms / 1000;
-  if (seconds < 60) return `${seconds.toFixed(1)}s`;
-  return `${(seconds / 60).toFixed(1)}m`;
 }
 
 function formatDate(value: string | null | undefined) {
@@ -43,7 +33,7 @@ function runLink(runId: string) {
 
 export default async function ExperimentPage({ params }: ExperimentPageProps) {
   const { definitionId } = await params;
-  let detail: ExperimentDetail | null = null;
+  let detail: ExperimentDetailWithRunMetrics | null = null;
   const result = await loadExperimentDetail(definitionId);
   if (result.ok) {
     detail = result.data;
@@ -55,9 +45,18 @@ export default async function ExperimentPage({ params }: ExperimentPageProps) {
   const experiment = detail.experiment;
   const analytics = detail.analytics;
   const sampleSelection = detail.sample_selection ?? {};
+  const scoreDescriptor = metricDescriptor("score");
+  const durationDescriptor = metricDescriptor("duration_ms");
+  const tasksDescriptor = metricDescriptor("total_tasks");
+  const costDescriptor = metricDescriptor("total_cost_usd");
+  const observedCostTotal = detail.runMetricPoints.reduce((total, point) => {
+    const cost = point.metrics.total_cost_usd;
+    return cost.available && cost.value != null ? total + cost.value : total;
+  }, 0);
+  const hasObservedCosts = detail.runMetricPoints.some((point) => point.metrics.total_cost_usd.available);
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-8">
+    <main className="mx-auto w-full max-w-7xl px-6 py-8">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <Link
@@ -66,7 +65,7 @@ export default async function ExperimentPage({ params }: ExperimentPageProps) {
           >
             Experiments
           </Link>
-          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-[var(--ink)]">
+          <h1 className="mt-2 text-3xl font-semibold text-[var(--ink)]">
             {experiment.name}
           </h1>
           <p className="mt-2 text-sm text-[var(--muted)]">
@@ -74,12 +73,10 @@ export default async function ExperimentPage({ params }: ExperimentPageProps) {
             {experiment.run_count} runs · latest activity {formatDate(analytics.latest_activity_at)}
           </p>
         </div>
-        <div className="rounded-full border border-[var(--line)] px-3 py-1 text-sm text-[var(--muted)]">
-          {experiment.status}
-        </div>
+        <StatusBadge status={experiment.status} />
       </div>
 
-      <section className="mb-6 grid gap-3 md:grid-cols-3">
+      <section className="mb-6 grid gap-3 md:grid-cols-4">
         <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] p-4">
           <div className="text-xs uppercase tracking-[0.08em] text-[var(--faint)]">Model</div>
           <div className="mt-1 text-sm text-[var(--ink)]">{experiment.default_model_target ?? "—"}</div>
@@ -128,7 +125,7 @@ export default async function ExperimentPage({ params }: ExperimentPageProps) {
         <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] p-4 shadow-card">
           <div className="text-xs uppercase tracking-[0.08em] text-[var(--faint)]">Runtime</div>
           <div className="mt-2 text-2xl font-semibold text-[var(--ink)]">
-            {formatDuration(analytics.average_duration_ms)}
+            {formatDurationMs(analytics.average_duration_ms)}
           </div>
           <div className="mt-1 text-xs text-[var(--muted)]">
             {formatNumber(analytics.average_tasks)} avg tasks
@@ -137,87 +134,64 @@ export default async function ExperimentPage({ params }: ExperimentPageProps) {
         <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] p-4 shadow-card">
           <div className="text-xs uppercase tracking-[0.08em] text-[var(--faint)]">Cost</div>
           <div className="mt-2 text-2xl font-semibold text-[var(--ink)]">
-            {formatCurrency(analytics.total_cost_usd)}
+            {hasObservedCosts ? formatRunMetricValue(costDescriptor, observedCostTotal) : "Unavailable"}
           </div>
           <div className="mt-1 text-xs text-[var(--muted)]">
-            {analytics.error_count} runs with errors
+            {hasObservedCosts ? "observed run costs only" : "no observed cost instrumentation"}
           </div>
         </div>
       </section>
 
-      <section
-        className="mb-6 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] p-4 shadow-card"
-        data-testid="experiment-run-distribution"
-      >
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-[var(--ink)]">Run distribution</h2>
-            <p className="text-xs text-[var(--muted)]">
-              Score and runtime by benchmark instance.
-            </p>
-          </div>
-        </div>
-        <div className="grid gap-2 md:grid-cols-2">
-          {detail.runs.map((run) => (
-            <div
-              key={run.run_id}
-              className="rounded-[var(--radius-sm)] border border-[var(--line)] px-3 py-2 text-xs"
-              data-testid="experiment-distribution-row"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-medium text-[var(--ink)]">{run.instance_key}</span>
-                <span className="text-[var(--muted)]">{run.status}</span>
-              </div>
-              <div className="mt-1 text-[var(--muted)]">
-                score {formatNumber(run.final_score)} · runtime {formatDuration(run.running_time_ms)}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+      <div className="mb-6" data-testid="experiment-run-distribution">
+        <RunMetricExplorer points={detail.runMetricPoints} getRunHref={runLink} />
+      </div>
 
       <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] shadow-card">
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-[var(--line)] text-xs uppercase tracking-[0.08em] text-[var(--faint)]">
+          <thead className="border-b border-[var(--line)] bg-[var(--paper)] text-xs uppercase tracking-[0.08em] text-[var(--faint)]">
             <tr>
-              <th className="px-4 py-3">Run</th>
-              <th className="px-4 py-3">Sample</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Duration</th>
-              <th className="px-4 py-3">Score</th>
-              <th className="px-4 py-3">Tasks</th>
-              <th className="px-4 py-3">Model</th>
-              <th className="px-4 py-3">Evaluator</th>
+              <th className="px-3 py-2">Run</th>
+              <th className="px-3 py-2">Sample</th>
+              <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2">Score</th>
+              <th className="px-3 py-2">Duration</th>
+              <th className="px-3 py-2">Tasks</th>
+              <th className="px-3 py-2">Cost</th>
+              <th className="px-3 py-2">Model</th>
             </tr>
           </thead>
           <tbody>
-            {detail.runs.map((run) => (
-              <tr key={run.run_id} className="border-b border-[var(--line)] last:border-0">
-                <td className="px-4 py-3">
+            {detail.runMetricPoints.map((point) => (
+              <tr key={point.runId} className="border-b border-[var(--line)] last:border-0 hover:bg-[var(--paper)]">
+                <td className="px-3 py-2">
                   <Link
-                    href={runLink(run.run_id)}
+                    href={runLink(point.runId)}
                     className="font-mono text-xs text-[var(--ink)] underline-offset-2 hover:underline"
                   >
-                    {run.run_id}
+                    {point.runName}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-[var(--muted)]">{run.instance_key}</td>
-                <td className="px-4 py-3 text-[var(--muted)]">
-                  <div className="text-[var(--ink)]">{run.status}</div>
-                  {run.error_message ? <div className="text-xs text-red-500">{run.error_message}</div> : null}
+                <td className="px-3 py-2 text-[var(--muted)]">{point.sampleLabel}</td>
+                <td className="px-3 py-2 text-[var(--muted)]">
+                  <StatusBadge status={point.status} size="sm" />
+                  {point.errorSummary ? <div className="mt-1 max-w-56 truncate text-xs text-red-500">{point.errorSummary}</div> : null}
                 </td>
-                <td className="px-4 py-3 text-[var(--muted)]">
-                  {formatDuration(run.running_time_ms)}
+                <td className="px-3 py-2 font-mono text-xs text-[var(--ink)]">
+                  {formatRunMetricValue(scoreDescriptor, point.metrics.score)}
                 </td>
-                <td className="px-4 py-3 text-[var(--muted)]">
-                  {run.final_score === null ? "—" : `Eval ${formatNumber(run.final_score)}`}
+                <td className="px-3 py-2 font-mono text-xs text-[var(--muted)]">
+                  {formatRunMetricValue(durationDescriptor, point.metrics.duration_ms)}
                 </td>
-                <td className="px-4 py-3 text-[var(--muted)]">{run.total_tasks ?? "—"}</td>
-                <td className="px-4 py-3 text-[var(--muted)]">{run.model_target ?? "—"}</td>
-                <td className="px-4 py-3 text-[var(--muted)]">{run.evaluator_slug ?? "—"}</td>
+                <td className="px-3 py-2 font-mono text-xs text-[var(--muted)]">
+                  {formatRunMetricValue(tasksDescriptor, point.metrics.total_tasks)}
+                </td>
+                <td className="px-3 py-2 text-xs text-[var(--muted)]">
+                  {formatRunMetricValue(costDescriptor, point.metrics.total_cost_usd)}
+                </td>
+                <td className="px-3 py-2 text-[var(--muted)]">{point.modelTarget ?? "—"}</td>
               </tr>
             ))}
-            {detail.runs.length === 0 ? (
+            {detail.runMetricPoints.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-4 py-8 text-center text-[var(--muted)]">
                   This experiment has not launched any runs yet.

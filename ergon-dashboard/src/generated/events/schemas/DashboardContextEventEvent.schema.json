@@ -91,6 +91,18 @@
           "description": "Per-token log probabilities associated with this context part.",
           "title": "Logprobs"
         },
+        "provider_usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProviderTokenUsage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Provider-reported token and cost usage for this generation boundary."
+        },
         "sequence": {
           "description": "Monotonic sequence number within the execution stream.",
           "title": "Sequence",
@@ -207,6 +219,117 @@
           "type": "object"
         }
       ]
+    },
+    "ProviderTokenUsage": {
+      "description": "Provider-reported token and cost usage for one generation boundary.",
+      "properties": {
+        "prompt_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Input tokens charged or reported by the model provider.",
+          "title": "Prompt Tokens"
+        },
+        "completion_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Output tokens charged or reported by the model provider.",
+          "title": "Completion Tokens"
+        },
+        "reasoning_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reasoning tokens when the provider reports them separately.",
+          "title": "Reasoning Tokens"
+        },
+        "tool_call_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tool-call argument tokens when reported separately.",
+          "title": "Tool Call Tokens"
+        },
+        "tool_result_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tool-result tokens when reported separately.",
+          "title": "Tool Result Tokens"
+        },
+        "cached_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Cached/read tokens when reported separately.",
+          "title": "Cached Tokens"
+        },
+        "total_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Provider total when semantic buckets are unavailable.",
+          "title": "Total Tokens"
+        },
+        "total_cost_usd": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Observed provider cost in USD for this generation boundary.",
+          "title": "Total Cost Usd"
+        }
+      },
+      "title": "ProviderTokenUsage",
+      "type": "object"
     },
     "SystemPromptPart": {
       "properties": {

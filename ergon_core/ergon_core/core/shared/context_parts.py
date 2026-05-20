@@ -25,6 +25,45 @@ class TokenLogprob(BaseModel):
     )
 
 
+class ProviderTokenUsage(BaseModel):
+    """Provider-reported token and cost usage for one generation boundary."""
+
+    model_config = {"frozen": True}
+
+    prompt_tokens: int | None = Field(
+        default=None,
+        description="Input tokens charged or reported by the model provider.",
+    )
+    completion_tokens: int | None = Field(
+        default=None,
+        description="Output tokens charged or reported by the model provider.",
+    )
+    reasoning_tokens: int | None = Field(
+        default=None,
+        description="Reasoning tokens when the provider reports them separately.",
+    )
+    tool_call_tokens: int | None = Field(
+        default=None,
+        description="Tool-call argument tokens when reported separately.",
+    )
+    tool_result_tokens: int | None = Field(
+        default=None,
+        description="Tool-result tokens when reported separately.",
+    )
+    cached_tokens: int | None = Field(
+        default=None,
+        description="Cached/read tokens when reported separately.",
+    )
+    total_tokens: int | None = Field(
+        default=None,
+        description="Provider total when semantic buckets are unavailable.",
+    )
+    total_cost_usd: float | None = Field(
+        default=None,
+        description="Observed provider cost in USD for this generation boundary.",
+    )
+
+
 class SystemPromptPart(BaseModel):
     model_config = {"frozen": True}
     part_kind: Literal["system_prompt"] = Field(
@@ -116,6 +155,10 @@ class ContextPartChunk(BaseModel):
     logprobs: list[TokenLogprob] | None = Field(
         default=None,
         description="Per-token log probabilities associated with this context part.",
+    )
+    provider_usage: ProviderTokenUsage | None = Field(
+        default=None,
+        description="Provider-reported token and cost usage for this generation boundary.",
     )
 
 

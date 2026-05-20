@@ -2,9 +2,11 @@
 
 import os
 from pathlib import Path
+from datetime import datetime
 from uuid import UUID
 
 from ergon_core.core.views.runs.models import (
+    RunSnapshotMetricsDto,
     RunSummaryDto,
     RunSnapshotDto,
 )
@@ -45,8 +47,9 @@ from ergon_core.core.views.runs.snapshot import (
 )
 from ergon_core.core.views.resources import require_viewable_resource_size
 from ergon_core.core.views.dashboard_events.graph_mutations import graph_mutation_record_from_row
+from ergon_core.core.views.runs.metrics import aggregate_run_metrics, observed_cost_from_summary
 from pydantic import BaseModel
-from sqlmodel import col, select
+from sqlmodel import Session, col, select
 
 
 class RunResourceBlob(BaseModel):
@@ -67,6 +70,7 @@ class RunReadService:
         status: str | None = None,
         definition_id: UUID | None = None,
         experiment: str | None = None,
+        offset: int = 0,
     ) -> list[RunSummaryDto]:
         with get_session() as session:
             stmt = select(RunRecord).order_by(col(RunRecord.created_at).desc())
@@ -76,9 +80,25 @@ class RunReadService:
                 stmt = stmt.where(RunRecord.definition_id == definition_id)
             if experiment:
                 stmt = stmt.where(RunRecord.experiment == experiment)
-            stmt = stmt.limit(limit)
+            stmt = stmt.offset(offset).limit(limit)
             rows = list(session.exec(stmt).all())
-        return [_run_summary(row) for row in rows]
+            definition_names = {
+                definition.id: definition.name
+                for definition in session.exec(
+                    select(ExperimentDefinition).where(
+                        col(ExperimentDefinition.id).in_([row.definition_id for row in rows])
+                    )
+                ).all()
+            }
+            task_counts = _task_counts_by_run(session, [row.id for row in rows])
+        return [
+            _run_summary(
+                row,
+                definition_name=definition_names.get(row.definition_id),
+                task_counts=task_counts.get(row.id),
+            )
+            for row in rows
+        ]
 
     def get_run_summary(self, run_id: UUID) -> RunSummaryDto | None:
         with get_session() as session:
@@ -168,6 +188,7 @@ class RunReadService:
 
         run_id_str = str(run.id)
         run_summary = run.parsed_summary()
+        aggregated_metrics = aggregate_run_metrics(context_events, summary=run_summary)
         meta = definition.parsed_metadata()
         run_name = str(meta.get("name", definition.benchmark_type))
 
@@ -207,6 +228,19 @@ class RunReadService:
             running_tasks=running_tasks,
             cancelled_tasks=cancelled_tasks,
             final_score=_display_run_score(score_summary, run.status),
+            metrics=RunSnapshotMetricsDto(
+                run_id=run_id_str,
+                status=str(run.status),
+                duration_ms=(
+                    round(duration_seconds * 1000) if duration_seconds is not None else None
+                ),
+                total_tasks=total_tasks,
+                tool_call_count=aggregated_metrics.tool_call_count,
+                total_tokens=aggregated_metrics.total_tokens,
+                token_breakdown=aggregated_metrics.token_breakdown,
+                total_cost_usd=aggregated_metrics.total_cost_usd,
+                cost_observed=aggregated_metrics.cost_observed,
+            ),
             error=run.error_message,
         )
 
@@ -258,20 +292,124 @@ def _display_run_score(
     return score_summary.normalized_score
 
 
-def _run_summary(run: RunRecord) -> RunSummaryDto:
+def _run_summary(
+    run: RunRecord,
+    *,
+    definition_name: str | None = None,
+    task_counts: dict[str, object] | None = None,
+) -> RunSummaryDto:
+    summary = run.parsed_summary()
+    metrics = summary.get("metrics")
+    total_cost_usd, _ = observed_cost_from_summary(summary)
     return RunSummaryDto(
         id=run.id,
+        name=_summary_text(summary, "name")
+        or _summary_text(summary, "run_name")
+        or f"{run.benchmark_type} / {run.instance_key}",
         status=str(run.status),
         created_at=run.created_at,
         started_at=run.started_at,
         completed_at=run.completed_at,
+        latest_activity_at=_latest_activity(run, task_counts),
+        duration_seconds=_duration_seconds(run),
         definition_id=run.definition_id,
+        definition_name=definition_name,
+        experiment=run.experiment,
         benchmark_type=run.benchmark_type,
         instance_key=run.instance_key,
+        sample_id=run.sample_id,
+        sample_label=run.sample_id or run.instance_key,
         evaluator_slug=run.evaluator_slug,
         model_target=run.model_target,
-        error_message=run.error_message,
+        final_score=_summary_number(summary, "normalized_score")
+        or _summary_number(summary, "final_score")
+        or _summary_number(summary, "score"),
+        return_value=_summary_number(summary, "return") or _summary_number(summary, "return_value"),
+        total_tasks=_count_value(task_counts, "total"),
+        completed_tasks=_count_value(task_counts, "completed"),
+        failed_tasks=_count_value(task_counts, "failed"),
+        running_tasks=_count_value(task_counts, "running"),
+        cancelled_tasks=_count_value(task_counts, "cancelled"),
+        total_cost_usd=total_cost_usd,
+        error_message=run.error_message or _summary_text(summary, "error_message"),
+        metrics=dict(metrics) if isinstance(metrics, dict) else {},
     )
+
+
+def _task_counts_by_run(session: Session, run_ids: list[UUID]) -> dict[UUID, dict[str, object]]:
+    counts: dict[UUID, dict[str, int]] = {
+        run_id: {
+            "total": 0,
+            "completed": 0,
+            "failed": 0,
+            "running": 0,
+            "cancelled": 0,
+        }
+        for run_id in run_ids
+    }
+    if not run_ids:
+        return {}
+
+    nodes = list(
+        session.exec(select(RunGraphNode).where(col(RunGraphNode.run_id).in_(run_ids))).all()
+    )
+    latest_updates: dict[UUID, datetime] = {}
+    for node in nodes:
+        run_counts = counts.setdefault(
+            node.run_id,
+            {"total": 0, "completed": 0, "failed": 0, "running": 0, "cancelled": 0},
+        )
+        run_counts["total"] += 1
+        status = str(node.status)
+        if status in run_counts:
+            run_counts[status] += 1
+        elif status in {"executing", "evaluating"}:
+            run_counts["running"] += 1
+        if node.updated_at is not None:
+            latest_updates[node.run_id] = max(
+                latest_updates.get(node.run_id, node.updated_at),
+                node.updated_at,
+            )
+
+    result: dict[UUID, dict[str, object]] = {
+        run_id: dict(run_counts) for run_id, run_counts in counts.items()
+    }
+    for run_id, updated_at in latest_updates.items():
+        result[run_id]["latest_update"] = updated_at
+    return result
+
+
+def _count_value(task_counts: dict[str, object] | None, key: str) -> int:
+    value = (task_counts or {}).get(key, 0)
+    return value if isinstance(value, int) else 0
+
+
+def _latest_activity(run: RunRecord, task_counts: dict | None = None) -> datetime | None:
+    candidates = [run.created_at, run.started_at, run.completed_at]
+    latest_update = (task_counts or {}).get("latest_update")
+    if isinstance(latest_update, datetime):
+        candidates.append(latest_update)
+    return max(value for value in candidates if value is not None)
+
+
+def _duration_seconds(run: RunRecord) -> float | None:
+    if run.started_at is None or run.completed_at is None:
+        return None
+    return (run.completed_at - run.started_at).total_seconds()
+
+
+def _summary_number(summary: dict, key: str) -> float | None:
+    value = summary.get(key)
+    if isinstance(value, int | float):
+        return float(value)
+    return None
+
+
+def _summary_text(summary: dict, key: str) -> str | None:
+    value = summary.get(key)
+    if isinstance(value, str) and value:
+        return value
+    return None
 
 
 def _blob_root() -> Path:

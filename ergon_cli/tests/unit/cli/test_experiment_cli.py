@@ -8,6 +8,7 @@ from ergon_cli.domains.experiments.models import ExperimentTagDefinitionView
 from ergon_cli.main import build_parser
 from ergon_core.core.views.experiments.models import (
     ExperimentDetailDto,
+    ExperimentRunMetricsDto,
     ExperimentRunRowDto,
     ExperimentSummaryDto,
 )
@@ -104,6 +105,11 @@ def test_experiment_show_prints_detail(monkeypatch, capsys):
                         instance_key="sample-a",
                         status="completed",
                         created_at="2026-04-27T12:00:00Z",
+                        metrics=ExperimentRunMetricsDto(
+                            run_id=run_id,
+                            status="completed",
+                            instance_key="sample-a",
+                        ),
                     )
                 ],
                 sample_selection={"instance_keys": ["sample-a"]},

@@ -5,6 +5,7 @@ from ergon_core.core.shared.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
     ContextPartChunkLog,
+    ProviderTokenUsage,
     ThinkingPart,
     ToolCallPart,
     ToolResultPart,
@@ -136,6 +137,48 @@ async def test_persist_chunk_records_prompt_and_model_output_in_order() -> None:
         "assistant_text",
     ]
     assert events[1].parsed_payload().turn_id == events[2].parsed_payload().turn_id
+
+
+@pytest.mark.asyncio
+async def test_persist_chunk_records_provider_usage() -> None:
+    session = _session()
+    run_id, execution_id = _execution_fixture(session)
+    repo = ContextEventService()
+
+    await repo.persist_chunk(
+        session,
+        run_id=run_id,
+        execution_id=execution_id,
+        worker_binding_key="worker",
+        chunk=ContextPartChunk(
+            part=AssistantTextPart(content="answer"),
+            provider_usage=ProviderTokenUsage(
+                prompt_tokens=5,
+                completion_tokens=7,
+                cached_tokens=2,
+                total_cost_usd=0.03,
+            ),
+        ),
+    )
+
+    event = repo.get_for_execution(session, execution_id)[0]
+
+    assert event.payload["provider_usage"] == {
+        "prompt_tokens": 5,
+        "completion_tokens": 7,
+        "reasoning_tokens": None,
+        "tool_call_tokens": None,
+        "tool_result_tokens": None,
+        "cached_tokens": 2,
+        "total_tokens": None,
+        "total_cost_usd": 0.03,
+    }
+    assert event.parsed_payload().provider_usage == ProviderTokenUsage(
+        prompt_tokens=5,
+        completion_tokens=7,
+        cached_tokens=2,
+        total_cost_usd=0.03,
+    )
 
 
 @pytest.mark.asyncio

@@ -30,6 +30,7 @@ export type TaskStatusValue = z.infer<typeof TaskStatusSchema>;
 
 type RawExperimentDetail = KnownKeys<z.infer<typeof ExperimentDetailSchema>>;
 type RawExperimentRunRow = KnownKeys<NonNullable<RawExperimentDetail["runs"]>[number]>;
+type RawExperimentSummary = KnownKeys<RawExperimentDetail["experiment"]>;
 type RawRunExecutionAttempt = KnownKeys<z.infer<typeof RunExecutionAttemptSchema>>;
 type RawRunResource = KnownKeys<z.infer<typeof RunResourceSchema>>;
 type RawRunSandboxCommand = KnownKeys<z.infer<typeof RunSandboxCommandSchema>>;
@@ -53,6 +54,53 @@ export interface ExperimentStatusCounts {
   cancelled: number;
 }
 
+export interface ExperimentRunMetrics {
+  run_id: string;
+  run_name?: string | null;
+  status: string;
+  sample_label?: string | null;
+  instance_key: string;
+  score?: number | null;
+  return_value?: number | null;
+  duration_ms?: number | null;
+  total_tasks?: number | null;
+  tool_call_count: number;
+  total_cost_usd?: number | null;
+  cost_observed: boolean;
+  total_tokens?: number | null;
+  tokens_observed?: boolean;
+  token_breakdown?: Record<string, number>;
+  model_target?: string | null;
+  evaluator_slug?: string | null;
+  error_summary?: string | null;
+}
+
+export interface ExperimentSummaryDetail
+  extends Omit<
+    RawExperimentSummary,
+    | "average_duration_ms"
+    | "average_score"
+    | "average_tasks"
+    | "default_evaluator_slug"
+    | "default_model_target"
+    | "description"
+    | "failure_count"
+    | "latest_activity_at"
+    | "status_counts"
+    | "total_cost_usd"
+  > {
+  average_duration_ms?: number | null;
+  average_score?: number | null;
+  average_tasks?: number | null;
+  default_evaluator_slug?: string | null;
+  default_model_target?: string | null;
+  description?: string | null;
+  failure_count?: number;
+  latest_activity_at?: string | null;
+  status_counts?: Partial<ExperimentStatusCounts>;
+  total_cost_usd?: number | null;
+}
+
 export interface ExperimentRunRow
   extends Omit<
     RawExperimentRunRow,
@@ -61,6 +109,7 @@ export interface ExperimentRunRow
     | "evaluator_slug"
     | "final_score"
     | "model_target"
+    | "metrics"
     | "running_time_ms"
     | "seed"
     | "started_at"
@@ -73,6 +122,7 @@ export interface ExperimentRunRow
   evaluator_slug: string | null;
   final_score: number | null;
   model_target: string | null;
+  metrics: ExperimentRunMetrics;
   running_time_ms: number | null;
   seed: number | null;
   started_at: string | null;
@@ -81,7 +131,8 @@ export interface ExperimentRunRow
   worker_team: Record<string, unknown>;
 }
 
-export interface ExperimentDetail extends Omit<RawExperimentDetail, "runs" | "analytics"> {
+export interface ExperimentDetail extends Omit<RawExperimentDetail, "analytics" | "experiment" | "runs"> {
+  experiment: ExperimentSummaryDetail;
   runs: ExperimentRunRow[];
   analytics: {
     total_runs: number;
@@ -308,6 +359,7 @@ export function parseExperimentDetail(input: unknown): ExperimentDetail {
       evaluator_slug: run.evaluator_slug ?? null,
       final_score: run.final_score ?? null,
       model_target: run.model_target ?? null,
+      metrics: run.metrics ?? {},
       running_time_ms: run.running_time_ms ?? null,
       seed: run.seed ?? null,
       started_at: run.started_at ?? null,

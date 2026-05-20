@@ -7,9 +7,16 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
 )
+from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.shared.context_parts import (
+    AssistantTextPart,
+    ContextPartChunkLog,
+    ProviderTokenUsage,
+    ToolCallPart,
+)
 from ergon_core.core.views.experiments import service as module
 from ergon_core.core.views.experiments.service import ExperimentReadService
 from sqlalchemy.pool import StaticPool
@@ -21,6 +28,7 @@ def session_factory():
     _ = ExperimentDefinition
     _ = ExperimentDefinitionInstance
     _ = ExperimentDefinitionTask
+    _ = RunContextEvent
     _ = RunGraphNode
     engine = create_engine(
         "sqlite://",
@@ -82,7 +90,11 @@ def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory
                     started_at=started,
                     completed_at=completed,
                     summary_json=(
-                        {"final_score": score, "total_cost_usd": cost}
+                        {
+                            "final_score": score,
+                            "total_cost_usd": cost,
+                            "cost_observed": True,
+                        }
                         if score is not None and cost is not None
                         else {}
                     ),
@@ -117,6 +129,117 @@ def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory
     assert detail.analytics.total_cost_usd == 0.5
     assert detail.runs[0].running_time_ms == 10_000
     assert detail.runs[0].total_tasks == 2
+
+
+def test_experiment_run_rows_project_nested_metrics(monkeypatch, session_factory) -> None:
+    now = datetime(2026, 4, 27, 12, 0, tzinfo=UTC)
+    definition_id = uuid4()
+    run_id = uuid4()
+    execution_id = uuid4()
+
+    with session_factory() as session:
+        session.add(
+            ExperimentDefinition(
+                id=definition_id,
+                name="metric experiment",
+                benchmark_type="metric-benchmark",
+                metadata_json={},
+                created_at=now,
+            )
+        )
+        session.add(
+            RunRecord(
+                id=run_id,
+                definition_id=definition_id,
+                benchmark_type="metric-benchmark",
+                instance_key="sample-1",
+                sample_id="sample label",
+                worker_team_json={"primary": "ci-worker"},
+                evaluator_slug="metric-evaluator",
+                model_target="openai:gpt-4o",
+                status=RunStatus.COMPLETED,
+                started_at=now,
+                completed_at=now + timedelta(seconds=3),
+                summary_json={
+                    "normalized_score": 0.75,
+                    "total_cost_usd": 0.0,
+                    "error_message": "ignored because run succeeded",
+                },
+            )
+        )
+        session.add(
+            RunGraphNode(
+                run_id=run_id,
+                instance_key="sample-1",
+                task_slug="root",
+                description="Task",
+                status="completed",
+                assigned_worker_slug="ci-worker",
+                level=0,
+            )
+        )
+        session.add(
+            RunContextEvent(
+                run_id=run_id,
+                task_execution_id=execution_id,
+                worker_binding_key="ci-worker",
+                sequence=0,
+                event_type="assistant_text",
+                payload=ContextPartChunkLog(
+                    part=AssistantTextPart(content="answer"),
+                    sequence=0,
+                    worker_binding_key="ci-worker",
+                    provider_usage=ProviderTokenUsage(completion_tokens=9),
+                ).model_dump(mode="json"),
+            )
+        )
+        session.add(
+            RunContextEvent(
+                run_id=run_id,
+                task_execution_id=execution_id,
+                worker_binding_key="ci-worker",
+                sequence=1,
+                event_type="tool_call",
+                payload=ContextPartChunkLog(
+                    part=ToolCallPart(
+                        tool_call_id="call-1",
+                        tool_name="search",
+                        args={"q": "x"},
+                    ),
+                    token_ids=[1, 2, 3],
+                    sequence=1,
+                    worker_binding_key="ci-worker",
+                ).model_dump(mode="json"),
+            )
+        )
+        session.commit()
+
+    monkeypatch.setattr(module, "get_session", session_factory)
+
+    detail = ExperimentReadService().get_experiment(definition_id)
+
+    assert detail is not None
+    row = detail.runs[0]
+    assert row.running_time_ms == 3_000
+    assert row.total_cost_usd is None
+    assert row.metrics.run_id == run_id
+    assert row.metrics.run_name == "sample label"
+    assert row.metrics.status == "completed"
+    assert row.metrics.sample_label == "sample label"
+    assert row.metrics.instance_key == "sample-1"
+    assert row.metrics.score == 0.75
+    assert row.metrics.return_value == 0.75
+    assert row.metrics.duration_ms == 3_000
+    assert row.metrics.total_tasks == 1
+    assert row.metrics.tool_call_count == 1
+    assert row.metrics.total_tokens == 12
+    assert row.metrics.token_breakdown["assistant_text"] == 9
+    assert row.metrics.token_breakdown["tool_call"] == 3
+    assert row.metrics.total_cost_usd is None
+    assert row.metrics.cost_observed is False
+    assert row.metrics.model_target == "openai:gpt-4o"
+    assert row.metrics.evaluator_slug == "metric-evaluator"
+    assert row.metrics.error_summary is None
 
 
 def test_experiment_detail_groups_runs_by_experiment_tag(monkeypatch, session_factory) -> None:

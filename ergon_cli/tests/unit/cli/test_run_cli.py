@@ -9,6 +9,7 @@ import ergon_cli.domains.runs.commands as run_cmd
 from ergon_cli.main import build_parser
 import ergon_core.core.views.runs.service as core_run_views
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
+from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from sqlalchemy.pool import StaticPool
@@ -56,7 +57,11 @@ def session_factory():
     )
     SQLModel.metadata.create_all(
         engine,
-        tables=[ExperimentDefinition.__table__, RunRecord.__table__],
+        tables=[
+            ExperimentDefinition.__table__,
+            RunRecord.__table__,
+            RunGraphNode.__table__,
+        ],
     )
 
     def _get_session() -> Session:

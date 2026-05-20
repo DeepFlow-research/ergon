@@ -149,5 +149,6 @@ class RunCompletionData(BaseModel):
     completed_at: datetime
     final_score: float | None = None
     normalized_score: float | None = None
-    total_cost_usd: float = 0.0
+    total_cost_usd: float | None = None
+    cost_observed: bool = False
     execution_result: JsonObject = Field(default_factory=dict)

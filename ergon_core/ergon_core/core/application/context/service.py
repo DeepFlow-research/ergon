@@ -97,6 +97,7 @@ class ContextEventService:
             part=chunk.part,
             token_ids=chunk.token_ids,
             logprobs=chunk.logprobs,
+            provider_usage=chunk.provider_usage,
             sequence=seq,
             worker_binding_key=worker_binding_key,
             turn_id=self._turn_id_for_chunk(execution_id, chunk),
