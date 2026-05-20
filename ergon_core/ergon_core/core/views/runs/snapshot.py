@@ -5,12 +5,10 @@ from datetime import datetime
 from typing import cast
 from uuid import UUID
 
-from ergon_core.core.application.communication.models import (
-    RunCommunicationMessageDto,
-    RunCommunicationThreadDto,
-)
 from ergon_core.core.application.evaluation.dto_mapping import evaluation_row_to_dto
 from ergon_core.core.views.runs.models import (
+    RunCommunicationMessageDto,
+    RunCommunicationThreadDto,
     RunContextEventDto,
     RunExecutionAttemptDto,
     RunResourceDto,

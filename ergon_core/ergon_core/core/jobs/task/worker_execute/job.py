@@ -19,7 +19,7 @@ from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.jobs._events import send_job_step_event
 from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
-from ergon_core.core.application.ports.dashboard import get_dashboard_event_publisher
+from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.application.resources import RunResourceRepository
 from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
 from ergon_core.core.application.runtime.task_management import TaskManagementService
@@ -29,7 +29,7 @@ from ergon_core.core.application.runtime.task_execution_repository import (
 )
 from ergon_core.core.shared.context_parts import ContextPartChunk
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.application.context.events import ContextEventService
+from ergon_core.core.application.context.service import ContextEventService
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.persistence.context.models import RunContextEvent
 from .contract import WorkerExecuteJobRequest

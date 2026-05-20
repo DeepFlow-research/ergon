@@ -3,7 +3,7 @@
 import logging
 from uuid import UUID
 
-from ergon_core.core.application.ports.dashboard import get_dashboard_event_publisher
+from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionWorker,

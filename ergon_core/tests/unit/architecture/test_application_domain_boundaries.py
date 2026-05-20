@@ -28,7 +28,6 @@ APPROVED_DOMAIN_FILES = {
 APPROVED_DOMAIN_DIRS = {"policies", "__pycache__"}
 
 LAYOUT_FILE_EXCEPTIONS = {
-    "context": {"events.py"},
     "evaluation": {"scoring.py", "summary.py"},
     "events": {"base.py", "runtime.py"},
     "experiments": {"definition_writer.py", "handles.py", "launch.py"},
@@ -63,11 +62,6 @@ LAYOUT_DIR_EXCEPTIONS: dict[str, set[str]] = {}
 
 _PRIVATE_CROSS_DOMAIN_IMPORT_LEDGER = (
     (
-        "ergon_core.core.application.communication.service",
-        "ergon_core.core.application.ports.dashboard",
-        "PR 02: make application ports protocol-only public collaboration points.",
-    ),
-    (
         "ergon_core.core.application.experiments.launch",
         "ergon_core.core.application.events.runtime",
         "PR 05: route runtime event collaboration through public runtime facades.",
@@ -76,16 +70,6 @@ _PRIVATE_CROSS_DOMAIN_IMPORT_LEDGER = (
         "ergon_core.core.application.experiments.launch",
         "ergon_core.core.application.runtime.run_records",
         "PR 05: route run-record access through public runtime facades.",
-    ),
-    (
-        "ergon_core.core.application.ports.dashboard",
-        "ergon_core.core.application.events.base",
-        "PR 02: make application ports protocol-only public collaboration points.",
-    ),
-    (
-        "ergon_core.core.application.resources.publishing",
-        "ergon_core.core.application.ports.resources",
-        "PR 02: make application ports protocol-only public collaboration points.",
     ),
     (
         "ergon_core.core.application.runtime.events",
@@ -108,19 +92,9 @@ _PRIVATE_CROSS_DOMAIN_IMPORT_LEDGER = (
         "PR 04: decide and document experiment handle public surface.",
     ),
     (
-        "ergon_core.core.application.runtime.task_execution",
-        "ergon_core.core.application.ports.dashboard",
-        "PR 02: make application ports protocol-only public collaboration points.",
-    ),
-    (
         "ergon_core.core.application.runtime.task_management",
         "ergon_core.core.application.events.runtime",
         "PR 05: route runtime event collaboration through public runtime facades.",
-    ),
-    (
-        "ergon_core.core.application.runtime.task_management",
-        "ergon_core.core.application.ports.dashboard",
-        "PR 02: make application ports protocol-only public collaboration points.",
     ),
     (
         "ergon_core.core.application.runtime.task_models",

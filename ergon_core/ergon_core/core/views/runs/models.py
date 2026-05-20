@@ -9,7 +9,6 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from ergon_core.core.application.communication.models import RunCommunicationThreadDto
 from ergon_core.core.shared.context_parts import ContextEventType, ContextPartChunkLog
 from ergon_core.core.application.evaluation.summary import EvalCriterionStatus
 from pydantic import BaseModel, ConfigDict, Field
@@ -28,6 +27,33 @@ class CamelModel(BaseModel):
         populate_by_name=True,
         extra="forbid",
     )
+
+
+class RunCommunicationMessageDto(CamelModel):
+    id: str
+    thread_id: str
+    thread_topic: str
+    run_id: str
+    task_id: str | None = None
+    task_execution_id: str | None = None
+    from_agent_id: str
+    to_agent_id: str
+    content: str
+    sequence_num: int
+    created_at: datetime
+
+
+class RunCommunicationThreadDto(CamelModel):
+    id: str
+    run_id: str
+    task_id: str | None = None
+    topic: str
+    summary: str | None = None
+    agent_a_id: str
+    agent_b_id: str
+    created_at: datetime
+    updated_at: datetime
+    messages: list[RunCommunicationMessageDto] = Field(default_factory=list)
 
 
 class RunTaskDto(CamelModel):

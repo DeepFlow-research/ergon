@@ -3,7 +3,7 @@
 from typing import Protocol, runtime_checkable
 from uuid import UUID
 
-from ergon_core.core.application.ports.dashboard import DashboardEventPublisher
+from ergon_core.core.application.ports import DashboardEventPublisher
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.shared.utils import utcnow
 from ergon_core.core.views.dashboard_events.contracts import (

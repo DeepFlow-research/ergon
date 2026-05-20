@@ -32,7 +32,7 @@ from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.core.application.evaluation.service import EvaluationService
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from .contract import EvaluateTaskRunResult, TaskEvaluateRequest
-from ergon_core.core.application.ports.dashboard import get_dashboard_event_publisher
+from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.application.runtime.task_execution_repository import WorkerOutputRepository
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.infrastructure.tracing import (
