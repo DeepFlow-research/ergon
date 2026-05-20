@@ -6,10 +6,6 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from ergon_core.core.application.communication.models import (
-    RunCommunicationMessageDto,
-    RunCommunicationThreadDto,
-)
 from ergon_core.core.application.events.base import InngestEventContract
 from ergon_core.core.infrastructure.dashboard import emitter as dashboard_emitter_module
 from ergon_core.core.infrastructure.dashboard.emitter import DashboardEmitter
@@ -19,7 +15,11 @@ from ergon_core.core.views.dashboard_events.contracts import (
     DashboardThreadMessageCreatedEvent,
     DashboardWorkflowStartedEvent,
 )
-from ergon_core.core.views.runs.models import RunSnapshotDto
+from ergon_core.core.views.runs.models import (
+    RunCommunicationMessageDto,
+    RunCommunicationThreadDto,
+    RunSnapshotDto,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]

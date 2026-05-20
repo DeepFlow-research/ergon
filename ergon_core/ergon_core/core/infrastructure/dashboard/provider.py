@@ -5,7 +5,7 @@ request can retrieve the initialized process instance from here.
 """
 
 from ergon_core.core.infrastructure.dashboard.emitter import DashboardEmitter
-from ergon_core.core.application.ports.dashboard import (
+from ergon_core.core.application.events.service import (
     reset_dashboard_event_publisher,
     set_dashboard_event_publisher,
 )

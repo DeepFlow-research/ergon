@@ -9,7 +9,7 @@ from uuid import UUID
 
 from sqlmodel import Session
 
-from ergon_core.core.application.ports.resources import ResourceBlobWriter, SandboxFileReader
+from ergon_core.core.application.ports import ResourceBlobWriter, SandboxFileReader
 from ergon_core.core.application.resources.models import RunResourceView
 from ergon_core.core.application.resources.repository import RunResourceRepository
 from ergon_core.core.persistence.shared.db import get_session

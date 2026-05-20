@@ -4,7 +4,7 @@ import logging
 
 import inngest
 
-from ergon_core.core.application.events.base import InngestEventContract
+from ergon_core.core.application.ports import DashboardEventContract
 from ergon_core.core.infrastructure.inngest.client import inngest_client
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class DashboardEmitter:
     def enabled(self, value: bool) -> None:
         self._enabled = value
 
-    async def publish(self, event: InngestEventContract) -> None:
+    async def publish(self, event: DashboardEventContract) -> None:
         if not self._enabled:
             return
         try:
