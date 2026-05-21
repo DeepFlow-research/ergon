@@ -26,7 +26,7 @@ export function useRunDisplayState(
   // Inspector and graph may render replay display state.
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [snapshotSequence, setSnapshotSequence] = useState<number | null>(null);
-  const currentSequence = snapshotSequence ?? 0;
+  const currentSequence = snapshotSequence;
 
   const displayState = useMemo(() => {
     if (snapshotSequence === null || mutations.length === 0) return runState;

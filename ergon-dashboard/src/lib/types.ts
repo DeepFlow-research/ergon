@@ -8,6 +8,7 @@ import type {
   RunCommunicationThread as RestRunCommunicationThread,
   RunLifecycleStatus as RestRunLifecycleStatus,
   RunSnapshot,
+  RunSnapshotMetrics,
   RunTaskEvaluation as RestRunTaskEvaluation,
 } from "@/lib/contracts/rest";
 import type {
@@ -329,6 +330,7 @@ export interface WorkflowRunState {
   runningTasks: number;
   failedTasks: number;
   cancelledTasks: number;
+  metrics?: RunSnapshotMetrics | null;
 
   // Result
   finalScore: number | null;

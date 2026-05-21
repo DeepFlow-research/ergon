@@ -27,12 +27,15 @@ import {
 } from "@/components/run/useRunDisplayState";
 import { useRunKeyboardShortcuts } from "@/components/run/useRunKeyboardShortcuts";
 import { panelPercent, useRunPanelLayout } from "@/components/run/useRunPanelLayout";
+import { resolveReplayStep } from "@/components/run/replayNavigation";
 import { formatDuration } from "@/lib/run-state/formatters";
 
 type OptionalRunMetrics = {
-  totalTokens?: number | null;
-  totalCostUsd?: number | null;
-  costObserved?: boolean | null;
+  metrics?: {
+    totalTokens?: number | null;
+    totalCostUsd?: number | null;
+    costObserved?: boolean | null;
+  } | null;
 };
 
 function countObservedTokens(runState: WorkflowRunState | null): number | null {
@@ -62,6 +65,7 @@ export function RunWorkspacePage({
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<TaskStatus | null>(null);
   const [isStreamOpen, setIsStreamOpen] = useState(false);
+  const [isTimelineOpen, setIsTimelineOpen] = useState(true);
   const {
     verticalLayout,
     setVerticalLayout,
@@ -132,11 +136,6 @@ export function RunWorkspacePage({
     };
   }, [runId, setSnapshotSequence]);
 
-  const selectedTask = useMemo(() => {
-    if (!displayState || !selectedTaskId) return null;
-    return displayState.tasks.get(selectedTaskId) ?? null;
-  }, [displayState, selectedTaskId]);
-
   // Status counts shown in the run header. Only leaf tasks so the totals
   // match the "units of work" the user is tracking (parents double-count).
   const { leafStatusCounts, leafTotal } = useMemo(() => {
@@ -167,9 +166,9 @@ export function RunWorkspacePage({
         failed: leafStatusCounts[TaskStatus.FAILED],
         total: leafTotal,
       },
-      tokens: optionalMetrics?.totalTokens ?? countObservedTokens(runState),
-      costUsd: optionalMetrics?.totalCostUsd ?? null,
-      costObserved: optionalMetrics?.costObserved ?? false,
+      tokens: optionalMetrics?.metrics?.totalTokens ?? countObservedTokens(runState),
+      costUsd: optionalMetrics?.metrics?.totalCostUsd ?? null,
+      costObserved: optionalMetrics?.metrics?.costObserved ?? false,
       score: runState?.finalScore ?? null,
     };
   }, [leafStatusCounts, leafTotal, runState]);
@@ -196,6 +195,14 @@ export function RunWorkspacePage({
     [activities, selectedActivityId],
   );
 
+  const clearReplaySelection = () => {
+    requestedSequenceRef.current = null;
+    pendingActivityResolutionRef.current = null;
+    selectedActivityIdRef.current = null;
+    setSelectedActivityId(null);
+    setSnapshotSequence(null);
+  };
+
   const highlightedTaskIds = useMemo(() => {
     const ids = new Set<string>();
     if (selectedTaskId) ids.add(selectedTaskId);
@@ -207,7 +214,13 @@ export function RunWorkspacePage({
     selectedTaskId,
     clearSelectedTask: () => setSelectedTaskId(null),
     snapshotSequence,
-    setSnapshotSequence,
+    setSnapshotSequence: (sequence) => {
+      if (sequence === null) {
+        clearReplaySelection();
+        return;
+      }
+      setSnapshotSequence(sequence);
+    },
     statusFilter,
     setStatusFilter,
     toggleEventStream: () => setIsStreamOpen((prev) => !prev),
@@ -223,6 +236,7 @@ export function RunWorkspacePage({
   }, [displayState, selectedTaskId]);
 
   const status = runState?.status ?? "pending";
+  const experimentHref = runState?.definitionId ? `/experiments/${runState.definitionId}` : "/experiments";
   const isInspectorOpen = selectedTaskId !== null;
 
   const handleTaskClick = (taskId: string) => {
@@ -267,6 +281,8 @@ export function RunWorkspacePage({
           <div className="flex items-center gap-1 text-xs text-[var(--muted)]">
             <Link href="/experiments" className="hover:text-[var(--ink)]">Experiments</Link>
             <span>›</span>
+            <Link href={experimentHref} className="hover:text-[var(--ink)]">Experiment</Link>
+            <span>›</span>
             <span className="font-mono text-[var(--ink)]">{runId.slice(0, 8)}…</span>
           </div>
           <div className="mt-1.5 flex items-center gap-3">
@@ -283,6 +299,52 @@ export function RunWorkspacePage({
         <div className="flex shrink-0 items-center gap-3">
           <RunHeaderMetrics metrics={runHeaderMetrics} />
 
+          {mutations.length > 0 && (
+            <div
+              className="flex items-center overflow-hidden rounded-[7px] border border-[var(--line)] bg-[var(--card)]"
+              data-testid="replay-header-controls"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  const sequence = resolveReplayStep(mutations, snapshotSequence, "previous");
+                  if (sequence !== null) setSnapshotSequence(sequence);
+                }}
+                className="border-r border-[var(--line)] px-2 py-1 font-mono text-xs text-[var(--muted)] hover:bg-[var(--paper-2)] hover:text-[var(--ink)]"
+                title="Previous graph snapshot"
+                data-testid="replay-step-previous"
+              >
+                ←
+              </button>
+              <span className="min-w-20 px-2 py-1 text-center font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]">
+                {snapshotSequence === null ? "live" : `seq ${snapshotSequence}`}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const sequence = resolveReplayStep(mutations, snapshotSequence, "next");
+                  if (sequence !== null) setSnapshotSequence(sequence);
+                }}
+                className="border-l border-[var(--line)] px-2 py-1 font-mono text-xs text-[var(--muted)] hover:bg-[var(--paper-2)] hover:text-[var(--ink)]"
+                title="Next graph snapshot"
+                data-testid="replay-step-next"
+              >
+                →
+              </button>
+              {snapshotSequence !== null && (
+                <button
+                  type="button"
+                  onClick={clearReplaySelection}
+                  className="border-l border-[var(--line)] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--accent)] hover:bg-[var(--accent-soft)]"
+                  title="Return graph to live mode"
+                  data-testid="replay-return-live"
+                >
+                  live
+                </button>
+              )}
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => setIsStreamOpen((p) => !p)}
@@ -296,6 +358,21 @@ export function RunWorkspacePage({
             data-testid="event-stream-toggle"
           >
             {isStreamOpen ? "Hide events" : "Event tracks"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsTimelineOpen((p) => !p)}
+            aria-pressed={isTimelineOpen}
+            className={`rounded-[7px] px-2.5 py-1 text-xs font-medium transition-colors ${
+              isTimelineOpen
+                ? "bg-[var(--ink)] text-[var(--paper)]"
+                : "border border-[var(--line)] bg-[var(--card)] text-[var(--muted)] hover:bg-[var(--paper-2)]"
+            }`}
+            title="Toggle activity timeline"
+            data-testid="activity-timeline-toggle"
+          >
+            {isTimelineOpen ? "Hide timeline" : "Show timeline"}
           </button>
 
           <button
@@ -346,12 +423,16 @@ export function RunWorkspacePage({
         )}
         <Group
           key={`${hasLoadedPanelLayouts ? "hydrated" : "initial"}-${
-            activities.length > 0 ? "with-timeline" : "without-timeline"
+            isTimelineOpen && activities.length > 0 ? "with-timeline" : "without-timeline"
           }`}
           orientation="vertical"
-          defaultLayout={activities.length > 0 ? verticalLayout : { "graph-workspace": 100 }}
+          defaultLayout={
+            isTimelineOpen && activities.length > 0
+              ? verticalLayout
+              : { "graph-workspace": 100 }
+          }
           onLayoutChange={(layout) => {
-            if (activities.length > 0) {
+            if (isTimelineOpen && activities.length > 0) {
               setVerticalLayout(layout);
             }
           }}
@@ -360,7 +441,7 @@ export function RunWorkspacePage({
           <Panel
             id="graph-workspace"
             defaultSize={
-              activities.length > 0
+              isTimelineOpen && activities.length > 0
                 ? panelPercent(verticalLayout, "graph-workspace", 62)
                 : "100%"
             }
@@ -424,27 +505,6 @@ export function RunWorkspacePage({
                     </section>
                   )}
 
-                  {!isInspectorOpen && (
-                    <section
-                      className="pointer-events-none absolute bottom-4 right-4 z-10 w-[260px] rounded-[var(--radius)] border border-dashed border-[var(--line-strong)] bg-white/80 px-4 py-3 text-xs text-[var(--muted)]"
-                      data-testid="workspace-launcher"
-                    >
-                      <div className="max-w-3xl space-y-3">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">
-                          Task inspection
-                        </div>
-                        <h2 className="text-sm font-semibold text-[var(--ink)]">
-                          Click node → workspace drawer
-                        </h2>
-                        <p>State, outputs, turns, and evals appear scoped to the selected sequence.</p>
-                        {selectedTask && (
-                          <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--paper)] px-3 py-2">
-                            Ready to inspect <span className="font-semibold text-[var(--ink)]">{selectedTask.name}</span>.
-                          </div>
-                        )}
-                      </div>
-                    </section>
-                  )}
                 </section>
               </Panel>
 
@@ -488,7 +548,7 @@ export function RunWorkspacePage({
             </Group>
           </Panel>
 
-          {activities.length > 0 && (
+          {isTimelineOpen && activities.length > 0 && (
             <>
               <Separator
                 id="timeline-resize-handle"
@@ -515,6 +575,7 @@ export function RunWorkspacePage({
                     selectedTaskId={selectedTaskId}
                     selectedActivityId={selectedActivityId}
                     onActivityClick={handleActivityClick}
+                    onReturnToLive={clearReplaySelection}
                   />
                 </section>
               </Panel>

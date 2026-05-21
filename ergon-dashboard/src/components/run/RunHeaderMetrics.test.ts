@@ -22,8 +22,8 @@ test("run header metrics render strong values and unavailable states", () => {
   assert.match(html, /1 running/);
   assert.match(html, /1 failed/);
   assert.match(html, /Unavailable/);
-  assert.match(html, /tokens not reported/);
-  assert.match(html, /cost not observed/);
+  assert.match(html, /provider did not report tokens/);
+  assert.match(html, /provider did not report cost/);
   assert.match(html, /score not reported/);
 });
 

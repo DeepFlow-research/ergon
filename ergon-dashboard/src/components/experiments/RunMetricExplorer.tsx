@@ -17,7 +17,7 @@ import {
 
 interface RunMetricExplorerProps {
   points: RunMetricPoint[];
-  getRunHref: (runId: string) => string;
+  runHrefBase?: string;
   initialMode?: RunMetricExplorerMode;
   initialPrimaryMetric?: RunMetricKey;
   initialSecondaryMetric?: RunMetricKey;
@@ -36,6 +36,10 @@ function extent(values: number[]): [number, number] {
 
 function scale(value: number, min: number, max: number, outputMin: number, outputMax: number) {
   return outputMin + ((value - min) / (max - min)) * (outputMax - outputMin);
+}
+
+function runHref(runHrefBase: string, runId: string) {
+  return `${runHrefBase.replace(/\/$/, "")}/${runId}`;
 }
 
 function HoverCard({
@@ -78,12 +82,12 @@ function HoverCard({
 function RankedList({
   points,
   metricKey,
-  getRunHref,
+  runHrefBase,
   onHover,
 }: {
   points: RunMetricPoint[];
   metricKey: RunMetricKey;
-  getRunHref: (runId: string) => string;
+  runHrefBase: string;
   onHover: (point: RunMetricPoint | null) => void;
 }) {
   const descriptor = metricDescriptor(metricKey);
@@ -93,7 +97,7 @@ function RankedList({
     <div className="grid gap-2">
       {sorted.map((point, index) => (
         <Link
-          href={getRunHref(point.runId)}
+          href={runHref(runHrefBase, point.runId)}
           key={point.runId}
           onMouseEnter={() => onHover(point)}
           onMouseLeave={() => onHover(null)}
@@ -114,12 +118,12 @@ function RankedList({
 function StripPlot({
   points,
   metricKey,
-  getRunHref,
+  runHrefBase,
   onHover,
 }: {
   points: RunMetricPoint[];
   metricKey: RunMetricKey;
-  getRunHref: (runId: string) => string;
+  runHrefBase: string;
   onHover: (point: RunMetricPoint | null) => void;
 }) {
   const descriptor = metricDescriptor(metricKey);
@@ -134,7 +138,7 @@ function StripPlot({
         const left = scale(value, min, max, CHART_PAD, CHART_WIDTH - CHART_PAD);
         return (
           <Link
-            href={getRunHref(point.runId)}
+            href={runHref(runHrefBase, point.runId)}
             key={point.runId}
             onMouseEnter={() => onHover(point)}
             onMouseLeave={() => onHover(null)}
@@ -153,12 +157,12 @@ function StripPlot({
 function Histogram({
   points,
   metricKey,
-  getRunHref,
+  runHrefBase,
   onHover,
 }: {
   points: RunMetricPoint[];
   metricKey: RunMetricKey;
-  getRunHref: (runId: string) => string;
+  runHrefBase: string;
   onHover: (point: RunMetricPoint | null) => void;
 }) {
   const descriptor = metricDescriptor(metricKey);
@@ -202,7 +206,7 @@ function Histogram({
       <div className="mt-3 flex flex-wrap gap-1.5">
         {points.slice(0, 12).map((point) => (
           <Link
-            href={getRunHref(point.runId)}
+            href={runHref(runHrefBase, point.runId)}
             key={point.runId}
             onMouseEnter={() => onHover(point)}
             onMouseLeave={() => onHover(null)}
@@ -220,13 +224,13 @@ function ScatterPlot({
   points,
   primaryMetricKey,
   secondaryMetricKey,
-  getRunHref,
+  runHrefBase,
   onHover,
 }: {
   points: RunMetricPoint[];
   primaryMetricKey: RunMetricKey;
   secondaryMetricKey: RunMetricKey;
-  getRunHref: (runId: string) => string;
+  runHrefBase: string;
   onHover: (point: RunMetricPoint | null) => void;
 }) {
   const xDescriptor = metricDescriptor(primaryMetricKey);
@@ -251,7 +255,7 @@ function ScatterPlot({
           const y = scale(point.metrics[secondaryMetricKey].value ?? 0, yMin, yMax, CHART_HEIGHT - CHART_PAD, CHART_PAD);
           return (
             <a
-              href={getRunHref(point.runId)}
+              href={runHref(runHrefBase, point.runId)}
               key={point.runId}
               onMouseEnter={() => onHover(point)}
               onMouseLeave={() => onHover(null)}
@@ -271,7 +275,7 @@ function ScatterPlot({
 
 export function RunMetricExplorer({
   points,
-  getRunHref,
+  runHrefBase = "/run",
   initialMode = "1d",
   initialPrimaryMetric = "score",
   initialSecondaryMetric = "duration_ms",
@@ -329,16 +333,16 @@ export function RunMetricExplorer({
             </div>
           ) : null}
           {view === "ranked-list" ? (
-            <RankedList points={comparablePoints} metricKey={primaryMetricKey} getRunHref={getRunHref} onHover={setHoveredPoint} />
+            <RankedList points={comparablePoints} metricKey={primaryMetricKey} runHrefBase={runHrefBase} onHover={setHoveredPoint} />
           ) : null}
           {view === "strip" ? (
-            <StripPlot points={comparablePoints} metricKey={primaryMetricKey} getRunHref={getRunHref} onHover={setHoveredPoint} />
+            <StripPlot points={comparablePoints} metricKey={primaryMetricKey} runHrefBase={runHrefBase} onHover={setHoveredPoint} />
           ) : null}
           {view === "histogram" ? (
-            <Histogram points={comparablePoints} metricKey={primaryMetricKey} getRunHref={getRunHref} onHover={setHoveredPoint} />
+            <Histogram points={comparablePoints} metricKey={primaryMetricKey} runHrefBase={runHrefBase} onHover={setHoveredPoint} />
           ) : null}
           {view === "scatter" ? (
-            <ScatterPlot points={comparablePoints} primaryMetricKey={primaryMetricKey} secondaryMetricKey={secondaryMetricKey} getRunHref={getRunHref} onHover={setHoveredPoint} />
+            <ScatterPlot points={comparablePoints} primaryMetricKey={primaryMetricKey} secondaryMetricKey={secondaryMetricKey} runHrefBase={runHrefBase} onHover={setHoveredPoint} />
           ) : null}
         </div>
         <HoverCard point={hoveredPoint ?? comparablePoints[0] ?? null} primaryMetricKey={primaryMetricKey} secondaryMetricKey={secondaryMetricKey} />

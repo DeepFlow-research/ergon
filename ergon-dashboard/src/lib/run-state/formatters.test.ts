@@ -17,7 +17,8 @@ test("formats unavailable metric values explicitly", () => {
     isUnavailable: true,
   });
   assert.equal(formatScore(null).value, "Unavailable");
-  assert.equal(formatCost(null, false).detail, "cost not observed");
+  assert.equal(formatTokens(null).detail, "provider did not report tokens");
+  assert.equal(formatCost(null, false).detail, "provider did not report cost");
 });
 
 test("formats run metric values consistently", () => {

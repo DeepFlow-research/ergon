@@ -29,7 +29,7 @@ export function formatCost(
   value: number | null | undefined,
   observed: boolean | null | undefined,
 ): MetricDisplay {
-  if (!observed || value == null) return unavailableMetric("cost not observed");
+  if (!observed || value == null) return unavailableMetric("provider did not report cost");
   if (value > 0 && value < 1) return availableMetric(`$${value.toFixed(4)}`);
   return availableMetric(
     new Intl.NumberFormat("en-US", {
@@ -42,7 +42,7 @@ export function formatCost(
 }
 
 export function formatTokens(value: number | null | undefined): MetricDisplay {
-  if (value == null) return unavailableMetric("tokens not reported");
+  if (value == null) return unavailableMetric("provider did not report tokens");
   if (value < 1000) return availableMetric(String(value));
   if (value < 1_000_000) return availableMetric(`${(value / 1000).toFixed(1)}K`);
   return availableMetric(`${(value / 1_000_000).toFixed(1)}M`);

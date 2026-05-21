@@ -146,3 +146,52 @@ def test_list_runs_filters_offsets_and_projects_index_summary(monkeypatch, sessi
     assert summary.evaluator_slug == "judge-v1"
     assert summary.model_target == "openai:gpt-4.1"
     assert summary.metrics == {"pass_rate": 0.9}
+
+
+def test_failed_run_snapshot_preserves_persisted_final_score(
+    monkeypatch, session_factory
+) -> None:
+    now = datetime(2026, 5, 20, 12, 0, tzinfo=UTC)
+    definition_id = uuid4()
+    run_id = uuid4()
+
+    with session_factory() as session:
+        session.add(
+            ExperimentDefinition(
+                id=definition_id,
+                name="Failed score experiment",
+                benchmark_type="smoke",
+                metadata_json={},
+            )
+        )
+        session.add(
+            RunRecord(
+                id=run_id,
+                definition_id=definition_id,
+                benchmark_type="smoke",
+                instance_key="sad-path",
+                status=RunStatus.FAILED,
+                started_at=now,
+                completed_at=now + timedelta(seconds=9),
+                summary_json={"final_score": 0.5},
+            )
+        )
+        session.add(
+            RunGraphNode(
+                run_id=run_id,
+                instance_key="sad-path",
+                task_slug="root",
+                description="Root task",
+                status="failed",
+                level=0,
+            )
+        )
+        session.commit()
+
+    monkeypatch.setattr(module, "get_session", session_factory)
+
+    snapshot = RunReadService().build_run_snapshot(run_id)
+
+    assert snapshot is not None
+    assert snapshot.status == "failed"
+    assert snapshot.final_score == 0.5

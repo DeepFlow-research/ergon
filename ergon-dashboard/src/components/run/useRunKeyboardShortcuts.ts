@@ -4,6 +4,7 @@ import { useEffect } from "react";
 
 import type { GraphMutationDto } from "@/features/graph/contracts/graphMutations";
 import { TaskStatus } from "@/lib/types";
+import { resolveReplayStep } from "./replayNavigation";
 
 export function useRunKeyboardShortcuts(options: {
   selectedTaskId: string | null;
@@ -54,16 +55,14 @@ export function useRunKeyboardShortcuts(options: {
         return;
       }
 
-      if (e.key === "ArrowLeft" && options.snapshotSequence !== null) {
-        const idx = options.mutations.findIndex((m) => m.sequence === options.snapshotSequence);
-        if (idx > 0) options.setSnapshotSequence(options.mutations[idx - 1].sequence);
+      if (e.key === "ArrowLeft") {
+        const sequence = resolveReplayStep(options.mutations, options.snapshotSequence, "previous");
+        if (sequence !== null) options.setSnapshotSequence(sequence);
         return;
       }
-      if (e.key === "ArrowRight" && options.snapshotSequence !== null) {
-        const idx = options.mutations.findIndex((m) => m.sequence === options.snapshotSequence);
-        if (idx >= 0 && idx < options.mutations.length - 1) {
-          options.setSnapshotSequence(options.mutations[idx + 1].sequence);
-        }
+      if (e.key === "ArrowRight") {
+        const sequence = resolveReplayStep(options.mutations, options.snapshotSequence, "next");
+        if (sequence !== null) options.setSnapshotSequence(sequence);
         return;
       }
 

@@ -26,7 +26,6 @@ from uuid import UUID
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
 from ergon_core.api.worker import WorkerOutput
-from ergon_core.core.shared.context_parts import AssistantTextPart, ContextPartChunk
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.infrastructure.sandbox.instrumentation import InstrumentedSandbox
@@ -36,6 +35,7 @@ from ergon_core.core.application.communication.service import (
 )
 from ergon_core.core.shared.settings import settings
 from tests.fixtures.smoke_components.sandbox import SmokeSandboxManager
+from tests.fixtures.smoke_components.smoke_base.metrics import smoke_assistant_chunk
 from tests.fixtures.smoke_components.smoke_base.subworker import (
     SmokeSubworker,
     SubworkerResult,
@@ -80,12 +80,10 @@ class BaseSmokeLeafWorker(Worker):
         task_hex = context.task_id.hex[:8] if context.task_id else "unknown"
 
         # --- Turn 1: attaching + starting ---------------------------------
-        yield ContextPartChunk(
-            part=AssistantTextPart(
-                content=(
-                    f"{type(self).__name__}: attaching to sandbox "
-                    f"{context.sandbox_id} for task={task_hex}"
-                ),
+        yield smoke_assistant_chunk(
+            (
+                f"{type(self).__name__}: attaching to sandbox "
+                f"{context.sandbox_id} for task={task_hex}"
             ),
         )
 
@@ -107,12 +105,10 @@ class BaseSmokeLeafWorker(Worker):
         await self._send_completion_message(context, result)
 
         # --- Turn 2: done + result summary --------------------------------
-        yield ContextPartChunk(
-            part=AssistantTextPart(
-                content=(
-                    f"{type(self).__name__}: done task={task_hex} "
-                    f"file={result.file_path} probe_exit={result.probe_exit_code}"
-                ),
+        yield smoke_assistant_chunk(
+            (
+                f"{type(self).__name__}: done task={task_hex} "
+                f"file={result.file_path} probe_exit={result.probe_exit_code}"
             ),
         )
 

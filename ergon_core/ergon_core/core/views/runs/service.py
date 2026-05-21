@@ -227,7 +227,7 @@ class RunReadService:
             failed_tasks=failed_tasks,
             running_tasks=running_tasks,
             cancelled_tasks=cancelled_tasks,
-            final_score=_display_run_score(score_summary, run.status),
+            final_score=_display_run_score(score_summary, run.status, run_summary),
             metrics=RunSnapshotMetricsDto(
                 run_id=run_id_str,
                 status=str(run.status),
@@ -285,11 +285,17 @@ class RunReadService:
 def _display_run_score(
     score_summary: EvaluationScoreSummary,
     run_status: str,
+    summary: dict,
 ) -> float | None:
+    persisted_score = _summary_number(summary, "normalized_score")
+    if persisted_score is None:
+        persisted_score = _summary_number(summary, "final_score")
+    if persisted_score is None:
+        persisted_score = _summary_number(summary, "score")
     if run_status != RunStatus.COMPLETED:
-        return None
+        return persisted_score
     # TODO: this is a hack, we need to fix the calculation / rename variables to make clear that the output score should be normalised by here.
-    return score_summary.normalized_score
+    return score_summary.normalized_score if score_summary.normalized_score is not None else persisted_score
 
 
 def _run_summary(

@@ -143,6 +143,7 @@ export function hydrateRunSnapshot(input: unknown): WorkflowRunState {
     runningTasks: data.runningTasks,
     failedTasks: data.failedTasks,
     cancelledTasks: data.cancelledTasks,
+    metrics: data.metrics ?? null,
     finalScore: data.finalScore ?? null,
     error: data.error ?? null,
     edges: new Map(),

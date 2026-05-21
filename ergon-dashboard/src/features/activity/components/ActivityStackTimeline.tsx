@@ -12,10 +12,11 @@ import { ActivityBar, activityKindLegendLabel, activityKindColor } from "./Activ
 interface ActivityStackTimelineProps {
   activities: RunActivity[];
   mutations: GraphMutationDto[];
-  currentSequence: number;
+  currentSequence: number | null;
   selectedTaskId: string | null;
   selectedActivityId: string | null;
   onActivityClick: (activity: RunActivity) => void;
+  onReturnToLive?: () => void;
 }
 
 const ROW_HEIGHT = 31;
@@ -156,14 +157,18 @@ export function ActivityStackTimeline({
   selectedTaskId,
   selectedActivityId,
   onActivityClick,
+  onReturnToLive,
 }: ActivityStackTimelineProps) {
   const [hoveredActivityId, setHoveredActivityId] = useState<string | null>(null);
   const layout = useMemo(() => stackActivities(activities), [activities]);
   const maxSequence = mutations.length > 0 ? mutations[mutations.length - 1].sequence : 0;
   const minSequence = mutations.length > 0 ? mutations[0].sequence : 0;
-  const currentMutation = mutations.find((mutation) => mutation.sequence === currentSequence);
+  const currentMutation =
+    currentSequence === null
+      ? null
+      : mutations.find((mutation) => mutation.sequence === currentSequence);
   const hasMutations = mutations.length > 0;
-  const isReplayLocked = currentSequence > 0;
+  const isReplayLocked = currentSequence !== null;
   const snapshotLeftPct = currentMutation
     ? timePositionPct(currentMutation.created_at, layout.startMs, layout.endMs)
     : null;
@@ -219,13 +224,18 @@ export function ActivityStackTimeline({
           )}
 
           <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]" data-testid="activity-current-sequence">
-            seq {minSequence} — {maxSequence || currentMutation?.sequence || currentSequence} · {isReplayLocked ? "replay" : "streaming"}
+            seq {minSequence} — {maxSequence || currentMutation?.sequence || currentSequence || 0} · {isReplayLocked ? "replay" : "streaming"}
           </span>
 
           {isReplayLocked && (
-            <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--accent)]" data-testid="snapshot-lock-label">
-              graph locked · seq {currentSequence}
-            </span>
+            <button
+              type="button"
+              onClick={onReturnToLive}
+              className="rounded-full border border-[var(--accent)] bg-[var(--card)] px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--accent)] hover:bg-[var(--accent-soft)]"
+              data-testid="snapshot-lock-label"
+            >
+              graph locked · seq {currentSequence} · return live
+            </button>
           )}
 
         </div>
