@@ -12,7 +12,6 @@ from uuid import UUID
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
 from ergon_core.api.worker import WorkerOutput
-from ergon_core.core.shared.context_parts import AssistantTextPart, ContextPartChunk
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
@@ -22,6 +21,7 @@ from tests.fixtures.smoke_components.smoke_base.dynamic_tasks import (
     SmokeChildTaskSpec,
     smoke_task_from_spec,
 )
+from tests.fixtures.smoke_components.smoke_base.metrics import smoke_assistant_chunk
 from sqlmodel import select
 
 NESTED_LINE_SLUGS: tuple[str, ...] = ("l_2_a", "l_2_b")
@@ -46,12 +46,10 @@ class RecursiveSmokeWorkerBase(Worker):
         if context.task_id is None:
             raise ValueError(f"{type(self).__name__} requires context.task_id")
 
-        yield ContextPartChunk(
-            part=AssistantTextPart(
-                content=(
-                    f"{type(self).__name__}: planning nested "
-                    f"{' -> '.join(NESTED_LINE_SLUGS)} via leaf={self.leaf_slug}"
-                ),
+        yield smoke_assistant_chunk(
+            (
+                f"{type(self).__name__}: planning nested "
+                f"{' -> '.join(NESTED_LINE_SLUGS)} via leaf={self.leaf_slug}"
             ),
         )
 
@@ -79,18 +77,14 @@ class RecursiveSmokeWorkerBase(Worker):
             f"{slug}: planned (task_id={planned[TaskSlug(slug)]})"
             for slug, _deps, _desc in NESTED_SUBTASK_GRAPH
         )
-        yield ContextPartChunk(
-            part=AssistantTextPart(
-                content=f"{type(self).__name__}: nested subtasks planned:\n{summary}",
-            ),
+        yield smoke_assistant_chunk(
+            f"{type(self).__name__}: nested subtasks planned:\n{summary}",
         )
 
         planned_children = sorted(str(slug) for slug in planned)
         await self._send_recursive_completion_message(context, planned_children)
-        yield ContextPartChunk(
-            part=AssistantTextPart(
-                content=f"{type(self).__name__}: nested children planned {planned_children}",
-            ),
+        yield smoke_assistant_chunk(
+            f"{type(self).__name__}: nested children planned {planned_children}",
         )
 
         yield WorkerOutput(

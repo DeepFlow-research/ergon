@@ -19,7 +19,6 @@ from uuid import UUID
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
 from ergon_core.api.worker import WorkerOutput
-from ergon_core.core.shared.context_parts import AssistantTextPart, ContextPartChunk
 from ergon_core.core.persistence.shared.types import (
     AssignedWorkerSlug,
     TaskSlug,
@@ -29,6 +28,7 @@ from tests.fixtures.smoke_components.smoke_base.dynamic_tasks import (
     SmokeChildTaskSpec,
     smoke_task_from_spec,
 )
+from tests.fixtures.smoke_components.smoke_base.metrics import smoke_assistant_chunk
 
 
 class SmokeWorkerBase(Worker):
@@ -60,12 +60,10 @@ class SmokeWorkerBase(Worker):
             raise ValueError(f"{type(self).__name__} requires context.task_id")
 
         # --- Turn 1: planning announcement (pre-service-call) -------------
-        yield ContextPartChunk(
-            part=AssistantTextPart(
-                content=(
-                    f"{type(self).__name__}: planning 9 subtasks "
-                    f"(diamond+line+singletons) → leaf slug={self.leaf_slug}"
-                ),
+        yield smoke_assistant_chunk(
+            (
+                f"{type(self).__name__}: planning 9 subtasks "
+                f"(diamond+line+singletons) → leaf slug={self.leaf_slug}"
             ),
         )
 
@@ -92,23 +90,15 @@ class SmokeWorkerBase(Worker):
             f"{slug}: planned (task_id={planned[TaskSlug(slug)]})"
             for slug, _deps, _desc in SUBTASK_GRAPH
         )
-        yield ContextPartChunk(
-            part=AssistantTextPart(
-                content=(
-                    f"{type(self).__name__}: 9 subtasks planned (roots={sorted(roots)}):\n{summary}"
-                ),
-            ),
+        yield smoke_assistant_chunk(
+            (f"{type(self).__name__}: 9 subtasks planned (roots={sorted(roots)}):\n{summary}"),
         )
 
         # --- Turn 3: awaiting children (terminal) -------------------------
         waiting_message = (
             f"{type(self).__name__}: planned 9 children -- criterion will observe child completion"
         )
-        yield ContextPartChunk(
-            part=AssistantTextPart(
-                content=waiting_message,
-            ),
-        )
+        yield smoke_assistant_chunk(waiting_message)
 
         yield WorkerOutput(
             output=waiting_message,

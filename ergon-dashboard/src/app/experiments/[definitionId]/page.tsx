@@ -27,7 +27,7 @@ function workerTeamLabel(workerTeam: Record<string, unknown>) {
   return entries.map(([key, value]) => `${key}: ${String(value)}`).join(", ");
 }
 
-function runLink(runId: string) {
+function runHref(runId: string) {
   return `/run/${runId}`;
 }
 
@@ -143,7 +143,7 @@ export default async function ExperimentPage({ params }: ExperimentPageProps) {
       </section>
 
       <div className="mb-6" data-testid="experiment-run-distribution">
-        <RunMetricExplorer points={detail.runMetricPoints} getRunHref={runLink} />
+        <RunMetricExplorer points={detail.runMetricPoints} runHrefBase="/run" />
       </div>
 
       <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] shadow-card">
@@ -162,33 +162,55 @@ export default async function ExperimentPage({ params }: ExperimentPageProps) {
           </thead>
           <tbody>
             {detail.runMetricPoints.map((point) => (
-              <tr key={point.runId} className="border-b border-[var(--line)] last:border-0 hover:bg-[var(--paper)]">
-                <td className="px-3 py-2">
+              <tr
+                key={point.runId}
+                data-testid={`experiment-run-row-${point.runId}`}
+                className="group cursor-pointer border-b border-[var(--line)] last:border-0 hover:bg-[var(--paper)]"
+              >
+                <td>
                   <Link
-                    href={runLink(point.runId)}
-                    className="font-mono text-xs text-[var(--ink)] underline-offset-2 hover:underline"
+                    href={runHref(point.runId)}
+                    className="block px-3 py-2 font-mono text-xs text-[var(--ink)] underline-offset-2 group-hover:underline"
                   >
                     {point.runName}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-[var(--muted)]">{point.sampleLabel}</td>
-                <td className="px-3 py-2 text-[var(--muted)]">
-                  <StatusBadge status={point.status} size="sm" />
-                  {point.errorSummary ? <div className="mt-1 max-w-56 truncate text-xs text-red-500">{point.errorSummary}</div> : null}
+                <td>
+                  <Link href={runHref(point.runId)} className="block px-3 py-2 text-[var(--muted)]">
+                    {point.sampleLabel}
+                  </Link>
                 </td>
-                <td className="px-3 py-2 font-mono text-xs text-[var(--ink)]">
-                  {formatRunMetricValue(scoreDescriptor, point.metrics.score)}
+                <td>
+                  <Link href={runHref(point.runId)} className="block px-3 py-2 text-[var(--muted)]">
+                    <StatusBadge status={point.status} size="sm" />
+                    {point.errorSummary ? <div className="mt-1 max-w-56 truncate text-xs text-red-500">{point.errorSummary}</div> : null}
+                  </Link>
                 </td>
-                <td className="px-3 py-2 font-mono text-xs text-[var(--muted)]">
-                  {formatRunMetricValue(durationDescriptor, point.metrics.duration_ms)}
+                <td>
+                  <Link href={runHref(point.runId)} className="block px-3 py-2 font-mono text-xs text-[var(--ink)]">
+                    {formatRunMetricValue(scoreDescriptor, point.metrics.score)}
+                  </Link>
                 </td>
-                <td className="px-3 py-2 font-mono text-xs text-[var(--muted)]">
-                  {formatRunMetricValue(tasksDescriptor, point.metrics.total_tasks)}
+                <td>
+                  <Link href={runHref(point.runId)} className="block px-3 py-2 font-mono text-xs text-[var(--muted)]">
+                    {formatRunMetricValue(durationDescriptor, point.metrics.duration_ms)}
+                  </Link>
                 </td>
-                <td className="px-3 py-2 text-xs text-[var(--muted)]">
-                  {formatRunMetricValue(costDescriptor, point.metrics.total_cost_usd)}
+                <td>
+                  <Link href={runHref(point.runId)} className="block px-3 py-2 font-mono text-xs text-[var(--muted)]">
+                    {formatRunMetricValue(tasksDescriptor, point.metrics.total_tasks)}
+                  </Link>
                 </td>
-                <td className="px-3 py-2 text-[var(--muted)]">{point.modelTarget ?? "—"}</td>
+                <td>
+                  <Link href={runHref(point.runId)} className="block px-3 py-2 text-xs text-[var(--muted)]">
+                    {formatRunMetricValue(costDescriptor, point.metrics.total_cost_usd)}
+                  </Link>
+                </td>
+                <td>
+                  <Link href={runHref(point.runId)} className="block px-3 py-2 text-[var(--muted)]">
+                    {point.modelTarget ?? "—"}
+                  </Link>
+                </td>
               </tr>
             ))}
             {detail.runMetricPoints.length === 0 ? (

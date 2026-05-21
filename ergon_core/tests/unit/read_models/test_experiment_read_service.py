@@ -351,3 +351,37 @@ def test_list_experiments_reads_definition_rows(monkeypatch, session_factory) ->
     assert len(matching) == 1
     assert matching[0].name == "definition-name"
     assert matching[0].benchmark_type == "definition-type"
+
+
+def test_list_experiments_projects_aggregate_lifecycle_status(monkeypatch, session_factory) -> None:
+    definition_id = uuid4()
+    with session_factory() as session:
+        session.add(
+            ExperimentDefinition(
+                id=definition_id,
+                name="finished-with-failure",
+                benchmark_type="ci-benchmark",
+                metadata_json={},
+            )
+        )
+        for index, status in enumerate(
+            (RunStatus.COMPLETED, RunStatus.COMPLETED, RunStatus.FAILED)
+        ):
+            session.add(
+                RunRecord(
+                    definition_id=definition_id,
+                    benchmark_type="ci-benchmark",
+                    instance_key=f"sample-{index}",
+                    worker_team_json={},
+                    status=status,
+                )
+            )
+        session.commit()
+
+    monkeypatch.setattr(module, "get_session", session_factory)
+
+    summaries = ExperimentReadService().list_experiments(limit=10)
+    matching = [s for s in summaries if s.definition_id == definition_id]
+
+    assert len(matching) == 1
+    assert matching[0].status == "failed"

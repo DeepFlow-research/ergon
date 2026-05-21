@@ -41,9 +41,12 @@ type RawRunCommunicationThread = KnownKeys<z.infer<typeof RunCommunicationThread
 type RawRunTaskEvaluation = KnownKeys<z.infer<typeof RunTaskEvaluationSchema>>;
 type RawRunEvaluationCriterion = KnownKeys<NonNullable<RawRunTaskEvaluation["criterionResults"]>[number]>;
 type RawRunSnapshot = KnownKeys<z.infer<typeof RunSnapshotSchema>>;
+type RawRunSnapshotMetrics = KnownKeys<NonNullable<RawRunSnapshot["metrics"]>>;
 
 export type RawRunSandboxType = RawRunSandbox;
 export type RawRunSandboxCommandType = RawRunSandboxCommand;
+
+export type RunSnapshotMetrics = RawRunSnapshotMetrics;
 
 export interface ExperimentStatusCounts {
   pending: number;

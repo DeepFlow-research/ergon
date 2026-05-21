@@ -118,7 +118,11 @@ def _definition_summary(
         description=definition.description,
         benchmark_type=definition.benchmark_type,
         sample_count=sample_count,
-        status=str(metadata.get("status", "defined")),
+        status=_experiment_lifecycle_status(
+            analytics.status_counts,
+            run_count=run_count,
+            fallback=str(metadata.get("status", "defined")),
+        ),
         default_worker_team=dict_metadata(metadata, "default_worker_team"),
         default_evaluator_slug=optional_str_metadata(metadata, "default_evaluator_slug"),
         default_model_target=optional_str_metadata(metadata, "default_model_target"),
@@ -318,6 +322,31 @@ def _increment_status_count(counts: ExperimentStatusCountsDto, status: str) -> N
             counts.failed += 1
         case "cancelled":
             counts.cancelled += 1
+
+
+def _experiment_lifecycle_status(
+    counts: ExperimentStatusCountsDto,
+    *,
+    run_count: int,
+    fallback: str,
+) -> str:
+    if counts.executing > 0:
+        return "executing"
+    if counts.evaluating > 0:
+        return "evaluating"
+    if counts.pending > 0:
+        return "pending"
+    if run_count == 0:
+        return fallback
+    if counts.failed > 0:
+        return "failed"
+    if counts.cancelled > 0 and counts.completed == 0:
+        return "cancelled"
+    if counts.completed == run_count:
+        return "completed"
+    if counts.cancelled > 0:
+        return "cancelled"
+    return fallback
 
 
 def _average(values: list[float] | list[int]) -> float | None:
