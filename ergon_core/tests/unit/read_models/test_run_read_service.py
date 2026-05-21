@@ -148,9 +148,7 @@ def test_list_runs_filters_offsets_and_projects_index_summary(monkeypatch, sessi
     assert summary.metrics == {"pass_rate": 0.9}
 
 
-def test_failed_run_snapshot_preserves_persisted_final_score(
-    monkeypatch, session_factory
-) -> None:
+def test_failed_run_snapshot_preserves_persisted_final_score(monkeypatch, session_factory) -> None:
     now = datetime(2026, 5, 20, 12, 0, tzinfo=UTC)
     definition_id = uuid4()
     run_id = uuid4()

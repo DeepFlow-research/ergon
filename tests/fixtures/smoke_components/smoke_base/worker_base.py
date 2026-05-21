@@ -91,10 +91,7 @@ class SmokeWorkerBase(Worker):
             for slug, _deps, _desc in SUBTASK_GRAPH
         )
         yield smoke_assistant_chunk(
-            (
-                f"{type(self).__name__}: 9 subtasks planned "
-                f"(roots={sorted(roots)}):\n{summary}"
-            ),
+            (f"{type(self).__name__}: 9 subtasks planned (roots={sorted(roots)}):\n{summary}"),
         )
 
         # --- Turn 3: awaiting children (terminal) -------------------------

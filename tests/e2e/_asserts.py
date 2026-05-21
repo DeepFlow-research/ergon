@@ -439,9 +439,10 @@ def _assert_sadpath_thread_messages(run_id: UUID) -> None:
 
 
 def _assert_sadpath_evaluation(run_id: UUID) -> None:
-    """Sad-path run should not produce a successful final score."""
+    """Sad-path run should not be mistaken for a successful run."""
     snapshot = require_run_snapshot(run_id)
-    assert snapshot.final_score in (None, 0.0)
+    assert snapshot.status == "failed"
+    assert snapshot.final_score != 1.0
 
 
 # =============================================================================

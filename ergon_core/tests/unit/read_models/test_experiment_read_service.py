@@ -353,9 +353,7 @@ def test_list_experiments_reads_definition_rows(monkeypatch, session_factory) ->
     assert matching[0].benchmark_type == "definition-type"
 
 
-def test_list_experiments_projects_aggregate_lifecycle_status(
-    monkeypatch, session_factory
-) -> None:
+def test_list_experiments_projects_aggregate_lifecycle_status(monkeypatch, session_factory) -> None:
     definition_id = uuid4()
     with session_factory() as session:
         session.add(

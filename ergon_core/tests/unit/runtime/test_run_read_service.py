@@ -19,8 +19,11 @@ def test_display_run_score_does_not_fallback_to_raw_total_score() -> None:
 def test_display_run_score_uses_persisted_score_for_failed_runs() -> None:
     score_summary = SimpleNamespace(final_score=2.0, normalized_score=1.0)
 
-    assert _display_run_score(
-        score_summary,
-        RunStatus.FAILED,
-        {"normalized_score": 0.75},
-    ) == 0.75
+    assert (
+        _display_run_score(
+            score_summary,
+            RunStatus.FAILED,
+            {"normalized_score": 0.75},
+        )
+        == 0.75
+    )

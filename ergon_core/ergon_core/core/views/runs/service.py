@@ -295,7 +295,11 @@ def _display_run_score(
     if run_status != RunStatus.COMPLETED:
         return persisted_score
     # TODO: this is a hack, we need to fix the calculation / rename variables to make clear that the output score should be normalised by here.
-    return score_summary.normalized_score if score_summary.normalized_score is not None else persisted_score
+    return (
+        score_summary.normalized_score
+        if score_summary.normalized_score is not None
+        else persisted_score
+    )
 
 
 def _run_summary(

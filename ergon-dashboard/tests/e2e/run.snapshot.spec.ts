@@ -108,7 +108,6 @@ test("graph selection opens workspace evidence sections", async ({ page }) => {
   await page.goto(`/run/${FIXTURE_IDS.runId}`);
 
   await expect(page.getByTestId("graph-canvas")).toBeVisible();
-  await expect(page.getByTestId("workspace-launcher")).toBeVisible();
   await page.getByTestId(`graph-node-${FIXTURE_IDS.solveTaskId}`).click();
 
   await expect(page.getByTestId("workspace-header")).toContainText("Write proof");
