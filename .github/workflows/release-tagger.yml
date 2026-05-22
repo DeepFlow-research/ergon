@@ -34,6 +34,8 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           git fetch --force --tags origin
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
             tagged_sha="$(git rev-list -n 1 "${TAG}")"
