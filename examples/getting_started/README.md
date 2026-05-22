@@ -1,14 +1,21 @@
 # Getting Started Examples
 
-These examples are the public first steps for running Ergon locally.
+Small examples for running Ergon from a local checkout. Start here when you
+want to launch a real run before writing your own benchmark script.
 
 ## Available Examples
 
 | Example | What it runs |
 | --- | --- |
-| [`01_minif2f_local_llamacpp`](01_minif2f_local_llamacpp/) | Three MiniF2F Lean proof tasks with a local llama.cpp OpenAI-compatible server and E2B Lean sandbox |
+| [`01_minif2f_local_llamacpp`](01_minif2f_local_llamacpp/) | Three MiniF2F Lean proof tasks with llama.cpp and an E2B Lean sandbox |
 
-The examples stay as plain Python scripts, and `uv run ergon examples ...`
-provides a thin wrapper for listing, checking, and launching them. The script is
-still the source of behavior, so you can read it directly to see the benchmark
-authoring path.
+Use the CLI for the normal path:
+
+```bash
+uv run ergon examples list
+uv run ergon examples info minif2f-local-llamacpp
+uv run ergon examples check minif2f-local-llamacpp --base-url http://localhost:8080
+```
+
+The examples are still plain Python scripts. Read the script when you want to
+see the object-bound benchmark authoring path directly.
