@@ -1,11 +1,12 @@
 import json
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from ergon_cli.commands.workflow import WorkflowCommandContext, execute_workflow_command
-from ergon_core.core.application.tasks.models import AddSubtaskResult
-from ergon_core.core.application.workflows.models import WorkflowResourceRef
+from ergon_cli.domains.workflow.executor import execute_workflow_command
+from ergon_cli.domains.workflow.models import WorkflowCommandContext
+from ergon_core.core.application.runtime.models import GraphTaskRef
+from ergon_core.core.application.runtime.workflow_models import WorkflowResourceRef
+from pydantic import BaseModel, ConfigDict
 
 
 class _Session:
@@ -13,14 +14,16 @@ class _Session:
         pass
 
 
-@dataclass
-class _Service:
-    resource: WorkflowResourceRef
+class _Service(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def list_resources(self, session, *, run_id, node_id, scope, kind=None, max_depth=3, limit=50):
+    resource: WorkflowResourceRef | None
+
+    def list_resources(self, session, *, run_id, task_id, scope, kind=None, max_depth=3, limit=50):
         assert isinstance(session, _Session)
+        assert self.resource is not None
         assert run_id == self.resource.run_id
-        assert node_id == self.resource.node_id
+        assert task_id == self.resource.task_id
         assert scope == "visible"
         assert kind is None
         assert max_depth == 3
@@ -28,36 +31,23 @@ class _Service:
         return [self.resource]
 
 
-class _ManagingService:
-    def __init__(self) -> None:
-        self.added = None
+class _TaskTreeService(BaseModel):
+    requested_parent_task_id: object | None = None
 
-    async def add_task(
-        self,
-        session,
-        *,
-        run_id,
-        parent_node_id,
-        task_slug,
-        description,
-        assigned_worker_slug,
-        dry_run,
-    ):
+    def list_tasks(self, session, *, run_id, parent_task_id=None):
         assert isinstance(session, _Session)
-        self.added = {
-            "run_id": run_id,
-            "parent_node_id": parent_node_id,
-            "task_slug": task_slug,
-            "description": description,
-            "assigned_worker_slug": assigned_worker_slug,
-            "dry_run": dry_run,
-        }
-
-        return AddSubtaskResult(
-            node_id=uuid4(),
-            task_slug="source-scout",
-            status="pending",
-        )
+        self.requested_parent_task_id = parent_task_id
+        return [
+            GraphTaskRef(
+                task_id=uuid4(),
+                task_slug="child",
+                status="pending",
+                level=1,
+                parent_task_id=parent_task_id,
+                assigned_worker_slug="react-v1",
+                description="Child task",
+            )
+        ]
 
 
 class _FailingService:
@@ -68,7 +58,7 @@ class _FailingService:
 def _context() -> WorkflowCommandContext:
     return WorkflowCommandContext(
         run_id=uuid4(),
-        node_id=uuid4(),
+        task_id=uuid4(),
         execution_id=uuid4(),
         sandbox_task_key=uuid4(),
         benchmark_type="researchrubrics",
@@ -77,12 +67,12 @@ def _context() -> WorkflowCommandContext:
 
 def test_resource_list_json_uses_injected_context() -> None:
     run_id = uuid4()
-    node_id = uuid4()
+    task_id = uuid4()
     resource = WorkflowResourceRef(
         resource_id=uuid4(),
         run_id=run_id,
         task_execution_id=uuid4(),
-        node_id=node_id,
+        task_id=task_id,
         task_slug="research",
         kind="report",
         name="paper.txt",
@@ -97,13 +87,13 @@ def test_resource_list_json_uses_injected_context() -> None:
         "inspect resource-list --scope visible --limit 5 --format json",
         context=WorkflowCommandContext(
             run_id=run_id,
-            node_id=node_id,
+            task_id=task_id,
             execution_id=uuid4(),
             sandbox_task_key=uuid4(),
             benchmark_type="researchrubrics",
         ),
         session_factory=_Session,
-        service=_Service(resource),
+        service=_Service(resource=resource),
     )
 
     payload = json.loads(output.stdout)
@@ -128,7 +118,7 @@ def test_agent_command_rejects_user_supplied_context_flags() -> None:
 
 def test_parse_error_returns_nonzero_output_instead_of_system_exit() -> None:
     output = execute_workflow_command(
-        "manage materialize-resource",
+        "inspect resource-content",
         context=_context(),
         session_factory=_Session,
         service=_Service(resource=None),  # type: ignore[arg-type]
@@ -196,35 +186,58 @@ def test_service_validation_error_returns_nonzero_output() -> None:
     assert output.stderr == "unsupported resource scope: all"
 
 
-def test_manage_add_task_creates_subtask_with_injected_parent_context() -> None:
-    run_id = uuid4()
-    node_id = uuid4()
-    service = _ManagingService()
+def test_manage_command_is_not_registered() -> None:
+    output = execute_workflow_command(
+        "manage add-subtask --task-slug child --description child",
+        context=_context(),
+        session_factory=_Session,
+        service=object(),
+    )
+
+    assert output.exit_code == 2
+    assert output.stderr is not None
+    assert "invalid choice: 'manage'" in output.stderr
+    assert "workflow manage --help" not in output.stderr
+
+
+def test_task_tree_parent_task_id_filters_tasks_by_parent() -> None:
+    parent_task_id = uuid4()
+    service = _TaskTreeService()
 
     output = execute_workflow_command(
-        "manage add-task --task-slug source-scout "
-        "--worker researchrubrics-researcher "
-        "--description 'Find authoritative sources' "
-        "--format json",
-        context=WorkflowCommandContext(
-            run_id=run_id,
-            node_id=node_id,
-            execution_id=uuid4(),
-            sandbox_task_key=uuid4(),
-            benchmark_type="researchrubrics",
-        ),
+        f"inspect task-tree --parent-task-id {parent_task_id} --format json",
+        context=_context(),
         session_factory=_Session,
         service=service,
     )
 
     payload = json.loads(output.stdout)
     assert output.exit_code == 0
-    assert payload["task"]["task_slug"] == "source-scout"
-    assert service.added == {
-        "run_id": run_id,
-        "parent_node_id": node_id,
-        "task_slug": "source-scout",
-        "description": "Find authoritative sources",
-        "assigned_worker_slug": "researchrubrics-researcher",
-        "dry_run": False,
-    }
+    assert service.requested_parent_task_id == parent_task_id
+    assert payload["tasks"][0]["parent_task_id"] == str(parent_task_id)
+
+
+def test_human_cli_rejects_workflow_manage_surface() -> None:
+    output = execute_workflow_command(
+        "manage add-edge",
+        context=_context(),
+        session_factory=_Session,
+        service=object(),
+    )
+
+    assert output.exit_code == 2
+    assert output.stderr is not None
+    assert "invalid choice: 'manage'" in output.stderr
+
+
+def test_resource_list_rejects_removed_explain_flag() -> None:
+    output = execute_workflow_command(
+        "inspect resource-list --scope visible --explain",
+        context=_context(),
+        session_factory=_Session,
+        service=_Service(resource=None),  # type: ignore[arg-type]
+    )
+
+    assert output.exit_code == 2
+    assert output.stderr is not None
+    assert "unrecognized arguments: --explain" in output.stderr

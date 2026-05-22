@@ -3,18 +3,15 @@ export type { ContextEventState };
 
 import type {
   BenchmarkName as RestBenchmarkName,
-  CohortDetail as RestCohortDetail,
   ExperimentDetail as RestExperimentDetail,
-  CohortSummary as RestCohortSummary,
-  ExperimentCohortStatusValue,
   RunCommunicationMessage as RestRunCommunicationMessage,
   RunCommunicationThread as RestRunCommunicationThread,
   RunLifecycleStatus as RestRunLifecycleStatus,
   RunSnapshot,
+  RunSnapshotMetrics,
   RunTaskEvaluation as RestRunTaskEvaluation,
 } from "@/lib/contracts/rest";
 import type {
-  DashboardCohortUpdatedData as GeneratedDashboardCohortUpdatedData,
   DashboardGraphMutationData as GeneratedDashboardGraphMutationData,
   DashboardResourcePublishedData as GeneratedDashboardResourcePublishedData,
   GraphMutationSocketData as GeneratedGraphMutationSocketData,
@@ -33,7 +30,6 @@ import type {
   DashboardWorkflowStartedData as GeneratedDashboardWorkflowStartedData,
   RunListEntry,
   TaskStatusSocketData,
-  TaskTreeNode,
 } from "@/lib/contracts/events";
 
 // =============================================================================
@@ -60,8 +56,6 @@ export enum TaskTrigger {
 
 export type BenchmarkName = RestBenchmarkName;
 export type RunLifecycleStatus = RestRunLifecycleStatus;
-export type ExperimentCohortStatus = ExperimentCohortStatusValue;
-export type { TaskTreeNode };
 
 // =============================================================================
 // Event Names
@@ -70,7 +64,6 @@ export type { TaskTreeNode };
 export const DashboardEventNames = {
   WORKFLOW_STARTED: "dashboard/workflow.started",
   WORKFLOW_COMPLETED: "dashboard/workflow.completed",
-  COHORT_UPDATED: "dashboard/cohort.updated",
   TASK_STATUS_CHANGED: "dashboard/task.status_changed",
   RESOURCE_PUBLISHED: "dashboard/resource.published",
   SANDBOX_CREATED: "dashboard/sandbox.created",
@@ -91,11 +84,7 @@ export type DashboardEventName =
 
 export type DashboardWorkflowStartedData = GeneratedDashboardWorkflowStartedData;
 export type DashboardWorkflowCompletedData = GeneratedDashboardWorkflowCompletedData;
-export type CohortSummary = RestCohortSummary;
-export type CohortExperimentRow = NonNullable<RestCohortDetail["experiments"]>[number];
-export type CohortDetail = RestCohortDetail;
 export type ExperimentDetail = RestExperimentDetail;
-export type DashboardCohortUpdatedData = GeneratedDashboardCohortUpdatedData;
 export type DashboardTaskStatusChangedData = GeneratedDashboardTaskStatusChangedData;
 export type DashboardResourcePublishedData = GeneratedDashboardResourcePublishedData;
 export type DashboardSandboxCreatedData = GeneratedDashboardSandboxCreatedData;
@@ -121,7 +110,6 @@ export type GraphMutationSocketData = GeneratedGraphMutationSocketData;
 export type DashboardEventData =
   | DashboardWorkflowStartedData
   | DashboardWorkflowCompletedData
-  | DashboardCohortUpdatedData
   | DashboardTaskStatusChangedData
   | DashboardResourcePublishedData
   | DashboardSandboxCreatedData
@@ -139,7 +127,6 @@ export type DashboardEventData =
 export type DashboardEvents = {
   "dashboard/workflow.started": { data: DashboardWorkflowStartedData };
   "dashboard/workflow.completed": { data: DashboardWorkflowCompletedData };
-  "dashboard/cohort.updated": { data: DashboardCohortUpdatedData };
   "dashboard/task.status_changed": { data: DashboardTaskStatusChangedData };
   "dashboard/resource.published": { data: DashboardResourcePublishedData };
   "dashboard/sandbox.created": { data: DashboardSandboxCreatedData };
@@ -174,7 +161,7 @@ export interface TaskTransitionRecord {
 }
 
 /**
- * Task state in the store (flattened from TaskTreeNode).
+ * Task state in the store (flattened from the run snapshot task map).
  * Represents the current state of a task during execution.
  */
 export interface TaskState {
@@ -305,7 +292,7 @@ export interface UnhandledMutationRecord {
  */
 export interface WorkflowRunState {
   id: string;
-  experimentId: string;
+  definitionId: string;
   name: string;
   status: RunLifecycleStatus;
 
@@ -343,6 +330,7 @@ export interface WorkflowRunState {
   runningTasks: number;
   failedTasks: number;
   cancelledTasks: number;
+  metrics?: RunSnapshotMetrics | null;
 
   // Result
   finalScore: number | null;
@@ -366,7 +354,6 @@ export interface WorkflowRunState {
  * Events sent from server to client via Socket.io.
  */
 export interface ServerToClientEvents {
-  "cohort:updated": (data: DashboardCohortUpdatedData) => void;
   "run:started": (data: { runId: string; name: string }) => void;
   "run:completed": (data: RunCompletedSocketData) => void;
   "task:status": (data: TaskStatusSocketData) => void;
@@ -377,7 +364,7 @@ export interface ServerToClientEvents {
   "thread:message": (data: DashboardThreadMessageCreatedData) => void;
   "task:evaluation": (data: DashboardTaskEvaluationUpdatedData) => void;
   "graph:mutation": (data: GraphMutationSocketData) => void;
-  "context:event": (data: { runId: string; taskNodeId: string; event: ContextEventState }) => void;
+  "context:event": (data: { runId: string; taskId: string; event: ContextEventState }) => void;
   // Sync event - sends all current runs to a client on request
   "sync:runs": (runs: RunListEntry[]) => void;
   // Sync event - sends full state for a specific run

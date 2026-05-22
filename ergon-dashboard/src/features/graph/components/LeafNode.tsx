@@ -77,15 +77,15 @@ function StatusDot({ status }: { status: string }) {
 function evaluationGlyphClass(status: EvaluationRollup["status"]): string {
   switch (status) {
     case "passing":
-      return "bg-emerald-600 text-white";
+      return "border-emerald-500 bg-emerald-500";
     case "failing":
-      return "bg-rose-600 text-white";
+      return "border-rose-500 bg-rose-500";
     case "errored":
-      return "bg-amber-500 text-white";
+      return "border-amber-500 bg-amber-500";
     case "skipped":
-      return "bg-slate-400 text-white";
+      return "border-slate-400 bg-slate-400";
     case "mixed":
-      return "bg-indigo-500 text-white";
+      return "border-indigo-500 bg-indigo-500";
   }
 }
 
@@ -160,12 +160,13 @@ function LeafNodeComponent(props: LeafNodeProps) {
       <StatusDot status={task.status} />
       {evaluationRollup && (
         <span
-          className={`absolute bottom-1.5 right-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none ${evaluationGlyphClass(evaluationRollup.status)}`}
+          className={`absolute bottom-2 right-2 h-2 w-2 rounded-full border ${evaluationGlyphClass(evaluationRollup.status)} ${
+            props.evaluationLensActive ? "ring-2 ring-white ring-offset-1" : "opacity-70"
+          }`}
           data-testid={`graph-rubric-glyph-${task.id}`}
           title={`${evaluationRollup.status}: ${evaluationRollup.passed} passed, ${evaluationRollup.failed} failed, ${evaluationRollup.errored} errored, ${evaluationRollup.skipped} skipped`}
-        >
-          R
-        </span>
+          aria-label={`${evaluationRollup.status} evaluation`}
+        />
       )}
 
       <Handle

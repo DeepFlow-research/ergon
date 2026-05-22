@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
-from ergon_core.api.benchmark.task import EmptyTaskPayload, TaskSpec
+from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
 from ergon_core.api.errors import DependencyError
 from ergon_core.core.infrastructure.dependencies import check_packages
 from pydantic import BaseModel
@@ -16,7 +16,7 @@ class Benchmark(ABC):
     type_slug: ClassVar[str]
     task_payload_model: ClassVar[type[BaseModel]] = EmptyTaskPayload
     required_packages: ClassVar[list[str]] = []
-    install_hint: ClassVar[str] = ""
+    install_hint: ClassVar[str | None] = None
 
     def __init__(
         self,
@@ -25,19 +25,26 @@ class Benchmark(ABC):
         description: str | None = None,
         metadata: Mapping[
             str,
-            Any,  # slopcop: ignore[no-typing-any] -- public metadata bag accepts arbitrary JSON-like values
+            Any,
         ]
         | None = None,
+        created_by: str | None = None,
     ) -> None:
         self.name = name or self.__class__.__name__
         self.description = description or ""
         self.metadata: dict[
             str,
-            Any,  # slopcop: ignore[no-typing-any] -- preserves caller-supplied benchmark metadata values
+            Any,
         ] = dict(metadata or {})
+        # `created_by` deliberately preserves `None` as the unset sentinel,
+        # unlike `name`/`description` which collapse to defaults via `or`.
+        # Attribution wants the absent state distinguishable from empty
+        # (an empty string would mean "explicitly set to nothing", which is
+        # meaningless for "who created this").
+        self.created_by = created_by
 
     @abstractmethod
-    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[BaseModel]]]:
+    def build_instances(self) -> Mapping[str, Sequence[Task[BaseModel]]]:
         """Materialize benchmark instances."""
         ...
 
@@ -51,7 +58,7 @@ class Benchmark(ABC):
         payload: BaseModel
         | Mapping[
             str,
-            Any,  # slopcop: ignore[no-typing-any] -- arbitrary persisted JSON is validated below
+            Any,
         ]
         | None,
     ) -> BaseModel:

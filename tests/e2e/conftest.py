@@ -46,7 +46,7 @@ def _require_infra():
     if not url:
         pytest.fail(
             "E2E tests require ERGON_DATABASE_URL pointing at a live Postgres. "
-            "Run with docker-compose.yml (or scripts/smoke_local_up.sh)."
+            "Run with docker compose up -d."
         )
 
     db_parsed = urlparse(url)
@@ -84,7 +84,7 @@ def run_benchmark(
     extras: str = "none",
     model: str = "stub:constant",
     limit: int = 1,
-    cohort: str = "ci",
+    experiment: str = "ci",
     timeout: int = 120,
 ) -> subprocess.CompletedProcess:
     """Define and run an experiment via the ergon CLI."""
@@ -105,8 +105,8 @@ def run_benchmark(
         extras,
         "--limit",
         str(limit),
-        "--cohort",
-        cohort,
+        "--experiment",
+        experiment,
     ]
     env = {**os.environ, "PYTHONUNBUFFERED": "1"}
     define = subprocess.run(
@@ -119,9 +119,9 @@ def run_benchmark(
     if define.returncode != 0:
         return define
 
-    experiment_id = _parse_uuid_line("EXPERIMENT_ID=", define.stdout + define.stderr)
+    definition_id = _parse_uuid_line("EXPERIMENT_ID=", define.stdout + define.stderr)
     return subprocess.run(
-        ["ergon", "experiment", "run", experiment_id, "--timeout", str(timeout)],
+        ["ergon", "experiment", "run", definition_id, "--timeout", str(timeout)],
         capture_output=True,
         text=True,
         env=env,
@@ -158,10 +158,10 @@ def benchmarked():
         sandbox: str,
         extras: str = "none",
         limit: int = 1,
-        cohort: str = "ci",
+        experiment: str = "ci",
         timeout: int = 120,
     ) -> subprocess.CompletedProcess:
-        key = (slug, worker, evaluator, sandbox, extras, cohort)
+        key = (slug, worker, evaluator, sandbox, extras, experiment)
         if key not in cache:
             cache[key] = run_benchmark(
                 slug,
@@ -170,7 +170,7 @@ def benchmarked():
                 sandbox=sandbox,
                 extras=extras,
                 limit=limit,
-                cohort=cohort,
+                experiment=experiment,
                 timeout=timeout,
             )
         return cache[key]

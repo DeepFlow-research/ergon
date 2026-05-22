@@ -39,7 +39,7 @@ class InstrumentedSandboxCommands:
         sandbox_id: str,
         commands: Commands,
         max_output_len: int = 4000,
-    ):
+    ) -> None:
         self._sink = sink
         self._run_id = run_id
         self._task_id = task_id
@@ -111,7 +111,7 @@ class InstrumentedSandboxFiles:
         sandbox_id: str,
         files: Filesystem,
         max_output_len: int = 4000,
-    ):
+    ) -> None:
         self._sink = sink
         self._run_id = run_id
         self._task_id = task_id
@@ -208,7 +208,7 @@ class InstrumentedSandbox:
         run_id: UUID,
         task_id: UUID,
         max_output_len: int = 4000,
-    ):
+    ) -> None:
         self._sandbox = sandbox
         self._sink = sink
         self._run_id = run_id

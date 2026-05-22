@@ -19,7 +19,7 @@ export default function ModelsPage() {
           <div className="mx-auto mb-3 text-3xl text-[var(--faint)]">⊘</div>
           <h2 className="text-lg font-medium text-[var(--ink)]">Coming soon</h2>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            The model registry is under development. Use the training page to track active sessions.
+            The model registry is under development.
           </p>
         </div>
       </main>

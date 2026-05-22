@@ -1,6 +1,7 @@
 """Unit tests for OnboardProfile: required_keys() and required_extras()."""
 
-from ergon_cli.onboarding.profile import (
+import ergon_cli.domains.onboarding.profile as profile_module
+from ergon_cli.domains.onboarding.profile import (
     GPUProvider,
     LLMProvider,
     OnboardProfile,
@@ -29,7 +30,7 @@ class TestRequiredKeys:
 
     def test_e2b_benchmark_needs_e2b_key(self) -> None:
         # ``minif2f`` is the lowest-dependency E2B benchmark still in the
-        # registry after the canonical-smoke cleanup removed the legacy
+        # registry after the canonical-smoke cleanup removed the prior
         # ``smoke-test`` benchmark.
         p = OnboardProfile(benchmarks=["minif2f"])
         keys = p.required_keys()
@@ -138,19 +139,7 @@ class TestRequiredExtras:
 
 
 class TestPreviouslyMissingBenchmarks:
-    """Regression: delegation-smoke and researchrubrics-smoke were absent
-    from BENCHMARK_DEPS before this RFC. Verify they now appear in the
-    onboarding wizard choices and produce correct deps."""
-
-    def test_delegation_smoke_has_no_e2b(self) -> None:
-        p = OnboardProfile(benchmarks=["delegation-smoke"])
-        assert "E2B_API_KEY" not in p.required_keys()
-        assert p.required_extras() == []
-
-    def test_researchrubrics_smoke_has_no_e2b(self) -> None:
-        p = OnboardProfile(benchmarks=["researchrubrics-smoke"])
-        assert "E2B_API_KEY" not in p.required_keys()
-        assert p.required_extras() == []
+    """Regression coverage for the remaining object-bound benchmark choices."""
 
     def test_researchrubrics_vanilla_needs_data_extra(self) -> None:
         p = OnboardProfile(benchmarks=["researchrubrics-vanilla"])
@@ -161,17 +150,6 @@ class TestOnboardingWizardSeesAllBenchmarks:
     """The wizard must offer all registered benchmarks."""
 
     def test_wizard_sees_all_registered_slugs(self) -> None:
-        from ergon_builtins.registry import register_builtins
-        from ergon_core.api.registry import ComponentRegistry
-        from ergon_core.core.application.components.catalog import ComponentCatalogService
-
-        registry = ComponentRegistry(catalog_service=ComponentCatalogService())
-        register_builtins(registry)
-
-        # ``smoke-test`` and ``researchrubrics-smoke`` benchmarks retired
-        # alongside the canonical-smoke refactor — smoke now runs
-        # against each benchmark's real sandbox image via test-only
-        # fixtures.  See docs/architecture/07_testing.md.
         expected = {
             "minif2f",
             "swebench-verified",
@@ -179,4 +157,4 @@ class TestOnboardingWizardSeesAllBenchmarks:
             "researchrubrics",
             "researchrubrics-vanilla",
         }
-        assert expected <= set(registry.benchmarks)
+        assert expected <= set(profile_module.available_benchmark_slugs())

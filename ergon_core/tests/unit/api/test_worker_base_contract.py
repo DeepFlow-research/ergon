@@ -1,37 +1,41 @@
-"""Contract tests for the base `Worker.__init__` signature."""
+"""Contract tests for the base `Worker` field defaults.
 
-import inspect
+PR 5 converted `Worker` from a hand-rolled ABC to a Pydantic `BaseModel`,
+so the invariants now live on `Worker.model_fields[...]` rather than
+the (auto-generated, kwargs-only) `__init__` signature.
+"""
+
+from pydantic_core import PydanticUndefined
 
 from ergon_core.api import Worker
 
 
-def test_model_kwarg_has_no_default() -> None:
-    """`model` must be keyword-only AND have no default value.
+def test_model_field_has_no_default() -> None:
+    """`model` must have no default value on the base.
 
-    Defaults on worker `__init__` are an anti-pattern (RFC 2026-04-22):
+    Defaults on worker config are an anti-pattern (RFC 2026-04-22):
     they hide sizing decisions. Factories must pass `model=` explicitly.
     """
-    sig = inspect.signature(Worker.__init__)
-    model_param = sig.parameters["model"]
-    assert model_param.kind == inspect.Parameter.KEYWORD_ONLY, (
-        f"`model` must be keyword-only, got {model_param.kind}"
-    )
-    assert model_param.default is inspect.Parameter.empty, (
-        f"`model` must have no default; got {model_param.default!r}"
+    field = Worker.model_fields["model"]
+    assert field.default is PydanticUndefined, (
+        f"`model` must have no default; got {field.default!r}"
     )
 
 
-def test_name_kwarg_has_no_default() -> None:
-    """Mirror of the `model` invariant: `name` also has no default.
+def test_model_field_is_str_not_nullable() -> None:
+    field = Worker.model_fields["model"]
+    assert field.annotation is str
 
-    Locked in so future drift (someone adding `name: str = "worker"` to
-    the base) is caught immediately.
+
+def test_name_field_has_no_default() -> None:
+    """Mirror of the `model` invariant: `name` also has no default on the base.
+
+    Subclasses are free to override (e.g. ``TrainingStubWorker.name =
+    "training-stub"``). The base contract is what's locked here so
+    drift adding ``name = "worker"`` to ``ergon_core.api.worker.worker``
+    is caught immediately.
     """
-    sig = inspect.signature(Worker.__init__)
-    name_param = sig.parameters["name"]
-    assert name_param.kind == inspect.Parameter.KEYWORD_ONLY, (
-        f"`name` must be keyword-only, got {name_param.kind}"
-    )
-    assert name_param.default is inspect.Parameter.empty, (
-        f"`name` must have no default; got {name_param.default!r}"
+    field = Worker.model_fields["name"]
+    assert field.default is PydanticUndefined, (
+        f"`name` must have no default on the base Worker; got {field.default!r}"
     )

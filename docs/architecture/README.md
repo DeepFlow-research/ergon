@@ -90,12 +90,35 @@ Cross-cutting concerns that span layers live in [`cross_cutting/`](cross_cutting
 | [`cross_cutting/sandbox_lifecycle.md`](cross_cutting/sandbox_lifecycle.md) | Per-task default, reconnect, teardown timing. |
 | [`cross_cutting/error_propagation.md`](cross_cutting/error_propagation.md) | Failure semantics, cancel cascade, fractal-OS semantics. |
 
-## Status: partial
+## Status: landed
 
 This doc tree was bootstrapped in a Q&A session with the system owner on
-2026-04-17. High-confidence layers (01, 02, 03, 08, cross_cutting/sandbox_lifecycle)
-are drafted in full; others are skeletons marked `[Q&A pending]`. Skeletons
-will be filled in as the remaining Q&A sessions land.
+2026-04-17. The core-domain structure standardization stack landed on
+2026-05-19; these docs now describe the accepted `ergon_core.core` layout.
+
+Final top-level packages:
+
+| Package | Owner |
+|---------|-------|
+| `core/application` | Use cases, runtime lifecycle, command-side services, ports, and application-owned events. |
+| `core/infrastructure` | HTTP, Inngest, dashboard, sandbox, tracing, and other external adapters. |
+| `core/jobs` | Durable job composition modules with colocated `contract.py`, `job.py`, and `inngest.py` files. |
+| `core/persistence` | SQLModel tables, session setup, storage-safe types, and low-level row validation. |
+| `core/rl` | RL rollout and reward-loop orchestration. |
+| `core/shared` | Cross-layer value contracts such as context stream parts and JSON helpers. |
+| `core/views` | Read-only DTOs and view builders for dashboard/API hydration. |
+
+Retired roots stay deleted: `core/domain`, `core/rest_api`,
+`core/application/jobs`, `core/application/read_models`,
+`core/application/graph`, `core/application/tasks`,
+`core/application/workflows`, and `core/infrastructure/inngest/handlers`.
+The architecture tests enforce these names, the import boundaries between
+layers, and the deleted compatibility symbols from the refactor PRDs.
+
+PR10 note: durable runtime jobs now live under `core/jobs/**` as colocated
+`contract.py`, `job.py`, and `inngest.py` modules. `02_runtime_lifecycle.md`
+documents the ownership split and the temporary direct-persistence exception
+that remains until PR11 runtime consolidation.
 
 ## Related trees
 

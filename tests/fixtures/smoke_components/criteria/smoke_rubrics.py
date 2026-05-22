@@ -14,9 +14,11 @@ reuse the ``{env}-smoke-criterion`` slug on the rubric so the CLI arg
 ``--evaluator {env}-smoke-criterion`` resolves directly.
 """
 
-from collections.abc import Mapping
-from typing import Any, ClassVar
+from typing import ClassVar
 
+from pydantic import Field, model_validator
+
+from ergon_core.api.criterion import Criterion
 from ergon_core.api.rubric import Rubric
 from tests.fixtures.smoke_components.criteria.minif2f_smoke import MiniF2FSmokeCriterion
 from tests.fixtures.smoke_components.criteria.researchrubrics_smoke import (
@@ -26,54 +28,61 @@ from tests.fixtures.smoke_components.criteria.swebench_smoke import SweBenchSmok
 
 
 class ResearchRubricsSmokeRubric(Rubric):
-    """Evaluator wrapping the researchrubrics smoke criterion."""
+    """Evaluator wrapping the researchrubrics smoke criterion.
+
+    PR 10b: migrated from custom ``__init__`` to pure-Pydantic
+    ``Field(default_factory=tuple, exclude=True)`` + ``@model_validator``
+    so the rubric round-trips through ``Evaluator.from_definition`` (the
+    object-bound code path used by ``ResearchRubricsSmokeTask.evaluators``).
+    Mirrors the PR 10a SWE-Bench smoke rubric migration.
+    """
 
     type_slug: ClassVar[str] = "researchrubrics-smoke-criterion"
+    name: str = "researchrubrics-smoke-criterion"
+    criteria: tuple[Criterion, ...] = Field(default_factory=tuple, exclude=True)
 
-    def __init__(
-        self,
-        *,
-        name: str,
-        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
-    ) -> None:
-        super().__init__(
-            name=name,
-            criteria=[ResearchRubricsSmokeCriterion(slug="researchrubrics-smoke")],
-            metadata=metadata,
-        )
+    @model_validator(mode="after")
+    def _build_criterion(self) -> "ResearchRubricsSmokeRubric":
+        if not self.criteria:
+            self.criteria = (ResearchRubricsSmokeCriterion(slug="researchrubrics-smoke"),)
+        return self
 
 
 class MiniF2FSmokeRubric(Rubric):
-    """Evaluator wrapping the minif2f smoke criterion."""
+    """Evaluator wrapping the minif2f smoke criterion.
+
+    Mirrors the pure-Pydantic wrapper shape used by the other smoke
+    rubrics so object-bound Task snapshots can rehydrate inline
+    evaluators via ``Evaluator.from_definition``.
+    """
 
     type_slug: ClassVar[str] = "minif2f-smoke-criterion"
+    name: str = "minif2f-smoke-criterion"
+    criteria: tuple[Criterion, ...] = Field(default_factory=tuple, exclude=True)
 
-    def __init__(
-        self,
-        *,
-        name: str,
-        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
-    ) -> None:
-        super().__init__(
-            name=name,
-            criteria=[MiniF2FSmokeCriterion(slug="minif2f-smoke")],
-            metadata=metadata,
-        )
+    @model_validator(mode="after")
+    def _build_criterion(self) -> "MiniF2FSmokeRubric":
+        if not self.criteria:
+            self.criteria = (MiniF2FSmokeCriterion(slug="minif2f-smoke"),)
+        return self
 
 
 class SweBenchSmokeRubric(Rubric):
-    """Evaluator wrapping the swebench smoke criterion."""
+    """Evaluator wrapping the swebench smoke criterion.
+
+    PR 10a: migrated from custom ``__init__`` to pure-Pydantic
+    ``Field(default_factory=tuple, exclude=True)`` + ``@model_validator``
+    so the rubric round-trips through ``Evaluator.from_definition`` (the
+    object-bound code path used by ``SweBenchSmokeTask.evaluators``).
+    See ``ergon_builtins/benchmarks/minif2f/rubric.py`` for the exemplar.
+    """
 
     type_slug: ClassVar[str] = "swebench-smoke-criterion"
+    name: str = "swebench-smoke-criterion"
+    criteria: tuple[Criterion, ...] = Field(default_factory=tuple, exclude=True)
 
-    def __init__(
-        self,
-        *,
-        name: str,
-        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
-    ) -> None:
-        super().__init__(
-            name=name,
-            criteria=[SweBenchSmokeCriterion(slug="swebench-smoke")],
-            metadata=metadata,
-        )
+    @model_validator(mode="after")
+    def _build_criterion(self) -> "SweBenchSmokeRubric":
+        if not self.criteria:
+            self.criteria = (SweBenchSmokeCriterion(slug="swebench-smoke"),)
+        return self

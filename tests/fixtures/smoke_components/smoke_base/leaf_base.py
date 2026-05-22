@@ -26,7 +26,6 @@ from uuid import UUID
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
 from ergon_core.api.worker import WorkerOutput
-from ergon_core.core.domain.generation.context_parts import AssistantTextPart, ContextPartChunk
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.infrastructure.sandbox.instrumentation import InstrumentedSandbox
@@ -36,10 +35,12 @@ from ergon_core.core.application.communication.service import (
 )
 from ergon_core.core.shared.settings import settings
 from tests.fixtures.smoke_components.sandbox import SmokeSandboxManager
+from tests.fixtures.smoke_components.smoke_base.metrics import smoke_assistant_chunk
 from tests.fixtures.smoke_components.smoke_base.subworker import (
     SmokeSubworker,
     SubworkerResult,
 )
+from sqlmodel import select
 
 
 class BaseSmokeLeafWorker(Worker):
@@ -62,7 +63,12 @@ class BaseSmokeLeafWorker(Worker):
         model: str | None,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
-        super().__init__(name=name, model=model, metadata=metadata)
+        # PR 5 converted Worker to a Pydantic BaseModel — `metadata` is
+        # now a non-nullable `dict[str, Any]` field with a
+        # `default_factory=dict`. Convert the nullable sentinel
+        # into ``{}`` so callers that still pass ``metadata=None``
+        # (e.g. smoke unit tests) keep working.
+        super().__init__(name=name, model=model, metadata=dict(metadata) if metadata else {})
         self._last_result: SubworkerResult | None = None
 
     async def execute(
@@ -71,15 +77,13 @@ class BaseSmokeLeafWorker(Worker):
         *,
         context: WorkerContext,
     ) -> AsyncGenerator[WorkerStreamItem, None]:
-        node_hex = context.node_id.hex[:8] if context.node_id else "unknown"
+        task_hex = context.task_id.hex[:8] if context.task_id else "unknown"
 
         # --- Turn 1: attaching + starting ---------------------------------
-        yield ContextPartChunk(
-            part=AssistantTextPart(
-                content=(
-                    f"{type(self).__name__}: attaching to sandbox "
-                    f"{context.sandbox_id} for node={node_hex}"
-                ),
+        yield smoke_assistant_chunk(
+            (
+                f"{type(self).__name__}: attaching to sandbox "
+                f"{context.sandbox_id} for task={task_hex}"
             ),
         )
 
@@ -88,10 +92,10 @@ class BaseSmokeLeafWorker(Worker):
             raw_sandbox,
             SmokeSandboxManager._event_sink,
             context.run_id,
-            context.node_id or context.execution_id,
+            context.task_id or context.execution_id,
             settings.otel_stdout_stderr_max_length,
         )
-        result = await self.subworker_cls().work(node_id=node_hex, sandbox=sandbox)
+        result = await self.subworker_cls().work(task_id=task_hex, sandbox=sandbox)
         self._last_result = result
 
         # Post a one-line completion message to the shared
@@ -101,12 +105,10 @@ class BaseSmokeLeafWorker(Worker):
         await self._send_completion_message(context, result)
 
         # --- Turn 2: done + result summary --------------------------------
-        yield ContextPartChunk(
-            part=AssistantTextPart(
-                content=(
-                    f"{type(self).__name__}: done node={node_hex} "
-                    f"file={result.file_path} probe_exit={result.probe_exit_code}"
-                ),
+        yield smoke_assistant_chunk(
+            (
+                f"{type(self).__name__}: done task={task_hex} "
+                f"file={result.file_path} probe_exit={result.probe_exit_code}"
             ),
         )
 
@@ -131,12 +133,12 @@ class BaseSmokeLeafWorker(Worker):
 
         - Thread topic: ``"smoke-completion"``
         - ``from_agent_id``: ``f"leaf-{task_slug}"`` — looked up from
-          ``RunGraphNode.task_slug`` by ``context.node_id``
+          ``RunGraphNode.task_slug`` by ``context.task_id``
         - ``to_agent_id``: ``"parent"``
         - 9 messages per happy run, sequence_num 1..9 per-thread-monotonic
         - 8 messages per sad run (l_2 suppresses this call; l_3 still runs)
         """
-        task_slug = self._lookup_task_slug(context.node_id)
+        task_slug = self._lookup_task_slug(context.task_id)
         await communication_service.save_message(
             CreateMessageRequest(
                 run_id=context.run_id,
@@ -151,17 +153,17 @@ class BaseSmokeLeafWorker(Worker):
         )
 
     @staticmethod
-    def _lookup_task_slug(node_id: UUID | None) -> str:
+    def _lookup_task_slug(task_id: UUID | None) -> str:
         """Resolve the leaf's ``task_slug`` from its ``RunGraphNode``.
 
-        ``WorkerContext`` exposes ``node_id`` but not ``task_slug``; the
+        ``WorkerContext`` exposes ``task_id`` but not ``task_slug``; the
         leaf's message needs the slug so observers can identify which
         leaf sent it without joining back to the graph table.  Fallback
-        for the rare ``node_id is None`` case is a readable placeholder
+        for the rare ``task_id is None`` case is a readable placeholder
         so messages still land rather than raising from test scaffolding.
         """
-        if node_id is None:
+        if task_id is None:
             return "unknown"
         with get_session() as session:
-            node = session.get(RunGraphNode, node_id)
-        return node.task_slug if node is not None else f"node-{node_id.hex[:8]}"
+            node = session.exec(select(RunGraphNode).where(RunGraphNode.task_id == task_id)).first()
+        return node.task_slug if node is not None else f"node-{task_id.hex[:8]}"

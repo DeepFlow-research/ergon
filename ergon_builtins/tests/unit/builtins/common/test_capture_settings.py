@@ -1,4 +1,5 @@
-from ergon_builtins.models.resolution import ResolvedModel, capture_model_settings_for
+from ergon_builtins.llm.capture_settings import capture_model_settings_for
+from ergon_builtins.llm.resolution import ResolvedModel
 
 
 def _resolved(*, supports_logprobs: bool = False) -> ResolvedModel:

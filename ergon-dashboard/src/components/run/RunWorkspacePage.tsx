@@ -7,6 +7,7 @@ import { Group, Panel, Separator } from "react-resizable-panels";
 import { DAGCanvas } from "@/components/dag/DAGCanvas";
 import { StatusBadge } from "@/components/common/StatusBadge";
 
+import { RunHeaderMetrics, type RunHeaderMetricValues } from "@/components/run/RunHeaderMetrics";
 import { UnifiedEventStream } from "@/components/run/UnifiedEventStream";
 import { TaskWorkspace } from "@/components/workspace/TaskWorkspace";
 import { ActivityStackTimeline } from "@/features/activity/components/ActivityStackTimeline";
@@ -19,35 +20,44 @@ import {
 } from "@/features/graph/contracts/graphMutations";
 import { useRunState } from "@/hooks/useRunState";
 import { buildRunEvents } from "@/lib/runEvents";
-import { RunLifecycleStatus, SerializedWorkflowRunState, TaskStatus } from "@/lib/types";
+import { RunLifecycleStatus, SerializedWorkflowRunState, TaskStatus, type WorkflowRunState } from "@/lib/types";
 import {
   nearestMutationAtOrBefore,
   useRunDisplayState,
 } from "@/components/run/useRunDisplayState";
 import { useRunKeyboardShortcuts } from "@/components/run/useRunKeyboardShortcuts";
 import { panelPercent, useRunPanelLayout } from "@/components/run/useRunPanelLayout";
+import { resolveReplayStep } from "@/components/run/replayNavigation";
+import { formatDuration } from "@/lib/run-state/formatters";
 
-function formatSeconds(value: number | null): string {
-  if (value == null) return "—";
-  if (value < 60) return `${value.toFixed(1)}s`;
-  return `${(value / 60).toFixed(1)}m`;
-}
+type OptionalRunMetrics = {
+  metrics?: {
+    totalTokens?: number | null;
+    totalCostUsd?: number | null;
+    costObserved?: boolean | null;
+  } | null;
+};
 
-function formatPercent(value: number | null): string {
-  if (value == null) return "—";
-  return `${(value * 100).toFixed(1)}%`;
+function countObservedTokens(runState: WorkflowRunState | null): number | null {
+  if (!runState) return null;
+  let tokenCount = 0;
+  for (const events of runState.contextEventsByTask.values()) {
+    for (const event of events) {
+      const payload = event.payload;
+      if ("turn_token_ids" in payload && payload.turn_token_ids) {
+        tokenCount += payload.turn_token_ids.length;
+      }
+    }
+  }
+  return tokenCount > 0 ? tokenCount : null;
 }
 
 export function RunWorkspacePage({
   runId,
-  cohortId,
-  cohortLabel,
   initialRunState = null,
   ssrError = null,
 }: {
   runId: string;
-  cohortId?: string;
-  cohortLabel?: string | null;
   initialRunState?: SerializedWorkflowRunState | null;
   ssrError?: string | null;
 }) {
@@ -55,6 +65,7 @@ export function RunWorkspacePage({
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<TaskStatus | null>(null);
   const [isStreamOpen, setIsStreamOpen] = useState(false);
+  const [isTimelineOpen, setIsTimelineOpen] = useState(true);
   const {
     verticalLayout,
     setVerticalLayout,
@@ -125,14 +136,9 @@ export function RunWorkspacePage({
     };
   }, [runId, setSnapshotSequence]);
 
-  const selectedTask = useMemo(() => {
-    if (!displayState || !selectedTaskId) return null;
-    return displayState.tasks.get(selectedTaskId) ?? null;
-  }, [displayState, selectedTaskId]);
-
   // Status counts shown in the run header. Only leaf tasks so the totals
   // match the "units of work" the user is tracking (parents double-count).
-  const { leafStatusCounts } = useMemo(() => {
+  const { leafStatusCounts, leafTotal } = useMemo(() => {
     const empty: Record<TaskStatus, number> = {
       [TaskStatus.PENDING]: 0,
       [TaskStatus.READY]: 0,
@@ -150,6 +156,22 @@ export function RunWorkspacePage({
     }
     return { leafStatusCounts: empty, leafTotal: total };
   }, [displayState]);
+
+  const runHeaderMetrics: RunHeaderMetricValues = useMemo(() => {
+    const optionalMetrics = runState as (WorkflowRunState & OptionalRunMetrics) | null;
+    return {
+      tasks: {
+        completed: leafStatusCounts[TaskStatus.COMPLETED],
+        running: leafStatusCounts[TaskStatus.RUNNING],
+        failed: leafStatusCounts[TaskStatus.FAILED],
+        total: leafTotal,
+      },
+      tokens: optionalMetrics?.metrics?.totalTokens ?? countObservedTokens(runState),
+      costUsd: optionalMetrics?.metrics?.totalCostUsd ?? null,
+      costObserved: optionalMetrics?.metrics?.costObserved ?? false,
+      score: runState?.finalScore ?? null,
+    };
+  }, [leafStatusCounts, leafTotal, runState]);
 
   // D4: Unified event log for the replayed inspector view.
   const events = useMemo(() => buildRunEvents(displayState), [displayState]);
@@ -173,6 +195,14 @@ export function RunWorkspacePage({
     [activities, selectedActivityId],
   );
 
+  const clearReplaySelection = () => {
+    requestedSequenceRef.current = null;
+    pendingActivityResolutionRef.current = null;
+    selectedActivityIdRef.current = null;
+    setSelectedActivityId(null);
+    setSnapshotSequence(null);
+  };
+
   const highlightedTaskIds = useMemo(() => {
     const ids = new Set<string>();
     if (selectedTaskId) ids.add(selectedTaskId);
@@ -184,7 +214,13 @@ export function RunWorkspacePage({
     selectedTaskId,
     clearSelectedTask: () => setSelectedTaskId(null),
     snapshotSequence,
-    setSnapshotSequence,
+    setSnapshotSequence: (sequence) => {
+      if (sequence === null) {
+        clearReplaySelection();
+        return;
+      }
+      setSnapshotSequence(sequence);
+    },
     statusFilter,
     setStatusFilter,
     toggleEventStream: () => setIsStreamOpen((prev) => !prev),
@@ -200,6 +236,7 @@ export function RunWorkspacePage({
   }, [displayState, selectedTaskId]);
 
   const status = runState?.status ?? "pending";
+  const experimentHref = runState?.definitionId ? `/experiments/${runState.definitionId}` : "/experiments";
   const isInspectorOpen = selectedTaskId !== null;
 
   const handleTaskClick = (taskId: string) => {
@@ -237,25 +274,15 @@ export function RunWorkspacePage({
     <div className="flex h-full min-h-0 flex-col bg-[var(--paper)] text-[var(--ink)]">
       {/* Run header strip */}
       <header
-        className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--card)] px-8 py-3"
+        className="flex items-center justify-between gap-5 border-b border-[var(--line)] bg-[var(--card)] px-8 py-3 shadow-card"
         data-testid="run-header"
       >
         <div className="min-w-0">
           <div className="flex items-center gap-1 text-xs text-[var(--muted)]">
-            <Link href="/cohorts" className="hover:text-[var(--ink)]">Cohorts</Link>
+            <Link href="/experiments" className="hover:text-[var(--ink)]">Experiments</Link>
             <span>›</span>
-            {cohortId && (
-              <>
-                <Link
-                  href={`/cohorts/${cohortId}`}
-                  className="max-w-[180px] truncate hover:text-[var(--ink)]"
-                  data-testid="run-breadcrumb-cohort"
-                >
-                  {cohortLabel ?? "Cohort"}
-                </Link>
-                <span>›</span>
-              </>
-            )}
+            <Link href={experimentHref} className="hover:text-[var(--ink)]">Experiment</Link>
+            <span>›</span>
             <span className="font-mono text-[var(--ink)]">{runId.slice(0, 8)}…</span>
           </div>
           <div className="mt-1.5 flex items-center gap-3">
@@ -264,35 +291,59 @@ export function RunWorkspacePage({
             </h1>
             <StatusBadge status={status as RunLifecycleStatus} />
             <span className="rounded bg-[var(--paper-2)] px-2 py-0.5 font-mono text-xs text-[var(--muted)]">
-              {snapshotSequence === null ? "live" : `snapshot · seq ${snapshotSequence}`} · {formatSeconds(runState?.durationSeconds ?? null)}
+              {snapshotSequence === null ? "live" : `snapshot · seq ${snapshotSequence}`} · {formatDuration(runState?.durationSeconds ?? null).value}
             </span>
           </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-3">
-          {/* Key metrics */}
-          <div className="hidden items-center gap-5 border-r border-[var(--line)] pr-3 lg:flex">
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">Tasks</div>
-              <span className="font-mono text-sm text-[var(--ink)]" data-testid="stat-tasks">
-                {leafStatusCounts[TaskStatus.COMPLETED]}·{leafStatusCounts[TaskStatus.RUNNING]}·{leafStatusCounts[TaskStatus.READY]}·{leafStatusCounts[TaskStatus.PENDING]}
+          <RunHeaderMetrics metrics={runHeaderMetrics} />
+
+          {mutations.length > 0 && (
+            <div
+              className="flex items-center overflow-hidden rounded-[7px] border border-[var(--line)] bg-[var(--card)]"
+              data-testid="replay-header-controls"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  const sequence = resolveReplayStep(mutations, snapshotSequence, "previous");
+                  if (sequence !== null) setSnapshotSequence(sequence);
+                }}
+                className="border-r border-[var(--line)] px-2 py-1 font-mono text-xs text-[var(--muted)] hover:bg-[var(--paper-2)] hover:text-[var(--ink)]"
+                title="Previous graph snapshot"
+                data-testid="replay-step-previous"
+              >
+                ←
+              </button>
+              <span className="min-w-20 px-2 py-1 text-center font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]">
+                {snapshotSequence === null ? "live" : `seq ${snapshotSequence}`}
               </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const sequence = resolveReplayStep(mutations, snapshotSequence, "next");
+                  if (sequence !== null) setSnapshotSequence(sequence);
+                }}
+                className="border-l border-[var(--line)] px-2 py-1 font-mono text-xs text-[var(--muted)] hover:bg-[var(--paper-2)] hover:text-[var(--ink)]"
+                title="Next graph snapshot"
+                data-testid="replay-step-next"
+              >
+                →
+              </button>
+              {snapshotSequence !== null && (
+                <button
+                  type="button"
+                  onClick={clearReplaySelection}
+                  className="border-l border-[var(--line)] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--accent)] hover:bg-[var(--accent-soft)]"
+                  title="Return graph to live mode"
+                  data-testid="replay-return-live"
+                >
+                  live
+                </button>
+              )}
             </div>
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">Tokens</div>
-              <span className="font-mono text-sm text-[var(--ink)]" data-testid="stat-tokens">—</span>
-            </div>
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">Cost</div>
-              <span className="font-mono text-sm text-[var(--ink)]" data-testid="stat-cost">—</span>
-            </div>
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">Score</div>
-              <span className="font-mono text-sm text-[var(--ink)]" data-testid="stat-score">
-                {formatPercent(runState?.finalScore ?? null)}
-              </span>
-            </div>
-          </div>
+          )}
 
           <button
             type="button"
@@ -307,6 +358,21 @@ export function RunWorkspacePage({
             data-testid="event-stream-toggle"
           >
             {isStreamOpen ? "Hide events" : "Event tracks"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsTimelineOpen((p) => !p)}
+            aria-pressed={isTimelineOpen}
+            className={`rounded-[7px] px-2.5 py-1 text-xs font-medium transition-colors ${
+              isTimelineOpen
+                ? "bg-[var(--ink)] text-[var(--paper)]"
+                : "border border-[var(--line)] bg-[var(--card)] text-[var(--muted)] hover:bg-[var(--paper-2)]"
+            }`}
+            title="Toggle activity timeline"
+            data-testid="activity-timeline-toggle"
+          >
+            {isTimelineOpen ? "Hide timeline" : "Show timeline"}
           </button>
 
           <button
@@ -357,12 +423,16 @@ export function RunWorkspacePage({
         )}
         <Group
           key={`${hasLoadedPanelLayouts ? "hydrated" : "initial"}-${
-            activities.length > 0 ? "with-timeline" : "without-timeline"
+            isTimelineOpen && activities.length > 0 ? "with-timeline" : "without-timeline"
           }`}
           orientation="vertical"
-          defaultLayout={activities.length > 0 ? verticalLayout : { "graph-workspace": 100 }}
+          defaultLayout={
+            isTimelineOpen && activities.length > 0
+              ? verticalLayout
+              : { "graph-workspace": 100 }
+          }
           onLayoutChange={(layout) => {
-            if (activities.length > 0) {
+            if (isTimelineOpen && activities.length > 0) {
               setVerticalLayout(layout);
             }
           }}
@@ -371,7 +441,7 @@ export function RunWorkspacePage({
           <Panel
             id="graph-workspace"
             defaultSize={
-              activities.length > 0
+              isTimelineOpen && activities.length > 0
                 ? panelPercent(verticalLayout, "graph-workspace", 62)
                 : "100%"
             }
@@ -435,27 +505,6 @@ export function RunWorkspacePage({
                     </section>
                   )}
 
-                  {!isInspectorOpen && (
-                    <section
-                      className="pointer-events-none absolute bottom-4 right-4 z-10 w-[260px] rounded-[var(--radius)] border border-dashed border-[var(--line-strong)] bg-white/80 px-4 py-3 text-xs text-[var(--muted)]"
-                      data-testid="workspace-launcher"
-                    >
-                      <div className="max-w-3xl space-y-3">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">
-                          Task inspection
-                        </div>
-                        <h2 className="text-sm font-semibold text-[var(--ink)]">
-                          Click node → workspace drawer
-                        </h2>
-                        <p>State, outputs, turns, and evals appear scoped to the selected sequence.</p>
-                        {selectedTask && (
-                          <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--paper)] px-3 py-2">
-                            Ready to inspect <span className="font-semibold text-[var(--ink)]">{selectedTask.name}</span>.
-                          </div>
-                        )}
-                      </div>
-                    </section>
-                  )}
                 </section>
               </Panel>
 
@@ -499,7 +548,7 @@ export function RunWorkspacePage({
             </Group>
           </Panel>
 
-          {activities.length > 0 && (
+          {isTimelineOpen && activities.length > 0 && (
             <>
               <Separator
                 id="timeline-resize-handle"
@@ -526,6 +575,7 @@ export function RunWorkspacePage({
                     selectedTaskId={selectedTaskId}
                     selectedActivityId={selectedActivityId}
                     onActivityClick={handleActivityClick}
+                    onReturnToLive={clearReplaySelection}
                   />
                 </section>
               </Panel>

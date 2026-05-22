@@ -9,9 +9,10 @@ from argparse import Namespace
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import ergon_cli.commands.stack as _stack_mod
+import ergon_cli.domains.stack.service as _stack_service
 import pytest
-from ergon_cli.commands.stack import _find_compose_file, handle_start, handle_stop
+from ergon_cli.domains.stack.commands import handle_start, handle_stop
+from ergon_cli.domains.stack.service import find_compose_file
 
 
 def _seed_repo(tmp_path: Path) -> Path:
@@ -21,20 +22,20 @@ def _seed_repo(tmp_path: Path) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# _find_compose_file
+# find_compose_file
 # ---------------------------------------------------------------------------
 
 
 class TestFindComposeFile:
     def test_returns_directory_when_compose_present(self, tmp_path: Path) -> None:
         repo = _seed_repo(tmp_path)
-        assert _find_compose_file(repo) == repo
+        assert find_compose_file(repo) == repo
 
     def test_walks_up_from_subdirectory(self, tmp_path: Path) -> None:
         repo = _seed_repo(tmp_path)
         sub = repo / "deep" / "nested" / "place"
         sub.mkdir(parents=True)
-        assert _find_compose_file(sub) == repo
+        assert find_compose_file(sub) == repo
 
     def test_returns_none_when_no_compose_in_ancestors(self, tmp_path: Path) -> None:
         sub = tmp_path / "child"
@@ -43,7 +44,7 @@ class TestFindComposeFile:
         # (extremely unlikely on CI runners but possible in local dev trees).
         if any((p / "docker-compose.yml").is_file() for p in (sub, *sub.parents)):
             pytest.skip("ancestor directory contains docker-compose.yml")
-        assert _find_compose_file(sub) is None
+        assert find_compose_file(sub) is None
 
 
 # ---------------------------------------------------------------------------
@@ -81,9 +82,9 @@ class _FakeRunner:
 def mock_docker_ok(monkeypatch: pytest.MonkeyPatch) -> _FakeRunner:
     """Patch ``shutil.which('docker')`` to a fake path and ``subprocess.run``
     to a recording fake that returns 0 for every call by default."""
-    monkeypatch.setattr(_stack_mod.shutil, "which", lambda name: f"/usr/local/bin/{name}")
+    monkeypatch.setattr(_stack_service.shutil, "which", lambda name: f"/usr/local/bin/{name}")
     runner = _FakeRunner()
-    monkeypatch.setattr(_stack_mod.subprocess, "run", runner)
+    monkeypatch.setattr(_stack_service.subprocess, "run", runner)
     return runner
 
 
@@ -106,9 +107,11 @@ class TestHandleStart:
 
         out = capsys.readouterr().out
         assert "Ergon dev stack is up." in out
-        assert "http://localhost:9000" in out
-        assert "http://localhost:3001" in out
-        assert "http://localhost:8289" in out
+        assert "Services" in out
+        assert "Dashboard  http://localhost:3001" in out
+        assert "API        http://localhost:9000" in out
+        assert "Inngest    http://localhost:8289" in out
+        assert "Postgres   postgresql://ergon:ergon_dev@localhost:5433/ergon" in out
         assert "ergon doctor" in out
 
     def test_fails_when_no_compose_file(
@@ -137,10 +140,10 @@ class TestHandleStart:
     ) -> None:
         repo = _seed_repo(tmp_path)
         monkeypatch.chdir(repo)
-        monkeypatch.setattr(_stack_mod.shutil, "which", lambda name: f"/usr/local/bin/{name}")
+        monkeypatch.setattr(_stack_service.shutil, "which", lambda name: f"/usr/local/bin/{name}")
         # `docker info` returns rc=1 → daemon not reachable.
         runner = _FakeRunner({("docker", "info"): 1})
-        monkeypatch.setattr(_stack_mod.subprocess, "run", runner)
+        monkeypatch.setattr(_stack_service.subprocess, "run", runner)
 
         rc = handle_start(Namespace())
 
@@ -156,7 +159,7 @@ class TestHandleStart:
     ) -> None:
         repo = _seed_repo(tmp_path)
         monkeypatch.chdir(repo)
-        monkeypatch.setattr(_stack_mod.shutil, "which", lambda name: None)
+        monkeypatch.setattr(_stack_service.shutil, "which", lambda name: None)
 
         rc = handle_start(Namespace())
 
@@ -171,14 +174,14 @@ class TestHandleStart:
     ) -> None:
         repo = _seed_repo(tmp_path)
         monkeypatch.chdir(repo)
-        monkeypatch.setattr(_stack_mod.shutil, "which", lambda name: f"/usr/local/bin/{name}")
+        monkeypatch.setattr(_stack_service.shutil, "which", lambda name: f"/usr/local/bin/{name}")
         runner = _FakeRunner(
             {
                 ("docker", "info"): 0,
                 ("docker", "compose", "up", "-d", "--wait"): 2,
             }
         )
-        monkeypatch.setattr(_stack_mod.subprocess, "run", runner)
+        monkeypatch.setattr(_stack_service.subprocess, "run", runner)
 
         rc = handle_start(Namespace())
 
@@ -201,7 +204,7 @@ class TestHandleStart:
 
         assert rc == 0
         # The recorded compose call should run with cwd=repo (verified via the
-        # fact that we never moved up explicitly — `_find_compose_file` did).
+        # fact that we never moved up explicitly — `find_compose_file` did).
         assert ["docker", "compose", "up", "-d", "--wait"] in mock_docker_ok.calls
 
 
@@ -250,7 +253,7 @@ class TestHandleStop:
     ) -> None:
         repo = _seed_repo(tmp_path)
         monkeypatch.chdir(repo)
-        monkeypatch.setattr(_stack_mod.shutil, "which", lambda name: None)
+        monkeypatch.setattr(_stack_service.shutil, "which", lambda name: None)
 
         rc = handle_stop(Namespace())
 
@@ -264,9 +267,9 @@ class TestHandleStop:
     ) -> None:
         repo = _seed_repo(tmp_path)
         monkeypatch.chdir(repo)
-        monkeypatch.setattr(_stack_mod.shutil, "which", lambda name: f"/usr/local/bin/{name}")
+        monkeypatch.setattr(_stack_service.shutil, "which", lambda name: f"/usr/local/bin/{name}")
         runner = _FakeRunner({("docker", "compose", "down"): 5})
-        monkeypatch.setattr(_stack_mod.subprocess, "run", runner)
+        monkeypatch.setattr(_stack_service.subprocess, "run", runner)
 
         rc = handle_stop(Namespace())
 

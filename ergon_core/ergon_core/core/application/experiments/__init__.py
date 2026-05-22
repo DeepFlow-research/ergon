@@ -1,3 +1,9 @@
-from ergon_core.core.application.experiments.service import ExperimentService
+__all__ = ["run_experiment"]
 
-__all__ = ["ExperimentService"]
+
+def __getattr__(name: str) -> object:
+    if name == "run_experiment":
+        from ergon_core.core.application.experiments.service import run_experiment
+
+        return run_experiment
+    raise AttributeError(name)

@@ -10,12 +10,15 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from ergon_builtins.benchmarks.swebench_verified.criterion import SWEBenchTestCriterion
+from ergon_builtins.benchmarks.swebench_verified.criteria.test_resolution import (
+    SWEBenchTestCriterion,
+)
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
 from ergon_core.api import WorkerOutput
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.benchmark import Task
-from ergon_core.core.application.evaluation.protocols import CommandResult
+from ergon_core.api.sandbox.runtime import CommandResult
+from ergon_core.test_support.task_factory import task_with_id
 
 
 def _fake_run(cmd: str, timeout: int = 30) -> CommandResult:
@@ -37,10 +40,9 @@ async def test_criterion_computes_patch_via_run_command(
     # reason: RFC 2026-04-22 §3 — the criterion drives the harness entirely
     # through Protocol ops (``run_command``, ``write_file``); no reach
     # past the DI surface to ``sandbox_manager.get_sandbox`` anymore.
-    runtime = MagicMock()
-    runtime.run_command = AsyncMock(side_effect=_fake_run)
-    runtime.ensure_sandbox = AsyncMock()
-    runtime.write_file = AsyncMock()
+    sandbox = MagicMock()
+    sandbox.run_command = AsyncMock(side_effect=_fake_run)
+    sandbox.write_file = AsyncMock()
 
     payload = SWEBenchTaskPayload(
         instance_id="django__django-1",
@@ -55,6 +57,16 @@ async def test_criterion_computes_patch_via_run_command(
         hints_text="",
     )
 
+    task = task_with_id(
+        uuid4(),
+        cls=Task[SWEBenchTaskPayload],
+        task_slug="django-1",
+        instance_key="default",
+        description="d",
+        task_payload=payload,
+    )
+    task.sandbox = sandbox
+
     # Worker produces empty output; criterion must still derive the patch
     # from the sandbox.
     run_id = uuid4()
@@ -62,26 +74,18 @@ async def test_criterion_computes_patch_via_run_command(
         run_id=run_id,
         task_id=uuid4(),
         execution_id=uuid4(),
-        task=Task[SWEBenchTaskPayload](
-            task_id=uuid4(),
-            task_slug="django-1",
-            instance_key="default",
-            description="d",
-            task_payload=payload,
-        ),
+        task=task,
         worker_result=WorkerOutput(output="", success=True),
-        sandbox_id="sbx-abc",
-        runtime=runtime,
     )
 
     # Skip the heavy harness-grading path with a monkeypatch so the test
     # doesn't try to import swebench or run the real eval script.
     monkeypatch.setattr(
-        "ergon_builtins.benchmarks.swebench_verified.criterion.get_eval_report",
+        "ergon_builtins.benchmarks.swebench_verified.criteria.test_resolution.get_eval_report",
         lambda **kwargs: {payload.instance_id: {"resolved": True, "tests_status": {}}},
     )
     monkeypatch.setattr(
-        "ergon_builtins.benchmarks.swebench_verified.criterion.make_test_spec",
+        "ergon_builtins.benchmarks.swebench_verified.criteria.test_resolution.make_test_spec",
         lambda row: MagicMock(install_repo_script=":", eval_script=":"),
     )
 
@@ -90,7 +94,7 @@ async def test_criterion_computes_patch_via_run_command(
 
     # At least one call to run_command must have been `git diff HEAD`.
     git_diff_calls = [
-        call for call in runtime.run_command.await_args_list if "git diff HEAD" in call.args[0]
+        call for call in sandbox.run_command.await_args_list if "git diff HEAD" in call.args[0]
     ]
     assert git_diff_calls, (
         "criterion must compute its own patch via runtime.run_command('... git diff HEAD ...')"
@@ -107,10 +111,9 @@ async def test_criterion_short_circuits_on_empty_patch(
     async def _empty_diff(cmd: str, timeout: int = 30) -> CommandResult:
         return CommandResult(stdout="", stderr="", exit_code=0)
 
-    runtime = MagicMock()
-    runtime.run_command = AsyncMock(side_effect=_empty_diff)
-    runtime.ensure_sandbox = AsyncMock()
-    runtime.write_file = AsyncMock()
+    sandbox = MagicMock()
+    sandbox.run_command = AsyncMock(side_effect=_empty_diff)
+    sandbox.write_file = AsyncMock()
 
     payload = SWEBenchTaskPayload(
         instance_id="django__django-1",
@@ -125,30 +128,32 @@ async def test_criterion_short_circuits_on_empty_patch(
         hints_text="",
     )
 
+    task = task_with_id(
+        uuid4(),
+        cls=Task[SWEBenchTaskPayload],
+        task_slug="django-1",
+        instance_key="default",
+        description="d",
+        task_payload=payload,
+    )
+    task.sandbox = sandbox
+
     context = CriterionContext(
         run_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
-        task=Task[SWEBenchTaskPayload](
-            task_id=uuid4(),
-            task_slug="django-1",
-            instance_key="default",
-            description="d",
-            task_payload=payload,
-        ),
+        task=task,
         worker_result=WorkerOutput(output="", success=True),
-        sandbox_id="sbx-abc",
-        runtime=runtime,
     )
 
     # Even if the criterion regresses and tries the old make_test_spec path,
     # monkeypatch so the test doesn't depend on the real swebench harness.
     monkeypatch.setattr(
-        "ergon_builtins.benchmarks.swebench_verified.criterion.get_eval_report",
+        "ergon_builtins.benchmarks.swebench_verified.criteria.test_resolution.get_eval_report",
         lambda **kwargs: {payload.instance_id: {"resolved": False, "tests_status": {}}},
     )
     monkeypatch.setattr(
-        "ergon_builtins.benchmarks.swebench_verified.criterion.make_test_spec",
+        "ergon_builtins.benchmarks.swebench_verified.criteria.test_resolution.make_test_spec",
         lambda row: MagicMock(install_repo_script=":", eval_script=":"),
     )
 

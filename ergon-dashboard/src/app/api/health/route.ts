@@ -29,7 +29,7 @@ export async function GET() {
 
   // 2. Verify upstream Ergon API is reachable
   try {
-    const res = await fetchErgonApi("/cohorts?limit=1");
+    const res = await fetchErgonApi("/experiments?limit=1");
     checks.ergon_api = res.ok ? "ok" : "fail";
     if (!res.ok) errors.push(`Ergon API returned ${res.status}`);
   } catch (e) {

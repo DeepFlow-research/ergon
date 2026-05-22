@@ -1,10 +1,5 @@
 [
   {
-    "eventName": "dashboard/cohort.updated",
-    "modelName": "CohortUpdatedEvent",
-    "schemaFile": "CohortUpdatedEvent.schema.json"
-  },
-  {
     "eventName": "dashboard/workflow.started",
     "modelName": "DashboardWorkflowStartedEvent",
     "schemaFile": "DashboardWorkflowStartedEvent.schema.json"
@@ -48,5 +43,15 @@
     "eventName": "dashboard/task.evaluation_updated",
     "modelName": "DashboardTaskEvaluationUpdatedEvent",
     "schemaFile": "DashboardTaskEvaluationUpdatedEvent.schema.json"
+  },
+  {
+    "eventName": "dashboard/graph.mutation",
+    "modelName": "DashboardGraphMutationEvent",
+    "schemaFile": "DashboardGraphMutationEvent.schema.json"
+  },
+  {
+    "eventName": "dashboard/context.event",
+    "modelName": "DashboardContextEventEvent",
+    "schemaFile": "DashboardContextEventEvent.schema.json"
   }
 ]

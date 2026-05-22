@@ -1,25 +1,24 @@
 import { z } from "zod";
 
+import { GraphMutationDtoSchema } from "@/features/graph/contracts/graphMutations";
 import {
-  MutationTypeSchema,
-  GraphTargetTypeSchema,
-} from "@/features/graph/contracts/graphMutations";
-import {
+  dashboardEventSchemas,
+  DashboardContextEventEventSchema as GeneratedDashboardContextEventEventSchema,
+  DashboardGraphMutationEventSchema as GeneratedDashboardGraphMutationEventSchema,
   DashboardResourcePublishedEvent as GeneratedDashboardResourcePublishedEvent,
   DashboardSandboxClosedEvent as GeneratedDashboardSandboxClosedEvent,
   DashboardSandboxCommandEvent as GeneratedDashboardSandboxCommandEvent,
   DashboardSandboxCreatedEvent as GeneratedDashboardSandboxCreatedEvent,
   DashboardTaskStatusChangedEvent as GeneratedDashboardTaskStatusChangedEvent,
   DashboardWorkflowCompletedEvent as GeneratedDashboardWorkflowCompletedEvent,
+  DashboardWorkflowStartedEventSchema as GeneratedDashboardWorkflowStartedEventSchema,
 } from "@/generated/events";
 import {
-  CohortSummary,
-  CohortSummarySchema,
-  parseCohortSummary,
   parseRunCommunicationMessage,
   parseRunCommunicationThread,
   parseRunSandbox,
   parseRunSandboxCommand,
+  parseRunSnapshot,
   parseRunTaskEvaluation,
   RunCommunicationMessageSchema,
   RunCommunicationThreadSchema,
@@ -29,10 +28,14 @@ import {
   RunSandboxCommand,
   RunSandboxCommandSchema,
   RunSandboxSchema,
+  RunSnapshot,
   RunTaskEvaluation,
   RunTaskEvaluationSchema,
   TaskStatusSchema,
 } from "@/lib/contracts/rest";
+import { normalizeContextEventPayload } from "@/lib/run-state/contextEvents";
+
+export { dashboardEventSchemas };
 
 export const TaskTriggerSchema = z.enum([
   "workflow_started",
@@ -42,12 +45,6 @@ export const TaskTriggerSchema = z.enum([
   "execution_failed",
   "children_completed",
 ]);
-
-export const WorkerRefSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string(),
-  type: z.string(),
-});
 
 export const ResourceRefSchema = z.object({
   path: z.string().nullable().optional(),
@@ -59,70 +56,17 @@ export const ResourceRefSchema = z.object({
 
 export const EvaluatorRefSchema = z.object({ type: z.string() }).passthrough();
 
-export type WorkerRef = z.infer<typeof WorkerRefSchema>;
 export type ResourceRef = z.infer<typeof ResourceRefSchema>;
 export type EvaluatorRef = z.infer<typeof EvaluatorRefSchema>;
-export type TaskTreeNode = {
-  id: string;
-  name: string;
-  description: string;
-  assigned_worker_slug?: string | null;
-  assigned_to: WorkerRef;
-  full_team?: WorkerRef[] | null;
-  children: TaskTreeNode[];
-  depends_on: string[];
-  parent_id?: string | null;
-  is_leaf: boolean;
-  resources: ResourceRef[];
-  evaluator?: EvaluatorRef | null;
-  evaluator_type?: string | null;
-};
-
-export const TaskTreeNodeSchema: z.ZodType<{
-  id: string;
-  name: string;
-  description: string;
-  assigned_worker_slug?: string | null;
-  assigned_to: WorkerRef;
-  full_team?: WorkerRef[] | null;
-  children: TaskTreeNode[];
-  depends_on: string[];
-  parent_id?: string | null;
-  is_leaf: boolean;
-  resources: ResourceRef[];
-  evaluator?: EvaluatorRef | null;
-  evaluator_type?: string | null;
-}> = z.lazy(() =>
-  z.object({
-    id: z.string().uuid(),
-    name: z.string(),
-    description: z.string(),
-    assigned_worker_slug: z.string().nullable().optional(),
-    assigned_to: WorkerRefSchema,
-    full_team: z.array(WorkerRefSchema).nullable().optional(),
-    children: z.array(TaskTreeNodeSchema),
-    depends_on: z.array(z.string().uuid()),
-    parent_id: z.string().uuid().nullable().optional(),
-    is_leaf: z.boolean(),
-    resources: z.array(ResourceRefSchema),
-    evaluator: EvaluatorRefSchema.nullable().optional(),
-    evaluator_type: z.string().nullable().optional(),
-  }),
-);
 
 export const DashboardWorkflowStartedDataSchema = z.object({
   run_id: z.string().uuid(),
-  experiment_id: z.string().uuid(),
+  definition_id: z.string().uuid(),
   workflow_name: z.string(),
-  task_tree: TaskTreeNodeSchema,
+  snapshot: z.unknown(),
   started_at: z.string().datetime({ offset: true }),
   total_tasks: z.number().int(),
   total_leaf_tasks: z.number().int(),
-});
-
-export const DashboardCohortUpdatedDataSchema = z.object({
-  cohort_id: z.string().uuid(),
-  summary: CohortSummarySchema,
 });
 
 export const DashboardThreadMessageCreatedDataSchema = z.object({
@@ -186,18 +130,22 @@ export const SandboxClosedSocketDataSchema = z.object({
 });
 
 export type TaskTrigger = z.infer<typeof TaskTriggerSchema>;
-export type DashboardWorkflowStartedData = z.infer<typeof DashboardWorkflowStartedDataSchema>;
-// Migrated to generated schemas — types re-exported under the legacy `Data` suffix.
+export interface DashboardWorkflowStartedData {
+  run_id: string;
+  definition_id: string;
+  workflow_name: string;
+  snapshot: RunSnapshot;
+  started_at: string;
+  total_tasks: number;
+  total_leaf_tasks: number;
+}
+// Migrated to generated schemas; existing type names are re-exported for callers.
 export type DashboardWorkflowCompletedData = GeneratedDashboardWorkflowCompletedEvent;
 export type DashboardTaskStatusChangedData = GeneratedDashboardTaskStatusChangedEvent;
 export type DashboardResourcePublishedData = GeneratedDashboardResourcePublishedEvent;
 export type DashboardSandboxCreatedData = GeneratedDashboardSandboxCreatedEvent;
 export type DashboardSandboxCommandData = GeneratedDashboardSandboxCommandEvent;
 export type DashboardSandboxClosedData = GeneratedDashboardSandboxClosedEvent;
-export interface DashboardCohortUpdatedData {
-  cohort_id: string;
-  summary: CohortSummary;
-}
 export interface DashboardThreadMessageCreatedData {
   run_id: string;
   thread: ReturnType<typeof parseRunCommunicationThread>;
@@ -245,18 +193,21 @@ function camelizeObjectKeys(input: unknown): unknown {
   );
 }
 
-// TODO(E2b): replace with generated once backend ``summary`` type is tightened
-// (docs/bugs/open/2026-04-23-inngest-function-failures.md § E2b).
-export function parseDashboardCohortUpdatedData(input: unknown): DashboardCohortUpdatedData {
-  const parsed = DashboardCohortUpdatedDataSchema.parse(input);
-  return {
-    cohort_id: parsed.cohort_id,
-    summary: parseCohortSummary(parsed.summary),
-  };
+function camelizeSnapshotKeys(input: unknown): unknown {
+  if (Array.isArray(input)) {
+    return input.map(camelizeSnapshotKeys);
+  }
+  if (input === null || typeof input !== "object") {
+    return input;
+  }
+  return Object.fromEntries(
+    Object.entries(input as Record<string, unknown>).map(([key, value]) => [
+      camelizeKey(key),
+      key === "payload" ? value : camelizeSnapshotKeys(value),
+    ]),
+  );
 }
 
-// TODO(E2b): replace with generated once backend ``thread``/``message`` types
-// are tightened (docs/bugs/open/2026-04-23-inngest-function-failures.md § E2b).
 export function parseDashboardThreadMessageCreatedData(
   input: unknown,
 ): DashboardThreadMessageCreatedData {
@@ -273,8 +224,6 @@ export function parseDashboardThreadMessageCreatedData(
   };
 }
 
-// TODO(E2b): replace with generated once backend ``evaluation`` type is
-// tightened (docs/bugs/open/2026-04-23-inngest-function-failures.md § E2b).
 export function parseDashboardTaskEvaluationUpdatedData(
   input: unknown,
 ): DashboardTaskEvaluationUpdatedData {
@@ -291,11 +240,20 @@ export function parseDashboardTaskEvaluationUpdatedData(
 }
 
 export function parseDashboardWorkflowStartedData(input: unknown): DashboardWorkflowStartedData {
-  // Generated schema for dashboard/workflow.started still types ``task_tree``
-  // as ``z.any()`` — see docs/bugs/open/2026-04-23-inngest-function-failures.md § E3.
-  // TODO(E2b): replace with DashboardWorkflowStartedEventSchema.parse(...) once
-  // json-schema-to-zod handles ``$ref``/``$defs`` for recursive TaskTreeNode.
-  return DashboardWorkflowStartedDataSchema.parse(input);
+  const raw = z.object({ snapshot: z.unknown() }).passthrough().parse(input);
+  const parsed = GeneratedDashboardWorkflowStartedEventSchema.parse({
+    ...raw,
+    snapshot: camelizeSnapshotKeys(raw.snapshot),
+  });
+  return {
+    run_id: parsed.run_id,
+    definition_id: parsed.definition_id,
+    workflow_name: parsed.workflow_name,
+    snapshot: parseRunSnapshot(parsed.snapshot),
+    started_at: parsed.started_at,
+    total_tasks: parsed.total_tasks,
+    total_leaf_tasks: parsed.total_leaf_tasks,
+  };
 }
 
 export function parseSyncRuns(input: unknown): RunListEntry[] {
@@ -343,18 +301,14 @@ export function parseSandboxClosedSocketData(input: unknown): SandboxClosedSocke
 // Graph Mutation Events
 // =============================================================================
 
-export const DashboardGraphMutationDataSchema = z.object({
-  run_id: z.string().uuid(),
-  sequence: z.number().int().nonnegative(),
-  mutation_type: MutationTypeSchema,
-  target_type: GraphTargetTypeSchema,
-  target_id: z.string().uuid(),
-  actor: z.string().min(1),
-  new_value: z.record(z.string(), z.unknown()),
-  old_value: z.record(z.string(), z.unknown()).nullable().optional(),
-  reason: z.string().nullable().optional(),
-  timestamp: z.string().datetime({ offset: true }),
-});
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+export const DashboardGraphMutationDataSchema = z.preprocess((input) => {
+  const outer = asRecord(input);
+  return outer.mutation === undefined ? input : GeneratedDashboardGraphMutationEventSchema.parse(input).mutation;
+}, GraphMutationDtoSchema);
 
 export type DashboardGraphMutationData = z.infer<typeof DashboardGraphMutationDataSchema>;
 
@@ -372,62 +326,9 @@ export type GraphMutationSocketData = z.infer<typeof GraphMutationSocketDataSche
 // Context Event Events
 // =============================================================================
 
-const TokenLogprobSchema = z.object({
-  token: z.string(),
-  logprob: z.number(),
-});
-
-const ContextEventPayloadSchema = z.discriminatedUnion("event_type", [
-  z.object({ event_type: z.literal("system_prompt"), text: z.string() }),
-  z.object({
-    event_type: z.literal("user_message"),
-    text: z.string(),
-    from_worker_key: z.string().nullable(),
-  }),
-  z.object({
-    event_type: z.literal("assistant_text"),
-    text: z.string(),
-    turn_id: z.string(),
-    turn_token_ids: z.array(z.number()).nullable(),
-    turn_logprobs: z.array(TokenLogprobSchema).nullable(),
-  }),
-  z.object({
-    event_type: z.literal("tool_call"),
-    tool_call_id: z.string(),
-    tool_name: z.string(),
-    args: z.record(z.string(), z.unknown()),
-    turn_id: z.string(),
-    turn_token_ids: z.array(z.number()).nullable(),
-    turn_logprobs: z.array(TokenLogprobSchema).nullable(),
-  }),
-  z.object({
-    event_type: z.literal("tool_result"),
-    tool_call_id: z.string(),
-    tool_name: z.string(),
-    result: z.unknown(),
-    is_error: z.boolean(),
-  }),
-  z.object({
-    event_type: z.literal("thinking"),
-    text: z.string(),
-    turn_id: z.string(),
-    turn_token_ids: z.array(z.number()).nullable(),
-    turn_logprobs: z.array(TokenLogprobSchema).nullable(),
-  }),
-]);
-
 export const DashboardContextEventEventSchema = z.object({
-  id: z.string(),
-  run_id: z.string(),
-  task_execution_id: z.string(),
-  task_node_id: z.string(),
-  worker_binding_key: z.string(),
-  sequence: z.number(),
-  event_type: z.string(),
-  payload: ContextEventPayloadSchema,
-  created_at: z.string(),
-  started_at: z.string().nullable(),
-  completed_at: z.string().nullable(),
+  ...GeneratedDashboardContextEventEventSchema.shape,
+  payload: z.unknown().transform(normalizeContextEventPayload),
 });
 
 export type DashboardContextEventEventData = z.infer<typeof DashboardContextEventEventSchema>;

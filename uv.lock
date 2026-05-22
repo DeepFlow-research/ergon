@@ -17,6 +17,7 @@ members = [
     "ergon-builtins",
     "ergon-cli",
     "ergon-core",
+    "ergon-examples",
     "ergon-infra",
     "ergon-ingestion",
 ]
@@ -1217,6 +1218,23 @@ requires-dist = [
     { name = "uvicorn", specifier = ">=0.24.0" },
 ]
 provides-extras = ["dev"]
+
+[[package]]
+name = "ergon-examples"
+version = "0.1.0"
+source = { editable = "examples" }
+dependencies = [
+    { name = "ergon-builtins", extra = ["data"] },
+    { name = "ergon-core" },
+    { name = "huggingface-hub" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "ergon-builtins", extras = ["data"], editable = "ergon_builtins" },
+    { name = "ergon-core", editable = "ergon_core" },
+    { name = "huggingface-hub" },
+]
 
 [[package]]
 name = "ergon-infra"

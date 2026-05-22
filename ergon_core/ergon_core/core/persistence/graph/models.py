@@ -17,7 +17,7 @@ from uuid import UUID, uuid4
 from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.shared.utils import utcnow as _utcnow
 from pydantic import model_validator
-from sqlalchemy import JSON, Column, DateTime, Index
+from sqlalchemy import JSON, Boolean, Column, DateTime, Index
 from sqlmodel import Field, SQLModel
 
 GraphTargetType = Literal["node", "edge"]
@@ -45,11 +45,11 @@ TZDateTime = DateTime(timezone=True)
 class RunGraphNode(SQLModel, table=True):
     __tablename__ = "run_graph_nodes"
 
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
-    definition_task_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_definition_tasks.id",
+    run_id: UUID = Field(foreign_key="runs.id", primary_key=True, index=True)
+    task_id: UUID = Field(
+        default_factory=uuid4,
+        primary_key=True,
+        description="Canonical runtime identity for this task within a run.",
     )
     instance_key: str = Field(
         description=(
@@ -65,6 +65,27 @@ class RunGraphNode(SQLModel, table=True):
         ),
     )
     description: str
+
+    task_json: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False, server_default="{}"),
+        description=(
+            "Run-tier snapshot of the authored Task. Static nodes copy "
+            "this from experiment_definition_tasks at prepare-run time; "
+            "dynamic nodes write it directly at spawn time."
+        ),
+    )
+
+    is_dynamic: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, server_default="false"),
+        description=(
+            "True when this node was spawned during a run (no row in "
+            "experiment_definition_tasks). Denormalized at insert time "
+            "per 02-persistence-layer.md §5 so the static-vs-dynamic "
+            "discriminator avoids a join."
+        ),
+    )
 
     status: str = Field(
         index=True,
@@ -82,9 +103,8 @@ class RunGraphNode(SQLModel, table=True):
         ),
     )
 
-    parent_node_id: UUID | None = Field(
+    parent_task_id: UUID | None = Field(
         default=None,
-        foreign_key="run_graph_nodes.id",
         index=True,
         description=(
             "Self-referential containment parent. Null for definition-seeded roots and set "
@@ -118,12 +138,10 @@ class RunGraphEdge(SQLModel, table=True):
         default=None,
         foreign_key="experiment_definition_task_dependencies.id",
     )
-    source_node_id: UUID = Field(
-        foreign_key="run_graph_nodes.id",
+    source_task_id: UUID = Field(
         index=True,
     )
-    target_node_id: UUID = Field(
-        foreign_key="run_graph_nodes.id",
+    target_task_id: UUID = Field(
         index=True,
     )
     status: str = Field(index=True)

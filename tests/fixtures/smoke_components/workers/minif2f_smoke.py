@@ -8,6 +8,7 @@ so a genuinely broken toolchain fails loudly there.
 """
 
 import json
+from typing import ClassVar
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 from tests.fixtures.smoke_components.smoke_base.leaf_base import BaseSmokeLeafWorker
@@ -33,16 +34,16 @@ theorem smoke_trivial : 1 + 1 = 2 := by norm_num
 class MiniF2FSmokeWorker(RecursiveSmokeWorkerMixin, SmokeWorkerBase):
     """Happy-path parent for the minif2f leg."""
 
-    type_slug = "minif2f-smoke-worker"
-    leaf_slug = "minif2f-smoke-leaf"
-    RECURSIVE_WORKER_SLUG = "minif2f-smoke-recursive-worker"
+    type_slug: ClassVar[str] = "minif2f-smoke-worker"
+    leaf_slug: ClassVar[str] = "minif2f-smoke-leaf"
+    RECURSIVE_WORKER_SLUG: ClassVar[str] = "minif2f-smoke-recursive-worker"
 
 
 class MiniF2FSubworker:
     """Writes a trivial .lean proof + runs ``lean --check`` as the probe."""
 
-    async def work(self, node_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
-        proof_path = f"/workspace/final_output/proof_{node_id}.lean"
+    async def work(self, task_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
+        proof_path = f"/workspace/final_output/proof_{task_id}.lean"
         await sandbox.files.write(proof_path, LEAN_SOURCE)
 
         # ``|| true`` keeps the leaf-side probe exit deterministic even if
@@ -53,7 +54,7 @@ class MiniF2FSubworker:
             timeout=60,
         )
         probe_stdout = ("" if probe.stdout is None else probe.stdout).strip()[:4096]
-        probe_path = f"/workspace/final_output/probe_{node_id}.json"
+        probe_path = f"/workspace/final_output/probe_{task_id}.json"
         await sandbox.files.write(
             probe_path,
             json.dumps({"exit_code": probe.exit_code, "stdout": probe_stdout}),
@@ -68,27 +69,27 @@ class MiniF2FSubworker:
 class MiniF2FSmokeLeafWorker(BaseSmokeLeafWorker):
     """Registered leaf that delegates to ``MiniF2FSubworker``."""
 
-    type_slug = "minif2f-smoke-leaf"
-    subworker_cls = MiniF2FSubworker
+    type_slug: ClassVar[str] = "minif2f-smoke-leaf"
+    subworker_cls: ClassVar[type] = MiniF2FSubworker
 
 
 class MiniF2FRecursiveSmokeWorker(RecursiveSmokeWorkerBase):
     """Nested ``l_2`` worker that delegates nested leaves to MiniF2F."""
 
-    type_slug = "minif2f-smoke-recursive-worker"
-    leaf_slug = "minif2f-smoke-leaf"
+    type_slug: ClassVar[str] = "minif2f-smoke-recursive-worker"
+    leaf_slug: ClassVar[str] = "minif2f-smoke-leaf"
 
 
 class MiniF2FFailingLeafWorker(FailingSmokeLeafMixin, BaseSmokeLeafWorker):
     """Registered leaf that fails after partial work."""
 
-    type_slug = "minif2f-smoke-leaf-failing"
-    subworker_cls = AlwaysFailSubworker
+    type_slug: ClassVar[str] = "minif2f-smoke-leaf-failing"
+    subworker_cls: ClassVar[type] = AlwaysFailSubworker
 
 
 class MiniF2FSadPathSmokeWorker(SadPathSmokeWorkerMixin, SmokeWorkerBase):
     """Parent that routes ``l_2`` to the failing leaf."""
 
-    type_slug = "minif2f-sadpath-smoke-worker"
-    leaf_slug = "minif2f-smoke-leaf"
-    FAILING_LEAF_SLUG = "minif2f-smoke-leaf-failing"
+    type_slug: ClassVar[str] = "minif2f-sadpath-smoke-worker"
+    leaf_slug: ClassVar[str] = "minif2f-smoke-leaf"
+    FAILING_LEAF_SLUG: ClassVar[str] = "minif2f-smoke-leaf-failing"

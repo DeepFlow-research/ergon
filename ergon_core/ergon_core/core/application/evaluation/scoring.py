@@ -18,6 +18,7 @@ class EvaluationScoreSummary(BaseModel):
     evaluators_count: int
 
 
+# TODO: mixing of models and function logic, bad!
 def aggregate_evaluation_scores(
     evaluations: Iterable[ScoredEvaluation],
 ) -> EvaluationScoreSummary:

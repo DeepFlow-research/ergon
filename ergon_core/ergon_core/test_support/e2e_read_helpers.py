@@ -30,7 +30,7 @@ class ResourceSnapshot:
 
 @dataclass(frozen=True)
 class TaskExecutionSnapshot:
-    node_id: UUID | None
+    task_id: UUID
     started_at: datetime | None
     completed_at: datetime | None
 
@@ -64,7 +64,7 @@ def _resource_snapshot(row: RunResource) -> ResourceSnapshot:
 
 def _execution_snapshot(row: RunTaskExecution) -> TaskExecutionSnapshot:
     return TaskExecutionSnapshot(
-        node_id=row.node_id,
+        task_id=row.task_id,
         started_at=row.started_at,
         completed_at=row.completed_at,
     )
@@ -124,13 +124,13 @@ def list_root_execution_and_evaluations(
             .where(RunGraphNode.level == 0),
         ).one()
         execution = session.exec(
-            select(RunTaskExecution).where(RunTaskExecution.node_id == root.id),
+            select(RunTaskExecution).where(RunTaskExecution.task_id == root.task_id),
         ).first()
         evaluations = list(
             session.exec(
                 select(RunTaskEvaluation)
                 .where(RunTaskEvaluation.run_id == run_id)
-                .where(RunTaskEvaluation.node_id == root.id),
+                .where(RunTaskEvaluation.task_id == root.task_id),
             ).all(),
         )
     execution_snapshot = None if execution is None else _execution_snapshot(execution)
@@ -167,10 +167,10 @@ def leaf_execution_timings_by_slug(run_id: UUID) -> dict[str, TaskExecutionSnaps
                 select(RunTaskExecution)
                 .where(RunTaskExecution.run_id == run_id)
                 .where(
-                    RunTaskExecution.node_id.in_([leaf.id for leaf in leaves]),  # ty: ignore[unresolved-attribute]
+                    RunTaskExecution.task_id.in_([leaf.task_id for leaf in leaves]),  # ty: ignore[unresolved-attribute]
                 ),
             ).all(),
         )
 
-    by_node = {execution.node_id: _execution_snapshot(execution) for execution in executions}
-    return {leaf.task_slug: by_node.get(leaf.id) for leaf in leaves}
+    by_task = {execution.task_id: _execution_snapshot(execution) for execution in executions}
+    return {leaf.task_slug: by_task.get(leaf.task_id) for leaf in leaves}

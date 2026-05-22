@@ -15,6 +15,7 @@ SWE-Bench fixtures in Phase D follow the same shape.
 """
 
 import json
+from typing import ClassVar
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 from tests.fixtures.smoke_components.smoke_base.leaf_base import BaseSmokeLeafWorker
@@ -34,9 +35,9 @@ from tests.fixtures.smoke_components.smoke_base.worker_base import SmokeWorkerBa
 class ResearchRubricsSmokeWorker(RecursiveSmokeWorkerMixin, SmokeWorkerBase):
     """Happy-path parent worker for the researchrubrics leg."""
 
-    type_slug = "researchrubrics-smoke-worker"
-    leaf_slug = "researchrubrics-smoke-leaf"
-    RECURSIVE_WORKER_SLUG = "researchrubrics-smoke-recursive-worker"
+    type_slug: ClassVar[str] = "researchrubrics-smoke-worker"
+    leaf_slug: ClassVar[str] = "researchrubrics-smoke-leaf"
+    RECURSIVE_WORKER_SLUG: ClassVar[str] = "researchrubrics-smoke-recursive-worker"
 
 
 class ResearchRubricsSubworker:
@@ -49,17 +50,17 @@ class ResearchRubricsSubworker:
     - ``probe_<node>.json``   — ``{exit_code, stdout}`` from ``wc -l``
     """
 
-    async def work(self, node_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
-        report_path = f"/workspace/final_output/report_{node_id}.md"
+    async def work(self, task_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
+        report_path = f"/workspace/final_output/report_{task_id}.md"
         contents = (
-            f"# Research report {node_id}\n\n"
+            f"# Research report {task_id}\n\n"
             "Deterministic smoke output. Non-empty body required by criterion.\n"
         )
         await sandbox.files.write(report_path, contents)
 
         probe = await sandbox.commands.run(f"wc -l {report_path}", timeout=10)
         probe_stdout = ("" if probe.stdout is None else probe.stdout).strip()
-        probe_path = f"/workspace/final_output/probe_{node_id}.json"
+        probe_path = f"/workspace/final_output/probe_{task_id}.json"
         await sandbox.files.write(
             probe_path,
             json.dumps({"exit_code": probe.exit_code, "stdout": probe_stdout}),
@@ -74,27 +75,27 @@ class ResearchRubricsSubworker:
 class ResearchRubricsSmokeLeafWorker(BaseSmokeLeafWorker):
     """Registered leaf that delegates to ``ResearchRubricsSubworker``."""
 
-    type_slug = "researchrubrics-smoke-leaf"
-    subworker_cls = ResearchRubricsSubworker
+    type_slug: ClassVar[str] = "researchrubrics-smoke-leaf"
+    subworker_cls: ClassVar[type] = ResearchRubricsSubworker
 
 
 class ResearchRubricsRecursiveSmokeWorker(RecursiveSmokeWorkerBase):
     """Nested ``l_2`` worker that delegates nested leaves to ResearchRubrics."""
 
-    type_slug = "researchrubrics-smoke-recursive-worker"
-    leaf_slug = "researchrubrics-smoke-leaf"
+    type_slug: ClassVar[str] = "researchrubrics-smoke-recursive-worker"
+    leaf_slug: ClassVar[str] = "researchrubrics-smoke-leaf"
 
 
 class ResearchRubricsFailingLeafWorker(FailingSmokeLeafMixin, BaseSmokeLeafWorker):
     """Registered leaf that fails after partial work."""
 
-    type_slug = "researchrubrics-smoke-leaf-failing"
-    subworker_cls = AlwaysFailSubworker
+    type_slug: ClassVar[str] = "researchrubrics-smoke-leaf-failing"
+    subworker_cls: ClassVar[type] = AlwaysFailSubworker
 
 
 class ResearchRubricsSadPathSmokeWorker(SadPathSmokeWorkerMixin, SmokeWorkerBase):
     """Parent that routes ``l_2`` to the failing leaf."""
 
-    type_slug = "researchrubrics-sadpath-smoke-worker"
-    leaf_slug = "researchrubrics-smoke-leaf"
-    FAILING_LEAF_SLUG = "researchrubrics-smoke-leaf-failing"
+    type_slug: ClassVar[str] = "researchrubrics-sadpath-smoke-worker"
+    leaf_slug: ClassVar[str] = "researchrubrics-smoke-leaf"
+    FAILING_LEAF_SLUG: ClassVar[str] = "researchrubrics-smoke-leaf-failing"

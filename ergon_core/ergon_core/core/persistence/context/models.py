@@ -6,7 +6,7 @@ from typing import Any
 from uuid import UUID
 
 import sqlalchemy as sa
-from ergon_core.core.domain.generation.context_parts import ContextPartChunkLog
+from ergon_core.core.shared.context_parts import ContextPartChunkLog
 from ergon_core.core.persistence.shared.ids import new_id
 from pydantic import TypeAdapter
 from sqlalchemy import JSON, Column, DateTime
@@ -42,7 +42,7 @@ class RunContextEvent(SQLModel, table=True):
     payload: dict[str, Any] = Field(  # slopcop: ignore[no-typing-any]
         sa_column=Column(JSON),
         description=(
-            "Typed ContextEventPayload persisted as JSON. The SQLModel column uses JSON "
+            "Typed context part chunk log persisted as JSON. The SQLModel column uses JSON "
             "for SQLite test compatibility; the PostgreSQL migration uses JSONB."
         ),
     )

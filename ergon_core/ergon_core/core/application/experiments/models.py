@@ -1,70 +1,40 @@
-"""DTOs for experiment definition and launch services."""
+"""DTOs and public contracts for experiment services."""
 
+from datetime import datetime
+from typing import Any
 from typing import Self
 from uuid import UUID
 
 from ergon_core.core.shared.json_types import JsonObject
+from ergon_core.core.shared.utils import utcnow
 from pydantic import BaseModel, Field, model_validator
 
 
-class ExperimentDefineRequest(BaseModel):
-    benchmark_slug: str
-    name: str | None = None
-    cohort_id: UUID | None = None
-    limit: int | None = None
-    sample_ids: list[str] | None = None
-    default_model_target: str | None = None
-    default_worker_team: JsonObject = Field(default_factory=dict)
-    default_evaluator_slug: str | None = None
-    evaluator_bindings: dict[str, str] = Field(default_factory=dict)
-    sandbox_slug: str | None = None
-    dependency_extras: tuple[str, ...] = ()
-    design: JsonObject = Field(default_factory=dict)
-    seed: int | None = None
-    metadata: JsonObject = Field(default_factory=dict)
+class DefinitionHandle(BaseModel):
+    """Rich handle returned after a benchmark definition is persisted."""
 
-    @model_validator(mode="after")
-    def validate_define_request(self) -> Self:
-        if (self.limit is None) == (self.sample_ids is None):
-            raise ValueError("Provide exactly one of limit or sample_ids")
-        if self.limit is not None and self.limit < 1:
-            raise ValueError("limit must be >= 1")
+    model_config = {"frozen": True}
 
-        if self.design.get("arms"):
-            raise ValueError("design.arms is not supported until multi-arm launch semantics exist")
-
-        has_default_assignment = bool(self.default_worker_team) and bool(self.default_model_target)
-        if not has_default_assignment:
-            raise ValueError(
-                "Experiment definition requires default_worker_team + default_model_target"
-            )
-        if not self.default_evaluator_slug:
-            raise ValueError("Experiment definition requires default_evaluator_slug")
-        if not self.sandbox_slug:
-            raise ValueError("Experiment definition requires sandbox_slug")
-        if not self.dependency_extras:
-            raise ValueError("Experiment definition requires dependency_extras")
-        return self
-
-
-class ExperimentDefineResult(BaseModel):
-    experiment_id: UUID
-    cohort_id: UUID | None
+    definition_id: UUID
     benchmark_type: str
-    sample_count: int
-    selected_samples: list[str]
+    worker_bindings: dict[str, str] = Field(default_factory=dict)
+    evaluator_bindings: dict[str, str] = Field(default_factory=dict)
+    instance_count: int = 0
+    task_count: int = 0
+    created_at: datetime = Field(default_factory=utcnow)
+    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
 
 
 class ExperimentRunRequest(BaseModel):
-    experiment_id: UUID
+    definition_id: UUID
     timeout_seconds: int | None = None
     wait: bool = True
 
 
 class ExperimentRunResult(BaseModel):
-    experiment_id: UUID
+    definition_id: UUID
     run_ids: list[UUID]
-    workflow_definition_ids: list[UUID] = Field(default_factory=list)
+    definition_ids: list[UUID] = Field(default_factory=list)
 
 
 class RunAssignment(BaseModel):

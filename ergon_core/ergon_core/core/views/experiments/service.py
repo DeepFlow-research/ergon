@@ -1,0 +1,398 @@
+"""Read service for experiment API views."""
+
+from datetime import datetime
+from uuid import UUID
+
+from ergon_core.core.views.experiments.models import (
+    ExperimentAnalyticsDto,
+    ExperimentDetailDto,
+    ExperimentRunMetricsDto,
+    ExperimentRunRowDto,
+    ExperimentStatusCountsDto,
+    ExperimentSummaryDto,
+    ExperimentTagDefinitionDto,
+)
+from ergon_core.core.persistence.context.models import RunContextEvent
+from ergon_core.core.persistence.definitions.models import (
+    ExperimentDefinition,
+    ExperimentDefinitionInstance,
+)
+from ergon_core.core.persistence.graph.models import RunGraphNode
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.views.runs.metrics import aggregate_run_metrics
+from sqlmodel import Session, col, select
+
+
+class ExperimentReadService:
+    """List/show queries for persisted benchmark definitions."""
+
+    def list_experiments(self, *, limit: int = 50) -> list[ExperimentSummaryDto]:
+        with get_session() as session:
+            definitions = list(
+                session.exec(
+                    select(ExperimentDefinition)
+                    .order_by(col(ExperimentDefinition.created_at).desc())
+                    .limit(limit)
+                ).all()
+            )
+            summaries: list[tuple[datetime, ExperimentSummaryDto]] = []
+            for definition in definitions:
+                summaries.append(
+                    (
+                        definition.created_at,
+                        _definition_summary(session, definition),
+                    )
+                )
+
+            summaries.sort(key=lambda pair: pair[0], reverse=True)
+            return [summary for _, summary in summaries[:limit]]
+
+    def get_experiment(self, definition_id: UUID) -> ExperimentDetailDto | None:
+        with get_session() as session:
+            definition = session.get(ExperimentDefinition, definition_id)
+            if definition is not None:
+                return _definition_detail(session, definition)
+
+            return None
+
+    def distinct_tags(self) -> list[str]:
+        with get_session() as session:
+            tags = {
+                tag
+                for tag in session.exec(select(RunRecord.experiment)).all()
+                if isinstance(tag, str) and tag
+            }
+        return sorted(tags)
+
+    def definitions_by_tag(self, tag: str) -> list[ExperimentTagDefinitionDto]:
+        with get_session() as session:
+            runs = list(
+                session.exec(
+                    select(RunRecord)
+                    .where(RunRecord.experiment == tag)
+                    .order_by(col(RunRecord.created_at).desc())
+                ).all()
+            )
+            latest_by_definition: dict[UUID, RunRecord] = {}
+            for run in runs:
+                latest_by_definition.setdefault(run.definition_id, run)
+
+            rows: list[ExperimentTagDefinitionDto] = []
+            for definition_id, latest_run in latest_by_definition.items():
+                definition = session.get(ExperimentDefinition, definition_id)
+                if definition is None:
+                    continue
+                rows.append(
+                    ExperimentTagDefinitionDto(
+                        definition_id=definition.id,
+                        name=definition.name,
+                        benchmark_type=definition.benchmark_type,
+                        latest_run_status=str(latest_run.status),
+                    )
+                )
+        return rows
+
+
+def _definition_summary(
+    session: Session,
+    definition: ExperimentDefinition,
+    *,
+    runs: list[RunRecord] | None = None,
+) -> ExperimentSummaryDto:
+    """Build a summary DTO from an ``ExperimentDefinition`` row.
+
+    Identity fields (``name``/``description``/``benchmark_type``/``created_by``)
+    come directly from the columns Task 1 added.  Run / sample bookkeeping is
+    derived: ``RunRecord.experiment`` indexes grouped runs, and
+    ``ExperimentDefinitionInstance`` rows index instances.
+    """
+    runs = runs if runs is not None else _runs_for_definition_view(session, definition)
+    run_count = len(runs)
+    sample_count = _instance_count(session, definition.id)
+    metadata = definition.parsed_metadata()
+    analytics = _analytics([_run_row(run, context_events=[]) for run in runs])
+    return ExperimentSummaryDto(
+        definition_id=definition.id,
+        name=definition.name,
+        description=definition.description,
+        benchmark_type=definition.benchmark_type,
+        sample_count=sample_count,
+        status=_experiment_lifecycle_status(
+            analytics.status_counts,
+            run_count=run_count,
+            fallback=str(metadata.get("status", "defined")),
+        ),
+        default_worker_team=dict_metadata(metadata, "default_worker_team"),
+        default_evaluator_slug=optional_str_metadata(metadata, "default_evaluator_slug"),
+        default_model_target=optional_str_metadata(metadata, "default_model_target"),
+        created_by=definition.created_by,
+        created_at=definition.created_at,
+        started_at=None,
+        completed_at=None,
+        run_count=run_count,
+        status_counts=analytics.status_counts,
+        failure_count=analytics.status_counts.failed,
+        latest_activity_at=analytics.latest_activity_at,
+        average_score=analytics.average_score,
+        average_duration_ms=analytics.average_duration_ms,
+        average_tasks=analytics.average_tasks,
+        total_cost_usd=analytics.total_cost_usd,
+    )
+
+
+def _definition_detail(
+    session: Session,
+    definition: ExperimentDefinition,
+) -> ExperimentDetailDto:
+    """Build a detail DTO from an ``ExperimentDefinition`` row."""
+    runs = _runs_for_definition_view(session, definition)
+    task_counts = _task_counts_by_run(session, [run.id for run in runs])
+    context_events = _context_events_by_run(session, [run.id for run in runs])
+    run_rows = [
+        _run_row(
+            run,
+            total_tasks=task_counts.get(run.id),
+            context_events=context_events.get(run.id, []),
+        )
+        for run in runs
+    ]
+    return ExperimentDetailDto(
+        definition_id=definition.id,
+        name=definition.name,
+        description=definition.description,
+        benchmark_type=definition.benchmark_type,
+        experiment=_definition_summary(session, definition, runs=runs),
+        runs=run_rows,
+        analytics=_analytics(run_rows),
+        sample_selection={},
+        design={},
+        metadata=definition.parsed_metadata(),
+    )
+
+
+def _runs_for_definition_view(
+    session: Session,
+    definition: ExperimentDefinition,
+) -> list[RunRecord]:
+    experiment = optional_str_metadata(definition.parsed_metadata(), "experiment")
+    if experiment:
+        return list(session.exec(select(RunRecord).where(RunRecord.experiment == experiment)).all())
+    return list(
+        session.exec(select(RunRecord).where(RunRecord.definition_id == definition.id)).all()
+    )
+
+
+def _instance_count(session: Session, definition_id: UUID) -> int:
+    return len(
+        list(
+            session.exec(
+                select(ExperimentDefinitionInstance.id).where(
+                    ExperimentDefinitionInstance.experiment_definition_id == definition_id
+                )
+            )
+        )
+    )
+
+
+def _run_row(
+    run: RunRecord,
+    *,
+    total_tasks: int | None = None,
+    context_events: list[RunContextEvent],
+) -> ExperimentRunRowDto:
+    summary = run.parsed_summary()
+    duration_ms = _duration_ms(run)
+    score = _summary_number(summary, "normalized_score") or _summary_number(summary, "final_score")
+    error_summary = _error_summary(run, summary)
+    aggregated = aggregate_run_metrics(context_events, summary=summary)
+    return ExperimentRunRowDto(
+        run_id=run.id,
+        definition_id=run.definition_id,
+        benchmark_type=run.benchmark_type,
+        instance_key=run.instance_key,
+        status=run.status,
+        created_at=run.created_at,
+        started_at=run.started_at,
+        completed_at=run.completed_at,
+        evaluator_slug=run.evaluator_slug,
+        model_target=run.model_target,
+        worker_team=run.parsed_worker_team(),
+        seed=run.seed,
+        running_time_ms=duration_ms,
+        final_score=score,
+        total_tasks=total_tasks,
+        total_cost_usd=aggregated.total_cost_usd,
+        error_message=error_summary,
+        metrics=ExperimentRunMetricsDto(
+            run_id=run.id,
+            run_name=run.sample_id or run.instance_key,
+            status=str(run.status),
+            sample_label=run.sample_id,
+            instance_key=run.instance_key,
+            score=score,
+            return_value=score,
+            duration_ms=duration_ms,
+            total_tasks=total_tasks,
+            tool_call_count=aggregated.tool_call_count,
+            total_tokens=aggregated.total_tokens,
+            token_breakdown=aggregated.token_breakdown,
+            total_cost_usd=aggregated.total_cost_usd,
+            cost_observed=aggregated.cost_observed,
+            model_target=run.model_target,
+            evaluator_slug=run.evaluator_slug,
+            error_summary=error_summary,
+        ),
+    )
+
+
+def _task_counts_by_run(session: Session, run_ids: list[UUID]) -> dict[UUID, int]:
+    return {
+        run_id: len(
+            list(session.exec(select(RunGraphNode.task_id).where(RunGraphNode.run_id == run_id)))
+        )
+        for run_id in run_ids
+    }
+
+
+def _context_events_by_run(
+    session: Session,
+    run_ids: list[UUID],
+) -> dict[UUID, list[RunContextEvent]]:
+    if not run_ids:
+        return {}
+
+    rows = list(
+        session.exec(select(RunContextEvent).where(col(RunContextEvent.run_id).in_(run_ids)))
+    )
+    result: dict[UUID, list[RunContextEvent]] = {run_id: [] for run_id in run_ids}
+    for row in rows:
+        result.setdefault(row.run_id, []).append(row)
+    return result
+
+
+def _analytics(rows: list[ExperimentRunRowDto]) -> ExperimentAnalyticsDto:
+    status_counts = ExperimentStatusCountsDto()
+    scores: list[float] = []
+    durations: list[int] = []
+    task_counts: list[int] = []
+    total_cost_usd: float | None = None
+    latest_activity_at: datetime | None = None
+    error_count = 0
+
+    for row in rows:
+        _increment_status_count(status_counts, row.status)
+        if row.final_score is not None:
+            scores.append(row.final_score)
+        if row.running_time_ms is not None:
+            durations.append(row.running_time_ms)
+        if row.total_tasks is not None:
+            task_counts.append(row.total_tasks)
+        if row.metrics.cost_observed and row.total_cost_usd is not None:
+            total_cost_usd = (total_cost_usd or 0.0) + row.total_cost_usd
+        if row.error_message:
+            error_count += 1
+        activity_at = row.completed_at or row.started_at or row.created_at
+        if latest_activity_at is None or activity_at > latest_activity_at:
+            latest_activity_at = activity_at
+
+    return ExperimentAnalyticsDto(
+        total_runs=len(rows),
+        status_counts=status_counts,
+        average_score=_average(scores),
+        average_duration_ms=_rounded_average(durations),
+        average_tasks=_average(task_counts),
+        total_cost_usd=total_cost_usd,
+        latest_activity_at=latest_activity_at,
+        error_count=error_count,
+    )
+
+
+def _increment_status_count(counts: ExperimentStatusCountsDto, status: str) -> None:
+    match status:
+        case "pending":
+            counts.pending += 1
+        case "executing":
+            counts.executing += 1
+        case "evaluating":
+            counts.evaluating += 1
+        case "completed":
+            counts.completed += 1
+        case "failed":
+            counts.failed += 1
+        case "cancelled":
+            counts.cancelled += 1
+
+
+def _experiment_lifecycle_status(
+    counts: ExperimentStatusCountsDto,
+    *,
+    run_count: int,
+    fallback: str,
+) -> str:
+    if counts.executing > 0:
+        return "executing"
+    if counts.evaluating > 0:
+        return "evaluating"
+    if counts.pending > 0:
+        return "pending"
+    if run_count == 0:
+        return fallback
+    if counts.failed > 0:
+        return "failed"
+    if counts.cancelled > 0 and counts.completed == 0:
+        return "cancelled"
+    if counts.completed == run_count:
+        return "completed"
+    if counts.cancelled > 0:
+        return "cancelled"
+    return fallback
+
+
+def _average(values: list[float] | list[int]) -> float | None:
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
+def _rounded_average(values: list[int]) -> int | None:
+    average = _average(values)
+    return None if average is None else round(average)
+
+
+def _duration_ms(run: RunRecord) -> int | None:
+    if run.started_at is None or run.completed_at is None:
+        return None
+    return round((run.completed_at - run.started_at).total_seconds() * 1000)
+
+
+def _summary_number(summary: dict, key: str) -> float | None:
+    value = summary.get(key)
+    if isinstance(value, int | float):
+        return float(value)
+    return None
+
+
+def _summary_text(summary: dict, key: str) -> str | None:
+    value = summary.get(key)
+    if isinstance(value, str) and value:
+        return value
+    return None
+
+
+def _error_summary(run: RunRecord, summary: dict) -> str | None:
+    if run.error_message:
+        return run.error_message
+    if str(run.status) not in {"failed", "cancelled"}:
+        return None
+    return _summary_text(summary, "error_message")
+
+
+def dict_metadata(metadata: dict, key: str) -> dict:
+    value = metadata.get(key)
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def optional_str_metadata(metadata: dict, key: str) -> str | None:
+    value = metadata.get(key)
+    return value if isinstance(value, str) else None

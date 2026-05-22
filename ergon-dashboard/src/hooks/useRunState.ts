@@ -283,18 +283,18 @@ export function useRunState(
   );
 
   const handleContextEvent = useCallback(
-    (payload: { runId: string; taskNodeId: string; event: ContextEventState }) => {
+    (payload: { runId: string; taskId: string; event: ContextEventState }) => {
       if (payload.runId !== runId) return;
 
       setRunState((prev) => {
         if (!prev) return prev;
         const nextEvents = new Map(prev.contextEventsByTask);
-        const events = nextEvents.get(payload.taskNodeId) ?? [];
+        const events = nextEvents.get(payload.taskId) ?? [];
         if (events.some((event) => event.id === payload.event.id)) {
           return prev;
         }
         nextEvents.set(
-          payload.taskNodeId,
+          payload.taskId,
           [...events, payload.event].sort(compareContextEvents),
         );
         return {

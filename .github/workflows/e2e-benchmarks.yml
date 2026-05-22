@@ -97,15 +97,7 @@ jobs:
           ERGON_API_BASE_URL: http://127.0.0.1:9000
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:3001
           SCREENSHOT_DIR: /tmp/playwright
-        run: |
-          # Translate matrix env id to python module name (swebench-verified → swebench).
-          case "${SMOKE_ENV}" in
-            researchrubrics)    PYFILE="tests/e2e/test_researchrubrics_smoke.py" ;;
-            minif2f)            PYFILE="tests/e2e/test_minif2f_smoke.py" ;;
-            swebench-verified)  PYFILE="tests/e2e/test_swebench_smoke.py" ;;
-            *)                  echo "unknown env ${SMOKE_ENV}" >&2; exit 2 ;;
-          esac
-          uv run pytest "${PYFILE}" -v --timeout=330 --tb=short
+        run: uv run ergon test smoke "${SMOKE_ENV}" -- --timeout=330 --tb=short
 
       - name: Push screenshots
         if: always() && github.event.pull_request.number

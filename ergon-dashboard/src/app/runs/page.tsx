@@ -1,28 +1,53 @@
-export default function RunsPage() {
+import { RunIndexTable } from "@/components/indexes/RunIndexTable";
+import { loadRunList, type RunSummary } from "@/lib/server-data/runs";
+
+export default async function RunsPage() {
+  let runs: RunSummary[] = [];
+  let error: string | null = null;
+
+  const result = await loadRunList({ limit: 100 });
+  if (result.ok) {
+    runs = result.data;
+  } else {
+    const detail = (result.body as { detail?: string })?.detail;
+    error = detail ?? `API returned ${result.status}`;
+  }
+
+  const runningCount = runs.filter((run) => ["executing", "evaluating"].includes(run.status)).length;
+  const failedCount = runs.filter((run) => run.status === "failed" || run.failed_tasks > 0).length;
+  const completedCount = runs.filter((run) => run.status === "completed").length;
+
   return (
-    <div className="min-h-[60vh] bg-[var(--paper)]">
-      <header className="border-b border-[var(--line)] bg-[var(--card)]">
-        <div className="mx-auto max-w-7xl px-6 py-6">
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">
-            Workspace <span aria-hidden>◆</span>
-          </span>
-          <h1 className="mt-1 text-[26px] font-semibold leading-tight text-[var(--ink)]">
-            Runs
-          </h1>
-          <p className="mt-1.5 text-[13px] text-[var(--muted)]">
-            Browse all runs across cohorts. Filter by status, benchmark, or time range.
-          </p>
+    <main className="mx-auto w-full max-w-7xl px-6 py-8">
+      <div className="mb-5">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--faint)]">
+          Run Index
+        </p>
+        <h1 className="mt-2 text-3xl font-semibold text-[var(--ink)]">Runs</h1>
+      </div>
+
+      {error ? (
+        <div className="mb-4 border border-[var(--line)] bg-[var(--card)] p-4 text-sm text-[var(--muted)]">
+          {error}
         </div>
-      </header>
-      <main className="mx-auto max-w-7xl px-6 py-12">
-        <div className="rounded-[var(--radius)] border border-dashed border-[var(--line-strong)] bg-[var(--paper)] p-12 text-center">
-          <div className="mx-auto mb-3 text-3xl text-[var(--faint)]">⊘</div>
-          <h2 className="text-lg font-medium text-[var(--ink)]">Coming soon</h2>
-          <p className="mt-2 text-sm text-[var(--muted)]">
-            The cross-cohort runs view is under development. For now, access runs through individual cohort pages.
-          </p>
+      ) : null}
+
+      <div className="mb-5 grid gap-3 sm:grid-cols-3">
+        <div className="border border-[var(--line)] bg-[var(--card)] px-4 py-3">
+          <div className="text-xs uppercase tracking-[0.08em] text-[var(--faint)]">Running</div>
+          <div className="mt-1 font-mono text-2xl text-[var(--ink)]">{runningCount}</div>
         </div>
-      </main>
-    </div>
+        <div className="border border-[var(--line)] bg-[var(--card)] px-4 py-3">
+          <div className="text-xs uppercase tracking-[0.08em] text-[var(--faint)]">Failed</div>
+          <div className="mt-1 font-mono text-2xl text-[var(--ink)]">{failedCount}</div>
+        </div>
+        <div className="border border-[var(--line)] bg-[var(--card)] px-4 py-3">
+          <div className="text-xs uppercase tracking-[0.08em] text-[var(--faint)]">Completed</div>
+          <div className="mt-1 font-mono text-2xl text-[var(--ink)]">{completedCount}</div>
+        </div>
+      </div>
+
+      <RunIndexTable runs={runs} />
+    </main>
   );
 }

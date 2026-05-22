@@ -1,9 +1,9 @@
 """Shared assertion helpers for canonical smoke drivers.
 
 Per-run helpers take a single ``run_id`` and are called in a loop for
-each cohort member.  No "at-least-one-passed" fallbacks; each run must
-pass every check independently.  Cohort-level helpers (e.g.
-``_assert_cohort_membership``) take the cohort key + run_id list.
+each experiment-group member.  No "at-least-one-passed" fallbacks; each
+run must pass every check independently.  Experiment-group helpers take
+the experiment key + run_id list.
 
 See docs/superpowers/plans/test-refactor/02-drivers-and-asserts.md §2
 and §10 for the full catalogue.
@@ -22,7 +22,7 @@ import time
 from uuid import UUID
 
 import httpx
-from ergon_core.core.application.read_models.models import RunTaskDto
+from ergon_core.core.views.runs.models import RunTaskDto
 from ergon_core.test_support.e2e_read_helpers import (
     ResourceSnapshot,
     first_probe_resource,
@@ -59,7 +59,6 @@ def _assert_run_graph(run_id: UUID) -> None:
     snapshot = require_run_snapshot(run_id)
     tasks = list(snapshot.tasks.values())
     by_slug = {task.name: task for task in tasks}
-    leaves = [task for task in tasks if task.level > 0]
     root_tasks = [task for task in tasks if task.level == 0]
 
     assert snapshot.total_tasks == 12, f"expected 12 tasks, got {snapshot.total_tasks}"
@@ -153,10 +152,22 @@ def _assert_run_turn_counts(run_id: UUID) -> None:
 def _assert_run_evaluation(run_id: UUID) -> None:
     """Exactly 2 root RunTaskEvaluation rows with score 1.0.
 
-    Retries for up to 30 s because the evaluator Inngest function fires
-    asynchronously after the root task reaches terminal state.  The second
-    evaluator is the root timing marker; both must be created after root
-    execution completed.
+    Retries for up to 30 s because the evaluator invocations land
+    asynchronously even though PR 4's ``execute_task`` fanout is
+    synchronous within the orchestrator. The second evaluator is the
+    root timing marker.
+
+    Note on ordering: pre-PR-4 the evaluator was a sibling Inngest
+    function triggered by ``task/completed``, so evaluations were
+    written strictly after ``RunTaskExecution.completed_at``. PR 4
+    moved fanout inside ``execute_task`` via ``ctx.group.parallel``
+    after ``persist_outputs`` returns, so evaluation rows are written
+    *before* ``finalize_success`` stamps ``completed_at``. The
+    ordering invariant the assertion enforces is now structural — the
+    orchestrator only fans out after worker output has been persisted
+    — and the temporal check against ``completed_at`` no longer
+    captures that. The retained checks (count, scores, snapshot DTOs)
+    cover the observable contract.
     """
     deadline = time.monotonic() + 30
     evaluations = []
@@ -171,15 +182,6 @@ def _assert_run_evaluation(run_id: UUID) -> None:
     assert len(evaluations) == 2, f"expected 2 root task evaluations, got {len(evaluations)}"
     scores = [evaluation.score for evaluation in evaluations]
     assert scores == [1.0, 1.0], f"expected two score 1.0 evaluations, got {scores}"
-    early = [
-        evaluation.created_at
-        for evaluation in evaluations
-        if evaluation.created_at < root_execution.completed_at
-    ]
-    assert not early, (
-        "root evaluations must be created after the root execution completes; "
-        f"early timestamps={early}, completed_at={root_execution.completed_at}"
-    )
     snapshot = require_run_snapshot(run_id)
     assert snapshot.final_score == 1.0
     snapshot_evaluations = list(snapshot.evaluations_by_task.values())
@@ -251,7 +253,7 @@ def _assert_blob_roundtrip(run_id: UUID) -> None:
     Uses ``kind='report'`` resources because those are written to the
     content-addressed blob store (``ERGON_BLOB_ROOT``) which is bind-mounted
     at the same path on both the host and inside the API container.  The
-    legacy ``kind='output'`` rows store container-internal download paths
+    direct ``kind='output'`` rows store container-internal download paths
     that are not directly accessible from the host-side test process.
     """
     row = first_probe_resource(run_id)
@@ -305,7 +307,7 @@ def _assert_temporal_ordering(run_id: UUID) -> None:
     """Schedule honours DAG deps: children start no earlier than parents finish.
 
     Uses ``RunTaskExecution.started_at`` / ``completed_at`` via
-    ``node_id`` join.  Only checks edges whose both endpoints reached
+    ``task_id`` join.  Only checks edges whose both endpoints reached
     at least ``started`` state. Blocked descendants are skipped because
     they should never have execution timestamps.
     """
@@ -332,22 +334,22 @@ def _assert_temporal_ordering(run_id: UUID) -> None:
 
 
 # =============================================================================
-# Cohort-level helpers
+# Experiment-group helpers
 # =============================================================================
 
 
-def _assert_cohort_membership(cohort_key: str, run_ids: list[UUID]) -> None:
-    """3 runs visible via ``/api/__danger__/test-harness/read/cohort/{key}/runs`` harness endpoint."""
+def _assert_experiment_membership(experiment: str, run_ids: list[UUID]) -> None:
+    """Runs are visible via the experiment-group test-harness endpoint."""
     api_base = os.environ["ERGON_API_BASE_URL"]
     r = httpx.get(
-        f"{api_base}/api/__danger__/test-harness/read/cohort/{cohort_key}/runs",
+        f"{api_base}/api/__danger__/test-harness/read/experiment/{experiment}/runs",
         timeout=10.0,
     )
     r.raise_for_status()
     rows = r.json()
     returned = {UUID(row["run_id"]) for row in rows}
     expected = set(run_ids)
-    assert expected <= returned, f"cohort missing expected run ids: {expected - returned}"
+    assert expected <= returned, f"experiment group missing expected run ids: {expected - returned}"
 
 
 # =============================================================================
@@ -356,15 +358,16 @@ def _assert_cohort_membership(cohort_key: str, run_ids: list[UUID]) -> None:
 
 
 def _assert_sadpath_graph_cascade(run_id: UUID) -> None:
-    """Canonical sad path: l_2 fails, l_3 blocks, independent leaves complete."""
+    """Canonical sad path: parent plans, l_2 fails, l_3 blocks, independent leaves complete."""
     snapshot = require_run_snapshot(run_id)
     tasks = list(snapshot.tasks.values())
     leaves = [task for task in tasks if task.level > 0]
     root_tasks = [task for task in tasks if task.level == 0]
     by_slug = {task.name: task for task in leaves}
     assert len(root_tasks) == 1, f"expected 1 root task, got {len(root_tasks)}"
-    assert root_tasks[0].status != COMPLETED, (
-        f"parent task should not complete when a child fails, got {root_tasks[0].status}"
+    assert root_tasks[0].status == COMPLETED, (
+        "parent task should complete after planning; child failure is represented "
+        f"on the failing child and run terminal status, got {root_tasks[0].status}"
     )
     assert by_slug["l_2"].status == FAILED, f"l_2 expected FAILED, got {by_slug['l_2'].status}"
     assert by_slug["l_3"].status == BLOCKED, f"l_3 expected BLOCKED, got {by_slug['l_3'].status}"
@@ -436,9 +439,9 @@ def _assert_sadpath_thread_messages(run_id: UUID) -> None:
 
 
 def _assert_sadpath_evaluation(run_id: UUID) -> None:
-    """Sad-path run should not produce a successful final score."""
+    """Sad-path run should not be mistaken for a successful run."""
     snapshot = require_run_snapshot(run_id)
-    assert snapshot.final_score in (None, 0.0)
+    assert snapshot.status == "failed"
 
 
 # =============================================================================

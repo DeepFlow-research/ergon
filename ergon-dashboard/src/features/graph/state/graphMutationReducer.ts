@@ -290,15 +290,15 @@ function applyEdgeAdded(
   value: EdgeAddedValue,
   ctx: MutationContext,
 ): WorkflowRunState {
-  const source = state.tasks.get(value.source_node_id);
-  const target = state.tasks.get(value.target_node_id);
+  const source = state.tasks.get(value.source_task_id);
+  const target = state.tasks.get(value.target_task_id);
 
   const edges = ensureEdges(state);
-  const id = edgeId(value.source_node_id, value.target_node_id);
+  const id = edgeId(value.source_task_id, value.target_task_id);
   edges.set(id, {
     id,
-    sourceId: value.source_node_id,
-    targetId: value.target_node_id,
+    sourceId: value.source_task_id,
+    targetId: value.target_task_id,
     status: value.status,
     createdAt: ctx.createdAt,
   });
@@ -308,30 +308,30 @@ function applyEdgeAdded(
   const updatedTarget = { ...target };
   const updatedSource = { ...source };
 
-  const sourceAlreadyContainsTarget = updatedSource.childIds.includes(value.target_node_id);
+  const sourceAlreadyContainsTarget = updatedSource.childIds.includes(value.target_task_id);
   const isContainmentEdge =
-    updatedTarget.parentId === value.source_node_id ||
+    updatedTarget.parentId === value.source_task_id ||
     (updatedTarget.parentId === null &&
       (ctx.reason === "parent-child" || sourceAlreadyContainsTarget));
 
   if (isContainmentEdge) {
-    updatedTarget.parentId = value.source_node_id;
+    updatedTarget.parentId = value.source_task_id;
     updatedTarget.level = updatedSource.level + 1;
     updatedSource.childIds = sourceAlreadyContainsTarget
       ? updatedSource.childIds
-      : [...updatedSource.childIds, value.target_node_id];
+      : [...updatedSource.childIds, value.target_task_id];
     if (updatedSource.isLeaf && !sourceAlreadyContainsTarget) {
       updatedSource.isLeaf = false;
       state.totalLeafTasks -= 1;
     }
-  } else if (updatedTarget.parentId !== value.source_node_id) {
-    updatedTarget.dependsOnIds = updatedTarget.dependsOnIds.includes(value.source_node_id)
+  } else if (updatedTarget.parentId !== value.source_task_id) {
+    updatedTarget.dependsOnIds = updatedTarget.dependsOnIds.includes(value.source_task_id)
       ? updatedTarget.dependsOnIds
-      : [...updatedTarget.dependsOnIds, value.source_node_id];
+      : [...updatedTarget.dependsOnIds, value.source_task_id];
   }
 
-  state.tasks.set(value.source_node_id, updatedSource);
-  state.tasks.set(value.target_node_id, updatedTarget);
+  state.tasks.set(value.source_task_id, updatedSource);
+  state.tasks.set(value.target_task_id, updatedTarget);
   return state;
 }
 

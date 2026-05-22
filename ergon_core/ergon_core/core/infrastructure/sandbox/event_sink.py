@@ -1,9 +1,16 @@
 """Sandbox lifecycle/event sink abstractions."""
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 from uuid import UUID
 
+from ergon_core.core.application.ports import DashboardEventPublisher
 from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.shared.utils import utcnow
+from ergon_core.core.views.dashboard_events.contracts import (
+    DashboardSandboxClosedEvent,
+    DashboardSandboxCommandEvent,
+    DashboardSandboxCreatedEvent,
+)
 
 
 @runtime_checkable
@@ -79,7 +86,7 @@ class NoopSandboxEventSink:
 class DashboardEmitterSandboxEventSink:
     """Adapter that forwards sandbox events to the dashboard emitter."""
 
-    def __init__(self, emitter: Any):  # slopcop: ignore[no-typing-any]
+    def __init__(self, emitter: DashboardEventPublisher) -> None:
         self._emitter = emitter
 
     async def sandbox_created(
@@ -90,12 +97,15 @@ class DashboardEmitterSandboxEventSink:
         timeout_minutes: int,
         template: str | None = None,
     ) -> None:
-        await self._emitter.sandbox_created(
-            run_id=run_id,
-            task_id=task_id,
-            sandbox_id=sandbox_id,
-            timeout_minutes=timeout_minutes,
-            template=template,
+        await self._emitter.publish(
+            DashboardSandboxCreatedEvent(
+                run_id=run_id,
+                task_id=task_id,
+                sandbox_id=sandbox_id,
+                timeout_minutes=timeout_minutes,
+                template=template,
+                timestamp=utcnow(),
+            )
         )
 
     async def sandbox_command(
@@ -109,15 +119,18 @@ class DashboardEmitterSandboxEventSink:
         exit_code: int | None = None,
         duration_ms: int | None = None,
     ) -> None:
-        await self._emitter.sandbox_command(
-            run_id=run_id,
-            task_id=task_id,
-            sandbox_id=sandbox_id,
-            command=command,
-            stdout=stdout,
-            stderr=stderr,
-            exit_code=exit_code,
-            duration_ms=duration_ms,
+        await self._emitter.publish(
+            DashboardSandboxCommandEvent(
+                run_id=run_id,
+                task_id=task_id,
+                sandbox_id=sandbox_id,
+                command=command,
+                stdout=stdout,
+                stderr=stderr,
+                exit_code=exit_code,
+                duration_ms=duration_ms,
+                timestamp=utcnow(),
+            )
         )
 
     async def sandbox_closed(
@@ -127,10 +140,13 @@ class DashboardEmitterSandboxEventSink:
         reason: str,
         run_id: UUID | None = None,
     ) -> None:
-        await self._emitter.sandbox_closed(
-            task_id=task_id,
-            sandbox_id=sandbox_id,
-            reason=reason,
+        await self._emitter.publish(
+            DashboardSandboxClosedEvent(
+                task_id=task_id,
+                sandbox_id=sandbox_id,
+                reason=reason,
+                timestamp=utcnow(),
+            )
         )
 
 

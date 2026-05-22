@@ -3,40 +3,50 @@
 import inspect
 from uuid import UUID
 
-import ergon_builtins.workers.baselines.react_worker as react_worker_module
+import ergon_builtins.agents.react.worker as react_worker_module
 import pytest
-from ergon_builtins.workers.baselines.react_worker import ReActWorker, _worker_output_from_chunks
+from ergon_builtins.agents.react.output import worker_output_from_chunks
+from ergon_builtins.agents.react.worker import ReActWorker
 from ergon_core.api.benchmark import EmptyTaskPayload, Task
 from ergon_core.api.worker import WorkerContext, WorkerOutput
-from ergon_core.core.domain.generation.context_parts import (
+from ergon_core.test_support.task_factory import task_with_id
+from ergon_core.core.shared.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
     ToolCallPart,
 )
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
+from pydantic_core import PydanticUndefined
 
 
 def test_no_adapter_kwarg() -> None:
-    sig = inspect.signature(ReActWorker.__init__)
-    assert "adapter" not in sig.parameters, (
-        "BenchmarkAdapter ABC is being deleted — ReActWorker must not accept an adapter kwarg."
+    # PR 5 converted ReActWorker to a Pydantic BaseModel — there is no
+    # hand-rolled __init__ anymore, so check model_fields instead.
+    assert "adapter" not in ReActWorker.model_fields, (
+        "BenchmarkAdapter ABC is being deleted — ReActWorker must not accept an adapter field."
     )
 
 
 @pytest.mark.parametrize(
     "kwarg",
-    ["name", "model", "tools", "system_prompt", "max_iterations"],
+    ["name", "model", "system_prompt", "max_iterations"],
 )
 def test_all_kwargs_required_and_keyword_only(kwarg: str) -> None:
-    sig = inspect.signature(ReActWorker.__init__)
-    param = sig.parameters[kwarg]
-    assert param.kind == inspect.Parameter.KEYWORD_ONLY, (
-        f"`{kwarg}` must be keyword-only; got {param.kind}"
+    # PR 5 converted ReActWorker to a Pydantic BaseModel; the
+    # hand-rolled __init__ is gone. Pydantic's auto-init is
+    # keyword-only by construction, so we only need to assert each
+    # field is declared. `name` and `model` have no default (required);
+    # `system_prompt` and `max_iterations` have defaults (the base
+    # contract is just that they exist on the model).
+    assert kwarg in ReActWorker.model_fields, (
+        f"`{kwarg}` must be declared on ReActWorker.model_fields"
     )
-    assert param.default is inspect.Parameter.empty, (
-        f"`{kwarg}` must have no default (RFC 2026-04-22 forbids nullable-with-default); "
-        f"got {param.default!r}"
-    )
+    field = ReActWorker.model_fields[kwarg]
+    if kwarg in {"name", "model"}:
+        assert field.default is PydanticUndefined, (
+            f"`{kwarg}` must have no default (RFC 2026-04-22 forbids nullable-with-default); "
+            f"got {field.default!r}"
+        )
 
 
 def test_construct_with_minimal_explicit_kwargs() -> None:
@@ -47,13 +57,13 @@ def test_construct_with_minimal_explicit_kwargs() -> None:
     # never dereferenced (execute() isn't called).
     worker = ReActWorker(
         name="unit",
-        model=None,
+        model="test:none",
         tools=[],
         system_prompt=None,
         max_iterations=1,
     )
     assert worker.name == "unit"
-    assert worker.model is None
+    assert worker.model == "test:none"
     assert worker.tools == []
     assert worker.system_prompt is None
     assert worker.max_iterations == 1
@@ -68,7 +78,7 @@ def test_pydantic_ai_transcript_adapter_lives_outside_worker() -> None:
 
 
 def test_worker_output_prefers_structured_final_result_over_prior_assistant_text() -> None:
-    output = _worker_output_from_chunks(
+    output = worker_output_from_chunks(
         [
             ContextPartChunk(part=AssistantTextPart(content="intermediate answer")),
             ContextPartChunk(
@@ -81,7 +91,11 @@ def test_worker_output_prefers_structured_final_result_over_prior_assistant_text
         ]
     )
 
-    assert output == WorkerOutput(output="structured final answer", success=True)
+    assert output == WorkerOutput(
+        output="structured final answer",
+        success=True,
+        metadata={"output_source": "final_result_tool"},
+    )
 
 
 class _FakeRunState:
@@ -167,9 +181,13 @@ class _DepsWorker(ReActWorker):
         return {"execution_id": str(context.execution_id)}
 
 
+class _ResourceService:
+    pass
+
+
 def _minimal_task() -> Task:
-    return Task(
-        task_id=UUID(int=6),
+    return task_with_id(
+        UUID(int=6),
         task_slug="unit-task",
         instance_key="unit-instance",
         description="Unit task",
@@ -183,7 +201,11 @@ def _minimal_context() -> WorkerContext:
         definition_id=UUID(int=4),
         execution_id=UUID(int=5),
         sandbox_id="test-sandbox",
-        node_id=UUID(int=6),
+        task_id=UUID(int=6),
+        task_mgmt=object(),
+        task_inspect=object(),
+        resource_service=_ResourceService(),
+        session_factory=lambda: None,
     )
 
 
@@ -204,7 +226,7 @@ async def test_react_worker_yields_partial_chunk_before_reraising_agent_iter_fai
 
     worker = ReActWorker(
         name="unit",
-        model=None,
+        model="test:none",
         tools=[],
         system_prompt=None,
         max_iterations=10,
@@ -236,7 +258,7 @@ async def test_react_worker_passes_agent_deps_to_pydantic_ai(monkeypatch) -> Non
 
     worker = _DepsWorker(
         name="unit",
-        model=None,
+        model="test:none",
         tools=[],
         system_prompt=None,
         max_iterations=10,
@@ -246,6 +268,10 @@ async def test_react_worker_passes_agent_deps_to_pydantic_ai(monkeypatch) -> Non
 
     chunks = items[:-1]
     assert [chunk.part.part_kind for chunk in chunks] == ["user_message", "assistant_text"]
-    assert items[-1] == WorkerOutput(output="partial answer", success=True)
+    assert items[-1] == WorkerOutput(
+        output="partial answer",
+        success=True,
+        metadata={"output_source": "assistant_text_fallback"},
+    )
     assert _DepsAgent.init_kwargs["deps_type"] is dict
     assert _DepsAgent.iter_kwargs["deps"] == {"execution_id": str(UUID(int=5))}

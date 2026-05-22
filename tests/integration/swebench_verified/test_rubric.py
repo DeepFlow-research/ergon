@@ -1,6 +1,6 @@
 """Tests for SWEBenchRubric."""
 
-from ergon_builtins.evaluators.rubrics.swebench_rubric import SWEBenchRubric
+from ergon_builtins.benchmarks.swebench_verified.rubric import SWEBenchRubric
 
 
 def test_rubric_contains_single_test_resolution_criterion() -> None:

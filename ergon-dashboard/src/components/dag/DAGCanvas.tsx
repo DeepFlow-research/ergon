@@ -516,13 +516,15 @@ function DAGCanvasInner({
               backgroundColor: "var(--card)",
               border: "1px solid var(--line)",
               borderRadius: 8,
+              bottom: 18,
+              right: 18,
             }}
           />
         </ReactFlow>
 
         {/* Floating controls — top-left */}
         <div
-          className="absolute top-3 left-3 flex items-start gap-2"
+          className="absolute left-3 right-3 top-3 flex flex-wrap items-start gap-2"
           style={{ zIndex: 5 }}
         >
           <ZoomControls />

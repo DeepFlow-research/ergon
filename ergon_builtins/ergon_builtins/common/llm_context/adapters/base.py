@@ -2,8 +2,7 @@
 
 from typing import Protocol, TypeVar
 
-from ergon_core.core.domain.generation.context_parts import ContextPartChunk
-from ergon_core.core.persistence.context.models import RunContextEvent
+from ergon_core.core.shared.context_parts import ContextPartChunk
 
 TranscriptT = TypeVar("TranscriptT")
 ReplayT = TypeVar("ReplayT")
@@ -14,8 +13,4 @@ class TranscriptAdapter(Protocol[TranscriptT, ReplayT]):
 
     def build_chunks(self, transcript: TranscriptT) -> list[ContextPartChunk]:
         """Return ordered chunks extracted from a complete transcript."""
-        ...
-
-    def assemble_replay(self, events: list[RunContextEvent]) -> ReplayT:
-        """Return framework-native replay context from ordered context events."""
         ...

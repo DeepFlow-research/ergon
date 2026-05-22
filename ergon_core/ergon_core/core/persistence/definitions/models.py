@@ -28,6 +28,9 @@ class ExperimentDefinition(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     benchmark_type: str = Field(index=True)
+    name: str = Field(index=True)
+    description: str | None = None
+    created_by: str | None = None
     metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
@@ -182,6 +185,14 @@ class ExperimentDefinitionTask(SQLModel, table=True):
     task_payload_json: JsonObject = Field(
         default_factory=dict,
         sa_column=Column("task_payload", JSON),
+    )
+    # Full ``_type``-discriminated Task snapshot. ``task_payload_json`` carries
+    # only benchmark-specific payload data; ``task_json`` is the complete
+    # object-bound Task (worker + sandbox + evaluators + scalar fields) that
+    # ``Task.from_definition`` reconstructs end-to-end.
+    task_json: JsonObject = Field(
+        default_factory=dict,
+        sa_column=Column("task_json", JSON, nullable=False, server_default="{}"),
     )
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 

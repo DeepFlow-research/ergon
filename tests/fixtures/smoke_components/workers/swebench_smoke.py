@@ -6,6 +6,7 @@ probe run exercises compile + execute + assertion pass.
 """
 
 import json
+from typing import ClassVar
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 from tests.fixtures.smoke_components.smoke_base.leaf_base import BaseSmokeLeafWorker
@@ -34,16 +35,16 @@ if __name__ == "__main__":
 class SweBenchSmokeWorker(RecursiveSmokeWorkerMixin, SmokeWorkerBase):
     """Happy-path parent for the swebench-verified leg."""
 
-    type_slug = "swebench-smoke-worker"
-    leaf_slug = "swebench-smoke-leaf"
-    RECURSIVE_WORKER_SLUG = "swebench-smoke-recursive-worker"
+    type_slug: ClassVar[str] = "swebench-smoke-worker"
+    leaf_slug: ClassVar[str] = "swebench-smoke-leaf"
+    RECURSIVE_WORKER_SLUG: ClassVar[str] = "swebench-smoke-recursive-worker"
 
 
 class SweBenchSubworker:
     """Writes a trivial .py file + compiles + executes as the probe."""
 
-    async def work(self, node_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
-        patch_path = f"/workspace/final_output/patch_{node_id}.py"
+    async def work(self, task_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
+        patch_path = f"/workspace/final_output/patch_{task_id}.py"
         await sandbox.files.write(patch_path, PY_SOURCE)
 
         probe = await sandbox.commands.run(
@@ -51,7 +52,7 @@ class SweBenchSubworker:
             timeout=20,
         )
         probe_stdout = ("" if probe.stdout is None else probe.stdout).strip()[:4096]
-        probe_path = f"/workspace/final_output/probe_{node_id}.json"
+        probe_path = f"/workspace/final_output/probe_{task_id}.json"
         await sandbox.files.write(
             probe_path,
             json.dumps({"exit_code": probe.exit_code, "stdout": probe_stdout}),
@@ -66,27 +67,27 @@ class SweBenchSubworker:
 class SweBenchSmokeLeafWorker(BaseSmokeLeafWorker):
     """Registered leaf that delegates to ``SweBenchSubworker``."""
 
-    type_slug = "swebench-smoke-leaf"
-    subworker_cls = SweBenchSubworker
+    type_slug: ClassVar[str] = "swebench-smoke-leaf"
+    subworker_cls: ClassVar[type] = SweBenchSubworker
 
 
 class SweBenchRecursiveSmokeWorker(RecursiveSmokeWorkerBase):
     """Nested ``l_2`` worker that delegates nested leaves to SWE-Bench."""
 
-    type_slug = "swebench-smoke-recursive-worker"
-    leaf_slug = "swebench-smoke-leaf"
+    type_slug: ClassVar[str] = "swebench-smoke-recursive-worker"
+    leaf_slug: ClassVar[str] = "swebench-smoke-leaf"
 
 
 class SweBenchFailingLeafWorker(FailingSmokeLeafMixin, BaseSmokeLeafWorker):
     """Registered leaf that fails after partial work."""
 
-    type_slug = "swebench-smoke-leaf-failing"
-    subworker_cls = AlwaysFailSubworker
+    type_slug: ClassVar[str] = "swebench-smoke-leaf-failing"
+    subworker_cls: ClassVar[type] = AlwaysFailSubworker
 
 
 class SweBenchSadPathSmokeWorker(SadPathSmokeWorkerMixin, SmokeWorkerBase):
     """Parent that routes ``l_2`` to the failing leaf."""
 
-    type_slug = "swebench-sadpath-smoke-worker"
-    leaf_slug = "swebench-smoke-leaf"
-    FAILING_LEAF_SLUG = "swebench-smoke-leaf-failing"
+    type_slug: ClassVar[str] = "swebench-sadpath-smoke-worker"
+    leaf_slug: ClassVar[str] = "swebench-smoke-leaf"
+    FAILING_LEAF_SLUG: ClassVar[str] = "swebench-smoke-leaf-failing"

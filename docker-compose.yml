@@ -178,7 +178,7 @@ services:
     image: otel/opentelemetry-collector-contrib:latest
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
-      - ./config/otel-collector.yaml:/etc/otelcol-contrib/config.yaml
+      - ./ergon_infra/ergon_infra/templates/otel-collector.yaml:/etc/otelcol-contrib/config.yaml
     ports:
       - "4319:4317"
 

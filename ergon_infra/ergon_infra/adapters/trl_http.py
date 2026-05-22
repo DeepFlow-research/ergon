@@ -16,6 +16,7 @@ Usage::
 
 import logging
 import time
+from collections.abc import Callable
 from typing import Protocol, TypedDict
 
 import httpx
@@ -42,7 +43,7 @@ def make_ergon_http_rollout_func(
     definition_id: str,
     poll_interval_s: float = 2.0,
     timeout_s: float = 300.0,
-):
+) -> Callable[[list, TRLTrainerContext], "RolloutBatch"]:
     """Create a TRL-compatible ``rollout_func`` backed by Ergon's HTTP API.
 
     Args:

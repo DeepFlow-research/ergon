@@ -10,19 +10,19 @@ from typing import ClassVar
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 from ergon_core.api import WorkerContext
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
-from ergon_core.core.application.tasks.models import SubtaskSpec
+from tests.fixtures.smoke_components.smoke_base.dynamic_tasks import SmokeChildTaskSpec
 from tests.fixtures.smoke_components.smoke_base.subworker import SubworkerResult
 
 
 class AlwaysFailSubworker:
     """Writes partial work and runs a probe before returning failure."""
 
-    async def work(self, node_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
-        partial_path = f"/workspace/final_output/partial_{node_id}.md"
+    async def work(self, task_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
+        partial_path = f"/workspace/final_output/partial_{task_id}.md"
         await sandbox.files.write(
             partial_path,
             (
-                f"# Partial work {node_id}\n\n"
+                f"# Partial work {task_id}\n\n"
                 "This content was written before a deliberate failure. If smoke "
                 "sees this as a RunResource row, partial serialization works.\n"
             ),
@@ -42,7 +42,7 @@ class AlwaysFailSubworker:
         return SubworkerResult(
             file_path=partial_path,
             probe_stdout=(
-                f"SmokeSadPathError: deliberate failure of {node_id} after "
+                f"SmokeSadPathError: deliberate failure of {task_id} after "
                 f"writing {partial_path} and running probe "
                 f"(exit={pre_check.exit_code}). Smoke asserts the partial file + "
                 "probe WAL survive."
@@ -60,7 +60,7 @@ class SadPathSmokeWorkerMixin:
 
     def _spec_for(self, slug, deps, desc):
         leaf_slug = self.FAILING_LEAF_SLUG if slug in self.FAILING_SLUGS else self.leaf_slug
-        return SubtaskSpec(
+        return SmokeChildTaskSpec(
             task_slug=TaskSlug(slug),
             description=desc,
             assigned_worker_slug=AssignedWorkerSlug(leaf_slug),

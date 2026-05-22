@@ -6,7 +6,7 @@ from typing import Literal, TypeVar, cast
 from pydantic import BaseModel
 from pydantic_ai import Agent
 
-from ergon_builtins.models.resolution import resolve_model_target
+from ergon_builtins.llm.resolution import resolve_model_target
 
 T = TypeVar("T", bound=BaseModel)
 

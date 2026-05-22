@@ -178,5 +178,5 @@ export function serializeContextEvent(event: ContextEventState): ContextEventSta
       startedAt: event.startedAt,
       completedAt: event.completedAt,
     }) as unknown as ContextEventState["payload"],
-  };
+  } as unknown as ContextEventState;
 }

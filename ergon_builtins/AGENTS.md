@@ -1,11 +1,12 @@
 # ergon_builtins — agents & fixtures reference
 
-Every worker / benchmark / evaluator / criterion registered in
-`ergon_builtins/registry_core.py`, plus a cheat-sheet for picking the right
-one when you're testing dashboard panels or RL plumbing.
+This document is a cheat-sheet for built-in object-bound workers, benchmarks,
+evaluators, criteria, and sandbox classes when testing dashboard panels or RL
+plumbing.
 
-**Source of truth**: `ergon_builtins/ergon_builtins/registry_core.py`. If you
-add a new component, update the dicts there *and* this doc.
+**Source of truth**: the benchmark packages themselves. If you add a new
+component, expose it through explicit package imports or CLI discovery and
+update this doc in the same PR.
 
 ---
 
@@ -40,7 +41,7 @@ EVALUATION is populated by whichever **evaluator** you pass with
 
 ---
 
-## Workers (`WORKERS` in registry_core.py)
+## Workers
 
 | slug | class | requires | notes |
 |---|---|---|---|
@@ -52,7 +53,7 @@ EVALUATION is populated by whichever **evaluator** you pass with
 
 ---
 
-## Benchmarks (`BENCHMARKS` in registry_core.py)
+## Benchmarks
 
 | slug | class | task count | requires |
 |---|---|---|---|
@@ -63,7 +64,7 @@ EVALUATION is populated by whichever **evaluator** you pass with
 
 ---
 
-## Evaluators / rubrics (`EVALUATORS` in registry_core.py)
+## Evaluators / rubrics
 
 | slug | class | requires | what it checks |
 |---|---|---|---|
@@ -94,15 +95,15 @@ EVALUATION is populated by whichever **evaluator** you pass with
 
 ---
 
-## Sandbox managers (`SANDBOX_MANAGERS` in registry_core.py)
+## Sandbox classes
 
 | slug | class | purpose |
 |---|---|---|
 | `gdpeval` | `benchmarks/gdpeval/sandbox.py` | GDPEval harness sandbox. |
-| `minif2f` | `benchmarks/minif2f/sandbox_manager.py` | Lean 4 sandbox with the compiler pre-installed. |
-| `researchrubrics` | `benchmarks/researchrubrics/sandbox_manager.py` | ResearchRubrics E2B sandbox with Exa tooling. |
-| `researchrubrics-vanilla` | `benchmarks/researchrubrics/sandbox_manager.py` | Same sandbox setup for the vanilla benchmark variant. |
-| `swebench-verified` | `benchmarks/swebench_verified/sandbox_manager.py` | SWE-Bench instance sandbox; installs repo+deps in `_install_dependencies`. |
+| `minif2f` | `benchmarks/minif2f/sandbox.py` | Lean 4 sandbox with the compiler pre-installed. |
+| `researchrubrics` | `benchmarks/researchrubrics/sandbox.py` | ResearchRubrics E2B sandbox with Exa tooling. |
+| `researchrubrics-vanilla` | `benchmarks/researchrubrics/sandbox.py` | Same sandbox setup for the vanilla benchmark variant. |
+| `swebench-verified` | `benchmarks/swebench_verified/sandbox.py` | SWE-Bench instance sandbox; installs repo+deps in `_install_dependencies`. |
 
 ---
 

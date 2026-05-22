@@ -1,4 +1,5 @@
 import type { TaskEvaluationState, WorkflowRunState } from "@/lib/types";
+import { formatScore } from "@/lib/run-state/formatters";
 import type { EvalCriterionStatus, EvalRollupStatus, EvaluationRollup } from "./contracts";
 
 function criterionStatusToRollupStatus(status: EvalCriterionStatus): EvalRollupStatus {
@@ -39,6 +40,122 @@ export function evaluationToRollup(evaluation: TaskEvaluationState | undefined):
     evaluatorNames: [evaluation.evaluatorName],
     attachedTaskIds: evaluation.taskId ? [evaluation.taskId] : [],
     criterionStatuses,
+  };
+}
+
+function criterionStateLabel(status: EvalCriterionStatus): string {
+  switch (status) {
+    case "passed":
+      return "Pass";
+    case "failed":
+      return "Fail";
+    case "skipped":
+      return "Skipped";
+    case "errored":
+      return "Error";
+  }
+}
+
+export interface EvaluationCriterionViewModel {
+  id: string;
+  status: EvalCriterionStatus;
+  stateLabel: string;
+  stageLabel: string;
+  title: string;
+  typeLabel: string;
+  scoreLabel: string;
+  contributionLabel: string;
+  weightLabel: string;
+  feedback: string | null;
+  modelReasoning: string | null;
+  skippedReason: string | null;
+  evaluationInput: string | null;
+  error: Record<string, unknown> | null;
+  evaluatedActionIds: string[];
+  evaluatedResourceIds: string[];
+}
+
+export interface EvaluationViewModel {
+  summary: {
+    evaluatorName: string;
+    status: EvalRollupStatus;
+    scoreLabel: string;
+    criteriaLabel: string;
+    failedGateLabel: string;
+  };
+  composition: {
+    aggregationRule: string;
+    totalScoreLabel: string;
+    stagesLabel: string;
+  };
+  counts: Pick<EvaluationRollup, "passed" | "failed" | "skipped" | "errored" | "totalCriteria">;
+  criteria: EvaluationCriterionViewModel[];
+}
+
+export function evaluationToViewModel(
+  evaluation: TaskEvaluationState | null | undefined,
+): EvaluationViewModel | null {
+  if (!evaluation) return null;
+
+  const rollup =
+    evaluationToRollup(evaluation) ??
+    ({
+      status: "skipped",
+      totalCriteria: 0,
+      passed: 0,
+      failed: 0,
+      skipped: 0,
+      errored: 0,
+      normalizedScore: evaluation.normalizedScore,
+      maxScore: evaluation.maxScore,
+      evaluatorNames: [evaluation.evaluatorName],
+      attachedTaskIds: evaluation.taskId ? [evaluation.taskId] : [],
+      criterionStatuses: [],
+    } satisfies EvaluationRollup);
+
+  const criteriaLabel = `${rollup.passed} passed, ${rollup.failed} failed, ${rollup.skipped} skipped, ${rollup.errored} errored`;
+
+  return {
+    summary: {
+      evaluatorName: evaluation.evaluatorName,
+      status: rollup.status,
+      scoreLabel: formatScore(evaluation.normalizedScore).value,
+      criteriaLabel,
+      failedGateLabel: evaluation.failedGate ?? "None",
+    },
+    composition: {
+      aggregationRule: evaluation.aggregationRule,
+      totalScoreLabel: `${evaluation.totalScore} / ${evaluation.maxScore}`,
+      stagesLabel: `${evaluation.stagesPassed} / ${evaluation.stagesEvaluated}`,
+    },
+    counts: {
+      totalCriteria: rollup.totalCriteria,
+      passed: rollup.passed,
+      failed: rollup.failed,
+      skipped: rollup.skipped,
+      errored: rollup.errored,
+    },
+    criteria: evaluation.criterionResults.map((criterion) => {
+      const status = criterion.status as EvalCriterionStatus;
+      return {
+        id: criterion.id,
+        status,
+        stateLabel: criterionStateLabel(status),
+        stageLabel: `${criterion.stageName} · #${criterion.criterionNum + 1}`,
+        title: criterion.criterionDescription || criterion.criterionName,
+        typeLabel: criterion.criterionType,
+        scoreLabel: `${criterion.score} / ${criterion.maxScore}`,
+        contributionLabel: String(criterion.contribution),
+        weightLabel: String(criterion.weight),
+        feedback: criterion.feedback ?? null,
+        modelReasoning: criterion.modelReasoning ?? null,
+        skippedReason: criterion.skippedReason ?? null,
+        evaluationInput: criterion.evaluationInput ?? null,
+        error: criterion.error ?? null,
+        evaluatedActionIds: criterion.evaluatedActionIds ?? [],
+        evaluatedResourceIds: criterion.evaluatedResourceIds ?? [],
+      };
+    }),
   };
 }
 

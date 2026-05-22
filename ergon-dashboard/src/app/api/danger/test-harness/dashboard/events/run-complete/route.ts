@@ -9,7 +9,6 @@ export async function POST(request: Request) {
     durationSeconds: number;
     finalScore: number | null;
     error: string | null;
-    cohortId?: string | null;
   };
   emitHarnessRunCompleted(payload);
   return NextResponse.json({ ok: true });

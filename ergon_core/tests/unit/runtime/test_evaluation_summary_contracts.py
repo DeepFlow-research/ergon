@@ -13,13 +13,11 @@ from ergon_core.api.criterion import (
     EvidenceMessage,
 )
 from ergon_core.api.rubric import TaskEvaluationResult
-from ergon_core.core.persistence.telemetry.evaluation_summary import CriterionOutcomeEntry
+from ergon_core.core.application.evaluation.summary import CriterionOutcomeEntry
 from ergon_core.core.application.evaluation.models import CriterionSpec
-from ergon_core.core.application.evaluation.service import (
-    build_dashboard_evaluation_dto,
-    build_evaluation_summary,
-)
+from ergon_core.core.application.evaluation.mappers import build_evaluation_summary
 from ergon_core.core.application.evaluation.service import EvaluationServiceResult
+from ergon_core.core.views.runs.evaluation_mapping import build_dashboard_evaluation_dto
 from pydantic import ValidationError
 
 
@@ -27,7 +25,7 @@ class _Criterion(Criterion):
     type_slug = "test-criterion"
 
     async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
-        return CriterionOutcome(name=self.slug, score=1.0, passed=True)
+        return CriterionOutcome(slug=self.slug, name=self.slug, score=1.0, passed=True)
 
 
 def _service_result(
@@ -59,6 +57,7 @@ def _service_result(
             evaluator_name="rubric",
             criterion_results=[
                 CriterionOutcome(
+                    slug="criterion result",
                     name="criterion result",
                     score=criterion_score,
                     passed=passed,
@@ -284,6 +283,8 @@ def test_summary_migration_normalizes_missing_criterion_fields() -> None:
         / "versions"
         / "e5f6a7b8c9d0_normalize_evaluation_summary_nulls.py"
     )
+    if not migration_path.exists():
+        pytest.skip("PR 11 reset migrations into the v2 initial schema")
     spec = util.spec_from_file_location("summary_null_migration", migration_path)
     assert spec is not None
     assert spec.loader is not None

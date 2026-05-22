@@ -154,8 +154,8 @@ async def _run_local_eval(
             )
             return exit_code
 
-        experiment_id = _parse_uuid_line("EXPERIMENT_ID=", output)
-        run_cmd = ["ergon", "experiment", "run", experiment_id]
+        definition_id = _parse_uuid_line("EXPERIMENT_ID=", output)
+        run_cmd = ["ergon", "experiment", "run", definition_id]
         logger.info("Running local eval for step %d: %s", ckpt.step, " ".join(run_cmd))
 
         run_proc = await asyncio.create_subprocess_exec(

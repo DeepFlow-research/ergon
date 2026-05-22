@@ -6,6 +6,113 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/runs": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "List Runs",
+        "description": "List persisted run summaries for dashboard indexes.",
+        "operationId": "list_runs_runs_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "definition_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Definition Id"
+            }
+          },
+          {
+            "name": "experiment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Experiment"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunSummaryDto"
+                  },
+                  "title": "Response List Runs Runs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/runs/{run_id}": {
       "get": {
         "tags": [
@@ -56,7 +163,7 @@
           "runs"
         ],
         "summary": "Get Mutations",
-        "description": "Return the append-only mutation log for a run, ordered by sequence.\n\nUsed by the Timeline scrubber to replay DAG state at any point in time.",
+        "description": "Return the append-only mutation log for a run, ordered by sequence.",
         "operationId": "get_mutations_runs__run_id__mutations_get",
         "parameters": [
           {
@@ -104,7 +211,7 @@
           "runs"
         ],
         "summary": "Get Resource Content",
-        "description": "Stream the blob bytes for a RunResource.\n\nUsed by the dashboard's file-viewer modal. Enforces:\n- resource must belong to the named run (no cross-run leaks);\n- resolved path must sit under ``ERGON_BLOB_ROOT`` (traversal guard);\n- size <= ``_RESOURCE_CONTENT_MAX_BYTES`` (413 otherwise).",
+        "description": "Stream the blob bytes for a RunResource.",
         "operationId": "get_resource_content_runs__run_id__resources__resource_id__content_get",
         "parameters": [
           {
@@ -134,325 +241,6 @@
             "content": {
               "application/json": {
                 "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/runs/training/curves": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Get Training Curves",
-        "description": "Return score-over-step data for checkpoint evaluations.\n\nReads ``summary_json`` on ``RunRecord`` for checkpoint metadata\n(``checkpoint_step``, ``checkpoint_path``) written by the eval\nwatcher, and aggregates ``RunTaskEvaluation.score`` per run.\n\nFilter by ``definition_id`` or ``cohort_id``.",
-        "operationId": "get_training_curves_runs_training_curves_get",
-        "parameters": [
-          {
-            "name": "definition_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Definition Id"
-            }
-          },
-          {
-            "name": "cohort_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Cohort Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TrainingCurvePointDto"
-                  },
-                  "title": "Response Get Training Curves Runs Training Curves Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/runs/training/sessions": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Get Training Sessions",
-        "description": "List training sessions, optionally filtered by definition.",
-        "operationId": "get_training_sessions_runs_training_sessions_get",
-        "parameters": [
-          {
-            "name": "definition_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Definition Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TrainingSessionDto"
-                  },
-                  "title": "Response Get Training Sessions Runs Training Sessions Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/runs/training/sessions/{session_id}/metrics": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Get Training Metrics",
-        "description": "Get per-step training metrics for a session.",
-        "operationId": "get_training_metrics_runs_training_sessions__session_id__metrics_get",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TrainingMetricDto"
-                  },
-                  "title": "Response Get Training Metrics Runs Training Sessions  Session Id  Metrics Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/cohorts": {
-      "get": {
-        "tags": [
-          "cohorts"
-        ],
-        "summary": "List Cohorts",
-        "description": "List all experiment cohorts.",
-        "operationId": "list_cohorts_cohorts_get",
-        "parameters": [
-          {
-            "name": "include_archived",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Include Archived"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/CohortSummaryDto"
-                  },
-                  "title": "Response List Cohorts Cohorts Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/cohorts/{cohort_id}": {
-      "get": {
-        "tags": [
-          "cohorts"
-        ],
-        "summary": "Get Cohort",
-        "description": "Get one cohort detail payload.",
-        "operationId": "get_cohort_cohorts__cohort_id__get",
-        "parameters": [
-          {
-            "name": "cohort_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Cohort Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CohortDetailDto"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "cohorts"
-        ],
-        "summary": "Update Cohort",
-        "description": "Update one cohort's operator-managed fields.",
-        "operationId": "update_cohort_cohorts__cohort_id__patch",
-        "parameters": [
-          {
-            "name": "cohort_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Cohort Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateCohortRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CohortSummaryDto"
-                }
               }
             }
           },
@@ -516,22 +304,22 @@
         }
       }
     },
-    "/experiments/{experiment_id}": {
+    "/experiments/{definition_id}": {
       "get": {
         "tags": [
           "experiments"
         ],
         "summary": "Get Experiment",
-        "operationId": "get_experiment_experiments__experiment_id__get",
+        "operationId": "get_experiment_experiments__definition_id__get",
         "parameters": [
           {
-            "name": "experiment_id",
+            "name": "definition_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "format": "uuid",
-              "title": "Experiment Id"
+              "title": "Definition Id"
             }
           }
         ],
@@ -559,63 +347,22 @@
         }
       }
     },
-    "/experiments/define": {
-      "post": {
-        "tags": [
-          "experiments"
-        ],
-        "summary": "Define Experiment",
-        "operationId": "define_experiment_experiments_define_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ExperimentDefineRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExperimentDefineResult"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/experiments/{experiment_id}/run": {
+    "/experiments/{definition_id}/run": {
       "post": {
         "tags": [
           "experiments"
         ],
         "summary": "Run Experiment",
-        "operationId": "run_experiment_experiments__experiment_id__run_post",
+        "operationId": "run_experiment_experiments__definition_id__run_post",
         "parameters": [
           {
-            "name": "experiment_id",
+            "name": "definition_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "format": "uuid",
-              "title": "Experiment Id"
+              "title": "Definition Id"
             }
           }
         ],
@@ -823,6 +570,237 @@
         }
       }
     },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/__danger__/test-harness/read/run/{run_id}/state": {
+      "get": {
+        "tags": [
+          "danger-test-harness"
+        ],
+        "summary": "Read Run State",
+        "operationId": "read_run_state_api___danger___test_harness_read_run__run_id__state_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestRunStateDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/__danger__/test-harness/read/experiment/{experiment}/runs": {
+      "get": {
+        "tags": [
+          "danger-test-harness"
+        ],
+        "summary": "Read Experiment Runs",
+        "description": "List all runs attached to a v2 experiment grouping tag.",
+        "operationId": "read_experiment_runs_api___danger___test_harness_read_experiment__experiment__runs_get",
+        "parameters": [
+          {
+            "name": "experiment",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Experiment"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TestExperimentRunDto"
+                  },
+                  "title": "Response Read Experiment Runs Api   Danger   Test Harness Read Experiment  Experiment  Runs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/__danger__/test-harness/write/run/seed": {
+      "post": {
+        "tags": [
+          "danger-test-harness"
+        ],
+        "summary": "Seed Run",
+        "operationId": "seed_run_api___danger___test_harness_write_run_seed_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeedRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Seed Run Api   Danger   Test Harness Write Run Seed Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/__danger__/test-harness/write/reset": {
+      "post": {
+        "tags": [
+          "danger-test-harness"
+        ],
+        "summary": "Reset Test Rows",
+        "operationId": "reset_test_rows_api___danger___test_harness_write_reset_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/__danger__/test-harness/write/experiment-runs": {
+      "post": {
+        "tags": [
+          "danger-test-harness"
+        ],
+        "summary": "Submit Experiment Runs",
+        "description": "Build + persist + dispatch N runs under one experiment tag.\n\nPer-slot flow persists the object-bound smoke ``Benchmark`` into the\nimmutable ``ExperimentDefinition`` tables. The v2 experiment grouping tag\nis written into definition metadata and copied to ``RunRecord.experiment``\nby launch. Slots submit sequentially \u2014 typical N \u2264 3, so the\nparallel-gather savings are negligible.",
+        "operationId": "submit_experiment_runs_api___danger___test_harness_write_experiment_runs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitExperimentRunsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmitExperimentRunsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/inngest": {
       "get": {
         "summary": "Get Api Inngest",
@@ -883,7 +861,7 @@
             "title": "Namespace"
           },
           "payload": {
-            "$ref": "#/components/schemas/JsonObject-Output"
+            "$ref": "#/components/schemas/JsonObject"
           }
         },
         "type": "object",
@@ -907,7 +885,7 @@
             "title": "Namespace"
           },
           "payload": {
-            "$ref": "#/components/schemas/JsonObject-Output"
+            "$ref": "#/components/schemas/JsonObject"
           }
         },
         "type": "object",
@@ -938,295 +916,6 @@
           "content"
         ],
         "title": "AssistantTextPart"
-      },
-      "BatchStatus": {
-        "type": "string",
-        "enum": [
-          "pending",
-          "running",
-          "complete",
-          "failed",
-          "cancelled"
-        ],
-        "title": "BatchStatus"
-      },
-      "CohortDetailDto": {
-        "properties": {
-          "summary": {
-            "$ref": "#/components/schemas/CohortSummaryDto"
-          },
-          "experiments": {
-            "items": {
-              "$ref": "#/components/schemas/CohortExperimentRowDto"
-            },
-            "type": "array",
-            "title": "Experiments"
-          }
-        },
-        "type": "object",
-        "required": [
-          "summary"
-        ],
-        "title": "CohortDetailDto",
-        "description": "Full payload for a single cohort detail page."
-      },
-      "CohortExperimentRowDto": {
-        "properties": {
-          "experiment_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Experiment Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "benchmark_type": {
-            "type": "string",
-            "title": "Benchmark Type"
-          },
-          "sample_count": {
-            "type": "integer",
-            "title": "Sample Count"
-          },
-          "total_runs": {
-            "type": "integer",
-            "title": "Total Runs",
-            "default": 0
-          },
-          "status_counts": {
-            "$ref": "#/components/schemas/CohortStatusCountsDto"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "default_model_target": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Default Model Target"
-          },
-          "default_evaluator_slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Default Evaluator Slug"
-          },
-          "final_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Final Score"
-          },
-          "total_cost_usd": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total Cost Usd"
-          },
-          "error_message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error Message"
-          }
-        },
-        "type": "object",
-        "required": [
-          "experiment_id",
-          "name",
-          "benchmark_type",
-          "sample_count",
-          "status",
-          "created_at"
-        ],
-        "title": "CohortExperimentRowDto",
-        "description": "One experiment inside a cohort detail view."
-      },
-      "CohortStatusCountsDto": {
-        "properties": {
-          "pending": {
-            "type": "integer",
-            "title": "Pending",
-            "default": 0
-          },
-          "executing": {
-            "type": "integer",
-            "title": "Executing",
-            "default": 0
-          },
-          "evaluating": {
-            "type": "integer",
-            "title": "Evaluating",
-            "default": 0
-          },
-          "completed": {
-            "type": "integer",
-            "title": "Completed",
-            "default": 0
-          },
-          "failed": {
-            "type": "integer",
-            "title": "Failed",
-            "default": 0
-          }
-        },
-        "type": "object",
-        "title": "CohortStatusCountsDto",
-        "description": "Aggregate run counts by lifecycle status."
-      },
-      "CohortSummaryDto": {
-        "properties": {
-          "cohort_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Cohort Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "created_by": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created By"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "total_runs": {
-            "type": "integer",
-            "title": "Total Runs",
-            "default": 0
-          },
-          "status_counts": {
-            "$ref": "#/components/schemas/CohortStatusCountsDto"
-          },
-          "average_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Average Score"
-          },
-          "best_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Best Score"
-          },
-          "worst_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Worst Score"
-          },
-          "average_duration_ms": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Average Duration Ms"
-          },
-          "failure_rate": {
-            "type": "number",
-            "title": "Failure Rate",
-            "default": 0.0
-          },
-          "stats_updated_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stats Updated At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "cohort_id",
-          "name",
-          "created_at",
-          "status"
-        ],
-        "title": "CohortSummaryDto",
-        "description": "Summary row for cohort list and live updates."
       },
       "ContextPartChunkLog": {
         "properties": {
@@ -1294,6 +983,17 @@
             ],
             "title": "Logprobs",
             "description": "Per-token log probabilities associated with this context part."
+          },
+          "provider_usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProviderTokenUsage"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Provider-reported token and cost usage for this generation boundary."
           },
           "sequence": {
             "type": "integer",
@@ -1373,15 +1073,15 @@
             "title": "Mutation Type",
             "default": "edge.added"
           },
-          "source_node_id": {
+          "source_task_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Source Node Id"
+            "title": "Source Task Id"
           },
-          "target_node_id": {
+          "target_task_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Target Node Id"
+            "title": "Target Task Id"
           },
           "status": {
             "type": "string",
@@ -1390,8 +1090,8 @@
         },
         "type": "object",
         "required": [
-          "source_node_id",
-          "target_node_id",
+          "source_task_id",
+          "target_task_id",
           "status"
         ],
         "title": "EdgeAddedMutation",
@@ -1405,15 +1105,15 @@
             "title": "Mutation Type",
             "default": "edge.removed"
           },
-          "source_node_id": {
+          "source_task_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Source Node Id"
+            "title": "Source Task Id"
           },
-          "target_node_id": {
+          "target_task_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Target Node Id"
+            "title": "Target Task Id"
           },
           "status": {
             "type": "string",
@@ -1422,8 +1122,8 @@
         },
         "type": "object",
         "required": [
-          "source_node_id",
-          "target_node_id",
+          "source_task_id",
+          "target_task_id",
           "status"
         ],
         "title": "EdgeRemovedMutation",
@@ -1544,19 +1244,19 @@
         "type": "object",
         "title": "ExperimentAnalyticsDto"
       },
-      "ExperimentCohortStatus": {
-        "type": "string",
-        "enum": [
-          "active",
-          "archived"
-        ],
-        "title": "ExperimentCohortStatus"
-      },
-      "ExperimentDefineRequest": {
+      "ExperimentDetailDto": {
         "properties": {
-          "benchmark_slug": {
-            "type": "string",
-            "title": "Benchmark Slug"
+          "definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Definition Id"
           },
           "name": {
             "anyOf": [
@@ -1569,44 +1269,7 @@
             ],
             "title": "Name"
           },
-          "cohort_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cohort Id"
-          },
-          "limit": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Limit"
-          },
-          "sample_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sample Ids"
-          },
-          "default_model_target": {
+          "description": {
             "anyOf": [
               {
                 "type": "string"
@@ -1615,93 +1278,19 @@
                 "type": "null"
               }
             ],
-            "title": "Default Model Target"
-          },
-          "default_worker_team": {
-            "$ref": "#/components/schemas/JsonObject-Input"
-          },
-          "default_evaluator_slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Default Evaluator Slug"
-          },
-          "design": {
-            "$ref": "#/components/schemas/JsonObject-Input"
-          },
-          "seed": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Seed"
-          },
-          "metadata": {
-            "$ref": "#/components/schemas/JsonObject-Input"
-          }
-        },
-        "type": "object",
-        "required": [
-          "benchmark_slug"
-        ],
-        "title": "ExperimentDefineRequest"
-      },
-      "ExperimentDefineResult": {
-        "properties": {
-          "experiment_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Experiment Id"
-          },
-          "cohort_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cohort Id"
+            "title": "Description"
           },
           "benchmark_type": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Benchmark Type"
           },
-          "sample_count": {
-            "type": "integer",
-            "title": "Sample Count"
-          },
-          "selected_samples": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Selected Samples"
-          }
-        },
-        "type": "object",
-        "required": [
-          "experiment_id",
-          "cohort_id",
-          "benchmark_type",
-          "sample_count",
-          "selected_samples"
-        ],
-        "title": "ExperimentDefineResult"
-      },
-      "ExperimentDetailDto": {
-        "properties": {
           "experiment": {
             "$ref": "#/components/schemas/ExperimentSummaryDto"
           },
@@ -1737,12 +1326,174 @@
         ],
         "title": "ExperimentDetailDto"
       },
-      "ExperimentRunRequest": {
+      "ExperimentRunMetricsDto": {
         "properties": {
-          "experiment_id": {
+          "run_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Experiment Id"
+            "title": "Run Id"
+          },
+          "run_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "sample_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Label"
+          },
+          "instance_key": {
+            "type": "string",
+            "title": "Instance Key"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "return_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Value"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "total_tasks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Tasks"
+          },
+          "tool_call_count": {
+            "type": "integer",
+            "title": "Tool Call Count",
+            "default": 0
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Tokens"
+          },
+          "token_breakdown": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Token Breakdown"
+          },
+          "total_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cost Usd"
+          },
+          "cost_observed": {
+            "type": "boolean",
+            "title": "Cost Observed",
+            "default": false
+          },
+          "model_target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Target"
+          },
+          "evaluator_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluator Slug"
+          },
+          "error_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Summary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "status",
+          "instance_key"
+        ],
+        "title": "ExperimentRunMetricsDto"
+      },
+      "ExperimentRunRequest": {
+        "properties": {
+          "definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Definition Id"
           },
           "timeout_seconds": {
             "anyOf": [
@@ -1763,16 +1514,16 @@
         },
         "type": "object",
         "required": [
-          "experiment_id"
+          "definition_id"
         ],
         "title": "ExperimentRunRequest"
       },
       "ExperimentRunResult": {
         "properties": {
-          "experiment_id": {
+          "definition_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Experiment Id"
+            "title": "Definition Id"
           },
           "run_ids": {
             "items": {
@@ -1782,18 +1533,18 @@
             "type": "array",
             "title": "Run Ids"
           },
-          "workflow_definition_ids": {
+          "definition_ids": {
             "items": {
               "type": "string",
               "format": "uuid"
             },
             "type": "array",
-            "title": "Workflow Definition Ids"
+            "title": "Definition Ids"
           }
         },
         "type": "object",
         "required": [
-          "experiment_id",
+          "definition_id",
           "run_ids"
         ],
         "title": "ExperimentRunResult"
@@ -1805,10 +1556,10 @@
             "format": "uuid",
             "title": "Run Id"
           },
-          "workflow_definition_id": {
+          "definition_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Workflow Definition Id"
+            "title": "Definition Id"
           },
           "benchmark_type": {
             "type": "string",
@@ -1943,18 +1694,40 @@
               }
             ],
             "title": "Error Message"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/ExperimentRunMetricsDto"
           }
         },
         "type": "object",
         "required": [
           "run_id",
-          "workflow_definition_id",
+          "definition_id",
           "benchmark_type",
           "instance_key",
           "status",
-          "created_at"
+          "created_at",
+          "metrics"
         ],
         "title": "ExperimentRunRowDto"
+      },
+      "ExperimentRunSlotRequest": {
+        "properties": {
+          "worker_slug": {
+            "type": "string",
+            "title": "Worker Slug"
+          },
+          "evaluator_slug": {
+            "type": "string",
+            "title": "Evaluator Slug"
+          }
+        },
+        "type": "object",
+        "required": [
+          "worker_slug",
+          "evaluator_slug"
+        ],
+        "title": "ExperimentRunSlotRequest"
       },
       "ExperimentStatusCountsDto": {
         "properties": {
@@ -1994,26 +1767,25 @@
       },
       "ExperimentSummaryDto": {
         "properties": {
-          "experiment_id": {
+          "definition_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Experiment Id"
+            "title": "Definition Id"
           },
-          "cohort_id": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "uuid"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Cohort Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
+            "title": "Description"
           },
           "benchmark_type": {
             "type": "string",
@@ -2054,6 +1826,17 @@
             ],
             "title": "Default Model Target"
           },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -2087,11 +1870,75 @@
             "type": "integer",
             "title": "Run Count",
             "default": 0
+          },
+          "status_counts": {
+            "$ref": "#/components/schemas/ExperimentStatusCountsDto"
+          },
+          "failure_count": {
+            "type": "integer",
+            "title": "Failure Count",
+            "default": 0
+          },
+          "latest_activity_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Activity At"
+          },
+          "average_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Score"
+          },
+          "average_duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Duration Ms"
+          },
+          "average_tasks": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Tasks"
+          },
+          "total_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cost Usd"
           }
         },
         "type": "object",
         "required": [
-          "experiment_id",
+          "definition_id",
           "name",
           "benchmark_type",
           "sample_count",
@@ -2296,15 +2143,9 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
-      "JsonObject-Input": {
+      "JsonObject": {
         "additionalProperties": {
-          "$ref": "#/components/schemas/JsonValue-Input"
-        },
-        "type": "object"
-      },
-      "JsonObject-Output": {
-        "additionalProperties": {
-          "$ref": "#/components/schemas/JsonValue-Output"
+          "$ref": "#/components/schemas/JsonValue"
         },
         "type": "object"
       },
@@ -2327,39 +2168,20 @@
           }
         ]
       },
-      "JsonValue-Input": {
+      "JsonValue": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/JsonScalar"
           },
           {
             "items": {
-              "$ref": "#/components/schemas/JsonValue-Input"
+              "$ref": "#/components/schemas/JsonValue"
             },
             "type": "array"
           },
           {
             "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue-Input"
-            },
-            "type": "object"
-          }
-        ]
-      },
-      "JsonValue-Output": {
-        "anyOf": [
-          {
-            "$ref": "#/components/schemas/JsonScalar"
-          },
-          {
-            "items": {
-              "$ref": "#/components/schemas/JsonValue-Output"
-            },
-            "type": "array"
-          },
-          {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue-Output"
+              "$ref": "#/components/schemas/JsonValue"
             },
             "type": "object"
           }
@@ -2523,7 +2345,7 @@
             "title": "Batch Id"
           },
           "status": {
-            "$ref": "#/components/schemas/BatchStatus"
+            "$ref": "#/components/schemas/RolloutStatus"
           },
           "completed": {
             "type": "integer",
@@ -2557,6 +2379,133 @@
         ],
         "title": "PollResponse",
         "description": "Ergon \u2192 Trainer: current batch status + trajectories if complete."
+      },
+      "ProviderTokenUsage": {
+        "properties": {
+          "prompt_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Tokens",
+            "description": "Input tokens charged or reported by the model provider."
+          },
+          "completion_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Tokens",
+            "description": "Output tokens charged or reported by the model provider."
+          },
+          "reasoning_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Tokens",
+            "description": "Reasoning tokens when the provider reports them separately."
+          },
+          "tool_call_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Call Tokens",
+            "description": "Tool-call argument tokens when reported separately."
+          },
+          "tool_result_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Result Tokens",
+            "description": "Tool-result tokens when reported separately."
+          },
+          "cached_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cached Tokens",
+            "description": "Cached/read tokens when reported separately."
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Tokens",
+            "description": "Provider total when semantic buckets are unavailable."
+          },
+          "total_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cost Usd",
+            "description": "Observed provider cost in USD for this generation boundary."
+          }
+        },
+        "type": "object",
+        "title": "ProviderTokenUsage",
+        "description": "Provider-reported token and cost usage for one generation boundary."
+      },
+      "ResetRequest": {
+        "properties": {
+          "experiment_prefix": {
+            "type": "string",
+            "title": "Experiment Prefix"
+          }
+        },
+        "type": "object",
+        "required": [
+          "experiment_prefix"
+        ],
+        "title": "ResetRequest"
+      },
+      "RolloutStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "complete",
+          "failed",
+          "cancelled"
+        ],
+        "title": "RolloutStatus"
       },
       "RunCommunicationMessageDto": {
         "properties": {
@@ -2727,10 +2676,10 @@
             "format": "uuid",
             "title": "Taskexecutionid"
           },
-          "taskNodeId": {
+          "taskId": {
             "type": "string",
             "format": "uuid",
-            "title": "Tasknodeid"
+            "title": "Taskid"
           },
           "workerBindingKey": {
             "type": "string",
@@ -2791,7 +2740,7 @@
           "id",
           "runId",
           "taskExecutionId",
-          "taskNodeId",
+          "taskId",
           "workerBindingKey",
           "sequence",
           "eventType",
@@ -3290,9 +3239,9 @@
             "type": "string",
             "title": "Id"
           },
-          "experimentId": {
+          "definitionId": {
             "type": "string",
-            "title": "Experimentid"
+            "title": "Definitionid"
           },
           "name": {
             "type": "string",
@@ -3441,6 +3390,16 @@
             ],
             "title": "Finalscore"
           },
+          "metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunSnapshotMetricsDto"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "error": {
             "anyOf": [
               {
@@ -3457,11 +3416,318 @@
         "type": "object",
         "required": [
           "id",
-          "experimentId",
+          "definitionId",
           "name",
           "status"
         ],
         "title": "RunSnapshotDto"
+      },
+      "RunSnapshotMetricsDto": {
+        "properties": {
+          "runId": {
+            "type": "string",
+            "title": "Runid"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "durationMs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Durationms"
+          },
+          "totalTasks": {
+            "type": "integer",
+            "title": "Totaltasks",
+            "default": 0
+          },
+          "toolCallCount": {
+            "type": "integer",
+            "title": "Toolcallcount",
+            "default": 0
+          },
+          "totalTokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totaltokens"
+          },
+          "tokenBreakdown": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Tokenbreakdown"
+          },
+          "totalCostUsd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totalcostusd"
+          },
+          "costObserved": {
+            "type": "boolean",
+            "title": "Costobserved",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "runId",
+          "status"
+        ],
+        "title": "RunSnapshotMetricsDto"
+      },
+      "RunSummaryDto": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "latest_activity_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Activity At"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Definition Id"
+          },
+          "definition_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Definition Name"
+          },
+          "experiment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiment"
+          },
+          "benchmark_type": {
+            "type": "string",
+            "title": "Benchmark Type"
+          },
+          "instance_key": {
+            "type": "string",
+            "title": "Instance Key"
+          },
+          "sample_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Id"
+          },
+          "sample_label": {
+            "type": "string",
+            "title": "Sample Label"
+          },
+          "evaluator_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluator Slug"
+          },
+          "model_target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Target"
+          },
+          "final_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Score"
+          },
+          "return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return"
+          },
+          "total_tasks": {
+            "type": "integer",
+            "title": "Total Tasks",
+            "default": 0
+          },
+          "completed_tasks": {
+            "type": "integer",
+            "title": "Completed Tasks",
+            "default": 0
+          },
+          "failed_tasks": {
+            "type": "integer",
+            "title": "Failed Tasks",
+            "default": 0
+          },
+          "running_tasks": {
+            "type": "integer",
+            "title": "Running Tasks",
+            "default": 0
+          },
+          "cancelled_tasks": {
+            "type": "integer",
+            "title": "Cancelled Tasks",
+            "default": 0
+          },
+          "total_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cost Usd"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metrics"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "status",
+          "definition_id",
+          "benchmark_type",
+          "instance_key",
+          "sample_label"
+        ],
+        "title": "RunSummaryDto"
       },
       "RunTaskDto": {
         "properties": {
@@ -3572,7 +3838,7 @@
           "level"
         ],
         "title": "RunTaskDto",
-        "description": "REST projection of RunGraphNode for run detail pages.\n\nThis is not the canonical graph schema; graph semantics live in\nruntime/services/graph_dto.py and persistence/graph/status_conventions.py."
+        "description": "REST projection of RunGraphNode for run detail pages.\n\nThis is not the canonical graph schema; graph semantics live in\napplication/graph/models.py and application/runtime/status.py."
       },
       "RunTaskEvaluationDto": {
         "properties": {
@@ -3663,6 +3929,127 @@
         ],
         "title": "RunTaskEvaluationDto"
       },
+      "SeedRunRequest": {
+        "properties": {
+          "definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Definition Id"
+          },
+          "benchmark_type": {
+            "type": "string",
+            "title": "Benchmark Type",
+            "default": "test-harness"
+          },
+          "instance_key": {
+            "type": "string",
+            "title": "Instance Key",
+            "default": "seeded"
+          },
+          "worker_team": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Worker Team"
+          },
+          "experiment": {
+            "type": "string",
+            "title": "Experiment",
+            "default": "_test_"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "completed"
+          },
+          "task_slugs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Task Slugs",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "definition_id"
+        ],
+        "title": "SeedRunRequest"
+      },
+      "SubmitExperimentRunsRequest": {
+        "properties": {
+          "benchmark_slug": {
+            "type": "string",
+            "title": "Benchmark Slug"
+          },
+          "slots": {
+            "items": {
+              "$ref": "#/components/schemas/ExperimentRunSlotRequest"
+            },
+            "type": "array",
+            "title": "Slots"
+          },
+          "experiment": {
+            "type": "string",
+            "title": "Experiment"
+          },
+          "sandbox_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sandbox Slug"
+          },
+          "dependency_extras": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dependency Extras",
+            "default": [
+              "none"
+            ]
+          },
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "default": "openai:gpt-4o"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "default": 1
+          }
+        },
+        "type": "object",
+        "required": [
+          "benchmark_slug",
+          "slots",
+          "experiment"
+        ],
+        "title": "SubmitExperimentRunsRequest"
+      },
+      "SubmitExperimentRunsResponse": {
+        "properties": {
+          "run_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Run Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_ids"
+        ],
+        "title": "SubmitExperimentRunsResponse"
+      },
       "SubmitRequest": {
         "properties": {
           "definition_id": {
@@ -3722,7 +4109,7 @@
             "title": "Run Ids"
           },
           "status": {
-            "$ref": "#/components/schemas/BatchStatus",
+            "$ref": "#/components/schemas/RolloutStatus",
             "default": "pending"
           }
         },
@@ -3754,6 +4141,258 @@
           "content"
         ],
         "title": "SystemPromptPart"
+      },
+      "TestEvaluationDto": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Task Id"
+          },
+          "task_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Slug"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "task_slug",
+          "score",
+          "reason"
+        ],
+        "title": "TestEvaluationDto"
+      },
+      "TestExecutionDto": {
+        "properties": {
+          "task_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Slug"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_slug",
+          "status",
+          "error"
+        ],
+        "title": "TestExecutionDto"
+      },
+      "TestExperimentRunDto": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "status"
+        ],
+        "title": "TestExperimentRunDto"
+      },
+      "TestGraphMutationDto": {
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "title": "Sequence"
+          },
+          "mutation_type": {
+            "type": "string",
+            "title": "Mutation Type"
+          },
+          "target_task_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Task Slug"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sequence",
+          "mutation_type",
+          "target_task_slug"
+        ],
+        "title": "TestGraphMutationDto"
+      },
+      "TestGraphNodeDto": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "task_slug": {
+            "type": "string",
+            "title": "Task Slug"
+          },
+          "level": {
+            "type": "integer",
+            "title": "Level"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "parent_task_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Task Id"
+          },
+          "parent_task_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Task Slug"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "task_slug",
+          "level",
+          "status",
+          "parent_task_id",
+          "parent_task_slug"
+        ],
+        "title": "TestGraphNodeDto"
+      },
+      "TestRunStateDto": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "graph_nodes": {
+            "items": {
+              "$ref": "#/components/schemas/TestGraphNodeDto"
+            },
+            "type": "array",
+            "title": "Graph Nodes"
+          },
+          "mutations": {
+            "items": {
+              "$ref": "#/components/schemas/TestGraphMutationDto"
+            },
+            "type": "array",
+            "title": "Mutations"
+          },
+          "evaluations": {
+            "items": {
+              "$ref": "#/components/schemas/TestEvaluationDto"
+            },
+            "type": "array",
+            "title": "Evaluations"
+          },
+          "executions": {
+            "items": {
+              "$ref": "#/components/schemas/TestExecutionDto"
+            },
+            "type": "array",
+            "title": "Executions"
+          },
+          "execution_count": {
+            "type": "integer",
+            "title": "Execution Count"
+          },
+          "mutation_count": {
+            "type": "integer",
+            "title": "Mutation Count"
+          },
+          "resource_count": {
+            "type": "integer",
+            "title": "Resource Count"
+          },
+          "thread_count": {
+            "type": "integer",
+            "title": "Thread Count"
+          },
+          "context_event_count": {
+            "type": "integer",
+            "title": "Context Event Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "status",
+          "graph_nodes",
+          "mutations",
+          "evaluations",
+          "executions",
+          "execution_count",
+          "mutation_count",
+          "resource_count",
+          "thread_count",
+          "context_event_count"
+        ],
+        "title": "TestRunStateDto"
       },
       "ThinkingPart": {
         "properties": {
@@ -3790,7 +4429,7 @@
           },
           "top_logprobs": {
             "items": {
-              "$ref": "#/components/schemas/JsonObject-Output"
+              "$ref": "#/components/schemas/JsonObject"
             },
             "type": "array",
             "title": "Top Logprobs",
@@ -3878,249 +4517,6 @@
         ],
         "title": "ToolResultPart"
       },
-      "TrainingCurvePointDto": {
-        "properties": {
-          "runId": {
-            "type": "string",
-            "title": "Runid"
-          },
-          "step": {
-            "type": "integer",
-            "title": "Step"
-          },
-          "meanScore": {
-            "type": "number",
-            "title": "Meanscore"
-          },
-          "benchmarkType": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Benchmarktype"
-          },
-          "createdAt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Createdat"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "runId",
-          "step",
-          "meanScore"
-        ],
-        "title": "TrainingCurvePointDto"
-      },
-      "TrainingMetricDto": {
-        "properties": {
-          "step": {
-            "type": "integer",
-            "title": "Step"
-          },
-          "epoch": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Epoch"
-          },
-          "loss": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Loss"
-          },
-          "gradNorm": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Gradnorm"
-          },
-          "learningRate": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Learningrate"
-          },
-          "rewardMean": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rewardmean"
-          },
-          "rewardStd": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rewardstd"
-          },
-          "entropy": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Entropy"
-          },
-          "completionMeanLength": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completionmeanlength"
-          },
-          "stepTimeS": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Steptimes"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "step"
-        ],
-        "title": "TrainingMetricDto"
-      },
-      "TrainingSessionDto": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "experimentDefinitionId": {
-            "type": "string",
-            "title": "Experimentdefinitionid"
-          },
-          "modelName": {
-            "type": "string",
-            "title": "Modelname"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "startedAt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Startedat"
-          },
-          "completedAt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completedat"
-          },
-          "outputDir": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Outputdir"
-          },
-          "totalSteps": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Totalsteps"
-          },
-          "finalLoss": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Finalloss"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "id",
-          "experimentDefinitionId",
-          "modelName",
-          "status"
-        ],
-        "title": "TrainingSessionDto"
-      },
       "Trajectory": {
         "properties": {
           "run_id": {
@@ -4182,19 +4578,6 @@
         ],
         "title": "Trajectory",
         "description": "One agent's extracted trajectory from a completed episode.\n\nMaps 1:1 to AgentTrajectory from extraction.py, plus metadata."
-      },
-      "UpdateCohortRequest": {
-        "properties": {
-          "status": {
-            "$ref": "#/components/schemas/ExperimentCohortStatus"
-          }
-        },
-        "type": "object",
-        "required": [
-          "status"
-        ],
-        "title": "UpdateCohortRequest",
-        "description": "Mutable cohort fields exposed through the operator API."
       },
       "UserMessagePart": {
         "properties": {

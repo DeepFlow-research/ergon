@@ -3,11 +3,7 @@
 import logging
 from uuid import UUID
 
-from ergon_core.core.application.communication.models import (
-    RunCommunicationMessageDto,
-    RunCommunicationThreadDto,
-)
-from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
+from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import Thread, ThreadMessage
 from ergon_core.core.application.communication.models import (
@@ -17,8 +13,13 @@ from ergon_core.core.application.communication.models import (
     ThreadWithMessages,
 )
 from ergon_core.core.shared.utils import utcnow
+from ergon_core.core.views.dashboard_events.contracts import DashboardThreadMessageCreatedEvent
+from ergon_core.core.views.runs.models import (
+    RunCommunicationMessageDto,
+    RunCommunicationThreadDto,
+)
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import func, select
+from sqlmodel import Session, func, select
 
 logger = logging.getLogger(__name__)
 
@@ -101,10 +102,12 @@ class CommunicationService:
             created_at=message.created_at,
         )
         try:
-            await get_dashboard_emitter().thread_message_created(
-                run_id=request.run_id,
-                thread=thread_dto,
-                message=message_dto,
+            await get_dashboard_event_publisher().publish(
+                DashboardThreadMessageCreatedEvent(
+                    run_id=request.run_id,
+                    thread=thread_dto,
+                    message=message_dto,
+                )
             )
         except Exception:  # slopcop: ignore[no-broad-except]
             logger.warning("Failed to emit thread_message_created", exc_info=True)
@@ -192,7 +195,7 @@ class CommunicationService:
 
     @staticmethod
     def _get_or_create_thread(
-        session,
+        session: Session,
         *,
         run_id: UUID,
         agent_a_id: str,
@@ -233,4 +236,5 @@ class CommunicationService:
         return thread
 
 
+# TODO: consider if we should have these object level singletons or lean more on proper dependency injection pattern for core
 communication_service = CommunicationService()

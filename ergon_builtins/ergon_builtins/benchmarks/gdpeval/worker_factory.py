@@ -1,45 +1,52 @@
-"""GDPEval worker factories."""
+"""GDPEval worker factories — one per agentic strategy.
 
-from collections.abc import AsyncGenerator
+Each factory bundles the GDPEval sandbox, toolkit, and system prompt
+with a chosen worker class (ReActWorker today; CoTWorker / ReflexionWorker
+future).  Strategies vary independently; the domain bundle is constant.
 
-from ergon_core.api import Task, WorkerContext, WorkerStreamItem
-from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
-from ergon_builtins.benchmarks.gdpeval.toolkit import GDPEvalToolkit
-from ergon_builtins.shared.workers.react_worker import ReActWorker
-
-GDPEVAL_SYSTEM_PROMPT = """You are a GDPEval document-processing agent.
-
-Use the provided tools to inspect input documents, transform data, run Python
-when useful, and write final artifacts under /workspace/final_output. Keep a
-short final answer that names the produced files and any assumptions.
+v2 callers use ``make_gdpeval_worker()`` directly from the benchmark
+object graph.
 """
 
+from ergon_builtins.benchmarks.gdpeval.prompts import GDPEVAL_SYSTEM_PROMPT
+from ergon_builtins.benchmarks.gdpeval.rubric import StagedRubric
+from ergon_builtins.benchmarks.gdpeval.toolkit import GDPEvalToolkit
 
-class GDPEvalReactWorker(ReActWorker):
-    """ReAct worker wired to the GDPEval document toolkit at execution time."""
+from ergon_builtins.agents.react.worker import ReActWorker
 
-    type_slug = "gdpeval-react"
+__all__ = [
+    "make_gdpeval_rubric",
+    "make_gdpeval_worker",
+]
 
-    def __init__(self, *, name: str, model: str | None) -> None:
-        super().__init__(
-            name=name,
-            model=model,
-            tools=[],
-            system_prompt=GDPEVAL_SYSTEM_PROMPT,
-            max_iterations=40,
-        )
 
-    async def execute(
-        self,
-        task: Task,
-        *,
-        context: WorkerContext,
-    ) -> AsyncGenerator[WorkerStreamItem, None]:
-        toolkit = GDPEvalToolkit(
-            task_id=task.task_id,
-            run_id=context.run_id,
-            sandbox_manager=GDPEvalSandboxManager(),
-        )
-        self.tools = list(toolkit.get_tools())
-        async for item in super().execute(task, context=context):
-            yield item
+DEFAULT_WORKER_MODEL = "openai:gpt-4o-mini"
+
+
+def make_gdpeval_worker(
+    *,
+    model: str = DEFAULT_WORKER_MODEL,
+    max_iterations: int = 40,
+) -> ReActWorker:
+    """Return a serializable ReActWorker for GDPEval (v2 authoring shape)."""
+    return ReActWorker(
+        name="gdpeval-runner",
+        model=model,
+        system_prompt=GDPEVAL_SYSTEM_PROMPT,
+        max_iterations=max_iterations,
+        toolkit=GDPEvalToolkit(),
+    )
+
+
+def make_gdpeval_rubric() -> StagedRubric:
+    """Return a serializable GDPEval ``StagedRubric`` for inline evaluation.
+
+    The default rubric is empty-staged; callers can pass a pre-configured
+    ``StagedRubric`` directly to ``GDPEvalBenchmark(evaluator_factory=...)``
+    when bespoke stage configuration is needed.
+    """
+    return StagedRubric(
+        name="gdpeval-staged-rubric",
+        category_name="default",
+        max_total_score=1.0,
+    )

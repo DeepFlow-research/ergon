@@ -40,6 +40,19 @@ function patchZod4Compat(source) {
   });
 }
 
+function customEventContractSource(entry) {
+  if (entry.modelName === "DashboardGraphMutationEvent") {
+    return `import { z } from "zod";
+import { GraphMutationDtoSchema } from "@/features/graph/contracts/graphMutations";
+
+export const DashboardGraphMutationEventSchema = z.object({
+  mutation: GraphMutationDtoSchema,
+}).catchall(z.any());
+`;
+  }
+  return null;
+}
+
 for (const entry of manifest) {
   const schemaPath = path.join(schemasRoot, entry.schemaFile);
   const outputPath = path.join(outputRoot, `${entry.modelName}.ts`);
@@ -62,7 +75,7 @@ for (const entry of manifest) {
       stdio: "inherit",
     },
   );
-  const patched = patchZod4Compat(readFileSync(outputPath, "utf8"));
+  const patched = customEventContractSource(entry) ?? patchZod4Compat(readFileSync(outputPath, "utf8"));
   writeFileSync(outputPath, patched);
 }
 

@@ -1,5 +1,5 @@
-import { CohortListView } from "@/components/cohorts/CohortListView";
+import ExperimentsPage from "@/app/experiments/page";
 
 export default function Home() {
-  return <CohortListView />;
+  return <ExperimentsPage />;
 }

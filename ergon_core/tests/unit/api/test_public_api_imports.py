@@ -1,6 +1,11 @@
 import importlib
+import os
 import subprocess
 import sys
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[4]
 
 
 def test_telemetry_models_can_import_before_public_api() -> None:
@@ -25,16 +30,30 @@ def test_public_api_root_stays_authoring_scoped() -> None:
 
 
 def test_object_first_experiment_run_api_is_retired() -> None:
+    """v1 ``ExperimentRunHandle`` is gone; the PR 5 ``Experiment`` wrapper
+    class is deleted in PR 6.5 — replaced by ``persist_benchmark`` which
+    accepts a ``Benchmark`` directly."""
     public_api = importlib.import_module("ergon_core.api")
 
     assert not hasattr(public_api, "ExperimentRunHandle")
+    # PR 6.5 deletes the ``Experiment`` wrapper entirely.
+    # ``persist_benchmark`` replaces it as the authoring entry point.
     assert not hasattr(public_api, "Experiment")
+    assert hasattr(public_api, "persist_benchmark")
+    import inspect
+
+    sig = inspect.signature(public_api.persist_benchmark)
+    assert list(sig.parameters) == ["benchmark"]
 
 
 def test_core_api_app_imports_without_context_payload_cycle() -> None:
+    pythonpath = os.pathsep.join(
+        [str(ROOT / "ergon_core"), str(ROOT), os.environ.get("PYTHONPATH", "")]
+    )
     proc = subprocess.run(
-        [sys.executable, "-c", "import ergon_core.core.rest_api.app; print('ok')"],
+        [sys.executable, "-c", "import ergon_core.core.infrastructure.http.app; print('ok')"],
         capture_output=True,
+        env={**os.environ, "PYTHONPATH": pythonpath},
         text=True,
         check=False,
     )

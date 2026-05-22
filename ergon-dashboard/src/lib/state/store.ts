@@ -15,7 +15,6 @@ import { config } from "../config";
 import {
   ContextEventState,
   TaskStatus,
-  TaskTreeNode,
   TaskState,
   CommunicationThreadState,
   ResourceState,
@@ -26,6 +25,8 @@ import {
 } from "../types";
 import { applyGraphMutation as reduceGraphMutation } from "@/features/graph/state/graphMutationReducer";
 import type { DashboardGraphMutationData } from "@/lib/contracts/events";
+import type { RunSnapshot } from "@/lib/contracts/rest";
+import { hydrateRunSnapshot } from "@/lib/run-state/hydrate";
 import {
   applySandboxClosed,
   applySandboxCommand,
@@ -104,43 +105,30 @@ class DashboardStore {
    */
   initializeRun(
     runId: string,
-    experimentId: string,
+    definitionId: string,
     name: string,
-    taskTree: TaskTreeNode,
+    snapshot: RunSnapshot,
     startedAt: string,
     totalTasks: number,
     totalLeafTasks: number
   ): WorkflowRunState {
-    const tasks = this.parseTaskTree(taskTree);
-    const rootTaskId = taskTree.id;
-
-    const run: WorkflowRunState = {
+    const hydrated = hydrateRunSnapshot({
+      ...snapshot,
       id: runId,
-      experimentId,
+      definitionId,
       name,
       status: "executing",
-      tasks,
-      rootTaskId,
-      resourcesByTask: new Map(),
-      executionsByTask: new Map(),
-      sandboxesByTask: new Map(),
-      threads: [],
-      evaluationsByTask: new Map(),
-      contextEventsByTask: new Map(),
       startedAt,
-      completedAt: null,
-      durationSeconds: null,
       totalTasks,
       totalLeafTasks,
-      completedTasks: 0,
-      runningTasks: 0,
-      failedTasks: 0,
-      cancelledTasks: 0,
+    });
+    const run: WorkflowRunState = {
+      ...hydrated,
+      status: "executing",
+      completedAt: null,
+      durationSeconds: null,
       finalScore: null,
       error: null,
-      edges: new Map(),
-      annotationsByTarget: new Map(),
-      unhandledMutations: [],
     };
 
     this.runs.set(runId, run);
@@ -219,13 +207,13 @@ class DashboardStore {
     }
   }
 
-  addContextEvent(runId: string, taskNodeId: string, event: ContextEventState): void {
+  addContextEvent(runId: string, taskId: string, event: ContextEventState): void {
     const run = this.runs.get(runId);
     if (!run) return;
-    const existing = run.contextEventsByTask.get(taskNodeId) ?? [];
+    const existing = run.contextEventsByTask.get(taskId) ?? [];
     if (existing.some((e) => e.id === event.id)) return; // deduplicate
     run.contextEventsByTask.set(
-      taskNodeId,
+      taskId,
       [...existing, event].sort((a, b) => a.sequence - b.sequence),
     );
   }
@@ -342,50 +330,6 @@ class DashboardStore {
         this.runs.delete(run.id);
       }
     }
-  }
-
-  // ==========================================================================
-  // Private Helpers
-  // ==========================================================================
-
-  /**
-   * Parse a TaskTreeNode into a flat Map<taskId, TaskState>.
-   * Computes level (depth) for each task.
-   */
-  private parseTaskTree(
-    tree: TaskTreeNode,
-    level: number = 0,
-    parentId: string | null = null
-  ): Map<string, TaskState> {
-    const tasks = new Map<string, TaskState>();
-
-    const taskState: TaskState = {
-      id: tree.id,
-      name: tree.name,
-      description: tree.description,
-      status: TaskStatus.PENDING,
-      parentId,
-      childIds: tree.children.map((c) => c.id),
-      dependsOnIds: tree.depends_on,
-      assignedWorkerId: tree.assigned_to?.id ?? null,
-      assignedWorkerSlug: tree.assigned_worker_slug ?? null,
-      startedAt: null,
-      completedAt: null,
-      isLeaf: tree.is_leaf,
-      level,
-    };
-
-    tasks.set(tree.id, taskState);
-
-    // Recursively parse children
-    for (const child of tree.children) {
-      const childTasks = this.parseTaskTree(child, level + 1, tree.id);
-      for (const [id, state] of Array.from(childTasks.entries())) {
-        tasks.set(id, state);
-      }
-    }
-
-    return tasks;
   }
 
 }

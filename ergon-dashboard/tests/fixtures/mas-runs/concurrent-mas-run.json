@@ -2,7 +2,7 @@
   "name": "concurrent-mas-run",
   "runState": {
     "id": "99999999-9999-4999-8999-999999999999",
-    "experimentId": "33333333-3333-4333-8333-333333333333",
+    "definitionId": "33333333-3333-4333-8333-333333333333",
     "name": "Concurrent MAS run",
     "status": "executing",
     "rootTaskId": "10000000-0000-4000-8000-000000000001",
@@ -284,7 +284,7 @@
           "id": "60000000-0000-4000-8000-000000000001",
           "runId": "99999999-9999-4999-8999-999999999999",
           "taskExecutionId": "30000000-0000-4000-8000-000000000001",
-          "taskNodeId": "10000000-0000-4000-8000-000000000002",
+          "taskId": "10000000-0000-4000-8000-000000000002",
           "workerBindingKey": "researcher-a",
           "sequence": 0,
           "eventType": "tool_call",
@@ -379,8 +379,8 @@
       "actor": "planner",
       "old_value": null,
       "new_value": {
-        "source_node_id": "10000000-0000-4000-8000-000000000001",
-        "target_node_id": "10000000-0000-4000-8000-000000000002",
+        "source_task_id": "10000000-0000-4000-8000-000000000001",
+        "target_task_id": "10000000-0000-4000-8000-000000000002",
         "status": "active"
       },
       "reason": "parent-child",
@@ -415,8 +415,8 @@
       "actor": "planner",
       "old_value": null,
       "new_value": {
-        "source_node_id": "10000000-0000-4000-8000-000000000001",
-        "target_node_id": "10000000-0000-4000-8000-000000000003",
+        "source_task_id": "10000000-0000-4000-8000-000000000001",
+        "target_task_id": "10000000-0000-4000-8000-000000000003",
         "status": "active"
       },
       "reason": "parent-child",
@@ -451,8 +451,8 @@
       "actor": "planner",
       "old_value": null,
       "new_value": {
-        "source_node_id": "10000000-0000-4000-8000-000000000001",
-        "target_node_id": "10000000-0000-4000-8000-000000000004",
+        "source_task_id": "10000000-0000-4000-8000-000000000001",
+        "target_task_id": "10000000-0000-4000-8000-000000000004",
         "status": "active"
       },
       "reason": "parent-child",
@@ -521,8 +521,8 @@
       "actor": "writer",
       "old_value": null,
       "new_value": {
-        "source_node_id": "10000000-0000-4000-8000-000000000004",
-        "target_node_id": "10000000-0000-4000-8000-000000000005",
+        "source_task_id": "10000000-0000-4000-8000-000000000004",
+        "target_task_id": "10000000-0000-4000-8000-000000000005",
         "status": "active"
       },
       "reason": "parent-child",
@@ -557,8 +557,8 @@
       "actor": "writer",
       "old_value": null,
       "new_value": {
-        "source_node_id": "10000000-0000-4000-8000-000000000004",
-        "target_node_id": "10000000-0000-4000-8000-000000000006",
+        "source_task_id": "10000000-0000-4000-8000-000000000004",
+        "target_task_id": "10000000-0000-4000-8000-000000000006",
         "status": "active"
       },
       "reason": "parent-child",

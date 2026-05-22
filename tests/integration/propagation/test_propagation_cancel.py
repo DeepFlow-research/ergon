@@ -11,12 +11,12 @@ it would need xfail; but the simple node-level cancel works today.
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import CANCELLED
+from ergon_core.core.application.runtime.status import CANCELLED
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.application.graph.models import MutationMeta
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.runtime.models import MutationMeta
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from sqlmodel import select
 
 from tests.integration.propagation._helpers import (
@@ -73,18 +73,18 @@ async def test_6_manager_decision_cancel_pending_node() -> None:
         node_a = make_node(session, run.id, task_slug="cancel-target", status="pending")
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
+        node_a_id = node_a.task_id
         session.commit()
 
     try:
-        graph_repo = WorkflowGraphRepository()
+        graph_repo = RuntimeGraphRepository()
 
         # First stamp PENDING into the WAL so the WAL invariant holds.
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
                 run_id=run_id,
-                node_id=node_a_id,
+                task_id=node_a_id,
                 new_status=TaskExecutionStatus.PENDING,
                 meta=MutationMeta(actor="test:setup", reason="test setup: node pending"),
             )
@@ -95,7 +95,7 @@ async def test_6_manager_decision_cancel_pending_node() -> None:
             await graph_repo.update_node_status(
                 session,
                 run_id=run_id,
-                node_id=node_a_id,
+                task_id=node_a_id,
                 new_status=CANCELLED,
                 meta=MutationMeta(
                     actor="manager:operator",
@@ -127,7 +127,7 @@ async def test_6_manager_decision_cancel_pending_node() -> None:
 async def test_6b_cancel_does_not_affect_already_terminal_node() -> None:
     """Cancelling an already COMPLETED node must be a no-op (only_if_not_terminal).
 
-    The existing ``only_if_not_terminal`` guard in WorkflowGraphRepository
+    The existing ``only_if_not_terminal`` guard in RuntimeGraphRepository
     prevents overwriting a terminal node. This tests that behaviour directly.
     Expected to pass with current code.
     """
@@ -137,18 +137,18 @@ async def test_6b_cancel_does_not_affect_already_terminal_node() -> None:
         node_a = make_node(session, run.id, task_slug="already-completed", status="completed")
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
+        node_a_id = node_a.task_id
         session.commit()
 
     try:
-        graph_repo = WorkflowGraphRepository()
+        graph_repo = RuntimeGraphRepository()
 
         with get_session() as session:
             # Stamp COMPLETED into WAL
             await graph_repo.update_node_status(
                 session,
                 run_id=run_id,
-                node_id=node_a_id,
+                task_id=node_a_id,
                 new_status=TaskExecutionStatus.COMPLETED,
                 meta=MutationMeta(actor="test:setup", reason="test setup: node completed"),
             )
@@ -159,7 +159,7 @@ async def test_6b_cancel_does_not_affect_already_terminal_node() -> None:
             applied = await graph_repo.update_node_status(
                 session,
                 run_id=run_id,
-                node_id=node_a_id,
+                task_id=node_a_id,
                 new_status=CANCELLED,
                 meta=MutationMeta(actor="test:operator", reason="late cancel attempt"),
                 only_if_not_terminal=True,

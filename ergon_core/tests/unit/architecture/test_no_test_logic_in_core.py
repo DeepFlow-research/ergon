@@ -4,7 +4,7 @@ ROOT = Path(__file__).resolve().parents[4]
 CORE = ROOT / "ergon_core" / "ergon_core" / "core"
 
 ALLOWED_FILES = {
-    CORE / "rest_api" / "test_harness.py",
+    CORE / "infrastructure" / "http" / "routes" / "test_harness.py",
     CORE / "shared" / "settings.py",
 }
 
@@ -51,7 +51,7 @@ def test_core_does_not_define_or_branch_on_stub_sandbox_terms() -> None:
 
 
 def test_core_task_execution_does_not_mint_placeholder_sandbox_ids() -> None:
-    path = CORE / "application" / "jobs" / "execute_task.py"
+    path = CORE / "jobs" / "task" / "execute" / "job.py"
     text = path.read_text()
 
     assert "StubSandboxManager" not in text

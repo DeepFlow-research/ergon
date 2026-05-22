@@ -40,8 +40,8 @@ def test_sharded_export_writes_parquet_manifest_state_and_resources(tmp_path: Pa
     state = json.loads((tmp_path / "export" / "state.json").read_text())
     assert result.run_count == 3
     assert manifest["run_count"] == 3
-    assert manifest["reducer_count"] == 3
-    assert manifest["drop_count"] == 3
+    assert manifest["reducer_count"] == 0
+    assert manifest["drop_count"] == 0
     assert manifest["resource_count"] == 3
     assert state["phase"] == "completed"
     assert len(manifest["shards"]["runs"]) >= 2

@@ -1,21 +1,11 @@
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 
-
-def _load_budget_module():
-    script_path = Path(__file__).resolve().parents[4] / "scripts" / "check_suppression_budget.py"
-    spec = importlib.util.spec_from_file_location("check_suppression_budget", script_path)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+from ergon_core.core.application.testing import suppression_budget as budget
 
 
 def test_counts_inline_suppressions_in_python_files(tmp_path: Path) -> None:
-    budget = _load_budget_module()
     source = tmp_path / "pkg" / "module.py"
     source.parent.mkdir()
     source.write_text(
@@ -40,7 +30,6 @@ def test_counts_inline_suppressions_in_python_files(tmp_path: Path) -> None:
 
 
 def test_excludes_docs_and_non_python_files(tmp_path: Path) -> None:
-    budget = _load_budget_module()
     docs = tmp_path / "docs"
     docs.mkdir()
     (docs / "notes.md").write_text(
@@ -58,8 +47,6 @@ def test_excludes_docs_and_non_python_files(tmp_path: Path) -> None:
 
 
 def test_budget_fails_only_when_counts_increase() -> None:
-    budget = _load_budget_module()
-
     assert (
         budget.budget_failures(
             budget.SuppressionCounts(slopcop_ignore=1, noqa=2, type_ignore=3),

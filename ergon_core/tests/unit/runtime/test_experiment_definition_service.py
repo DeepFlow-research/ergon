@@ -1,96 +1,57 @@
-from collections.abc import Mapping, Sequence
+"""Tests for the experiments lifecycle façade.
 
-from ergon_core.api.benchmark import Benchmark
-from ergon_core.api.benchmark import TaskSpec
-from ergon_core.core.application.experiments import service as service_module
-from ergon_core.core.application.experiments.models import ExperimentDefineRequest
-from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord
-from ergon_core.core.application.experiments.service import (
-    ExperimentService,
+``define_benchmark_experiment`` was deleted in PR 6.5 Phase 2 — tests that
+exercised it have been removed.  ``ExperimentService`` was collapsed to
+module-level ``persist_benchmark`` (``definition_writer``) and
+``run_experiment`` (``service``); coverage lives in
+``test_walkthrough_smoketest.py`` and ``test_experiment_launch_service.py``.
+"""
+
+from types import SimpleNamespace
+from uuid import uuid4
+
+import pytest
+
+from ergon_core.core.application.experiments import definition_writer
+from ergon_core.core.application.experiments import service
+from ergon_core.core.application.experiments.models import (
+    DefinitionHandle,
+    ExperimentRunRequest,
+    ExperimentRunResult,
 )
-from pydantic import BaseModel
 
 
-class _Payload(BaseModel):
-    value: int
+def test_persist_benchmark_uses_experiments_service_public_facade(monkeypatch) -> None:
+    benchmark = SimpleNamespace(type_slug="ci-benchmark")
+    handle = DefinitionHandle(definition_id=uuid4(), benchmark_type="ci-benchmark")
+    seen: list[object] = []
+
+    def fake_persist(candidate: object) -> DefinitionHandle:
+        seen.append(candidate)
+        return handle
+
+    monkeypatch.setattr(definition_writer, "persist_benchmark", fake_persist)
+
+    assert service.persist_benchmark(benchmark) == handle
+    assert seen == [benchmark]
 
 
-class _Benchmark(Benchmark):
-    type_slug = "ci-benchmark"
-    task_payload_model = _Payload
-
-    def __init__(self, *, limit: int | None = None) -> None:
-        super().__init__()
-        self.limit = limit
-
-    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[BaseModel]]]:
-        selected = ["sample-a", "sample-b", "sample-c"][: self.limit]
-        return {
-            key: [
-                TaskSpec[_Payload](
-                    instance_key=key,
-                    task_slug=f"{key}-root",
-                    description=f"Task for {key}",
-                    task_payload=_Payload(value=index),
-                )
-            ]
-            for index, key in enumerate(selected)
-        }
-
-
-class _FakeSession:
-    def __init__(self) -> None:
-        self.added = []
-
-    def __enter__(self) -> "_FakeSession":
-        return self
-
-    def __exit__(self, *args) -> None:
-        return None
-
-    def add(self, row) -> None:
-        self.added.append(row)
-
-    def commit(self) -> None:
-        return None
-
-    def refresh(self, row) -> None:
-        return None
-
-
-def test_define_benchmark_experiment_creates_experiment_record_without_runs(monkeypatch):
-    session = _FakeSession()
-    monkeypatch.setattr(service_module, "get_session", lambda: session)
-    service = ExperimentService(benchmarks={"ci-benchmark": _Benchmark})
-
-    result = service.define_benchmark_experiment(
-        ExperimentDefineRequest(
-            benchmark_slug="ci-benchmark",
-            limit=2,
-            default_model_target="openai:gpt-4o",
-            default_worker_team={"primary": "test-worker"},
-            default_evaluator_slug="test-rubric",
-            evaluator_bindings={"post-root": "timing-rubric"},
-            sandbox_slug="test-sandbox",
-            dependency_extras=("none",),
-        )
+@pytest.mark.asyncio
+async def test_run_experiment_uses_experiments_service_public_facade(monkeypatch) -> None:
+    definition_id = uuid4()
+    run_id = uuid4()
+    result = ExperimentRunResult(
+        definition_id=definition_id,
+        run_ids=[run_id],
+        definition_ids=[definition_id],
     )
+    seen: list[tuple[object, object]] = []
 
-    assert result.benchmark_type == "ci-benchmark"
-    assert result.sample_count == 2
-    assert result.selected_samples == ["sample-a", "sample-b"]
-    assert len(session.added) == 1
-    assert isinstance(session.added[0], ExperimentRecord)
-    assert not any(isinstance(row, RunRecord) for row in session.added)
+    async def fake_launch_run(candidate_definition_id, *, emit_workflow_started=None):
+        seen.append((candidate_definition_id, emit_workflow_started))
+        return result
 
-    experiment = session.added[0]
-    assert experiment.name.startswith("ci-benchmark n=2")
-    assert experiment.cohort_id is None
-    assert experiment.sample_selection_json == {"instance_keys": ["sample-a", "sample-b"]}
-    assert experiment.default_worker_team_json == {"primary": "test-worker"}
-    assert experiment.default_model_target == "openai:gpt-4o"
-    assert experiment.default_evaluator_slug == "test-rubric"
-    assert experiment.design_json == {"evaluator_bindings": {"post-root": "timing-rubric"}}
-    assert experiment.sandbox_slug == "test-sandbox"
-    assert experiment.dependency_extras_json == {"extras": ["none"]}
-    assert experiment.status == "defined"
+    monkeypatch.setattr(service, "launch_run", fake_launch_run)
+
+    assert await service.run_experiment(ExperimentRunRequest(definition_id=definition_id)) == result
+    assert seen == [(definition_id, None)]

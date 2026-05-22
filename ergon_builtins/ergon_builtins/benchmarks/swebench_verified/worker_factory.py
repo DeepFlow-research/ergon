@@ -1,44 +1,37 @@
-"""SWE-Bench Verified worker factories."""
+"""SWE-Bench worker factories — one per agentic strategy.
 
-from collections.abc import AsyncGenerator
+Each factory bundles the SWE-Bench sandbox, toolkit, and system prompt
+with a chosen worker class (ReActWorker today; CoTWorker / ReflexionWorker
+future).  Strategies vary independently; the domain bundle is constant.
 
-from ergon_core.api import Task, WorkerContext, WorkerStreamItem
-from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
-    SWEBenchSandboxManager,
-)
+v2 callers use ``make_swebench_worker()`` directly from the benchmark
+object graph.
+"""
+
+from ergon_builtins.benchmarks.swebench_verified.rubric import SWEBenchRubric
 from ergon_builtins.benchmarks.swebench_verified.toolkit import SWEBenchToolkit
-from ergon_builtins.shared.workers.react_prompts import SWEBENCH_SYSTEM_PROMPT
-from ergon_builtins.shared.workers.react_worker import ReActWorker
+from ergon_builtins.benchmarks.swebench_verified.prompts import SWEBENCH_SYSTEM_PROMPT
+from ergon_builtins.agents.react.worker import ReActWorker
 
 
-class SWEBenchReactWorker(ReActWorker):
-    """ReAct worker wired to the live SWE-Bench sandbox at execution time."""
+DEFAULT_WORKER_MODEL = "openai:gpt-4o-mini"
 
-    type_slug = "swebench-react"
 
-    def __init__(self, *, name: str, model: str | None) -> None:
-        super().__init__(
-            name=name,
-            model=model,
-            tools=[],
-            system_prompt=SWEBENCH_SYSTEM_PROMPT,
-            max_iterations=50,
-        )
+def make_swebench_worker(
+    *,
+    model: str = DEFAULT_WORKER_MODEL,
+    max_iterations: int = 50,
+) -> ReActWorker:
+    """Return a serializable ReActWorker for SWE-Bench (v2 authoring shape)."""
+    return ReActWorker(
+        name="swebench-solver",
+        model=model,
+        system_prompt=SWEBENCH_SYSTEM_PROMPT,
+        max_iterations=max_iterations,
+        toolkit=SWEBenchToolkit(),
+    )
 
-    async def execute(
-        self,
-        task: Task,
-        *,
-        context: WorkerContext,
-    ) -> AsyncGenerator[WorkerStreamItem, None]:
-        sandbox = SWEBenchSandboxManager().get_sandbox(task.task_id)
-        if sandbox is None:
-            raise RuntimeError(
-                f"SWE-Bench worker requires a live sandbox for task_id={task.task_id}; "
-                "SandboxSetupRequest must have completed (including "
-                "_install_dependencies) before worker-execute runs."
-            )
-        toolkit = SWEBenchToolkit(sandbox=sandbox, workdir="/workspace/repo")
-        self.tools = list(toolkit.get_tools())
-        async for item in super().execute(task, context=context):
-            yield item
+
+def make_swebench_rubric() -> SWEBenchRubric:
+    """Return a serializable SWEBenchRubric for use as an inline evaluator."""
+    return SWEBenchRubric(name="swebench-rubric")

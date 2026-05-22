@@ -13,6 +13,7 @@ def test_root_tests_are_black_box_or_shared_only() -> None:
         "__pycache__",
         "conftest.py",
         "e2e",
+        "examples",
         "fixtures",
         "integration",
         "real_llm",

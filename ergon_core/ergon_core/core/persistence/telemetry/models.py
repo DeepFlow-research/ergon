@@ -5,8 +5,6 @@ of truth for the definition itself.
 """
 
 from datetime import datetime
-from enum import StrEnum
-from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
@@ -14,103 +12,18 @@ from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.shared.enums import (
     RunStatus,
     TaskExecutionStatus,
-    TrainingStatus,
 )
+from ergon_core.core.shared.rollout_status import RolloutStatus
 from ergon_core.core.shared.utils import utcnow as _utcnow
 from pydantic import model_validator
 from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import Field, SQLModel
-
-if TYPE_CHECKING:
-    from ergon_core.core.persistence.telemetry.evaluation_summary import (
-        EvaluationSummary,
-    )
 
 TZDateTime = DateTime(timezone=True)
 
 # model_validator(mode="after") fires on model_validate() but NOT on direct
 # SQLModel table model construction (SQLModel's __init__ bypasses Pydantic
 # for table=True). Validators here protect the API/deserialization boundary.
-
-# ---------------------------------------------------------------------------
-# Cohort status enum
-# ---------------------------------------------------------------------------
-
-
-class ExperimentCohortStatus(StrEnum):
-    ACTIVE = "active"
-    ARCHIVED = "archived"
-
-
-# ---------------------------------------------------------------------------
-# ExperimentRecord
-# ---------------------------------------------------------------------------
-
-
-class ExperimentRecord(SQLModel, table=True):
-    """One launched experiment definition and sample selection."""
-
-    __tablename__ = "experiments"
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    cohort_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_cohorts.id",
-        index=True,
-    )
-    name: str = Field(index=True)
-    benchmark_type: str = Field(index=True)
-    sample_count: int
-    sample_selection_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    default_worker_team_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    default_evaluator_slug: str | None = Field(default=None, index=True)
-    default_model_target: str | None = None
-    sandbox_slug: str | None = Field(default=None, index=True)
-    dependency_extras_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    design_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    seed: int | None = None
-    metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    status: str = Field(default="defined", index=True)
-    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
-    started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
-    completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
-
-    def parsed_sample_selection(self) -> JsonObject:
-        return self.__class__._parse_json_object(
-            self.sample_selection_json, "sample_selection_json"
-        )
-
-    def parsed_default_worker_team(self) -> JsonObject:
-        return self.__class__._parse_json_object(
-            self.default_worker_team_json, "default_worker_team_json"
-        )
-
-    def parsed_design(self) -> JsonObject:
-        return self.__class__._parse_json_object(self.design_json, "design_json")
-
-    def parsed_dependency_extras(self) -> JsonObject:
-        return self.__class__._parse_json_object(
-            self.dependency_extras_json, "dependency_extras_json"
-        )
-
-    def parsed_metadata(self) -> JsonObject:
-        return self.__class__._parse_json_object(self.metadata_json, "metadata_json")
-
-    @classmethod
-    def _parse_json_object(cls, data: dict, field_name: str) -> JsonObject:
-        if not isinstance(data, dict):
-            raise ValueError(f"{field_name} must be a dict, got {type(data).__name__}")
-        return data
-
-    @model_validator(mode="after")
-    def _validate_fields(self) -> "ExperimentRecord":
-        self.__class__._parse_json_object(self.sample_selection_json, "sample_selection_json")
-        self.__class__._parse_json_object(self.default_worker_team_json, "default_worker_team_json")
-        self.__class__._parse_json_object(self.dependency_extras_json, "dependency_extras_json")
-        self.__class__._parse_json_object(self.design_json, "design_json")
-        self.__class__._parse_json_object(self.metadata_json, "metadata_json")
-        return self
-
 
 # ---------------------------------------------------------------------------
 # RunRecord
@@ -121,21 +34,56 @@ class RunRecord(SQLModel, table=True):
     __tablename__ = "runs"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    experiment_id: UUID = Field(foreign_key="experiments.id", index=True)
-    workflow_definition_id: UUID = Field(
+    definition_id: UUID = Field(
         foreign_key="experiment_definitions.id",
         index=True,
+        description="Canonical runtime ExperimentDefinition id for this run.",
     )
     benchmark_type: str = Field(index=True)
     instance_key: str = Field(index=True)
     sample_id: str | None = Field(default=None, index=True)
-    worker_team_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    evaluator_slug: str | None = Field(default=None, index=True)
+    worker_team_json: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        description=(
+            "Compatibility/display-only worker selection snapshot; runtime "
+            "execution uses object-bound task snapshots."
+        ),
+    )
+    evaluator_slug: str | None = Field(
+        default=None,
+        index=True,
+        description=(
+            "Compatibility/display-only evaluator slug; runtime evaluation "
+            "uses object-bound task snapshots and definition evaluator rows."
+        ),
+    )
     model_target: str | None = None
-    sandbox_slug: str | None = Field(default=None, index=True)
-    dependency_extras_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    sandbox_slug: str | None = Field(
+        default=None,
+        index=True,
+        description=(
+            "Compatibility/display-only sandbox slug; runtime sandbox setup "
+            "is moving to object-bound task snapshots."
+        ),
+    )
+    dependency_extras_json: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        description=(
+            "Compatibility/display-only dependency extras snapshot retained for older run displays."
+        ),
+    )
     assignment_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     seed: int | None = None
+    experiment: str | None = Field(
+        default=None,
+        index=True,
+        description=(
+            "Optional v2 experiment grouping tag for runs. This is a label "
+            "for grouping related runs, not a foreign key to a retired table."
+        ),
+    )
     status: RunStatus = Field(index=True)
     error_message: str | None = None
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
@@ -189,18 +137,10 @@ class RunTaskExecution(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
-    definition_task_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_definition_tasks.id",
-        index=True,
-    )
+    task_id: UUID = Field(index=True)
     definition_worker_id: UUID | None = Field(
         default=None,
         foreign_key="experiment_definition_workers.id",
-        index=True,
-    )
-    node_id: UUID = Field(
-        foreign_key="run_graph_nodes.id",
         index=True,
     )
     attempt_number: int = 1
@@ -210,6 +150,15 @@ class RunTaskExecution(SQLModel, table=True):
     final_assistant_message: str | None = None
     output_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     error_json: dict | None = Field(default=None, sa_column=Column(JSON))
+    sandbox_id: str | None = None
+    # TODO(post-stack): relocate this column behind a lazy
+    # `await context.worker_output()` accessor on `CriterionContext`.
+    # Today the runtime pre-loads worker output in `evaluate_task_run` and
+    # stuffs it onto `worker_result`, but every other context capability
+    # (`run_command`, `read_resource`, ...) is fetched lazily by the
+    # criterion. When that redesign lands, this column may live in a
+    # dedicated output store rather than on `RunTaskExecution`.
+    worker_output_json: dict | None = Field(default=None, sa_column=Column(JSON))
 
     # -- JSON accessor: output_json --
 
@@ -237,11 +186,8 @@ class RunTaskExecution(SQLModel, table=True):
 
     def validate_identity(self) -> None:
         """Require enough identity to map execution rows to a static or dynamic task."""
-        if self.definition_task_id is None and self.node_id is None:
-            raise ValueError(
-                "RunTaskExecution requires definition_task_id for static tasks "
-                "or node_id for dynamic graph nodes"
-            )
+        if self.task_id is None:
+            raise ValueError("RunTaskExecution requires task_id")
 
     @model_validator(mode="after")
     def _validate_fields(self) -> "RunTaskExecution":
@@ -328,19 +274,11 @@ class RunTaskEvaluation(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
-    node_id: UUID = Field(
-        foreign_key="run_graph_nodes.id",
-        index=True,
-    )
     task_execution_id: UUID = Field(
         foreign_key="run_task_executions.id",
         index=True,
     )
-    definition_task_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_definition_tasks.id",
-        index=True,
-    )
+    task_id: UUID = Field(index=True)
     definition_evaluator_id: UUID = Field(
         foreign_key="experiment_definition_evaluators.id",
         index=True,
@@ -351,87 +289,11 @@ class RunTaskEvaluation(SQLModel, table=True):
     summary_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
-    # -- JSON accessor: summary_json --
-
-    def parsed_summary(self) -> "EvaluationSummary":
-        # reason: breaks import cycle — evaluation_summary imports RunTaskEvaluation for type hints
-        from ergon_core.core.persistence.telemetry.evaluation_summary import (
-            EvaluationSummary,
-        )
-
-        return EvaluationSummary.model_validate(self.summary_json)
-
     @model_validator(mode="after")
     def _validate_summary_json(self) -> "RunTaskEvaluation":
         if not isinstance(self.summary_json, dict):
             raise ValueError(f"summary_json must be a dict, got {type(self.summary_json).__name__}")
         return self
-
-
-# ---------------------------------------------------------------------------
-# ExperimentCohort
-# ---------------------------------------------------------------------------
-
-
-class ExperimentCohort(SQLModel, table=True):
-    """A named grouping of runs that the operator monitors as one unit."""
-
-    __tablename__ = "experiment_cohorts"
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    name: str = Field(index=True, unique=True)
-    description: str | None = None
-    created_by: str | None = None
-    status: ExperimentCohortStatus = Field(default=ExperimentCohortStatus.ACTIVE)
-    metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
-    updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
-
-    # -- JSON accessor: metadata_json --
-
-    def parsed_metadata(self) -> JsonObject:
-        return self.__class__._parse_metadata(self.metadata_json)
-
-    @classmethod
-    def _parse_metadata(cls, data: dict) -> JsonObject:
-        if not isinstance(data, dict):
-            raise ValueError(f"metadata_json must be a dict, got {type(data).__name__}")
-        return data
-
-    @model_validator(mode="after")
-    def _validate_fields(self) -> "ExperimentCohort":
-        self.__class__._parse_metadata(self.metadata_json)
-        try:
-            ExperimentCohortStatus(self.status)
-        except ValueError:
-            raise ValueError(
-                f"{self.status!r} is not a valid ExperimentCohortStatus; "
-                f"valid values: {[e.value for e in ExperimentCohortStatus]}"
-            )
-        return self
-
-
-# ---------------------------------------------------------------------------
-# ExperimentCohortStats
-# ---------------------------------------------------------------------------
-
-
-class ExperimentCohortStats(SQLModel, table=True):
-    """Denormalized aggregate snapshot for a cohort."""
-
-    __tablename__ = "experiment_cohort_stats"
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    cohort_id: UUID = Field(foreign_key="experiment_cohorts.id", index=True, unique=True)
-    total_runs: int = 0
-    completed_runs: int = 0
-    failed_runs: int = 0
-    average_score: float | None = None
-    best_score: float | None = None
-    worst_score: float | None = None
-    average_duration_ms: int | None = None
-    failure_rate: float = 0.0
-    updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
 
 # ---------------------------------------------------------------------------
@@ -477,79 +339,8 @@ class ThreadMessage(SQLModel, table=True):
 
 
 # ---------------------------------------------------------------------------
-# TrainingSession — tracks an RL training run
-# ---------------------------------------------------------------------------
-
-
-class TrainingSession(SQLModel, table=True):
-    """One invocation of ``ergon train`` (local or launched).
-
-    Links a training run to the ExperimentDefinition it trains against,
-    stores the training config, and anchors per-step metrics.
-    """
-
-    __tablename__ = "training_sessions"
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    experiment_definition_id: UUID = Field(
-        foreign_key="experiment_definitions.id",
-        index=True,
-    )
-    model_name: str
-    config_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    status: TrainingStatus = Field(default=TrainingStatus.RUNNING, index=True)
-    started_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
-    completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
-    output_dir: str | None = None
-    total_steps: int | None = None
-    final_loss: float | None = None
-
-    @model_validator(mode="after")
-    def _validate_fields(self) -> "TrainingSession":
-        try:
-            TrainingStatus(self.status)
-        except ValueError:
-            raise ValueError(
-                f"{self.status!r} is not a valid TrainingStatus; "
-                f"valid values: {[e.value for e in TrainingStatus]}"
-            )
-        return self
-
-
-# ---------------------------------------------------------------------------
-# TrainingMetric — per-step training metrics
-# ---------------------------------------------------------------------------
-
-
-class TrainingMetric(SQLModel, table=True):
-    """One row per logged training step.
-
-    Written by ``ErgonTrainingCallback.on_log()`` during training.
-    """
-
-    __tablename__ = "training_metrics"
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    session_id: UUID = Field(foreign_key="training_sessions.id", index=True)
-    step: int
-    epoch: float | None = None
-    loss: float | None = None
-    grad_norm: float | None = None
-    learning_rate: float | None = None
-    reward_mean: float | None = None
-    reward_std: float | None = None
-    entropy: float | None = None
-    completion_mean_length: float | None = None
-    step_time_s: float | None = None
-    extra_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
-
-
-# ---------------------------------------------------------------------------
 # RolloutBatch — durable batch state for the rollout service
 # ---------------------------------------------------------------------------
-
-_VALID_BATCH_STATUSES = frozenset({"pending", "running", "complete", "failed", "cancelled"})
 
 
 class RolloutBatch(SQLModel, table=True):
@@ -563,15 +354,17 @@ class RolloutBatch(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     definition_id: UUID = Field(foreign_key="experiment_definitions.id", index=True)
-    status: str = Field(default="pending", index=True)
+    status: RolloutStatus = Field(default=RolloutStatus.PENDING, index=True)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
     @model_validator(mode="after")
     def _validate_fields(self) -> "RolloutBatch":
-        if self.status not in _VALID_BATCH_STATUSES:
+        try:
+            RolloutStatus(self.status)
+        except ValueError:
             raise ValueError(
                 f"{self.status!r} is not a valid RolloutBatch status; "
-                f"valid values: {sorted(_VALID_BATCH_STATUSES)}"
+                f"valid values: {[e.value for e in RolloutStatus]}"
             )
         return self
 

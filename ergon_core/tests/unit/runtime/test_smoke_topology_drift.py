@@ -11,9 +11,11 @@ from tests.fixtures.smoke_components.smoke_base.constants import (
 )
 from tests.fixtures.smoke_components.smoke_base.recursive import NESTED_LINE_SLUGS
 
+REPO_ROOT = Path(__file__).resolve().parents[4]
+
 
 def test_playwright_expected_subtask_slugs_match_python_smoke_topology() -> None:
-    expected_ts = Path("ergon-dashboard/tests/e2e/_shared/expected.ts")
+    expected_ts = REPO_ROOT / "ergon-dashboard/tests/e2e/_shared/expected.ts"
     source = expected_ts.read_text()
     match = re.search(
         r"EXPECTED_SUBTASK_SLUGS\s*=\s*(\[[\s\S]*?\])\s+as const",
@@ -27,7 +29,7 @@ def test_playwright_expected_subtask_slugs_match_python_smoke_topology() -> None
 
 
 def test_playwright_expected_nested_subtask_slugs_match_python_smoke_topology() -> None:
-    expected_ts = Path("ergon-dashboard/tests/e2e/_shared/expected.ts")
+    expected_ts = REPO_ROOT / "ergon-dashboard/tests/e2e/_shared/expected.ts"
     source = expected_ts.read_text()
     match = re.search(
         r"EXPECTED_NESTED_SUBTASK_SLUGS\s*=\s*(\[[\s\S]*?\])\s+as const",

@@ -1,11 +1,10 @@
-"""Tests for RunRecordMissingError and the service method that raises it."""
+"""Tests for RunRecordMissingError and the runtime identity helper."""
 
-from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-from ergon_core.core.application.tasks.errors import RunRecordMissingError
-from ergon_core.core.application.tasks.management import TaskManagementService
+from ergon_core.core.application.runtime.run_identity import definition_id_for_run
+from ergon_core.core.application.runtime.task_errors import RunRecordMissingError
 
 
 def test_error_message_contains_run_id():
@@ -23,13 +22,14 @@ def test_error_is_exception_subclass():
 
 
 def test_service_raises_when_run_record_missing():
-    """_resolve_definition_id raises RunRecordMissingError when session returns None."""
+    """definition_id_for_run raises RunRecordMissingError when session returns None."""
+    from unittest.mock import MagicMock
+
     session = MagicMock()
     # exec().first() returns None → no RunRecord found
     session.exec.return_value.first.return_value = None
 
-    svc = TaskManagementService(dashboard_emitter=MagicMock())
     run_id = uuid4()
 
     with pytest.raises(RunRecordMissingError, match=str(run_id)):
-        svc._resolve_definition_id(session, run_id)
+        definition_id_for_run(session, run_id)

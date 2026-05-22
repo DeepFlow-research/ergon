@@ -1,0 +1,24 @@
+---
+description: Agent guardrails from the authoring API redesign postmortem
+globs:
+  - "**/*.py"
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "docs/**/*.md"
+alwaysApply: true
+---
+
+# Agent Regression Guardrails
+
+`CLAUDE.md` is canonical. Before touching runtime, persistence, CLI, workflow,
+or dashboard harness code, follow its **Agent regression guardrails** section.
+
+High-risk repeats to avoid:
+
+- Parallel legacy/new architectures for the same authoring or execution path.
+- Placeholder runtime functions that raise `NotImplementedError` or fake cleanup.
+- Duplicate persistence state without a documented owner and sync tests.
+- Runtime execution that reads static definition rows instead of the run graph.
+- Sandbox acquire paths without tested release/termination on all outcomes.
+- Compose `--wait` services without healthchecks.
+- Playwright drag/resize tests that use visibility as a proxy for layout geometry.

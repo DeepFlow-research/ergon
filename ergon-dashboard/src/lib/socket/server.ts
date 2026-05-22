@@ -14,7 +14,6 @@ import {
   ContextEventState,
   ServerToClientEvents,
   ClientToServerEvents,
-  DashboardCohortUpdatedData,
   DashboardTaskEvaluationUpdatedData,
   DashboardThreadMessageCreatedData,
   ResourceState,
@@ -159,11 +158,6 @@ export function broadcastRunStarted(runId: string, name: string): void {
   }
 }
 
-export function broadcastCohortUpdated(data: DashboardCohortUpdatedData): void {
-  const io = getIO();
-  io?.emit("cohort:updated", data);
-}
-
 /**
  * Broadcast run completed to subscribers of that run.
  */
@@ -280,9 +274,9 @@ export function broadcastGraphMutation(
 
 export function broadcastContextEvent(
   runId: string,
-  taskNodeId: string,
+  taskId: string,
   event: ContextEventState,
 ): void {
   const io = getIO();
-  io?.to(`run:${runId}`).emit("context:event", { runId, taskNodeId, event });
+  io?.to(`run:${runId}`).emit("context:event", { runId, taskId, event });
 }

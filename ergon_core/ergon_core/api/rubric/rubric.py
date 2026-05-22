@@ -1,27 +1,41 @@
 """Public fixed-criteria rubric implementation."""
 
-from collections.abc import Iterable, Mapping
-from typing import Any
+from collections.abc import Iterable
+from typing import Any, ClassVar
+
+from pydantic import Field, field_serializer, field_validator
 
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.criterion.criterion import Criterion
-from ergon_core.api.criterion.results import CriterionOutcome
+from ergon_core.api.criterion.outcome import CriterionOutcome
 from ergon_core.api.rubric.evaluator import Evaluator
 from ergon_core.api.rubric.results import TaskEvaluationResult
 
 
 class Rubric(Evaluator):
-    """Concrete evaluator with a fixed criteria list."""
+    """Core public API generic fixed-criteria Evaluator.
 
-    def __init__(
-        self,
-        *,
-        name: str,
-        criteria: Iterable[Criterion],
-        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
-    ) -> None:
-        super().__init__(name=name, metadata=metadata)
-        self.criteria: tuple[Criterion, ...] = tuple(criteria)
+    Rubric intentionally lives in ``ergon_core.api`` rather than builtins:
+    it is the reusable author-facing Evaluator for benchmarks whose criteria
+    are known up front, while builtins own only benchmark-specific criteria.
+    """
+
+    type_slug: ClassVar[str] = "rubric"
+
+    criteria: tuple[Criterion, ...] = Field(default_factory=tuple)
+
+    @field_serializer("criteria")
+    def _serialize_criteria(self, criteria: tuple[Criterion, ...]) -> list[dict[str, Any]]:
+        return [criterion.model_dump(mode="json") for criterion in criteria]
+
+    @field_validator("criteria", mode="before")
+    @classmethod
+    def _rehydrate_criteria(cls, value: Any) -> tuple[Criterion, ...]:
+        if value is None:
+            return ()
+        return tuple(
+            Criterion.from_definition(item) if isinstance(item, dict) else item for item in value
+        )
 
     def criteria_for(self, task: Task) -> Iterable[Criterion]:
         return self.criteria
@@ -56,7 +70,7 @@ class Rubric(Evaluator):
             criterion_results=results,
         )
 
-    def validate(self) -> None:
-        super().validate()
+    def validate_runtime_deps(self) -> None:
+        super().validate_runtime_deps()
         for criterion in self.criteria:
-            criterion.validate()
+            criterion.validate_runtime_deps()

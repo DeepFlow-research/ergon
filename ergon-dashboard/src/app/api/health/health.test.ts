@@ -37,7 +37,7 @@ async function runHealthChecks(deps: {
   }
 
   try {
-    const res = await deps.fetchErgonApi("/cohorts?limit=1");
+    const res = await deps.fetchErgonApi("/experiments?limit=1");
     checks.ergon_api = res.ok ? "ok" : "fail";
     if (!res.ok) errors.push(`Ergon API returned ${res.status}`);
   } catch (e) {
