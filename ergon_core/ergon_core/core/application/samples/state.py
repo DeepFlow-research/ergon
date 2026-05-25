@@ -166,43 +166,55 @@ class _SampleRuntimeStateAccumulator:
             )
 
     def _apply_worker(self, row: SampleWorkerEventRow) -> None:
-        if row.event_type == "worker.removed":
-            self.workers.pop(row.task_id, None)
+        task_id = row.task_id
+        if task_id is None:
             return
-        self.workers[row.task_id] = SampleWorkerRuntimeState(
-            task_id=row.task_id,
+        if row.event_type == "worker.removed":
+            self.workers.pop(task_id, None)
+            return
+        self.workers[task_id] = SampleWorkerRuntimeState(
+            task_id=task_id,
             worker_slug=row.worker_slug,
             worker_snapshot_json=dict(row.worker_snapshot_json),
         )
 
     def _apply_evaluator(self, row: SampleEvaluatorEventRow) -> None:
+        task_id = row.task_id
+        if task_id is None:
+            return
         if row.event_type == "evaluator.removed":
             self._remove_evaluator(row)
             return
-        self.evaluators_by_task_id.setdefault(row.task_id, []).append(
+        self.evaluators_by_task_id.setdefault(task_id, []).append(
             SampleEvaluatorRuntimeState(
-                task_id=row.task_id,
+                task_id=task_id,
                 evaluator_slug=row.evaluator_slug,
                 evaluator_snapshot_json=dict(row.evaluator_snapshot_json),
             )
         )
 
     def _remove_evaluator(self, row: SampleEvaluatorEventRow) -> None:
+        task_id = row.task_id
+        if task_id is None:
+            return
         if row.evaluator_slug:
-            self.evaluators_by_task_id[row.task_id] = [
+            self.evaluators_by_task_id[task_id] = [
                 evaluator
-                for evaluator in self.evaluators_by_task_id.get(row.task_id, [])
+                for evaluator in self.evaluators_by_task_id.get(task_id, [])
                 if evaluator.evaluator_slug != row.evaluator_slug
             ]
         else:
-            self.evaluators_by_task_id.pop(row.task_id, None)
+            self.evaluators_by_task_id.pop(task_id, None)
 
     def _apply_sandbox(self, row: SampleSandboxEventRow) -> None:
-        if row.event_type == "sandbox.removed":
-            self.sandboxes.pop(row.task_id, None)
+        task_id = row.task_id
+        if task_id is None:
             return
-        self.sandboxes[row.task_id] = SampleSandboxRuntimeState(
-            task_id=row.task_id,
+        if row.event_type == "sandbox.removed":
+            self.sandboxes.pop(task_id, None)
+            return
+        self.sandboxes[task_id] = SampleSandboxRuntimeState(
+            task_id=task_id,
             sandbox_slug=row.sandbox_slug,
             sandbox_snapshot_json=dict(row.sandbox_snapshot_json),
         )

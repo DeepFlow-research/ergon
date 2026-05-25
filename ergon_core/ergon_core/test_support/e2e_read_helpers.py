@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal, Mapping
+from typing import Any, Literal, Mapping, cast
 from uuid import UUID
 
 from ergon_core.core.persistence.graph.models import SampleGraphNode
@@ -460,4 +460,4 @@ def _string_payload(
 
 
 def _json_mapping(value: object) -> Mapping[str, Any]:  # slopcop: ignore[no-typing-any]
-    return value if isinstance(value, Mapping) else {}
+    return cast(Mapping[str, Any], value) if isinstance(value, Mapping) else {}
