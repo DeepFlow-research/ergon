@@ -27,6 +27,16 @@ class SubmitResponse(BaseModel):
     status: BatchStatus = BatchStatus.PENDING
 
 
+class RolloutBatchSummary(BaseModel):
+    """Durable trainer batch membership exposed by sample id."""
+
+    batch_id: UUID
+    sample_ids: list[UUID]
+    status: BatchStatus
+    definition_id: UUID | None = None
+    sampler_invocation_id: UUID | None = None
+
+
 class Trajectory(BaseModel):
     """One agent's extracted trajectory from a completed episode.
 

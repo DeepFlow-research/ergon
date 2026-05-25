@@ -8,7 +8,7 @@ Batch state is durable in PG — survives API restarts.
 
 import logging
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from uuid import UUID, uuid4
 
 import inngest
@@ -21,7 +21,7 @@ from ergon_core.core.persistence.shared.enums import (
 from ergon_core.core.persistence.shared.ids import new_id
 from ergon_core.core.persistence.telemetry.models import (
     RolloutBatch,
-    RolloutBatchRun,
+    RolloutBatchSampleMembership,
     SampleRecord,
     SampleTaskEvaluation,
     SampleTaskAttempt,
@@ -35,6 +35,7 @@ from ergon_core.core.rl.rollout_types import (
     BatchStatus,
     EpisodeFailure,
     PollResponse,
+    RolloutBatchSummary,
     SubmitRequest,
     SubmitResponse,
     Trajectory,
@@ -53,7 +54,7 @@ class RolloutService:
       2. Trainer polls ``poll()`` → returns RUNNING until all episodes finish
       3. When all terminal → ``poll()`` extracts trajectories and returns COMPLETE
 
-    Batch state is durable in PG via RolloutBatch/RolloutBatchRun tables.
+    Batch state is durable in PG via RolloutBatch/RolloutBatchSampleMembership tables.
     API restarts do not lose batch mappings.
     """
 
@@ -108,8 +109,7 @@ class RolloutService:
                     )
                 )
                 session.add(
-                    RolloutBatchRun(
-                        id=new_id(),
+                    RolloutBatchSampleMembership(
                         batch_id=batch_id,
                         sample_id=sample_id,
                     )
@@ -141,6 +141,57 @@ class RolloutService:
             status=BatchStatus.PENDING,
         )
 
+    def create_rollout_batch(
+        self,
+        session: Session,
+        *,
+        sample_ids: Sequence[UUID],
+        definition_id: UUID | None = None,
+        sampler_invocation_id: UUID | None = None,
+    ) -> RolloutBatchSummary:
+        """Create a durable sample-based batch without launching samples."""
+        batch = RolloutBatch(
+            definition_id=definition_id,
+            sampler_invocation_id=sampler_invocation_id,
+            status=BatchStatus.PENDING,
+        )
+        session.add(batch)
+        session.flush()
+        for sample_id in sample_ids:
+            session.add(
+                RolloutBatchSampleMembership(
+                    batch_id=batch.id,
+                    sample_id=sample_id,
+                )
+            )
+        session.flush()
+        return RolloutBatchSummary(
+            batch_id=batch.id,
+            sample_ids=list(sample_ids),
+            status=BatchStatus(batch.status),
+            definition_id=batch.definition_id,
+            sampler_invocation_id=batch.sampler_invocation_id,
+        )
+
+    def get_rollout_batch(self, session: Session, batch_id: UUID) -> RolloutBatchSummary | None:
+        """Load durable batch membership by sample id."""
+        batch = session.get(RolloutBatch, batch_id)
+        if batch is None:
+            return None
+        sample_ids = self._batch_sample_ids(session, batch_id)
+        return RolloutBatchSummary(
+            batch_id=batch.id,
+            sample_ids=sample_ids,
+            status=BatchStatus(batch.status),
+            definition_id=batch.definition_id,
+            sampler_invocation_id=batch.sampler_invocation_id,
+        )
+
+    def get_rollout_batch_by_id(self, batch_id: UUID) -> RolloutBatchSummary | None:
+        """Load durable batch membership using the service session factory."""
+        with self._session_factory() as session:
+            return self.get_rollout_batch(session, batch_id)
+
     def poll(self, batch_id: UUID) -> PollResponse | None:
         """Non-blocking status check. Extracts trajectories when all done."""
         with self._session_factory() as session:
@@ -148,12 +199,7 @@ class RolloutService:
             if batch is None:
                 return None
 
-            batch_runs = list(
-                session.exec(
-                    select(RolloutBatchRun).where(RolloutBatchRun.batch_id == batch_id)
-                ).all()
-            )
-            sample_ids = [br.sample_id for br in batch_runs]
+            sample_ids = self._batch_sample_ids(session, batch_id)
 
             if not sample_ids:
                 return PollResponse(
@@ -224,12 +270,7 @@ class RolloutService:
             if batch is None:
                 return
 
-            batch_runs = list(
-                session.exec(
-                    select(RolloutBatchRun).where(RolloutBatchRun.batch_id == batch_id)
-                ).all()
-            )
-            sample_ids = [br.sample_id for br in batch_runs]
+            sample_ids = self._batch_sample_ids(session, batch_id)
 
             if sample_ids:
                 runs = list(
@@ -247,6 +288,16 @@ class RolloutService:
             batch.status = BatchStatus.CANCELLED
             session.add(batch)
             session.commit()
+
+    def _batch_sample_ids(self, session: Session, batch_id: UUID) -> list[UUID]:
+        memberships = list(
+            session.exec(
+                select(RolloutBatchSampleMembership).where(
+                    RolloutBatchSampleMembership.batch_id == batch_id
+                )
+            ).all()
+        )
+        return [membership.sample_id for membership in memberships]
 
     def _extract_trajectories(self, sample_ids: list[UUID]) -> list[Trajectory]:
         """Load context events + evals from DB, run extraction, build Trajectory list."""

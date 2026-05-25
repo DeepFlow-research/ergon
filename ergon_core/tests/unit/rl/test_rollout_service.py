@@ -5,7 +5,7 @@ import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.telemetry.models import (
     RolloutBatch,
-    RolloutBatchRun,
+    RolloutBatchSampleMembership,
     SampleRecord,
 )
 from ergon_core.core.rl.rollout_service import RolloutService
@@ -27,7 +27,7 @@ def session_factory():
             ExperimentDefinition.__table__,
             SampleRecord.__table__,
             RolloutBatch.__table__,
-            RolloutBatchRun.__table__,
+            RolloutBatchSampleMembership.__table__,
         ],
     )
 
@@ -70,9 +70,11 @@ def test_rollout_submit_uses_rollout_batch_and_run_definition_without_legacy_rec
     with session_factory() as session:
         batch = session.get(RolloutBatch, response.batch_id)
         runs = list(session.exec(select(SampleRecord)).all())
+        memberships = list(session.exec(select(RolloutBatchSampleMembership)).all())
 
     assert batch is not None
     assert batch.definition_id == definition_id
     assert {run.definition_id for run in runs} == {definition_id}
     assert {run.model_target for run in runs} == {"openai:test"}
+    assert {membership.sample_id for membership in memberships} == {run.id for run in runs}
     assert len(sent_events) == 2

@@ -353,7 +353,12 @@ class RolloutBatch(SQLModel, table=True):
     __tablename__ = "rollout_batches"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    definition_id: UUID = Field(foreign_key="experiment_definitions.id", index=True)
+    definition_id: UUID | None = Field(
+        default=None,
+        foreign_key="experiment_definitions.id",
+        index=True,
+    )
+    sampler_invocation_id: UUID | None = Field(default=None, index=True)
     status: RolloutStatus = Field(default=RolloutStatus.PENDING, index=True)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
@@ -369,14 +374,16 @@ class RolloutBatch(SQLModel, table=True):
         return self
 
 
-class RolloutBatchRun(SQLModel, table=True):
-    """Join table: which runs belong to which batch."""
+class RolloutBatchSampleMembership(SQLModel, table=True):
+    """Join table: which samples belong to which rollout batch."""
 
-    __tablename__ = "rollout_batch_runs"
+    __tablename__ = "rollout_batch_sample_memberships"
 
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    batch_id: UUID = Field(foreign_key="rollout_batches.id", index=True)
-    sample_id: UUID = Field(foreign_key="samples.id", index=True)
+    batch_id: UUID = Field(foreign_key="rollout_batches.id", primary_key=True)
+    sample_id: UUID = Field(foreign_key="samples.id", primary_key=True)
+    environment_id: UUID | None = Field(default=None, index=True)
+    pool_entry_id: UUID | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
 
 # ---------------------------------------------------------------------------

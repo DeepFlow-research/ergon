@@ -12,6 +12,7 @@ from uuid import UUID
 from ergon_core.core.rl.rollout_service import RolloutService
 from ergon_core.core.rl.rollout_types import (
     PollResponse,
+    RolloutBatchSummary,
     SubmitRequest,
     SubmitResponse,
     WeightSyncRequest,
@@ -57,6 +58,18 @@ def poll_rollout(
 ) -> PollResponse:
     """Poll batch status. Returns trajectories when complete."""
     result = service.poll(batch_id)
+    if result is None:
+        raise HTTPException(404, f"Batch {batch_id} not found")
+    return result
+
+
+@router.get("/batches/{batch_id}", response_model=RolloutBatchSummary)
+def get_rollout_batch(
+    batch_id: UUID,
+    service: Annotated[RolloutService, Depends(get_rollout_service)],
+) -> RolloutBatchSummary:
+    """Load durable trainer batch membership by sample id."""
+    result = service.get_rollout_batch_by_id(batch_id)
     if result is None:
         raise HTTPException(404, f"Batch {batch_id} not found")
     return result

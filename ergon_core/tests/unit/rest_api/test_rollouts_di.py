@@ -17,6 +17,13 @@ class _FakeRolloutService:
             "status": "pending",
         }
 
+    def get_rollout_batch_by_id(self, _batch_id: object) -> dict[str, object]:
+        return {
+            "batch_id": self.batch_id,
+            "sample_ids": [self.sample_id],
+            "status": "pending",
+        }
+
 
 class _FakeVLLMManager:
     def __init__(self) -> None:
@@ -41,6 +48,20 @@ def test_rollout_router_gets_service_from_app_state() -> None:
     )
 
     assert resp.status_code == 202
+
+
+def test_rollout_batch_route_exposes_sample_ids() -> None:
+    app = FastAPI()
+    app.state.rollout_service = _FakeRolloutService()
+    app.include_router(router)
+    client = TestClient(app)
+
+    resp = client.get(f"/rollouts/batches/{app.state.rollout_service.batch_id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["sample_ids"] == [str(app.state.rollout_service.sample_id)]
+    assert "run_ids" not in body
 
 
 def test_sync_weights_gets_vllm_manager_from_app_state() -> None:
