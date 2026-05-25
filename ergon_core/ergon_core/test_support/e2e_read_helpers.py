@@ -9,6 +9,15 @@ from typing import Any, Literal, Mapping, cast
 from uuid import UUID
 
 from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.samples.models import (
+    SampleAnnotationEventRow,
+    SampleEdgeEventRow,
+    SampleEvaluatorEventRow,
+    SampleSandboxEventRow,
+    SampleStatusEventRow,
+    SampleTaskEventRow,
+    SampleWorkerEventRow,
+)
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import (
     SampleResource,
@@ -19,6 +28,16 @@ from ergon_core.core.persistence.telemetry.models import (
 )
 from pydantic import BaseModel, ConfigDict
 from sqlmodel import select
+
+type SampleRuntimeEventRow = (
+    SampleStatusEventRow
+    | SampleTaskEventRow
+    | SampleEdgeEventRow
+    | SampleWorkerEventRow
+    | SampleEvaluatorEventRow
+    | SampleSandboxEventRow
+    | SampleAnnotationEventRow
+)
 
 
 @dataclass(frozen=True)
@@ -260,18 +279,14 @@ def list_sandbox_events(sample_id: UUID) -> list[SandboxEventSnapshot]:
 
 
 def row_to_observed_sample_runtime_event(
-    row: Any,  # slopcop: ignore[no-typing-any]
+    row: SampleRuntimeEventRow,
     *,
     task_slug_by_id: Mapping[UUID, str],
 ) -> ObservedSampleRuntimeEvent:
-    # slopcop: ignore[no-hasattr-getattr]
-    payload = _json_mapping(getattr(row, "payload_json", {}))
-    # slopcop: ignore[no-hasattr-getattr]
-    source_task_id = getattr(row, "source_task_id", None)
-    # slopcop: ignore[no-hasattr-getattr]
-    target_task_id = getattr(row, "target_task_id", None)
-    # slopcop: ignore[no-hasattr-getattr]
-    annotation_key = getattr(row, "key", None)
+    payload = _json_mapping(row.payload_json)
+    source_task_id = row.source_task_id if isinstance(row, SampleEdgeEventRow) else None
+    target_task_id = row.target_task_id if isinstance(row, SampleEdgeEventRow) else None
+    annotation_key = row.key if isinstance(row, SampleAnnotationEventRow) else None
     return ObservedSampleRuntimeEvent(
         id=row.id,
         event_timestamp=row.event_timestamp,
@@ -366,17 +381,7 @@ def leaf_execution_timings_by_slug(sample_id: UUID) -> dict[str, TaskExecutionSn
     return {leaf.task_slug: by_task.get(leaf.task_id) for leaf in leaves}
 
 
-def _sample_runtime_event_row_classes() -> tuple[type[Any], ...]:  # slopcop: ignore[no-typing-any]
-    from ergon_core.core.persistence.samples.models import (
-        SampleAnnotationEventRow,
-        SampleEdgeEventRow,
-        SampleEvaluatorEventRow,
-        SampleSandboxEventRow,
-        SampleStatusEventRow,
-        SampleTaskEventRow,
-        SampleWorkerEventRow,
-    )
-
+def _sample_runtime_event_row_classes() -> tuple[type[SampleRuntimeEventRow], ...]:
     return (
         SampleStatusEventRow,
         SampleTaskEventRow,
@@ -389,14 +394,13 @@ def _sample_runtime_event_row_classes() -> tuple[type[Any], ...]:  # slopcop: ig
 
 
 def _task_slug_by_id_from_task_events(
-    task_rows: list[Any],
-) -> dict[UUID, str]:  # slopcop: ignore[no-typing-any]
+    task_rows: list[SampleTaskEventRow],
+) -> dict[UUID, str]:
     task_slug_by_id: dict[UUID, str] = {}
     for row in task_rows:
         if row.event_type != "task.added":
             continue
-        # slopcop: ignore[no-hasattr-getattr]
-        payload = _json_mapping(getattr(row, "payload_json", {}))
+        payload = _json_mapping(row.payload_json)
         task_slug = _task_slug(row, payload, task_slug_by_id)
         if task_slug:
             task_slug_by_id[row.task_id] = task_slug
@@ -404,15 +408,11 @@ def _task_slug_by_id_from_task_events(
 
 
 def _task_slug(
-    row: Any,  # slopcop: ignore[no-typing-any]
+    row: SampleRuntimeEventRow,
     payload: Mapping[str, Any],  # slopcop: ignore[no-typing-any]
     task_slug_by_id: Mapping[UUID, str],
 ) -> str | None:
-    # slopcop: ignore[no-hasattr-getattr]
-    task_id = getattr(row, "task_id", None)
-    if task_id is None:
-        # slopcop: ignore[no-hasattr-getattr]
-        task_id = getattr(row, "target_id", None)
+    task_id = _row_task_id(row)
     return (
         task_slug_by_id.get(task_id)
         or _string_attr_or_payload(row, payload, "task_slug")
@@ -422,11 +422,11 @@ def _task_slug(
 
 
 def _slug_attr_or_payload(
-    row: Any,  # slopcop: ignore[no-typing-any]
+    row: SampleRuntimeEventRow,
     payload: Mapping[str, Any],  # slopcop: ignore[no-typing-any]
     name: str,
 ) -> str | None:
-    attr_value = getattr(row, f"{name}_slug", None)  # slopcop: ignore[no-hasattr-getattr]
+    attr_value = _row_slug(row, name)
     if isinstance(attr_value, str):
         return attr_value
     direct = _string_payload(payload, f"{name}_slug")
@@ -435,21 +435,62 @@ def _slug_attr_or_payload(
     nested = payload.get(name)
     if isinstance(nested, Mapping):
         return _string_payload(nested, "slug")
-    snapshot = getattr(row, f"{name}_snapshot_json", None)  # slopcop: ignore[no-hasattr-getattr]
+    snapshot = _row_snapshot(row, name)
     if isinstance(snapshot, Mapping):
         return _string_payload(snapshot, "slug")
     return None
 
 
 def _string_attr_or_payload(
-    row: Any,  # slopcop: ignore[no-typing-any]
+    row: SampleRuntimeEventRow,
     payload: Mapping[str, Any],  # slopcop: ignore[no-typing-any]
     name: str,
 ) -> str | None:
-    attr_value = getattr(row, name, None)  # slopcop: ignore[no-hasattr-getattr]
+    attr_value = _row_string_attr(row, name)
     if isinstance(attr_value, str):
         return attr_value
     return _string_payload(payload, name)
+
+
+def _row_task_id(row: SampleRuntimeEventRow) -> UUID | None:
+    if isinstance(row, SampleTaskEventRow | SampleWorkerEventRow | SampleEvaluatorEventRow):
+        return row.task_id
+    if isinstance(row, SampleSandboxEventRow):
+        return row.task_id
+    if isinstance(row, SampleAnnotationEventRow):
+        return row.target_id
+    return None
+
+
+def _row_slug(row: SampleRuntimeEventRow, name: str) -> str | None:
+    if name == "worker" and isinstance(row, SampleWorkerEventRow):
+        return row.worker_slug
+    if name == "evaluator" and isinstance(row, SampleEvaluatorEventRow):
+        return row.evaluator_slug
+    if name == "sandbox" and isinstance(row, SampleSandboxEventRow):
+        return row.sandbox_slug
+    return None
+
+
+def _row_snapshot(
+    row: SampleRuntimeEventRow,
+    name: str,
+) -> Mapping[str, Any] | None:  # slopcop: ignore[no-typing-any]
+    if name == "worker" and isinstance(row, SampleWorkerEventRow):
+        return _json_mapping(row.worker_snapshot_json)
+    if name == "evaluator" and isinstance(row, SampleEvaluatorEventRow):
+        return _json_mapping(row.evaluator_snapshot_json)
+    if name == "sandbox" and isinstance(row, SampleSandboxEventRow):
+        return _json_mapping(row.sandbox_snapshot_json)
+    return None
+
+
+def _row_string_attr(row: SampleRuntimeEventRow, name: str) -> str | None:
+    if name == "status" and isinstance(row, SampleStatusEventRow | SampleTaskEventRow):
+        return row.status
+    if name == "task_slug" and isinstance(row, SampleTaskEventRow):
+        return row.task_slug
+    return None
 
 
 def _string_payload(
