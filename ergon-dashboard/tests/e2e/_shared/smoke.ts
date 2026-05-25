@@ -181,7 +181,7 @@ async function assertRunWorkspace(
   await expect(eventStream).toBeVisible();
   await expect(page.locator('[data-testid^="event-row-"]').first()).toBeVisible();
 
-  if (state.mutation_count > 0) {
+  if (state.event_count > 0) {
     await page.locator('[data-testid^="activity-bar-"]').first().click();
     await expect(page.getByTestId("timeline-region")).toBeVisible();
     await expect(page.getByTestId("activity-current-sequence")).toContainText(/seq/i);
@@ -224,8 +224,8 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
           expect(state.status).toBe("completed");
           expect(state.graph_nodes.length).toBe(12);
           expect(state.resource_count).toBeGreaterThanOrEqual(20);
-          expect(state.mutation_count).toBeGreaterThan(0);
-          expect(state.mutations.length).toBe(state.mutation_count);
+          expect(state.event_count).toBeGreaterThan(0);
+          expect(state.events.length).toBe(state.event_count);
           expect(state.executions.length).toBeGreaterThan(0);
           expect(state.executions.length).toBe(state.execution_count);
           expect(state.thread_count).toBeGreaterThan(0);
@@ -276,7 +276,7 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
         expect(state.status).toBe("failed");
         expect(state.resource_count).toBeGreaterThanOrEqual(15);
         expect(state.executions.length).toBe(state.execution_count);
-        expect(state.mutations.length).toBe(state.mutation_count);
+        expect(state.events.length).toBe(state.event_count);
         expect(state.thread_count).toBeGreaterThan(0);
         expect(state.context_event_count).toBeGreaterThan(0);
         const statusBySlug = new Map(
