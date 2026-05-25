@@ -43,7 +43,7 @@ def _reset_sandbox_singleton() -> None:
     BaseSandboxManager._instance = None
     BaseSandboxManager._sandboxes = {}
     BaseSandboxManager._creation_locks = {}
-    BaseSandboxManager._run_ids = {}
+    BaseSandboxManager._sample_ids = {}
     BaseSandboxManager._display_task_ids = {}
     BaseSandboxManager._file_registries = {}
     BaseSandboxManager._created_files_registry = {}

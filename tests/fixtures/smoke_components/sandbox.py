@@ -257,7 +257,7 @@ class SmokeSandboxManager(BaseSandboxManager):
         self._sandbox_ids[sandbox_id] = sandbox_key
         self._tempdirs[sandbox_key] = tempdir
         self._ensure_registries(sandbox_key)
-        self._run_ids[sandbox_key] = sample_id
+        self._sample_ids[sandbox_key] = sample_id
         self._display_task_ids[sandbox_key] = display_task_id
         self._sandbox_manager_classes[sandbox_key] = type(self)
 
@@ -294,11 +294,11 @@ class SmokeSandboxManager(BaseSandboxManager):
             sandbox.sandbox_id if sandbox is not None else f"{_SMOKE_SANDBOX_PREFIX}{task_id}"
         )
         display_task_id = self._get_display_task_id(task_id)
-        sample_id = self._run_ids.get(task_id)
+        sample_id = self._sample_ids.get(task_id)
         self._sandbox_ids.pop(sandbox_id, None)
         self._file_registries.pop(task_id, None)
         self._created_files_registry.pop(task_id, None)
-        self._run_ids.pop(task_id, None)
+        self._sample_ids.pop(task_id, None)
         self._display_task_ids.pop(task_id, None)
         self._sandbox_manager_classes.pop(task_id, None)
         tempdir = self._tempdirs.pop(task_id, None)
