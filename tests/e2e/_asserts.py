@@ -22,7 +22,7 @@ import time
 from uuid import UUID
 
 import httpx
-from ergon_core.core.views.runs.models import RunTaskDto
+from ergon_core.core.views.samples.models import SampleTaskDto
 from ergon_core.test_support.e2e_read_helpers import (
     ResourceSnapshot,
     first_probe_resource,
@@ -80,7 +80,7 @@ def _assert_sample_graph(sample_id: UUID) -> None:
     _assert_dag_edges(tasks)
 
 
-def _assert_dag_edges(leaves: list[RunTaskDto]) -> None:
+def _assert_dag_edges(leaves: list[SampleTaskDto]) -> None:
     """Verify each dependency edge is exposed by the read-service task DTO."""
     by_id = {task.id: task for task in leaves}
     actual_pairs = {
@@ -346,7 +346,7 @@ def _assert_experiment_membership(experiment: str, run_ids: list[UUID]) -> None:
     """Runs are visible via the experiment-group test-harness endpoint."""
     api_base = os.environ["ERGON_API_BASE_URL"]
     r = httpx.get(
-        f"{api_base}/api/__danger__/test-harness/read/experiment/{experiment}/runs",
+        f"{api_base}/api/__danger__/test-harness/read/experiment/{experiment}/samples",
         timeout=10.0,
     )
     r.raise_for_status()
@@ -475,7 +475,7 @@ async def wait_for_terminal_status(
     async with httpx.AsyncClient(timeout=10.0) as client:
         while time.monotonic() < deadline:
             r = await client.get(
-                f"{api_base}/api/__danger__/test-harness/read/run/{sample_id}/state"
+                f"{api_base}/api/__danger__/test-harness/read/samples/{sample_id}/state"
             )
             if r.status_code == 200:
                 state = r.json()

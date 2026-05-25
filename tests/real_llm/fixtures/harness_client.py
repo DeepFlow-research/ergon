@@ -16,7 +16,9 @@ class BackendHarnessClient:
 
     def get_run_state(self, sample_id: str) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
         with httpx.Client(timeout=10.0) as client:
-            r = client.get(f"{self._base}/api/__danger__/test-harness/read/run/{sample_id}/state")
+            r = client.get(
+                f"{self._base}/api/__danger__/test-harness/read/samples/{sample_id}/state"
+            )
             r.raise_for_status()
             return r.json()
 

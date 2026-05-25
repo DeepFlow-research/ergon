@@ -34,7 +34,7 @@ test.afterEach(async () => {
 test("run header reacts to controlled completion delta", async ({ page }) => {
   await page.goto(`/samples/${FIXTURE_IDS.sampleId}`);
 
-  await expect(page.getByTestId("run-header")).toContainText("Executing");
+  await expect(page.getByTestId("sample-header")).toContainText("Executing");
 
   const response = await page.request.post("/api/danger/test-harness/dashboard/events/run-complete", {
     data: {
@@ -47,8 +47,8 @@ test("run header reacts to controlled completion delta", async ({ page }) => {
   });
   expect(response.ok()).toBeTruthy();
 
-  await expect(page.getByTestId("run-header")).toContainText("Completed");
-  await expect(page.getByTestId("run-header")).toContainText("75.0%");
+  await expect(page.getByTestId("sample-header")).toContainText("Completed");
+  await expect(page.getByTestId("sample-header")).toContainText("75.0%");
 });
 
 test("communication and evaluation react to controlled deltas", async ({ page }) => {

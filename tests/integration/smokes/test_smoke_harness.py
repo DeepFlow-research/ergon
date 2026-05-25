@@ -107,10 +107,10 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
         defn_id = defn.id
 
     try:
-        # ── Step 2: seed a run via POST /api/__danger__/test-harness/write/run/seed ─────────────────
+        # ── Step 2: seed a sample via POST /api/__danger__/test-harness/write/samples/seed ──────────
         with httpx.Client(timeout=10.0) as client:
             seed_resp = client.post(
-                f"{API}/api/__danger__/test-harness/write/run/seed",
+                f"{API}/api/__danger__/test-harness/write/samples/seed",
                 json={
                     "definition_id": str(defn_id),
                     "experiment": _EXPERIMENT,
@@ -124,9 +124,11 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
         sample_id = seed_resp.json()["sample_id"]
         assert sample_id  # non-empty UUID string
 
-        # ── Step 3: read state via GET /api/__danger__/test-harness/read/run/{sample_id}/state ─────────
+        # ── Step 3: read state via GET /api/__danger__/test-harness/read/samples/{sample_id}/state ───
         with httpx.Client(timeout=10.0) as client:
-            state_resp = client.get(f"{API}/api/__danger__/test-harness/read/run/{sample_id}/state")
+            state_resp = client.get(
+                f"{API}/api/__danger__/test-harness/read/samples/{sample_id}/state"
+            )
 
         assert state_resp.status_code == 200, state_resp.text
         body = state_resp.json()
@@ -142,14 +144,21 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
 
         assert reset_resp.status_code == 204, reset_resp.text
 
-        # ── Step 5: confirm the run is gone ──────────────────────────────────────
+        # ── Step 5: confirm the sample is gone ───────────────────────────────────
         with httpx.Client(timeout=10.0) as client:
-            gone_resp = client.get(f"{API}/api/__danger__/test-harness/read/run/{sample_id}/state")
+            gone_resp = client.get(
+                f"{API}/api/__danger__/test-harness/read/samples/{sample_id}/state"
+            )
 
         assert gone_resp.status_code == 404, gone_resp.text
 
     finally:
-        # ── Cleanup: delete the ExperimentDefinition row to avoid leaks ──────────
+        # ── Cleanup: delete seeded samples before their definition row ───────────
+        with httpx.Client(timeout=10.0) as client:
+            client.post(
+                f"{API}/api/__danger__/test-harness/write/reset",
+                json={"experiment_prefix": _EXPERIMENT_PREFIX},
+            )
         with get_session() as session:
             row = session.get(ExperimentDefinition, defn_id)
             if row is not None:
@@ -185,4 +194,4 @@ def test_write_experiment_runs_accepts_explicit_runtime_choices() -> None:
         pytest.skip("Test harness secret mismatch - skipping harness integration test")
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["run_ids"], body
+    assert body["sample_ids"], body

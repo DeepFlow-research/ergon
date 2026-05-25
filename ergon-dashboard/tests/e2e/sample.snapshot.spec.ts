@@ -40,8 +40,8 @@ async function expectNoTimelinePlaybackControls(page: import("@playwright/test")
 test("run page links back to experiments", async ({ page }) => {
   await page.goto(`/samples/${FIXTURE_IDS.sampleId}`);
 
-  await expect(page.getByTestId("run-header")).toContainText("Experiments");
-  await expect(page.getByTestId("run-header")).toContainText("parallel");
+  await expect(page.getByTestId("sample-header")).toContainText("Experiments");
+  await expect(page.getByTestId("sample-header")).toContainText("parallel");
 });
 
 test("run workspace does not expose manual live or timeline mode controls", async ({ page }) => {
@@ -95,11 +95,11 @@ test("activity marker locks graph and header to snapshot until Escape returns to
 
   await expect(page.getByTestId("snapshot-lock-label")).toBeVisible();
   await expect(page.getByTestId("snapshot-pin").first()).toBeVisible();
-  await expect(page.getByTestId("run-header")).toContainText("snapshot · seq 14");
+  await expect(page.getByTestId("sample-header")).toContainText("snapshot · seq 14");
   await expect(validateCitationsNode).toHaveAttribute("data-task-status", "pending");
 
   await page.keyboard.press("Escape");
-  await expect(page.getByTestId("run-header")).toContainText(/live/i);
+  await expect(page.getByTestId("sample-header")).toContainText(/live/i);
   await expect(page.getByTestId("snapshot-lock-label")).toHaveCount(0);
   await expect(validateCitationsNode).toHaveAttribute("data-task-status", "completed");
 });

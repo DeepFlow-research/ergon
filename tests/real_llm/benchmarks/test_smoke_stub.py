@@ -4,7 +4,7 @@ actually spending tokens. Uses the researchrubrics smoke fixture + stub model.
 Validates:
   - docker stack up (or --assume-stack-up), stack fixture did not skip
   - `ergon benchmark run` CLI path works
-  - /api/__danger__/test-harness/read/run/{id}/state returns a terminal state
+  - /api/__danger__/test-harness/read/samples/{id}/state returns a terminal state
   - Postgres row exists with the right relationships
   - Playwright can find the run grouping in the dashboard
 """

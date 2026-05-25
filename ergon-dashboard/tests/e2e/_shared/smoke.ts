@@ -128,7 +128,7 @@ async function assertRunWorkspace(
   state: BackendRunState,
   sampleId: string,
 ): Promise<void> {
-  await expect(page.getByTestId("run-header")).toBeVisible();
+  await expect(page.getByTestId("sample-header")).toBeVisible();
   await expect(page.getByTestId("graph-canvas")).toBeVisible();
   await expect(page.getByTestId("activity-stack-region")).toBeVisible();
   await expect(page.locator('[data-testid^="activity-bar-"]').first()).toBeVisible();

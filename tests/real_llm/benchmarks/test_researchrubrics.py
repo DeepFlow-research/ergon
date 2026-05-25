@@ -121,7 +121,7 @@ def _wait_for_post_terminal_artifacts(sample_id: UUID) -> None:
 
 async def test_researchrubrics_rollout(
     real_llm_stack: None,  # session fixture: stack up
-    harness_client,  # poll /api/__danger__/test-harness/read/run/{id}/state
+    harness_client,  # poll /api/__danger__/test-harness/read/samples/{id}/state
     playwright_context,  # dashboard screenshots
     openrouter_budget: OpenRouterBudget | None,
 ) -> None:
