@@ -1,9 +1,9 @@
-"""RuntimeGraphRepository — single entry point for run graph mutations.
+"""RuntimeGraphRepository — single entry point for sample graph writes.
 
-Every mutation method:
+Every write method:
 1. Validates structural invariants (acyclicity, referential integrity).
 2. Writes to sample_graph_* tables.
-3. Appends to sample_graph_mutations in the same transaction.
+3. Appends typed sample runtime WAL rows in the same transaction.
 
 The repository does NOT validate status transitions or authorization.
 Those are the experiment layer's responsibility.
@@ -12,6 +12,7 @@ Those are the experiment layer's responsibility.
 import logging
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from typing import Literal
 from uuid import UUID, uuid4
 
@@ -22,11 +23,19 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTaskDependency,
     ExperimentDefinitionWorker,
 )
-from ergon_core.core.persistence.graph.models import (
-    SampleGraphAnnotation,
-    SampleGraphEdge,
-    SampleGraphMutation,
-    SampleGraphNode,
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
+from ergon_core.core.persistence.samples.models import (
+    SampleAnnotationEventRow,
+    SampleEdgeEventRow,
+    SampleEvaluatorEventRow,
+    SampleSandboxEventRow,
+    SampleStatusEventRow,
+    SampleTaskEventRow,
+    SampleWorkerEventRow,
+)
+from ergon_core.core.application.samples.events import (
+    SampleRuntimeEventAppender,
+    SampleRuntimeEventRow,
 )
 from ergon_core.core.application.runtime.status import TERMINAL_STATUSES
 from ergon_core.core.application.runtime.errors import (
@@ -37,21 +46,14 @@ from ergon_core.core.application.runtime.errors import (
 )
 from ergon_core.api.benchmark import Task
 from ergon_core.core.application.runtime.models import (
-    AnnotationSetMutation,
-    EdgeAddedMutation,
-    EdgeStatusChangedMutation,
     GraphEdgeDto,
-    GraphMutationValue,
     GraphNodeDto,
     MutationMeta,
-    NodeAddedMutation,
-    NodeFieldChangedMutation,
-    NodeStatusChangedMutation,
     SampleGraphNodeView,
     WorkflowGraphDto,
 )
 from ergon_core.core.shared.utils import utcnow
-from sqlmodel import Session, col, select
+from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +64,7 @@ _UPDATABLE_NODE_FIELDS = frozenset({"description", "assigned_worker_slug"})
 
 
 class RuntimeGraphRepository:
-    """Mutable DAG with append-only audit log.
+    """Mutable DAG with typed append-only runtime WAL.
 
     All methods accept a Session for caller-controlled transactions.
 
@@ -78,12 +80,12 @@ class RuntimeGraphRepository:
     """
 
     def __init__(self) -> None:
-        self._mutation_listeners: list[Callable[[SampleGraphMutation], Awaitable[None]]] = []
+        self._runtime_event_listeners: list[Callable[[SampleRuntimeEventRow], Awaitable[None]]] = []
 
-    def add_mutation_listener(
-        self, listener: Callable[[SampleGraphMutation], Awaitable[None]]
+    def add_runtime_event_listener(
+        self, listener: Callable[[SampleRuntimeEventRow], Awaitable[None]]
     ) -> None:
-        self._mutation_listeners.append(listener)
+        self._runtime_event_listeners.append(listener)
 
     # ── Initialization ──────────────────────────────────────
 
@@ -184,83 +186,83 @@ class RuntimeGraphRepository:
                 )
             )
 
-        session.add_all(node_rows)
-        session.add_all(edge_rows)
-        session.flush()
-
-        seq = self._next_sequence(session, sample_id)
-
-        annotation_rows: list[SampleGraphAnnotation] = []
-        mutation_rows: list[SampleGraphMutation] = []
+        appender = SampleRuntimeEventAppender(session)
+        status_event = appender.append_status_event(
+            SampleStatusEventRow(
+                sample_id=sample_id,
+                event_type="sample.status_changed",
+                status="pending",
+                actor=meta.actor,
+                event_timestamp=now,
+                payload_json={"reason": meta.reason},
+            )
+        )
+        runtime_events: list[SampleRuntimeEventRow] = [status_event]
 
         for task, node in zip(tasks, node_rows):
-            mutation_rows.append(
-                SampleGraphMutation(
-                    sample_id=sample_id,
-                    sequence=seq,
-                    mutation_type="node.added",
-                    target_type="node",
-                    target_id=node.task_id,
-                    actor=meta.actor,
-                    old_value=None,
-                    new_value=_node_snapshot(node).model_dump(mode="json"),
-                    reason=meta.reason,
-                    created_at=now,
+            runtime_events.append(
+                appender.append_task_event(
+                    SampleTaskEventRow(
+                        sample_id=sample_id,
+                        task_id=node.task_id,
+                        task_slug=node.task_slug,
+                        event_type="task.added",
+                        status=initial_node_status,
+                        actor=meta.actor,
+                        event_timestamp=now,
+                        task_snapshot_json=node.task_json,
+                        payload_json=_task_payload(node),
+                    )
                 )
             )
-            seq += 1
+            runtime_events.extend(
+                self._append_task_component_events(
+                    appender,
+                    sample_id=sample_id,
+                    actor=meta.actor,
+                    event_timestamp=now,
+                    task_id=node.task_id,
+                    task_json=node.task_json,
+                    assigned_worker_slug=node.assigned_worker_slug,
+                )
+            )
 
             payload = task.task_json.get("task_payload") or {}
             if payload:
-                annotation_rows.append(
-                    SampleGraphAnnotation(
-                        sample_id=sample_id,
-                        target_type="node",
-                        target_id=node.task_id,
-                        namespace="payload",
-                        sequence=seq,
-                        payload=payload,
-                        created_at=now,
+                runtime_events.append(
+                    appender.append_annotation_event(
+                        SampleAnnotationEventRow(
+                            sample_id=sample_id,
+                            target_type="task",
+                            target_id=node.task_id,
+                            key="payload",
+                            event_type="annotation.set",
+                            event_timestamp=now,
+                            payload_json={"value": payload},
+                        )
                     )
                 )
-                mutation_rows.append(
-                    SampleGraphMutation(
-                        sample_id=sample_id,
-                        sequence=seq,
-                        mutation_type="annotation.set",
-                        target_type="node",
-                        target_id=node.task_id,
-                        actor=meta.actor,
-                        old_value=None,
-                        new_value=AnnotationSetMutation(
-                            namespace="payload",
-                            payload=payload,
-                        ).model_dump(mode="json"),
-                        reason=meta.reason,
-                        created_at=now,
-                    )
-                )
-                seq += 1
 
         for edge in edge_rows:
-            mutation_rows.append(
-                SampleGraphMutation(
-                    sample_id=sample_id,
-                    sequence=seq,
-                    mutation_type="edge.added",
-                    target_type="edge",
-                    target_id=edge.id,
-                    actor=meta.actor,
-                    old_value=None,
-                    new_value=_edge_snapshot(edge).model_dump(mode="json"),
-                    reason=meta.reason,
-                    created_at=now,
+            runtime_events.append(
+                appender.append_edge_event(
+                    SampleEdgeEventRow(
+                        sample_id=sample_id,
+                        edge_id=edge.id,
+                        source_task_id=edge.source_task_id,
+                        target_task_id=edge.target_task_id,
+                        event_type="edge.added",
+                        status=initial_edge_status,
+                        actor=meta.actor,
+                        event_timestamp=now,
+                        edge_snapshot_json=_edge_payload(edge),
+                        payload_json=_edge_payload(edge),
+                    )
                 )
             )
-            seq += 1
 
-        session.add_all(annotation_rows)
-        session.add_all(mutation_rows)
+        session.add_all(node_rows)
+        session.add_all(edge_rows)
         session.flush()
 
         return WorkflowGraphDto(
@@ -359,16 +361,31 @@ class RuntimeGraphRepository:
         session.add(node)
         session.flush()
 
-        await self._log_mutation(
-            session,
-            sample_id,
-            mutation_type="node.added",
-            target_type="node",
-            target_id=node.task_id,
-            meta=meta,
-            old_value=None,
-            new_value=_node_snapshot(node),
+        appender = SampleRuntimeEventAppender(session)
+        task_event = appender.append_task_event(
+            SampleTaskEventRow(
+                sample_id=sample_id,
+                task_id=node.task_id,
+                task_slug=node.task_slug,
+                event_type="task.added",
+                status=status,
+                actor=meta.actor,
+                event_timestamp=now,
+                task_snapshot_json=node.task_json,
+                payload_json=_task_payload(node),
+            )
         )
+        await self._publish_runtime_event(task_event)
+        for event in self._append_task_component_events(
+            appender,
+            sample_id=sample_id,
+            actor=meta.actor,
+            event_timestamp=now,
+            task_id=node.task_id,
+            task_json=node.task_json,
+            assigned_worker_slug=node.assigned_worker_slug,
+        ):
+            await self._publish_runtime_event(event)
         return _to_node_dto(node)
 
     async def update_node_status(
@@ -401,16 +418,22 @@ class RuntimeGraphRepository:
         session.add(node)
         session.flush()
 
-        await self._log_mutation(
-            session,
-            sample_id,
-            mutation_type="node.status_changed",
-            target_type="node",
-            target_id=task_id,
-            meta=meta,
-            old_value=NodeStatusChangedMutation(status=old_status),
-            new_value=NodeStatusChangedMutation(status=new_status),
+        event = SampleRuntimeEventAppender(session).append_task_event(
+            SampleTaskEventRow(
+                sample_id=sample_id,
+                task_id=task_id,
+                task_slug=node.task_slug,
+                event_type="task.status_changed",
+                status=new_status,
+                actor=meta.actor,
+                payload_json={
+                    "old_status": old_status,
+                    "status": new_status,
+                    "reason": meta.reason,
+                },
+            )
         )
+        await self._publish_runtime_event(event)
         return True
 
     async def update_node_field(
@@ -440,16 +463,6 @@ class RuntimeGraphRepository:
         session.add(node)
         session.flush()
 
-        await self._log_mutation(
-            session,
-            sample_id,
-            mutation_type="node.field_changed",
-            target_type="node",
-            target_id=task_id,
-            meta=meta,
-            old_value=NodeFieldChangedMutation(field=field, value=old_value),
-            new_value=NodeFieldChangedMutation(field=field, value=value),
-        )
         return _to_node_dto(node)
 
     # ── Edge operations ─────────────────────────────────────
@@ -480,16 +493,21 @@ class RuntimeGraphRepository:
         session.add(edge)
         session.flush()
 
-        await self._log_mutation(
-            session,
-            sample_id,
-            mutation_type="edge.added",
-            target_type="edge",
-            target_id=edge.id,
-            meta=meta,
-            old_value=None,
-            new_value=_edge_snapshot(edge),
+        event = SampleRuntimeEventAppender(session).append_edge_event(
+            SampleEdgeEventRow(
+                sample_id=sample_id,
+                edge_id=edge.id,
+                source_task_id=edge.source_task_id,
+                target_task_id=edge.target_task_id,
+                event_type="edge.added",
+                status=status,
+                actor=meta.actor,
+                event_timestamp=now,
+                edge_snapshot_json=_edge_payload(edge),
+                payload_json=_edge_payload(edge),
+            )
         )
+        await self._publish_runtime_event(event)
         return _to_edge_dto(edge)
 
     async def update_edge_status(
@@ -509,16 +527,20 @@ class RuntimeGraphRepository:
         session.add(edge)
         session.flush()
 
-        await self._log_mutation(
-            session,
-            sample_id,
-            mutation_type="edge.status_changed",
-            target_type="edge",
-            target_id=edge_id,
-            meta=meta,
-            old_value=EdgeStatusChangedMutation(status=old_status),
-            new_value=EdgeStatusChangedMutation(status=new_status),
+        event = SampleRuntimeEventAppender(session).append_edge_event(
+            SampleEdgeEventRow(
+                sample_id=sample_id,
+                edge_id=edge_id,
+                source_task_id=edge.source_task_id,
+                target_task_id=edge.target_task_id,
+                event_type="edge.status_changed",
+                status=new_status,
+                actor=meta.actor,
+                edge_snapshot_json=_edge_payload(edge),
+                payload_json={"old_status": old_status, "status": new_status},
+            )
         )
+        await self._publish_runtime_event(event)
         return _to_edge_dto(edge)
 
     # ── Query operations ────────────────────────────────────
@@ -619,49 +641,94 @@ class RuntimeGraphRepository:
                 sample_id=sample_id,
             )
 
-    def _next_sequence(self, session: Session, sample_id: UUID) -> int:
-        stmt = (
-            select(SampleGraphMutation.sequence)
-            .where(SampleGraphMutation.sample_id == sample_id)
-            .order_by(col(SampleGraphMutation.sequence).desc())
-            .limit(1)
-        )
-        last = session.exec(stmt).first()
-        return (last + 1) if last is not None else 0
-
-    async def _log_mutation(
+    def _append_task_component_events(
         self,
-        session: Session,
-        sample_id: UUID,
+        appender: SampleRuntimeEventAppender,
         *,
-        mutation_type: str,
-        target_type: str,
-        target_id: UUID,
-        meta: MutationMeta,
-        old_value: GraphMutationValue | None,
-        new_value: GraphMutationValue,
-    ) -> None:
-        seq = self._next_sequence(session, sample_id)
-        row = SampleGraphMutation(
-            sample_id=sample_id,
-            sequence=seq,
-            mutation_type=mutation_type,
-            target_type=target_type,
-            target_id=target_id,
-            actor=meta.actor,
-            old_value=old_value.model_dump(mode="json") if old_value is not None else None,
-            new_value=new_value.model_dump(mode="json"),
-            reason=meta.reason,
-            created_at=utcnow(),
-        )
-        session.add(row)
-        session.flush()
+        sample_id: UUID,
+        actor: str,
+        event_timestamp: datetime,
+        task_id: UUID,
+        task_json: dict,
+        assigned_worker_slug: str | None,
+    ) -> list[SampleRuntimeEventRow]:
+        events: list[SampleRuntimeEventRow] = []
 
-        for listener in self._mutation_listeners:
+        worker_snapshot = _component_snapshot(task_json.get("worker"))
+        if worker_snapshot is not None:
+            worker_slug = assigned_worker_slug or _component_slug(
+                worker_snapshot, fallback="worker"
+            )
+            events.append(
+                appender.append_worker_event(
+                    SampleWorkerEventRow(
+                        sample_id=sample_id,
+                        task_id=task_id,
+                        worker_slug=worker_slug,
+                        worker_type=_component_type(worker_snapshot, fallback=worker_slug),
+                        model_target=_component_model(worker_snapshot),
+                        worker_snapshot_json=worker_snapshot,
+                        event_type="worker.added",
+                        actor=actor,
+                        event_timestamp=event_timestamp,
+                        payload_json={"worker": worker_snapshot},
+                    )
+                )
+            )
+
+        sandbox_snapshot = _component_snapshot(task_json.get("sandbox"))
+        if sandbox_snapshot is not None:
+            sandbox_slug = _component_slug(sandbox_snapshot, fallback="sandbox")
+            events.append(
+                appender.append_sandbox_event(
+                    SampleSandboxEventRow(
+                        sample_id=sample_id,
+                        task_id=task_id,
+                        sandbox_slug=sandbox_slug,
+                        sandbox_type=_component_type(sandbox_snapshot, fallback=sandbox_slug),
+                        sandbox_snapshot_json=sandbox_snapshot,
+                        event_type="sandbox.added",
+                        actor=actor,
+                        event_timestamp=event_timestamp,
+                        payload_json={"sandbox": sandbox_snapshot},
+                    )
+                )
+            )
+
+        evaluators = task_json.get("evaluators")
+        if isinstance(evaluators, list):
+            for evaluator in evaluators:
+                evaluator_snapshot = _component_snapshot(evaluator)
+                if evaluator_snapshot is None:
+                    continue
+                evaluator_slug = _component_slug(evaluator_snapshot, fallback="default")
+                events.append(
+                    appender.append_evaluator_event(
+                        SampleEvaluatorEventRow(
+                            sample_id=sample_id,
+                            task_id=task_id,
+                            evaluator_slug=evaluator_slug,
+                            evaluator_type=_component_type(
+                                evaluator_snapshot,
+                                fallback=evaluator_slug,
+                            ),
+                            evaluator_snapshot_json=evaluator_snapshot,
+                            event_type="evaluator.added",
+                            actor=actor,
+                            event_timestamp=event_timestamp,
+                            payload_json={"evaluator": evaluator_snapshot},
+                        )
+                    )
+                )
+
+        return events
+
+    async def _publish_runtime_event(self, row: SampleRuntimeEventRow) -> None:
+        for listener in self._runtime_event_listeners:
             try:
                 await listener(row)
             except Exception:  # slopcop: ignore[no-broad-except]
-                logger.warning("Mutation listener failed", exc_info=True)
+                logger.warning("Runtime event listener failed", exc_info=True)
 
     def _check_no_cycle(
         self,
@@ -723,19 +790,46 @@ def _to_edge_dto(row: SampleGraphEdge) -> GraphEdgeDto:
     )
 
 
-def _node_snapshot(node: SampleGraphNode) -> NodeAddedMutation:
-    return NodeAddedMutation(
-        task_slug=node.task_slug,
-        instance_key=node.instance_key,
-        description=node.description,
-        status=node.status,
-        assigned_worker_slug=node.assigned_worker_slug,
-    )
+def _task_payload(node: SampleGraphNode) -> dict:
+    return {
+        "task_key": node.task_slug,
+        "task_slug": node.task_slug,
+        "instance_key": node.instance_key,
+        "description": node.description,
+        "status": node.status,
+        "assigned_worker_slug": node.assigned_worker_slug,
+        "parent_task_id": str(node.parent_task_id) if node.parent_task_id else None,
+        "level": node.level,
+        "is_dynamic": node.is_dynamic,
+        "task": node.task_json,
+    }
 
 
-def _edge_snapshot(edge: SampleGraphEdge) -> EdgeAddedMutation:
-    return EdgeAddedMutation(
-        source_task_id=edge.source_task_id,
-        target_task_id=edge.target_task_id,
-        status=edge.status,
-    )
+def _edge_payload(edge: SampleGraphEdge) -> dict:
+    return {
+        "source_task_id": str(edge.source_task_id),
+        "target_task_id": str(edge.target_task_id),
+        "status": edge.status,
+    }
+
+
+def _component_snapshot(value: object) -> dict | None:
+    return value if isinstance(value, dict) else None
+
+
+def _component_slug(snapshot: dict, *, fallback: str) -> str:
+    value = snapshot.get("type_slug") or snapshot.get("slug") or snapshot.get("name")
+    if isinstance(value, str) and value:
+        return value
+    component_type = _component_type(snapshot, fallback=fallback)
+    return component_type.rsplit(":", 1)[-1].rsplit(".", 1)[-1]
+
+
+def _component_type(snapshot: dict, *, fallback: str) -> str:
+    value = snapshot.get("_type") or snapshot.get("type")
+    return value if isinstance(value, str) and value else fallback
+
+
+def _component_model(snapshot: dict) -> str | None:
+    value = snapshot.get("model") or snapshot.get("model_target")
+    return value if isinstance(value, str) else None

@@ -19,11 +19,14 @@ import asyncio
 import json
 import os
 import time
+from typing import Literal
 from uuid import UUID
 
 import httpx
 from ergon_core.core.views.samples.models import SampleTaskDto
 from ergon_core.test_support.e2e_read_helpers import (
+    ObservedSampleRuntimeEvent,
+    ObservedSampleRuntimeEventStream,
     ResourceSnapshot,
     first_probe_resource,
     leaf_execution_timings_by_slug,
@@ -31,15 +34,10 @@ from ergon_core.test_support.e2e_read_helpers import (
     list_root_execution_and_evaluations,
     list_sandbox_command_wal,
     list_sandbox_events,
+    read_sample_runtime_event_stream,
     read_resource_bytes,
 )
 from tests.fixtures.smoke_components.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
-from tests.fixtures.smoke_components.smoke_base.leaf_base import BaseSmokeLeafWorker
-from tests.fixtures.smoke_components.smoke_base.recursive import (
-    NESTED_LINE_SLUGS,
-    RecursiveSmokeWorkerBase,
-)
-from tests.fixtures.smoke_components.smoke_base.worker_base import SmokeWorkerBase
 
 from tests.e2e._read_contracts import require_run_snapshot
 
@@ -47,6 +45,10 @@ TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
 BLOCKED = "blocked"
 COMPLETED = "completed"
 FAILED = "failed"
+NESTED_LINE_SLUGS = ("l_2_a", "l_2_b")
+SMOKE_PARENT_TURN_COUNT = 3
+SMOKE_RECURSIVE_TURN_COUNT = 3
+SMOKE_LEAF_TURN_COUNT = 2
 
 
 # =============================================================================
@@ -133,9 +135,7 @@ def _assert_run_turn_counts(sample_id: UUID) -> None:
     """
     leaf_count = len(EXPECTED_SUBTASK_SLUGS) - 1 + len(NESTED_LINE_SLUGS)
     expected = (
-        SmokeWorkerBase.PARENT_TURN_COUNT
-        + RecursiveSmokeWorkerBase.RECURSIVE_TURN_COUNT
-        + leaf_count * BaseSmokeLeafWorker.LEAF_TURN_COUNT
+        SMOKE_PARENT_TURN_COUNT + SMOKE_RECURSIVE_TURN_COUNT + leaf_count * SMOKE_LEAF_TURN_COUNT
     )  # currently 3 + 3 + 10×2 = 26
 
     snapshot = require_run_snapshot(sample_id)
@@ -143,9 +143,9 @@ def _assert_run_turn_counts(sample_id: UUID) -> None:
 
     assert event_count == expected, (
         f"turn count mismatch: expected {expected} "
-        f"(parent={SmokeWorkerBase.PARENT_TURN_COUNT}, "
-        f"recursive={RecursiveSmokeWorkerBase.RECURSIVE_TURN_COUNT}, "
-        f"leaves={leaf_count}×{BaseSmokeLeafWorker.LEAF_TURN_COUNT}), got {event_count}"
+        f"(parent={SMOKE_PARENT_TURN_COUNT}, "
+        f"recursive={SMOKE_RECURSIVE_TURN_COUNT}, "
+        f"leaves={leaf_count}×{SMOKE_LEAF_TURN_COUNT}), got {event_count}"
     )
 
 
@@ -335,6 +335,143 @@ def _assert_temporal_ordering(sample_id: UUID) -> None:
     _after("d_right", ["d_root"])
     _after("l_2", ["l_1"])
     _after("l_3", ["l_2"])
+
+
+SMOKE_DIRECT_TASKS = EXPECTED_SUBTASK_SLUGS
+SMOKE_NESTED_TASKS = NESTED_LINE_SLUGS
+SMOKE_DIRECT_EDGES = (
+    ("d_root", "d_left"),
+    ("d_root", "d_right"),
+    ("d_left", "d_join"),
+    ("d_right", "d_join"),
+    ("l_1", "l_2"),
+    ("l_2", "l_3"),
+)
+SMOKE_NESTED_EDGES = (("l_2_a", "l_2_b"),)
+
+
+def _assert_sample_runtime_event_stream(
+    sample_id: UUID,
+    *,
+    profile: Literal["happy", "sad"],
+    worker_prefix: str,
+    root_worker_slug: str,
+) -> None:
+    snapshot = read_sample_runtime_event_stream(sample_id)
+    sample_snapshot = require_run_snapshot(sample_id)
+    root_slug = sample_snapshot.tasks[sample_snapshot.root_task_id].name
+
+    expected_task_slugs = (
+        (root_slug, *SMOKE_DIRECT_TASKS, *SMOKE_NESTED_TASKS)
+        if profile == "happy"
+        else (root_slug, *SMOKE_DIRECT_TASKS)
+    )
+    expected_edge_pairs = (
+        (*SMOKE_DIRECT_EDGES, *SMOKE_NESTED_EDGES) if profile == "happy" else SMOKE_DIRECT_EDGES
+    )
+    expected_status_sequence = (
+        ("pending", "executing", "completed")
+        if profile == "happy"
+        else ("pending", "executing", "failed")
+    )
+    expected_terminal_status_by_slug = {slug: "completed" for slug in expected_task_slugs}
+    if profile == "sad":
+        expected_terminal_status_by_slug["l_2"] = "failed"
+        expected_terminal_status_by_slug["l_3"] = "blocked"
+
+    expected_workers = {slug: f"{worker_prefix}-smoke-leaf" for slug in expected_task_slugs}
+    expected_workers[root_slug] = root_worker_slug
+    if profile == "happy":
+        expected_workers["l_2"] = f"{worker_prefix}-smoke-recursive-worker"
+        expected_workers["l_2_a"] = f"{worker_prefix}-smoke-leaf"
+        expected_workers["l_2_b"] = f"{worker_prefix}-smoke-leaf"
+    else:
+        expected_workers["l_2"] = f"{worker_prefix}-smoke-leaf-failing"
+
+    assert snapshot.status_sequence == expected_status_sequence
+    assert snapshot.task_added_slugs == expected_task_slugs
+    assert snapshot.edge_added_pairs == expected_edge_pairs
+    assert snapshot.worker_added_by_task_slug == expected_workers
+    assert set(snapshot.sandbox_added_by_task_slug) == set(expected_task_slugs)
+    assert snapshot.evaluator_added_by_task_slug == {root_slug: ("default", "post-root")}
+    assert snapshot.task_terminal_status_by_slug == expected_terminal_status_by_slug
+    if profile == "happy":
+        assert "l_2_a" in snapshot.task_added_slugs
+        assert "l_2_b" in snapshot.task_added_slugs
+    else:
+        assert "l_2_a" not in snapshot.task_added_slugs
+        assert "l_2_b" not in snapshot.task_added_slugs
+
+    _assert_sample_runtime_event_order(snapshot, root_slug=root_slug)
+
+
+def _assert_sample_runtime_event_order(
+    snapshot: ObservedSampleRuntimeEventStream,
+    *,
+    root_slug: str,
+) -> None:
+    ordered = snapshot.ordered_events
+    assert ordered, "expected typed sample runtime WAL events"
+    assert ordered == tuple(sorted(ordered, key=lambda event: (event.event_timestamp, event.id)))
+    assert ordered[0].event_table == "sample_status_events"
+    assert ordered[0].event_type == "sample.status_changed"
+    assert ordered[0].status == "pending"
+
+    first_executing = _event_index(
+        ordered,
+        event_table="sample_status_events",
+        event_type="sample.status_changed",
+        status="executing",
+    )
+    final_sample_status = max(
+        i for i, event in enumerate(ordered) if event.event_table == "sample_status_events"
+    )
+
+    task_add_index = {
+        event.task_slug: i for i, event in enumerate(ordered) if event.event_type == "task.added"
+    }
+
+    assert task_add_index[root_slug] < first_executing
+    for slug in SMOKE_DIRECT_TASKS:
+        assert task_add_index[slug] > first_executing
+
+    for i, event in enumerate(ordered):
+        if event.event_type in {"worker.added", "sandbox.added", "evaluator.added"}:
+            assert event.task_slug is not None
+            assert task_add_index[event.task_slug] < i
+        if event.event_type == "edge.added":
+            assert event.source_task_slug is not None
+            assert event.target_task_slug is not None
+            assert task_add_index[event.source_task_slug] < i
+            assert task_add_index[event.target_task_slug] < i
+        if event.event_type == "task.status_changed" and event.status in {
+            "completed",
+            "failed",
+            "blocked",
+            "cancelled",
+        }:
+            assert event.task_slug is not None
+            assert task_add_index[event.task_slug] < i
+            assert i < final_sample_status
+
+
+def _event_index(
+    ordered: tuple[ObservedSampleRuntimeEvent, ...],
+    *,
+    event_table: str,
+    event_type: str,
+    status: str | None = None,
+) -> int:
+    for i, event in enumerate(ordered):
+        if (
+            event.event_table == event_table
+            and event.event_type == event_type
+            and (status is None or event.status == status)
+        ):
+            return i
+    raise AssertionError(
+        f"missing event table={event_table!r} type={event_type!r} status={status!r}"
+    )
 
 
 # =============================================================================

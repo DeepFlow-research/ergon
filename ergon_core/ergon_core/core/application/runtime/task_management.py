@@ -10,9 +10,6 @@ invariants carried by the public task object.
 from __future__ import annotations
 
 import logging
-import inspect
-from collections.abc import Awaitable
-from typing import Protocol
 from uuid import UUID
 
 import inngest
@@ -20,6 +17,10 @@ from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.application.ports import DashboardEventPublisher
+from ergon_core.core.application.samples.events import (
+    SampleRuntimeEventRow,
+    sample_runtime_event_from_row,
+)
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.application.runtime.status import (
     BLOCKED,
@@ -60,19 +61,12 @@ from ergon_core.core.application.runtime.task_models import (
     RestartTaskResult,
 )
 from ergon_core.core.application.runtime.task_execution_repository import TaskExecutionRepository
-from ergon_core.core.persistence.graph.models import SampleGraphMutation
-from ergon_core.core.views.dashboard_events.graph_mutations import (
-    dashboard_graph_mutation_event_from_row,
-)
+from ergon_core.core.views.dashboard_events.contracts import DashboardSampleRuntimeEvent
 from sqlmodel import Session
 
 logger = logging.getLogger(__name__)
 
 _MANAGER_META = MutationMeta(actor="manager-worker", reason="manager_decision")
-
-
-class _LegacyDashboardGraphMutationEmitter(Protocol):
-    def graph_mutation(self, row: SampleGraphMutation) -> Awaitable[None] | None: ...
 
 
 def _count_non_terminal_descendants(session: Session, sample_id: UUID, task_id: UUID) -> int:
@@ -95,7 +89,7 @@ class TaskManagementService:
         self,
         graph_repo: RuntimeGraphRepository | None = None,
         dashboard_publisher: DashboardEventPublisher | None = None,
-        dashboard_emitter: _LegacyDashboardGraphMutationEmitter | None = None,
+        dashboard_emitter: object | None = None,
         task_ready_dispatcher: TaskReadyDispatcher | None = None,
     ) -> None:
         self._graph_repo = graph_repo or RuntimeGraphRepository()
@@ -103,21 +97,16 @@ class TaskManagementService:
         self._runtime_events = RuntimeEventDispatcher(task_ready_dispatcher)
         if dashboard_publisher is None and dashboard_emitter is not None:
             self._dashboard_publisher = None
-            self._legacy_graph_mutation_listener = dashboard_emitter.graph_mutation
-            self._graph_repo.add_mutation_listener(self._legacy_publish_graph_mutation)
             return
         self._dashboard_publisher = dashboard_publisher or get_dashboard_event_publisher()
-        self._graph_repo.add_mutation_listener(self._publish_graph_mutation)
+        self._graph_repo.add_runtime_event_listener(self._publish_runtime_event)
 
-    async def _publish_graph_mutation(self, row: SampleGraphMutation) -> None:
+    async def _publish_runtime_event(self, row: SampleRuntimeEventRow) -> None:
         if self._dashboard_publisher is None:
             return
-        await self._dashboard_publisher.publish(dashboard_graph_mutation_event_from_row(row))
-
-    async def _legacy_publish_graph_mutation(self, row: SampleGraphMutation) -> None:
-        result = self._legacy_graph_mutation_listener(row)
-        if inspect.isawaitable(result):
-            await result
+        await self._dashboard_publisher.publish(
+            DashboardSampleRuntimeEvent(event=sample_runtime_event_from_row(row))
+        )
 
     # ── spawn_dynamic_task ───────────────────────────────────
 

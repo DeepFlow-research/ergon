@@ -19,6 +19,7 @@ from ergon_core.core.application.runtime.task_models import RestartTaskCommand
 from ergon_core.core.application.runtime.task_management import TaskManagementService
 
 from tests.integration.propagation._helpers import (
+    delete_typed_sample_wal,
     get_node_status,
     make_edge,
     make_experiment_definition,

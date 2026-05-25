@@ -4,7 +4,7 @@ import { GraphMutationDtoSchema } from "@/features/graph/contracts/graphMutation
 import {
   dashboardEventSchemas,
   DashboardContextEventEventSchema as GeneratedDashboardContextEventEventSchema,
-  DashboardGraphMutationEventSchema as GeneratedDashboardGraphMutationEventSchema,
+  DashboardSampleRuntimeEventSchema as GeneratedDashboardSampleRuntimeEventSchema,
   DashboardResourcePublishedEvent as GeneratedDashboardResourcePublishedEvent,
   DashboardSandboxClosedEvent as GeneratedDashboardSandboxClosedEvent,
   DashboardSandboxCommandEvent as GeneratedDashboardSandboxCommandEvent,
@@ -307,7 +307,27 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 export const DashboardGraphMutationDataSchema = z.preprocess((input) => {
   const outer = asRecord(input);
-  return outer.mutation === undefined ? input : GeneratedDashboardGraphMutationEventSchema.parse(input).mutation;
+  if (outer.mutation !== undefined) {
+    return outer.mutation;
+  }
+  const event = outer.event === undefined ? outer : GeneratedDashboardSampleRuntimeEventSchema.parse(input).event;
+  const targetType = event.target_type === "task" ? "node" : event.target_type;
+  const mutationType = event.event_type
+    .replace("task.", "node.")
+    .replace("sample.", "node.");
+  return {
+    id: event.id,
+    sample_id: event.sample_id,
+    sequence: 0,
+    mutation_type: mutationType,
+    target_type: targetType,
+    target_id: event.target_id ?? event.sample_id,
+    actor: "typed-sample-wal",
+    old_value: null,
+    new_value: event.payload,
+    reason: null,
+    created_at: event.event_timestamp,
+  };
 }, GraphMutationDtoSchema);
 
 export type DashboardGraphMutationData = z.infer<typeof DashboardGraphMutationDataSchema>;

@@ -8,6 +8,7 @@ from logging.config import fileConfig
 
 import ergon_core.core.persistence.definitions.models
 import ergon_core.core.persistence.graph.models
+import ergon_core.core.persistence.samples.models
 import ergon_core.core.persistence.telemetry.models
 from alembic import context
 from ergon_core.core.shared.settings import Settings

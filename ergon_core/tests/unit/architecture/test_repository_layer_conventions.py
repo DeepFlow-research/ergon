@@ -117,7 +117,7 @@ def test_repository_file_is_singular(cls: type) -> None:
 def _takes_session_first(method: object) -> bool:
     """A method is a 'data-access method' iff its first non-self
     positional parameter is named `session`. Configuration setters like
-    `add_mutation_listener(self, listener)` are deliberately exempt
+    `add_runtime_event_listener(self, listener)` are deliberately exempt
     from the session-first and writes-are-async rules; they aren't
     data access."""
 
@@ -131,7 +131,7 @@ def test_public_data_access_methods_take_session_first(cls: type) -> None:
     """Every public data-access method takes `session` first.
 
     A method is *not* a data-access method if it never accepts a
-    session at all (e.g. `add_mutation_listener(self, listener)`).
+    session at all (e.g. `add_runtime_event_listener(self, listener)`).
     Those methods are exempt — the rule applies only to the methods
     that actually read or write the database.
     """

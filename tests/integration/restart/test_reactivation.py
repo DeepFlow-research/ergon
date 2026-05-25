@@ -13,11 +13,7 @@ Covered here:
 
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import (
-    SampleGraphEdge,
-    SampleGraphMutation,
-    SampleGraphNode,
-)
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.application.runtime.status import CANCELLED, EDGE_PENDING
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus

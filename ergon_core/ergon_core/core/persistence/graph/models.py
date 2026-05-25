@@ -1,38 +1,19 @@
-"""Per-run mutable workflow graph tables.
+"""Per-sample mutable workflow graph projection tables.
 
 The core graph layer. Status is a free-form string — the core does not
 constrain values. Domain semantics live in the experiment layer.
 
 Tables:
-    sample_graph_nodes        — mutable task nodes, one per run
-    sample_graph_edges        — mutable dependency edges, one per run
-    sample_graph_annotations  — append-only namespaced metadata (WAL)
-    sample_graph_mutations    — append-only audit log of every change
+    sample_graph_nodes        — mutable task node read model
+    sample_graph_edges        — mutable dependency edge read model
 """
 
 from datetime import datetime
-from typing import Literal
 from uuid import UUID, uuid4
 
-from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.shared.utils import utcnow as _utcnow
-from pydantic import model_validator
-from sqlalchemy import JSON, Boolean, Column, DateTime, Index
+from sqlalchemy import JSON, Boolean, Column, DateTime
 from sqlmodel import Field, SQLModel
-
-GraphTargetType = Literal["node", "edge"]
-
-MutationType = Literal[
-    "node.added",
-    "node.removed",
-    "node.status_changed",
-    "node.field_changed",
-    "edge.added",
-    "edge.removed",
-    "edge.status_changed",
-    "annotation.set",
-    "annotation.deleted",
-]
 
 TZDateTime = DateTime(timezone=True)
 
@@ -147,92 +128,3 @@ class SampleGraphEdge(SQLModel, table=True):
     status: str = Field(index=True)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
     updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
-
-
-# ---------------------------------------------------------------------------
-# SampleGraphAnnotation
-# ---------------------------------------------------------------------------
-
-
-class SampleGraphAnnotation(SQLModel, table=True):
-    """Append-only annotation WAL. Each set_annotation() inserts a new row.
-    Current value = latest sequence. Point-in-time = sequence <= N.
-
-    Append-only (rather than upsert) so the full DAG state can be
-    reconstructed at any mutation sequence — needed for counterfactual
-    replay and credit assignment in the training pipeline."""
-
-    __tablename__ = "sample_graph_annotations"
-    __table_args__ = (
-        Index(
-            "ix_annotation_lookup",
-            "sample_id",
-            "target_type",
-            "target_id",
-            "namespace",
-            "sequence",
-        ),
-    )
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    sample_id: UUID = Field(foreign_key="samples.id", index=True)
-    target_type: str = Field(
-        description=(
-            "GraphTargetType literal ('node' or 'edge') stored as a string for SQLModel "
-            "compatibility."
-        )
-    )
-    target_id: UUID
-    namespace: str
-    sequence: int = Field(index=True)
-    payload: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
-
-    def parsed_payload(self) -> JsonObject:
-        return self.__class__._parse_payload(self.payload)
-
-    @classmethod
-    def _parse_payload(cls, data: dict) -> JsonObject:
-        if not isinstance(data, dict):
-            raise ValueError(f"payload must be a dict, got {type(data).__name__}")
-        return data
-
-    @model_validator(mode="after")
-    def _validate_payload(self) -> "SampleGraphAnnotation":
-        self.__class__._parse_payload(self.payload)
-        return self
-
-
-# ---------------------------------------------------------------------------
-# SampleGraphMutation
-# ---------------------------------------------------------------------------
-
-
-class SampleGraphMutation(SQLModel, table=True):
-    __tablename__ = "sample_graph_mutations"
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    sample_id: UUID = Field(foreign_key="samples.id", index=True)
-    sequence: int = Field(index=True)
-    mutation_type: str = Field(
-        index=True,
-        description="MutationType literal stored as a string for SQLModel compatibility.",
-    )
-    target_type: str = Field(
-        description=(
-            "GraphTargetType literal ('node' or 'edge') stored as a string for SQLModel "
-            "compatibility."
-        )
-    )
-    target_id: UUID = Field(index=True)
-    actor: str
-    old_value: dict | None = Field(default=None, sa_column=Column(JSON))
-    new_value: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    reason: str | None = None
-    triggered_by_mutation_id: UUID | None = Field(
-        default=None,
-        foreign_key="sample_graph_mutations.id",
-        ondelete="SET NULL",
-    )
-    batch_operation_id: UUID | None = Field(default=None, index=False)
-    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)

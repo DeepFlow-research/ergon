@@ -14,7 +14,8 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
 )
-from ergon_core.core.persistence.graph.models import SampleGraphAnnotation, SampleGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.samples.models import SampleAnnotationEventRow
 from ergon_core.core.persistence.shared.enums import (
     SampleResourceKind,
     SampleStatus,
@@ -126,13 +127,16 @@ class ExternalRunWriter:
 
         for sequence, annotation in enumerate(parsed.annotations, start=1):
             self._session.add(
-                SampleGraphAnnotation(
+                SampleAnnotationEventRow(
                     sample_id=run.id,
                     target_type="node",
                     target_id=node.task_id,
-                    namespace=annotation.namespace,
-                    sequence=sequence,
-                    payload=_json_safe(annotation.payload),
+                    key=annotation.namespace,
+                    event_type="annotation.set",
+                    payload_json={
+                        "sequence": sequence,
+                        "value": _json_safe(annotation.payload),
+                    },
                 )
             )
 

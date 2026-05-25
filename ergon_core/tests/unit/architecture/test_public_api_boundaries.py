@@ -546,7 +546,6 @@ def test_sandbox_dashboard_tracing_and_dependencies_stay_in_infrastructure() -> 
         core_root / "infrastructure" / "dashboard" / "emitter.py",
         core_root / "infrastructure" / "dashboard" / "provider.py",
         core_root / "views" / "dashboard_events" / "contracts.py",
-        core_root / "views" / "dashboard_events" / "graph_mutations.py",
         core_root / "views" / "dashboard_events" / "context_events.py",
         core_root / "infrastructure" / "tracing" / "__init__.py",
         core_root / "infrastructure" / "tracing" / "attributes.py",

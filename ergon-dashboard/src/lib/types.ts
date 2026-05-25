@@ -71,7 +71,7 @@ export const DashboardEventNames = {
   SANDBOX_CLOSED: "dashboard/sandbox.closed",
   THREAD_MESSAGE_CREATED: "dashboard/thread.message_created",
   TASK_EVALUATION_UPDATED: "dashboard/task.evaluation_updated",
-  GRAPH_MUTATION: "dashboard/graph.mutation",
+  GRAPH_MUTATION: "dashboard/sample.runtime_event",
   CONTEXT_EVENT: "dashboard/context.event",
 } as const;
 
@@ -134,7 +134,7 @@ export type DashboardEvents = {
   "dashboard/sandbox.closed": { data: DashboardSandboxClosedData };
   "dashboard/thread.message_created": { data: DashboardThreadMessageCreatedData };
   "dashboard/task.evaluation_updated": { data: DashboardTaskEvaluationUpdatedData };
-  "dashboard/graph.mutation": { data: DashboardGraphMutationData };
+  "dashboard/sample.runtime_event": { data: DashboardGraphMutationData };
   "dashboard/context.event": { data: DashboardContextEventEventData };
 };
 

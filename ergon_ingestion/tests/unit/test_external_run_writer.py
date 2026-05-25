@@ -5,7 +5,8 @@ import numpy as np
 from sqlmodel import SQLModel, Session, create_engine, select
 
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import SampleGraphAnnotation, SampleGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.samples.models import SampleAnnotationEventRow
 from ergon_core.core.persistence.telemetry.models import (
     SampleRecord,
     SampleResource,
@@ -84,7 +85,9 @@ def test_external_run_writer_persists_import_spine_without_reducer_tables(tmp_pa
             session.exec(select(SampleTaskAttempt)).one().output_json["source_run_id"]
             == "gap-row-1"
         )
-        assert session.exec(select(SampleGraphAnnotation)).one().namespace == "gap.labels"
+        annotation_event = session.exec(select(SampleAnnotationEventRow)).one()
+        assert annotation_event.key == "gap.labels"
+        assert annotation_event.payload_json["value"] == {"t_safe": True, "tc_safe": False}
         assert session.exec(select(SampleResource)).one().name == "source-row.json"
 
 

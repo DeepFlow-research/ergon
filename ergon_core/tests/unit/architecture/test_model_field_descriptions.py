@@ -10,18 +10,19 @@ from ergon_core.core.shared.context_parts import (
     UserMessagePart,
 )
 from ergon_core.core.persistence.context.models import SampleContextEvent
-from ergon_core.core.persistence.graph.models import (
-    SampleGraphAnnotation,
-    SampleGraphMutation,
-    SampleGraphNode,
+from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.samples.models import (
+    SampleAnnotationEventRow,
+    SampleEdgeEventRow,
+    SampleStatusEventRow,
+    SampleTaskEventRow,
 )
 from ergon_core.core.persistence.telemetry.models import SampleRecord, SampleResource
 from ergon_core.core.application.runtime.models import (
-    GraphAnnotationDto,
     GraphEdgeDto,
-    GraphMutationRecordDto,
     GraphNodeDto,
 )
+from ergon_core.core.application.samples.events import SampleRuntimeEventView
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import (
     SWEBenchInstance,
     SWEBenchTaskPayload,
@@ -56,10 +57,7 @@ def test_dashboard_context_event_field_docs_are_schema_metadata() -> None:
 def test_graph_dto_field_docs_are_schema_metadata() -> None:
     assert _description(GraphNodeDto, "status")
     assert _description(GraphEdgeDto, "status")
-    assert _description(GraphAnnotationDto, "id")
-    assert _description(GraphAnnotationDto, "target_id")
-    assert _description(GraphMutationRecordDto, "id")
-    assert _description(GraphMutationRecordDto, "target_id")
+    assert _description(SampleRuntimeEventView, "payload")
 
 
 def test_sqlmodel_field_docs_are_schema_metadata() -> None:
@@ -71,9 +69,10 @@ def test_sqlmodel_field_docs_are_schema_metadata() -> None:
     assert _description(SampleGraphNode, "level")
     assert _description(SampleContextEvent, "event_type")
     assert _description(SampleContextEvent, "payload")
-    assert _description(SampleGraphAnnotation, "target_type")
-    assert _description(SampleGraphMutation, "mutation_type")
-    assert _description(SampleGraphMutation, "target_type")
+    assert _description(SampleStatusEventRow, "event_type")
+    assert _description(SampleTaskEventRow, "event_type")
+    assert _description(SampleEdgeEventRow, "event_type")
+    assert _description(SampleAnnotationEventRow, "event_type")
     assert "Canonical runtime" in (_description(SampleRecord, "definition_id") or "")
     assert "Optional v2 experiment grouping tag" in (_description(SampleRecord, "experiment") or "")
     assert "Compatibility/display-only" in (_description(SampleRecord, "worker_team_json") or "")
