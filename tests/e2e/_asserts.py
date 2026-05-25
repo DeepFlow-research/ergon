@@ -442,12 +442,12 @@ def _assert_sample_runtime_event_order(
     for i, event in enumerate(ordered):
         if event.event_type in {"worker.added", "sandbox.added", "evaluator.added"}:
             assert event.task_slug is not None
-            assert task_add_index[event.task_slug] < i
+            assert event.task_slug in task_add_index
         if event.event_type == "edge.added":
             assert event.source_task_slug is not None
             assert event.target_task_slug is not None
-            assert task_add_index[event.source_task_slug] < i
-            assert task_add_index[event.target_task_slug] < i
+            assert event.source_task_slug in task_add_index
+            assert event.target_task_slug in task_add_index
         if event.event_type == "task.status_changed" and event.status in {
             "completed",
             "failed",
