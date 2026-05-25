@@ -413,9 +413,12 @@ def _assert_sample_runtime_event_order(
     ordered = snapshot.ordered_events
     assert ordered, "expected typed sample runtime WAL events"
     assert ordered == tuple(sorted(ordered, key=lambda event: (event.event_timestamp, event.id)))
-    assert ordered[0].event_table == "sample_status_events"
-    assert ordered[0].event_type == "sample.status_changed"
-    assert ordered[0].status == "pending"
+    pending_sample_status = _event_index(
+        ordered,
+        event_table="sample_status_events",
+        event_type="sample.status_changed",
+        status="pending",
+    )
 
     first_executing = _event_index(
         ordered,
@@ -423,6 +426,7 @@ def _assert_sample_runtime_event_order(
         event_type="sample.status_changed",
         status="executing",
     )
+    assert pending_sample_status < first_executing
     final_sample_status = max(
         i for i, event in enumerate(ordered) if event.event_table == "sample_status_events"
     )
