@@ -49,7 +49,7 @@ async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStart
 
     await send_job_events(events)
 
-    snapshot = SampleSnapshotReadService().build_run_snapshot(payload.sample_id)
+    snapshot = SampleSnapshotReadService().build_snapshot(payload.sample_id)
     if snapshot is None:
         raise RuntimeError(f"Run snapshot {payload.sample_id} not found after workflow start")
 
