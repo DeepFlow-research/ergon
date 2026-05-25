@@ -393,7 +393,8 @@ def _assert_sample_runtime_event_stream(
     assert snapshot.edge_added_pairs == expected_edge_pairs
     assert snapshot.worker_added_by_task_slug == expected_workers
     assert set(snapshot.sandbox_added_by_task_slug) == set(expected_task_slugs)
-    assert snapshot.evaluator_added_by_task_slug == {root_slug: ("default", "post-root")}
+    assert set(snapshot.evaluator_added_by_task_slug) == {root_slug}
+    assert set(snapshot.evaluator_added_by_task_slug[root_slug]) == {"default", "post-root"}
     assert snapshot.task_terminal_status_by_slug == expected_terminal_status_by_slug
     if profile == "happy":
         assert "l_2_a" in snapshot.task_added_slugs
