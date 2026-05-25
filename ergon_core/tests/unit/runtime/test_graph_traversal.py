@@ -44,7 +44,9 @@ def test_descendants_walks_full_containment_subtree_past_terminal_nodes() -> Non
     child = _node(
         session, sample_id=sample_id, slug="child", parent_task_id=root.task_id, status="completed"
     )
-    grandchild = _node(session, sample_id=sample_id, slug="grandchild", parent_task_id=child.task_id)
+    grandchild = _node(
+        session, sample_id=sample_id, slug="grandchild", parent_task_id=child.task_id
+    )
     sibling = _node(session, sample_id=sample_id, slug="sibling", parent_task_id=root.task_id)
     other_run_child = _node(session, sample_id=uuid4(), slug="other", parent_task_id=root.task_id)
     session.commit()
@@ -60,7 +62,9 @@ def test_descendant_ids_respects_max_depth() -> None:
     sample_id = uuid4()
     root = _node(session, sample_id=sample_id, slug="root")
     child = _node(session, sample_id=sample_id, slug="child", parent_task_id=root.task_id)
-    grandchild = _node(session, sample_id=sample_id, slug="grandchild", parent_task_id=child.task_id)
+    grandchild = _node(
+        session, sample_id=sample_id, slug="grandchild", parent_task_id=child.task_id
+    )
     session.commit()
 
     assert descendant_ids(session, sample_id=sample_id, root_task_id=root.task_id, max_depth=1) == {

@@ -62,7 +62,9 @@ class TestContainmentDescendants:
         root = _node(session, sample_id=sample_id, slug="root")
         child1 = _node(session, sample_id=sample_id, slug="child1", parent_task_id=root.task_id)
         child2 = _node(session, sample_id=sample_id, slug="child2", parent_task_id=root.task_id)
-        grandchild = _node(session, sample_id=sample_id, slug="grandchild", parent_task_id=child1.task_id)
+        grandchild = _node(
+            session, sample_id=sample_id, slug="grandchild", parent_task_id=child1.task_id
+        )
         session.commit()
 
         rows = descendants(session, sample_id=sample_id, root_task_id=root.task_id)
@@ -148,7 +150,9 @@ class TestTaskInspectionServiceDescendantIds:
         root = _node(session, sample_id=sample_id, slug="root")
         child1 = _node(session, sample_id=sample_id, slug="child1", parent_task_id=root.task_id)
         child2 = _node(session, sample_id=sample_id, slug="child2", parent_task_id=root.task_id)
-        grandchild = _node(session, sample_id=sample_id, slug="grandchild", parent_task_id=child1.task_id)
+        grandchild = _node(
+            session, sample_id=sample_id, slug="grandchild", parent_task_id=child1.task_id
+        )
         session.commit()
 
         # Patch get_session in the inspection module to return the test session

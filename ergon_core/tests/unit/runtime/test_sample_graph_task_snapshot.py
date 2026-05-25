@@ -162,7 +162,9 @@ async def test_graph_repo_node_inflates_task_from_run_tier() -> None:
         initial_edge_status="pending",
         meta=MutationMeta(actor="test", reason="setup"),
     )
-    row = session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).first()
+    row = session.exec(
+        select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)
+    ).first()
     assert row is not None
 
     canonical_task_id = row.task_id

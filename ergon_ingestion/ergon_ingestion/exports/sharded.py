@@ -129,7 +129,9 @@ def _load_runs(*, session: Session, dataset: str, batch: str) -> list[SampleReco
 def _export_resources(
     session: Session, output_dir: Path, sample_id: UUID, config: ShardedExportConfig
 ) -> tuple[list[dict[str, object]], int]:
-    resources = list(session.exec(select(SampleResource).where(SampleResource.sample_id == sample_id)))
+    resources = list(
+        session.exec(select(SampleResource).where(SampleResource.sample_id == sample_id))
+    )
     descriptors: list[dict[str, object]] = []
     copied_bytes = 0
     for resource in resources:

@@ -672,7 +672,11 @@ class RuntimeGraphRepository:
     ) -> None:
         """DFS from target_id following outgoing edges. If we reach
         source_id, adding source→target would create a cycle."""
-        edges = list(session.exec(select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)).all())
+        edges = list(
+            session.exec(
+                select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)
+            ).all()
+        )
         adj: dict[UUID, list[UUID]] = defaultdict(list)
         for e in edges:
             adj[e.source_task_id].append(e.target_task_id)

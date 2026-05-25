@@ -338,7 +338,9 @@ async def on_task_completed_or_failed(
 def is_workflow_complete_v2(session: Session, sample_id: UUID) -> bool:
     """Every node terminal; zero FAILED. CANCELLED is neutral."""
     statuses = list(
-        session.exec(select(SampleGraphNode.status).where(SampleGraphNode.sample_id == sample_id)).all()
+        session.exec(
+            select(SampleGraphNode.status).where(SampleGraphNode.sample_id == sample_id)
+        ).all()
     )
     if not statuses:
         return True
@@ -353,7 +355,9 @@ _SETTLED_STATUSES = graph_status.TERMINAL_STATUSES | frozenset({graph_status.BLO
 def is_workflow_failed_v2(session: Session, sample_id: UUID) -> bool:
     """All nodes settled and at least one FAILED."""
     statuses = list(
-        session.exec(select(SampleGraphNode.status).where(SampleGraphNode.sample_id == sample_id)).all()
+        session.exec(
+            select(SampleGraphNode.status).where(SampleGraphNode.sample_id == sample_id)
+        ).all()
     )
     if not statuses:
         return False

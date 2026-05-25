@@ -117,10 +117,14 @@ class SampleSnapshotReadService:
 
             def_id = run.definition_id
             nodes = list(
-                session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all()
+                session.exec(
+                    select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)
+                ).all()
             )
             edges = list(
-                session.exec(select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)).all()
+                session.exec(
+                    select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)
+                ).all()
             )
             def_workers = list(
                 session.exec(
@@ -135,7 +139,9 @@ class SampleSnapshotReadService:
                 ).all()
             )
             resources = list(
-                session.exec(select(SampleResource).where(SampleResource.sample_id == sample_id)).all()
+                session.exec(
+                    select(SampleResource).where(SampleResource.sample_id == sample_id)
+                ).all()
             )
             evaluations = list(
                 session.exec(
@@ -144,7 +150,9 @@ class SampleSnapshotReadService:
             )
             threads = list(session.exec(select(Thread).where(Thread.sample_id == sample_id)).all())
             thread_messages = list(
-                session.exec(select(ThreadMessage).where(ThreadMessage.sample_id == sample_id)).all()
+                session.exec(
+                    select(ThreadMessage).where(ThreadMessage.sample_id == sample_id)
+                ).all()
             )
             context_events = list(
                 session.exec(
@@ -346,7 +354,9 @@ def _run_summary(
     )
 
 
-def _task_counts_by_sample(session: Session, sample_ids: list[UUID]) -> dict[UUID, dict[str, object]]:
+def _task_counts_by_sample(
+    session: Session, sample_ids: list[UUID]
+) -> dict[UUID, dict[str, object]]:
     counts: dict[UUID, dict[str, int]] = {
         sample_id: {
             "total": 0,
@@ -361,7 +371,9 @@ def _task_counts_by_sample(session: Session, sample_ids: list[UUID]) -> dict[UUI
         return {}
 
     nodes = list(
-        session.exec(select(SampleGraphNode).where(col(SampleGraphNode.sample_id).in_(sample_ids))).all()
+        session.exec(
+            select(SampleGraphNode).where(col(SampleGraphNode.sample_id).in_(sample_ids))
+        ).all()
     )
     latest_updates: dict[UUID, datetime] = {}
     for node in nodes:

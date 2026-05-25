@@ -16,9 +16,9 @@ class GraphNodeLookup:
         self._tasks: frozenset[UUID] = frozenset(task_ids)
 
         edge_rows = session.exec(
-            select(SampleGraphEdge.id, SampleGraphEdge.source_task_id, SampleGraphEdge.target_task_id).where(
-                SampleGraphEdge.sample_id == sample_id
-            )
+            select(
+                SampleGraphEdge.id, SampleGraphEdge.source_task_id, SampleGraphEdge.target_task_id
+            ).where(SampleGraphEdge.sample_id == sample_id)
         ).all()
         self._edges: dict[tuple[UUID, UUID], UUID] = {
             (src, tgt): eid for eid, src, tgt in edge_rows

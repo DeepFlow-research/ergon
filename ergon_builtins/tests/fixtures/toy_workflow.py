@@ -96,7 +96,9 @@ class ToyWorkflowHarness(BaseModel):
 
     def edges(self) -> list[SampleGraphEdge]:
         return list(
-            self.session.exec(select(SampleGraphEdge).where(SampleGraphEdge.sample_id == self.sample_id)).all()
+            self.session.exec(
+                select(SampleGraphEdge).where(SampleGraphEdge.sample_id == self.sample_id)
+            ).all()
         )
 
     def definition_tasks(self) -> list[ExperimentDefinitionTask]:

@@ -27,7 +27,7 @@ from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.application.runtime.orchestration import PropagateTaskCompletionCommand
 from ergon_core.core.application.runtime.task_models import RestartTaskCommand
 from ergon_core.core.application.runtime.task_management import TaskManagementService
-from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
+from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
 
 from tests.integration.propagation._helpers import (
     get_node_status,

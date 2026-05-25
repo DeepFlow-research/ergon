@@ -10,7 +10,11 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.application.runtime import status as graph_status
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.enums import SampleResourceKind, SampleStatus, TaskExecutionStatus
+from ergon_core.core.persistence.shared.enums import (
+    SampleResourceKind,
+    SampleStatus,
+    TaskExecutionStatus,
+)
 from ergon_core.core.persistence.telemetry.models import (
     SampleRecord,
     SampleResource,
@@ -166,13 +170,15 @@ class WorkflowService:
     def finalize(self, command: FinalizeWorkflowCommand) -> FinalizedWorkflowResult:
         """Aggregate evaluations and close the run."""
         # reason: importing EvaluationService at module load creates a cycle via
-        # ergon_core.api -> experiments.service -> experiments.launch -> run_lifecycle.
+        # ergon_core.api -> experiments.service -> experiments.launch -> sample_lifecycle.
         from ergon_core.core.application.evaluation.service import EvaluationService
 
         with get_session() as session:
             evaluations = list(
                 session.exec(
-                    select(SampleTaskEvaluation).where(SampleTaskEvaluation.sample_id == command.sample_id)
+                    select(SampleTaskEvaluation).where(
+                        SampleTaskEvaluation.sample_id == command.sample_id
+                    )
                 ).all()
             )
             score_summary = EvaluationService.summarize_scores(evaluations)
@@ -305,7 +311,9 @@ class WorkflowService:
     ) -> list[TaskDescriptor]:
         descriptors: list[TaskDescriptor] = []
         for task_id in task_ids:
-            node = session.exec(select(SampleGraphNode).where(SampleGraphNode.task_id == task_id)).first()
+            node = session.exec(
+                select(SampleGraphNode).where(SampleGraphNode.task_id == task_id)
+            ).first()
             if node is not None:
                 descriptors.append(
                     TaskDescriptor(
@@ -337,7 +345,9 @@ class WorkflowService:
         task_id: UUID | None = None,
         task_slug: str | None = None,
     ) -> WorkflowTaskRef:
-        node = self._resolve_node(session, sample_id=sample_id, task_id=task_id, task_slug=task_slug)
+        node = self._resolve_node(
+            session, sample_id=sample_id, task_id=task_id, task_slug=task_slug
+        )
         return self._task_ref(node)
 
     def get_latest_execution(
@@ -484,7 +494,9 @@ class WorkflowService:
         task_id: UUID,
     ) -> list[WorkflowBlockerRef]:
         task = self.get_task(session, sample_id=sample_id, task_id=task_id)
-        deps = self.list_dependencies(session, sample_id=sample_id, task_id=task_id, direction="upstream")
+        deps = self.list_dependencies(
+            session, sample_id=sample_id, task_id=task_id, direction="upstream"
+        )
         blockers: list[WorkflowBlockerRef] = []
         pending = [dep.source.task_slug for dep in deps if dep.edge_status != "satisfied"]
         if pending:
@@ -776,7 +788,11 @@ class WorkflowService:
 
     @staticmethod
     def _nodes_by_id(session: Session, sample_id: UUID) -> dict[UUID, SampleGraphNode]:
-        nodes = list(session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all())
+        nodes = list(
+            session.exec(
+                select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)
+            ).all()
+        )
         return {node.task_id: node for node in nodes}
 
     def _execution_ids_for_scope(
@@ -845,7 +861,9 @@ class WorkflowService:
         task_id: UUID,
         max_depth: int,
     ) -> set[UUID]:
-        return descendant_ids(session, sample_id=sample_id, root_task_id=task_id, max_depth=max_depth)
+        return descendant_ids(
+            session, sample_id=sample_id, root_task_id=task_id, max_depth=max_depth
+        )
 
     @staticmethod
     def _producer_node_for_resource(

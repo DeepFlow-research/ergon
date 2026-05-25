@@ -91,7 +91,9 @@ def read_run_state(sample_id: UUID, session: Session) -> HarnessRunState | None:
     if run is None:
         return None
 
-    nodes = list(session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all())
+    nodes = list(
+        session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all()
+    )
     slug_by_task_id: dict[UUID, str] = {n.task_id: n.task_slug for n in nodes}
 
     graph_nodes = [
@@ -123,7 +125,9 @@ def read_run_state(sample_id: UUID, session: Session) -> HarnessRunState | None:
     ]
 
     eval_rows = list(
-        session.exec(select(SampleTaskEvaluation).where(SampleTaskEvaluation.sample_id == sample_id)).all()
+        session.exec(
+            select(SampleTaskEvaluation).where(SampleTaskEvaluation.sample_id == sample_id)
+        ).all()
     )
     evaluations = [
         HarnessEvaluation(
@@ -136,7 +140,9 @@ def read_run_state(sample_id: UUID, session: Session) -> HarnessRunState | None:
     ]
 
     execution_rows = list(
-        session.exec(select(SampleTaskAttempt).where(SampleTaskAttempt.sample_id == sample_id)).all()
+        session.exec(
+            select(SampleTaskAttempt).where(SampleTaskAttempt.sample_id == sample_id)
+        ).all()
     )
     executions = [
         HarnessExecution(
@@ -148,11 +154,19 @@ def read_run_state(sample_id: UUID, session: Session) -> HarnessRunState | None:
     ]
 
     resource_count = len(
-        list(session.exec(select(SampleResource).where(SampleResource.sample_id == sample_id)).all())
+        list(
+            session.exec(select(SampleResource).where(SampleResource.sample_id == sample_id)).all()
+        )
     )
-    thread_count = len(list(session.exec(select(Thread).where(Thread.sample_id == sample_id)).all()))
+    thread_count = len(
+        list(session.exec(select(Thread).where(Thread.sample_id == sample_id)).all())
+    )
     context_event_count = len(
-        list(session.exec(select(SampleContextEvent).where(SampleContextEvent.sample_id == sample_id)).all())
+        list(
+            session.exec(
+                select(SampleContextEvent).where(SampleContextEvent.sample_id == sample_id)
+            ).all()
+        )
     )
 
     return HarnessRunState(

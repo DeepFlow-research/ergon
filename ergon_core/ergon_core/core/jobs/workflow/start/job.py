@@ -22,7 +22,9 @@ logger = logging.getLogger(__name__)
 
 
 async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStartResult:
-    logger.info("workflow-start sample_id=%s definition_id=%s", payload.sample_id, payload.definition_id)
+    logger.info(
+        "workflow-start sample_id=%s definition_id=%s", payload.sample_id, payload.definition_id
+    )
     span_start = datetime.now(UTC)
 
     svc = WorkflowService()

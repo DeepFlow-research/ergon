@@ -15,7 +15,11 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTask,
 )
 from ergon_core.core.persistence.graph.models import SampleGraphAnnotation, SampleGraphNode
-from ergon_core.core.persistence.shared.enums import SampleResourceKind, SampleStatus, TaskExecutionStatus
+from ergon_core.core.persistence.shared.enums import (
+    SampleResourceKind,
+    SampleStatus,
+    TaskExecutionStatus,
+)
 from ergon_core.core.persistence.telemetry.models import (
     SampleRecord,
     SampleResource,
@@ -135,7 +139,9 @@ class ExternalRunWriter:
         for resource in parsed.resources:
             self._session.add(self._resource_row(run.id, execution.id, resource))
 
-        return WriteRunResult(sample_id=run.id, task_id=node.task_id, task_execution_id=execution.id)
+        return WriteRunResult(
+            sample_id=run.id, task_id=node.task_id, task_execution_id=execution.id
+        )
 
     def _definition_row(self) -> ExperimentDefinition:
         if self._definition is None:

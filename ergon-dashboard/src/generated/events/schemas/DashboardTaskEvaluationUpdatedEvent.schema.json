@@ -181,7 +181,7 @@
           "type": "string"
         },
         "sampleId": {
-          "title": "Runid",
+          "title": "Sampleid",
           "type": "string"
         },
         "taskId": {
@@ -270,7 +270,7 @@
   "properties": {
     "sample_id": {
       "format": "uuid",
-      "title": "Run Id",
+      "title": "Sample Id",
       "type": "string"
     },
     "task_id": {

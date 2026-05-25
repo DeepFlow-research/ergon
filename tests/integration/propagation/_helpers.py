@@ -4,7 +4,11 @@ import time
 from uuid import UUID
 
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphMutation, SampleGraphNode
+from ergon_core.core.persistence.graph.models import (
+    SampleGraphEdge,
+    SampleGraphMutation,
+    SampleGraphNode,
+)
 from ergon_core.core.application.runtime.status import TERMINAL_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import SampleStatus
@@ -35,7 +39,9 @@ def get_node_status(session: Session, task_id: UUID) -> str:
 
 def get_wal_entries(session: Session, task_id: UUID) -> list[SampleGraphMutation]:
     return list(
-        session.exec(select(SampleGraphMutation).where(SampleGraphMutation.target_id == task_id)).all()
+        session.exec(
+            select(SampleGraphMutation).where(SampleGraphMutation.target_id == task_id)
+        ).all()
     )
 
 
@@ -60,7 +66,9 @@ def assert_wal_has_status(
 
 def assert_cross_cutting_invariants(session: Session, sample_id: UUID) -> None:
     """Basic invariants that should hold after any settled state."""
-    nodes = list(session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all())
+    nodes = list(
+        session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all()
+    )
     for node in nodes:
         session.refresh(node)
         entries = get_wal_entries(session, node.task_id)

@@ -81,7 +81,8 @@ def test_external_run_writer_persists_import_spine_without_reducer_tables(tmp_pa
         assert session.exec(select(SampleRecord)).one().instance_key == "gap-row-1"
         assert session.exec(select(SampleGraphNode)).one().task_slug == "imported-root"
         assert (
-            session.exec(select(SampleTaskAttempt)).one().output_json["source_run_id"] == "gap-row-1"
+            session.exec(select(SampleTaskAttempt)).one().output_json["source_run_id"]
+            == "gap-row-1"
         )
         assert session.exec(select(SampleGraphAnnotation)).one().namespace == "gap.labels"
         assert session.exec(select(SampleResource)).one().name == "source-row.json"

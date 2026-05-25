@@ -264,7 +264,9 @@ class RolloutService:
             )
             all_evals = list(
                 session.exec(
-                    select(SampleTaskEvaluation).where(SampleTaskEvaluation.sample_id.in_(sample_ids))  # type: ignore[union-attr]
+                    select(SampleTaskEvaluation).where(
+                        SampleTaskEvaluation.sample_id.in_(sample_ids)
+                    )  # type: ignore[union-attr]
                 ).all()
             )
             all_execs = list(

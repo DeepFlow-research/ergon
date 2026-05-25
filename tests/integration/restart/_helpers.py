@@ -3,7 +3,11 @@
 from uuid import UUID
 
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphMutation, SampleGraphNode
+from ergon_core.core.persistence.graph.models import (
+    SampleGraphEdge,
+    SampleGraphMutation,
+    SampleGraphNode,
+)
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import SampleRecord
 from sqlmodel import select
@@ -15,9 +19,15 @@ def cleanup_run(sample_id: UUID, defn_id: UUID) -> None:
             select(SampleGraphMutation).where(SampleGraphMutation.sample_id == sample_id)
         ).all():
             session.delete(mut)
-        for edge in session.exec(select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)).all():
+        for edge in session.exec(
+            select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)
+        ).all():
             session.delete(edge)
-        nodes = list(session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all())
+        nodes = list(
+            session.exec(
+                select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)
+            ).all()
+        )
         remaining = {node.task_id: node for node in nodes}
         while remaining:
             parent_ids = {

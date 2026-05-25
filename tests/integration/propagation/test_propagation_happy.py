@@ -8,14 +8,18 @@ Expected to PASS with current production code (no xfail).
 
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphMutation, SampleGraphNode
+from ergon_core.core.persistence.graph.models import (
+    SampleGraphEdge,
+    SampleGraphMutation,
+    SampleGraphNode,
+)
 from ergon_core.core.persistence.shared.db import get_engine, get_session
 from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.core.application.runtime.models import MutationMeta
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from ergon_core.core.application.runtime.orchestration import PropagateTaskCompletionCommand
-from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
+from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlmodel import select
@@ -65,9 +69,13 @@ def _cleanup_run(sample_id, defn_id) -> None:  # type: ignore[no-untyped-def]
             select(SampleGraphMutation).where(SampleGraphMutation.sample_id == sample_id)
         ).all():
             session.delete(mut)
-        for edge in session.exec(select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)).all():
+        for edge in session.exec(
+            select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)
+        ).all():
             session.delete(edge)
-        for nd in session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all():
+        for nd in session.exec(
+            select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)
+        ).all():
             session.delete(nd)
         run_row = session.get(SampleRecord, sample_id)
         if run_row is not None:

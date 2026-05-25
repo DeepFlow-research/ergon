@@ -189,7 +189,9 @@ class TaskManagementService:
         Uses only_if_not_terminal to avoid races. Counts non-terminal
         descendants so the caller knows the cascade scope.
         """
-        node = self._graph_repo.get_node(session, sample_id=command.sample_id, task_id=command.task_id)
+        node = self._graph_repo.get_node(
+            session, sample_id=command.sample_id, task_id=command.task_id
+        )
         old_status = node.status
 
         if old_status in TERMINAL_STATUSES:
@@ -333,7 +335,9 @@ class TaskManagementService:
         The graph node's description is the single source of truth --
         no definition row to keep in sync.
         """
-        node = self._graph_repo.get_node(session, sample_id=command.sample_id, task_id=command.task_id)
+        node = self._graph_repo.get_node(
+            session, sample_id=command.sample_id, task_id=command.task_id
+        )
         old_description = node.description
 
         if node.status == RUNNING:
@@ -378,7 +382,9 @@ class TaskManagementService:
         cancels non-terminal downstream targets (stale input) and
         recurses into COMPLETED downstream targets (stale output).
         """
-        node = self._graph_repo.get_node(session, sample_id=command.sample_id, task_id=command.task_id)
+        node = self._graph_repo.get_node(
+            session, sample_id=command.sample_id, task_id=command.task_id
+        )
         old_status = node.status
 
         if old_status not in TERMINAL_STATUSES:
@@ -482,7 +488,9 @@ class TaskManagementService:
 
         while stack:
             current = stack.pop()
-            outgoing = self._graph_repo.get_outgoing_edges(session, sample_id=sample_id, task_id=current)
+            outgoing = self._graph_repo.get_outgoing_edges(
+                session, sample_id=sample_id, task_id=current
+            )
             for edge in outgoing:
                 target_id = edge.target_task_id
                 if target_id in seen:
@@ -495,10 +503,16 @@ class TaskManagementService:
                     # Stale output — cancel, reset incoming edges (so
                     # other fan-in parents re-satisfy them on their next
                     # completion), reset outgoing edges, then recurse.
-                    await self._cancel_for_invalidation(session, sample_id=sample_id, task_id=target_id)
+                    await self._cancel_for_invalidation(
+                        session, sample_id=sample_id, task_id=target_id
+                    )
                     invalidated.append(target_id)
-                    await self._reset_incoming_edges(session, sample_id=sample_id, task_id=target_id)
-                    await self._reset_outgoing_edges(session, sample_id=sample_id, task_id=target_id)
+                    await self._reset_incoming_edges(
+                        session, sample_id=sample_id, task_id=target_id
+                    )
+                    await self._reset_outgoing_edges(
+                        session, sample_id=sample_id, task_id=target_id
+                    )
                     stack.append(target_id)
                 elif target.status in TERMINAL_STATUSES:
                     # FAILED or CANCELLED — no stale output, no recursion.
@@ -512,9 +526,13 @@ class TaskManagementService:
                     # siblings must re-satisfy them before the target
                     # re-activates. Do NOT recurse into outgoing: the
                     # target never completed, so no stale downstream.
-                    await self._cancel_for_invalidation(session, sample_id=sample_id, task_id=target_id)
+                    await self._cancel_for_invalidation(
+                        session, sample_id=sample_id, task_id=target_id
+                    )
                     invalidated.append(target_id)
-                    await self._reset_incoming_edges(session, sample_id=sample_id, task_id=target_id)
+                    await self._reset_incoming_edges(
+                        session, sample_id=sample_id, task_id=target_id
+                    )
 
         return invalidated
 
@@ -573,7 +591,9 @@ class TaskManagementService:
         downstream edges are ready to re-satisfy when this node is
         eventually re-run (via its own restart or via re-activation).
         """
-        outgoing = self._graph_repo.get_outgoing_edges(session, sample_id=sample_id, task_id=task_id)
+        outgoing = self._graph_repo.get_outgoing_edges(
+            session, sample_id=sample_id, task_id=task_id
+        )
         for edge in outgoing:
             if edge.status != EDGE_PENDING:
                 await self._graph_repo.update_edge_status(
@@ -606,7 +626,9 @@ class TaskManagementService:
         edge status), so this does not affect whether the target
         re-activates — it only keeps the edge WAL honest.
         """
-        incoming = self._graph_repo.get_incoming_edges(session, sample_id=sample_id, task_id=task_id)
+        incoming = self._graph_repo.get_incoming_edges(
+            session, sample_id=sample_id, task_id=task_id
+        )
         for edge in incoming:
             if edge.status != EDGE_PENDING:
                 await self._graph_repo.update_edge_status(

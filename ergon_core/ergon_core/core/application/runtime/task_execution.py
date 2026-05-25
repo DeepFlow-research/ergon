@@ -145,7 +145,9 @@ class TaskExecutionService:
     ) -> PreparedTaskExecution:
         lookup_id = command.task_id
         with get_session() as session:
-            view = await self._graph_repo.node(session, sample_id=command.sample_id, task_id=lookup_id)
+            view = await self._graph_repo.node(
+                session, sample_id=command.sample_id, task_id=lookup_id
+            )
             node = session.get(SampleGraphNode, (command.sample_id, view.task_id))
             if node is None:
                 raise ConfigurationError(

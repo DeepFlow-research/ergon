@@ -507,7 +507,7 @@
     },
     "sample_id": {
       "format": "uuid",
-      "title": "Run Id",
+      "title": "Sample Id",
       "type": "string"
     },
     "task_execution_id": {

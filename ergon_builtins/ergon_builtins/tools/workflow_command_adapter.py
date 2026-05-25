@@ -18,7 +18,7 @@ from ergon_builtins.tools.dynamic_task_factory import (
 )
 from ergon_core.api import Task, WorkerContext
 from ergon_core.core.application.runtime.errors import GraphError
-from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
+from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import SampleResourceKind

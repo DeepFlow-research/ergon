@@ -19,7 +19,9 @@ class _Service(BaseModel):
 
     resource: WorkflowResourceRef | None
 
-    def list_resources(self, session, *, sample_id, task_id, scope, kind=None, max_depth=3, limit=50):
+    def list_resources(
+        self, session, *, sample_id, task_id, scope, kind=None, max_depth=3, limit=50
+    ):
         assert isinstance(session, _Session)
         assert self.resource is not None
         assert sample_id == self.resource.sample_id

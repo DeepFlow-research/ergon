@@ -242,7 +242,9 @@ async def test_spawn_dynamic_task_creates_dependency_edge(
         depends_on=(other.task_id,),
     )
 
-    edges = session.exec(select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)).all()
+    edges = session.exec(
+        select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)
+    ).all()
     assert len(edges) == 1
     assert edges[0].source_task_id == other.task_id
     assert edges[0].target_task_id == handle.task_id

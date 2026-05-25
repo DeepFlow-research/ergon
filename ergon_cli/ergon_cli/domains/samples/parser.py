@@ -8,7 +8,9 @@ def register_sample_parser(subparsers: argparse._SubParsersAction) -> None:
     sample.set_defaults(handler=handle_sample)
     sample_sub = sample.add_subparsers(dest="sample_action")
     sample_list_parser = sample_sub.add_parser("list", help="List recent samples")
-    sample_list_parser.add_argument("--limit", type=int, default=20, help="Number of samples to show")
+    sample_list_parser.add_argument(
+        "--limit", type=int, default=20, help="Number of samples to show"
+    )
     sample_list_parser.add_argument(
         "--status",
         default=None,

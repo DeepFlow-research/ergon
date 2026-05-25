@@ -149,7 +149,9 @@ def list_sandbox_command_wal(sample_id: UUID) -> list[SandboxCommandWalSnapshot]
 
 def list_sandbox_events(sample_id: UUID) -> list[SandboxEventSnapshot]:
     with get_session() as session:
-        rows = list(session.exec(select(SandboxEvent).where(SandboxEvent.sample_id == sample_id)).all())
+        rows = list(
+            session.exec(select(SandboxEvent).where(SandboxEvent.sample_id == sample_id)).all()
+        )
     return [SandboxEventSnapshot(sandbox_id=row.sandbox_id, kind=row.kind) for row in rows]
 
 

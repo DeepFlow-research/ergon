@@ -182,7 +182,9 @@ class SmokeCriterionBase(Criterion):
             nested = list(
                 session.exec(
                     select(SampleGraphNode)
-                    .where(SampleGraphNode.parent_task_id.in_([child.task_id for child in children]))  # ty: ignore[unresolved-attribute]
+                    .where(
+                        SampleGraphNode.parent_task_id.in_([child.task_id for child in children])
+                    )  # ty: ignore[unresolved-attribute]
                     .order_by(SampleGraphNode.task_slug),
                 ).all(),
             )

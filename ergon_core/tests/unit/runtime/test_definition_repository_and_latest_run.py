@@ -80,7 +80,9 @@ def test_latest_sample_for_definition_returns_most_recent(monkeypatch, session_f
     assert result.id == newest_id
 
 
-def test_latest_sample_for_definition_ignores_other_definitions(monkeypatch, session_factory) -> None:
+def test_latest_sample_for_definition_ignores_other_definitions(
+    monkeypatch, session_factory
+) -> None:
     def_a = uuid4()
     def_b = uuid4()
     now = datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
@@ -120,7 +122,9 @@ def test_latest_sample_for_definition_ignores_other_definitions(monkeypatch, ses
     assert result.id == run_a_id
 
 
-def test_latest_sample_for_definition_returns_none_when_no_runs(monkeypatch, session_factory) -> None:
+def test_latest_sample_for_definition_returns_none_when_no_runs(
+    monkeypatch, session_factory
+) -> None:
     definition_id = uuid4()
 
     monkeypatch.setattr(runs_module, "get_session", session_factory)

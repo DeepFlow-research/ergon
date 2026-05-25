@@ -39,7 +39,9 @@ async def run_sample_cleanup_job(ctx: Any, payload: SampleCleanupEvent) -> Sampl
     )
 
 
-async def _cleanup_run(sample_id: UUID, status: str, error_message: str | None) -> SampleCleanupResult:
+async def _cleanup_run(
+    sample_id: UUID, status: str, error_message: str | None
+) -> SampleCleanupResult:
     """Terminate sandbox and update run status."""
     expected = _STATUS_MAP.get(status)
     if expected is None:

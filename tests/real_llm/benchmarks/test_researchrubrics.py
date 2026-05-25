@@ -99,12 +99,18 @@ def _wait_for_post_terminal_artifacts(sample_id: UUID) -> None:
     while time.monotonic() < deadline:
         with get_session() as session:
             resources = len(
-                list(session.exec(select(SampleResource).where(SampleResource.sample_id == sample_id)).all())
+                list(
+                    session.exec(
+                        select(SampleResource).where(SampleResource.sample_id == sample_id)
+                    ).all()
+                )
             )
             evaluations = len(
                 list(
                     session.exec(
-                        select(SampleTaskEvaluation).where(SampleTaskEvaluation.sample_id == sample_id)
+                        select(SampleTaskEvaluation).where(
+                            SampleTaskEvaluation.sample_id == sample_id
+                        )
                     ).all()
                 )
             )

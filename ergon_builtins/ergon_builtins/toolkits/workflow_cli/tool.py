@@ -9,7 +9,7 @@ from ergon_builtins.tools.workflow_command_adapter import (
     execute_workflow_command,
 )
 from ergon_core.api import WorkerContext
-from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
+from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
 from ergon_core.core.persistence.shared.db import get_session
 from pydantic_ai import RunContext
 from sqlmodel import Session

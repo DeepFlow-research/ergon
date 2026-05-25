@@ -169,7 +169,9 @@ async def test_task_id_propagates_into_runtime_task_instance() -> None:
         meta=MutationMeta(actor="test", reason="identity"),
     )
 
-    nodes = session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all()
+    nodes = session.exec(
+        select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)
+    ).all()
     for row in nodes:
         canonical_id = row.task_id
         view = await repo.node(session, sample_id=sample_id, task_id=canonical_id)

@@ -130,7 +130,11 @@ def dump_rollout(sample_id: UUID, out_dir: Path) -> dict[str, int]:
         )
         counts["sample_resources"] = _write_jsonl(
             db_dir / "sample_resources.jsonl",
-            list(session.exec(select(SampleResource).where(SampleResource.sample_id == sample_id)).all()),
+            list(
+                session.exec(
+                    select(SampleResource).where(SampleResource.sample_id == sample_id)
+                ).all()
+            ),
         )
         counts["sample_task_evaluations"] = _write_jsonl(
             db_dir / "sample_task_evaluations.jsonl",
@@ -142,15 +146,25 @@ def dump_rollout(sample_id: UUID, out_dir: Path) -> dict[str, int]:
         )
         counts["sandbox_events"] = _write_jsonl(
             db_dir / "sandbox_events.jsonl",
-            list(session.exec(select(SandboxEvent).where(SandboxEvent.sample_id == sample_id)).all()),
+            list(
+                session.exec(select(SandboxEvent).where(SandboxEvent.sample_id == sample_id)).all()
+            ),
         )
         counts["sample_graph_nodes"] = _write_jsonl(
             db_dir / "sample_graph_nodes.jsonl",
-            list(session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all()),
+            list(
+                session.exec(
+                    select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)
+                ).all()
+            ),
         )
         counts["sample_graph_edges"] = _write_jsonl(
             db_dir / "sample_graph_edges.jsonl",
-            list(session.exec(select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)).all()),
+            list(
+                session.exec(
+                    select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)
+                ).all()
+            ),
         )
         counts["sample_graph_mutations"] = _write_jsonl(
             db_dir / "sample_graph_mutations.jsonl",
@@ -225,7 +239,9 @@ async def capture_dashboard(
         await page.screenshot(path=str(shot), full_page=True)
         captured["run_detail"] = str(shot.relative_to(out_dir))
     except Exception:  # slopcop: ignore[no-broad-except]
-        logger.exception("capture_dashboard: run_detail screenshot failed for sample_id=%s", sample_id)
+        logger.exception(
+            "capture_dashboard: run_detail screenshot failed for sample_id=%s", sample_id
+        )
     finally:
         await page.close()
 

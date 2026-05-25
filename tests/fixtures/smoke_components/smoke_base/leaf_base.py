@@ -165,5 +165,7 @@ class BaseSmokeLeafWorker(Worker):
         if task_id is None:
             return "unknown"
         with get_session() as session:
-            node = session.exec(select(SampleGraphNode).where(SampleGraphNode.task_id == task_id)).first()
+            node = session.exec(
+                select(SampleGraphNode).where(SampleGraphNode.task_id == task_id)
+            ).first()
         return node.task_slug if node is not None else f"node-{task_id.hex[:8]}"

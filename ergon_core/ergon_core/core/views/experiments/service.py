@@ -177,7 +177,9 @@ def _runs_for_definition_view(
 ) -> list[SampleRecord]:
     experiment = optional_str_metadata(definition.parsed_metadata(), "experiment")
     if experiment:
-        return list(session.exec(select(SampleRecord).where(SampleRecord.experiment == experiment)).all())
+        return list(
+            session.exec(select(SampleRecord).where(SampleRecord.experiment == experiment)).all()
+        )
     return list(
         session.exec(select(SampleRecord).where(SampleRecord.definition_id == definition.id)).all()
     )
@@ -249,7 +251,11 @@ def _run_row(
 def _task_counts_by_sample(session: Session, sample_ids: list[UUID]) -> dict[UUID, int]:
     return {
         sample_id: len(
-            list(session.exec(select(SampleGraphNode.task_id).where(SampleGraphNode.sample_id == sample_id)))
+            list(
+                session.exec(
+                    select(SampleGraphNode.task_id).where(SampleGraphNode.sample_id == sample_id)
+                )
+            )
         )
         for sample_id in sample_ids
     }
@@ -263,7 +269,9 @@ def _context_events_by_run(
         return {}
 
     rows = list(
-        session.exec(select(SampleContextEvent).where(col(SampleContextEvent.sample_id).in_(sample_ids)))
+        session.exec(
+            select(SampleContextEvent).where(col(SampleContextEvent.sample_id).in_(sample_ids))
+        )
     )
     result: dict[UUID, list[SampleContextEvent]] = {sample_id: [] for sample_id in sample_ids}
     for row in rows:

@@ -268,7 +268,9 @@ def _assert_blob_roundtrip(sample_id: UUID) -> None:
 
 def _assert_minif2f_artifacts(sample_id: UUID) -> None:
     """Every MiniF2F leaf persists a Lean proof artifact with the smoke theorem."""
-    resources = _require_named_resources(sample_id, prefix="proof_", suffix=".lean", expected_count=10)
+    resources = _require_named_resources(
+        sample_id, prefix="proof_", suffix=".lean", expected_count=10
+    )
     for resource in resources:
         text = read_resource_bytes(resource).decode("utf-8")
         assert "theorem smoke_trivial" in text, f"{resource.name} missing theorem marker"
@@ -277,7 +279,9 @@ def _assert_minif2f_artifacts(sample_id: UUID) -> None:
 
 def _assert_swebench_artifacts(sample_id: UUID) -> None:
     """Every SWE-Bench leaf persists a parseable Python patch with add()."""
-    resources = _require_named_resources(sample_id, prefix="patch_", suffix=".py", expected_count=10)
+    resources = _require_named_resources(
+        sample_id, prefix="patch_", suffix=".py", expected_count=10
+    )
     for resource in resources:
         source = read_resource_bytes(resource).decode("utf-8")
         module = ast.parse(source, filename=resource.name)
@@ -470,7 +474,9 @@ async def wait_for_terminal_status(
     last_state: dict[str, object] | None = None
     async with httpx.AsyncClient(timeout=10.0) as client:
         while time.monotonic() < deadline:
-            r = await client.get(f"{api_base}/api/__danger__/test-harness/read/run/{sample_id}/state")
+            r = await client.get(
+                f"{api_base}/api/__danger__/test-harness/read/run/{sample_id}/state"
+            )
             if r.status_code == 200:
                 state = r.json()
                 last_state = state
