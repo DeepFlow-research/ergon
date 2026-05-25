@@ -20,10 +20,11 @@ export interface BackendRunState {
     parent_task_id: string | null;
     parent_task_slug: string | null;
   }[];
-  mutations: {
-    sequence: number;
-    mutation_type: string;
-    target_task_slug: string | null;
+  events: {
+    table: string;
+    event_type: string;
+    target_id: string | null;
+    payload: Record<string, unknown>;
   }[];
   evaluations: {
     task_id: string;
@@ -37,7 +38,7 @@ export interface BackendRunState {
     error: string | null;
   }[];
   execution_count: number;
-  mutation_count: number;
+  event_count: number;
   resource_count: number;
   thread_count: number;
   context_event_count: number;
