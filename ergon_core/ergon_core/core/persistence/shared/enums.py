@@ -7,7 +7,7 @@ type safety and Postgres VARCHAR/JSON compatibility.
 from enum import StrEnum
 
 
-class RunStatus(StrEnum):
+class SampleStatus(StrEnum):
     PENDING = "pending"
     EXECUTING = "executing"
     EVALUATING = "evaluating"
@@ -16,7 +16,7 @@ class RunStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
-TERMINAL_RUN_STATUSES = {RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELLED}
+TERMINAL_SAMPLE_STATUSES = {SampleStatus.COMPLETED, SampleStatus.FAILED, SampleStatus.CANCELLED}
 
 
 class TaskExecutionStatus(StrEnum):
@@ -29,8 +29,8 @@ class TaskExecutionStatus(StrEnum):
     BLOCKED = "blocked"
 
 
-class RunResourceKind(StrEnum):
-    """Canonical kinds for ``run_resources.kind``.
+class SampleResourceKind(StrEnum):
+    """Canonical kinds for ``sample_resources.kind``.
 
     Stored as VARCHAR; enforced at the model/API boundary, not in the DB
     schema. Each kind documents the publisher that produces it so a new
@@ -41,7 +41,7 @@ class RunResourceKind(StrEnum):
     """Explicit text artifact published by a worker/toolkit.
 
     Worker final assistant messages belong on
-    ``RunTaskExecution.final_assistant_message`` instead of this resource log.
+    ``SampleTaskAttempt.final_assistant_message`` instead of this resource log.
     """
 
     REPORT = "report"
@@ -57,4 +57,4 @@ class RunResourceKind(StrEnum):
     """Free-form scratch note written by an agent."""
 
     IMPORT = "import"
-    """Copied snapshot materialized from another ``RunResource``."""
+    """Copied snapshot materialized from another ``SampleResource``."""

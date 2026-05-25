@@ -54,17 +54,17 @@ class TaskAlreadyTerminalError(DelegationError):
         self.current_status = current_status
 
 
-class RunRecordMissingError(DelegationError):
-    """Raised when a service is asked to mutate a run that has no RunRecord.
+class SampleRecordMissingError(DelegationError):
+    """Raised when a service is asked to mutate a run that has no SampleRecord.
 
-    Every run must have a RunRecord (with ``experiment_definition_id``)
+    Every run must have a SampleRecord (with ``experiment_definition_id``)
     before any task/graph service is invoked on it. This is enforced as a
     hard invariant so missing fixtures in tests surface as a loud failure.
     """
 
-    def __init__(self, run_id: UUID) -> None:
+    def __init__(self, sample_id: UUID) -> None:
         super().__init__(
-            f"RunRecord missing for run_id={run_id}; seed a RunRecord before "
+            f"SampleRecord missing for sample_id={sample_id}; seed a SampleRecord before "
             "invoking TaskManagementService.",
         )
-        self.run_id = run_id
+        self.sample_id = sample_id

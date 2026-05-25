@@ -121,7 +121,7 @@ async function expectNoTimelinePlaybackControls(page: Page) {
 
 test("visual debugger renders graph, activity stack, and time-aware workspace", async ({ page }) => {
   await page.goto(
-    `/run/${CONCURRENT_MAS_FIXTURE_IDS.runId}`,
+    `/samples/${CONCURRENT_MAS_FIXTURE_IDS.sampleId}`,
   );
 
   await expect(page.getByTestId("run-header")).toBeVisible();

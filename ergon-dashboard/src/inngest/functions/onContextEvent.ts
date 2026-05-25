@@ -12,7 +12,7 @@ export const onContextEvent = inngest.createFunction(
 
     const contextEvent: ContextEventState = {
       id: payload.id,
-      runId: payload.run_id,
+      sampleId: payload.sample_id,
       taskExecutionId: payload.task_execution_id,
       taskId: payload.task_id,
       workerBindingKey: payload.worker_binding_key,
@@ -24,8 +24,8 @@ export const onContextEvent = inngest.createFunction(
       completedAt: payload.completed_at ?? null,
     };
 
-    store.addContextEvent(payload.run_id, payload.task_id, contextEvent);
-    broadcastContextEvent(payload.run_id, payload.task_id, contextEvent);
+    store.addContextEvent(payload.sample_id, payload.task_id, contextEvent);
+    broadcastContextEvent(payload.sample_id, payload.task_id, contextEvent);
 
     return { success: true };
   },

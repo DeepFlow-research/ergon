@@ -44,7 +44,7 @@ async def test_reads_proof_via_task_sandbox() -> None:
     sandbox.is_live = True
 
     context = CriterionContext(
-        run_id=uuid4(),
+        sample_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
         task=_make_task(sandbox),
@@ -68,7 +68,7 @@ async def test_scores_zero_when_proof_missing() -> None:
     sandbox.read_file = AsyncMock(side_effect=OSError("missing"))
 
     context = CriterionContext(
-        run_id=uuid4(),
+        sample_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
         task=_make_task(sandbox),

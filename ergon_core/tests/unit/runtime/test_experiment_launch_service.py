@@ -4,13 +4,13 @@ from uuid import uuid4
 import pytest
 from ergon_core.core.application.experiments import launch as launch_module
 from ergon_core.core.application.experiments.errors import DefinitionNotFoundError
-from ergon_core.core.application.experiments.launch import launch_run
+from ergon_core.core.application.experiments.launch import launch_sample
 from ergon_core.core.application.experiments.models import ExperimentRunRequest
 from ergon_core.core.application.experiments.handles import DefinitionHandle
 from ergon_core.core.application.experiments.service import run_experiment
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.shared.enums import SampleStatus
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 
 
 class _FakeSession:
@@ -46,31 +46,31 @@ class _FakeSession:
 
 
 @pytest.mark.asyncio
-async def test_run_experiment_creates_one_run_per_selected_sample(monkeypatch):
+async def test_sample_experiment_creates_one_run_per_selected_sample(monkeypatch):
     definition = ExperimentDefinition(
         id=uuid4(),
         name="ci experiment",
         benchmark_type="ci-benchmark",
         metadata_json={},
     )
-    created_runs: list[RunRecord] = []
+    created_samples: list[SampleRecord] = []
     emitted: list[tuple] = []
 
-    def fake_create_run(definition, **kwargs):
-        run = RunRecord(
+    def fake_create_sample(definition, **kwargs):
+        run = SampleRecord(
             id=uuid4(),
-            status=RunStatus.PENDING,
+            status=SampleStatus.PENDING,
             benchmark_type=definition.benchmark_type,
             **kwargs,
         )
-        created_runs.append(run)
+        created_samples.append(run)
         return run
 
-    async def fake_emit(run_id, definition_id):
-        emitted.append((run_id, definition_id))
+    async def fake_emit(sample_id, definition_id):
+        emitted.append((sample_id, definition_id))
 
     monkeypatch.setattr(launch_module, "get_session", lambda: _FakeSession(definition=definition))
-    monkeypatch.setattr(launch_module, "create_run", fake_create_run)
+    monkeypatch.setattr(launch_module, "create_definition_backed_sample", fake_create_sample)
 
     result = await run_experiment(
         ExperimentRunRequest(definition_id=definition.id),
@@ -78,19 +78,19 @@ async def test_run_experiment_creates_one_run_per_selected_sample(monkeypatch):
     )
 
     assert result.definition_id == definition.id
-    assert result.run_ids == [created_runs[0].id]
+    assert result.sample_ids == [created_samples[0].id]
     assert result.definition_ids == [definition.id]
-    assert [run.instance_key for run in created_runs] == ["default"]
-    assert {run.definition_id for run in created_runs} == {definition.id}
-    assert emitted == [(created_runs[0].id, definition.id)]
+    assert [run.instance_key for run in created_samples] == ["default"]
+    assert {run.definition_id for run in created_samples} == {definition.id}
+    assert emitted == [(created_samples[0].id, definition.id)]
 
 
 @pytest.mark.asyncio
-async def test_launch_run_accepts_definition_id(monkeypatch):
-    """``launch_run`` materializes a run straight from ``ExperimentDefinition``.
+async def test_launch_sample_accepts_definition_id(monkeypatch):
+    """``launch_sample`` materializes a sample straight from ``ExperimentDefinition``.
 
-    The real DB write inside ``create_run`` is blocked by
-    ``create_run`` is mocked here so the orchestration around the
+    The real DB write inside ``create_definition_backed_sample`` is blocked by
+    ``create_definition_backed_sample`` is mocked here so the orchestration around the
     definition-first path can be exercised without a database write.
     The orchestration around it (session lookup, emitter, result shape)
     is still exercised end-to-end against the new definition-first path.
@@ -104,12 +104,12 @@ async def test_launch_run_accepts_definition_id(monkeypatch):
     )
     captured: dict = {}
 
-    def fake_create_run(handle, **kwargs):
+    def fake_create_sample(handle, **kwargs):
         captured["handle"] = handle
         captured["kwargs"] = kwargs
-        return RunRecord(
+        return SampleRecord(
             id=uuid4(),
-            status=RunStatus.PENDING,
+            status=SampleStatus.PENDING,
             benchmark_type=handle.benchmark_type,
             definition_id=kwargs.get("definition_id"),
             worker_team_json=kwargs.get("worker_team_json") or {},
@@ -117,12 +117,12 @@ async def test_launch_run_accepts_definition_id(monkeypatch):
         )
 
     monkeypatch.setattr(launch_module, "get_session", lambda: _FakeSession(definition=definition))
-    monkeypatch.setattr(launch_module, "create_run", fake_create_run)
+    monkeypatch.setattr(launch_module, "create_definition_backed_sample", fake_create_sample)
 
     emitter = AsyncMock()
-    result = await launch_run(definition.id, emit_workflow_started=emitter)
+    result = await launch_sample(definition.id, emit_workflow_started=emitter)
 
-    # Orchestration: create_run was reached with the definition handle.
+    # Orchestration: create_definition_backed_sample was reached with the definition handle.
     assert captured["handle"].definition_id == definition.id
     assert captured["handle"].benchmark_type == "mini"
     assert captured["kwargs"]["definition_id"] == definition.id
@@ -131,16 +131,16 @@ async def test_launch_run_accepts_definition_id(monkeypatch):
     # Result shape mirrors the spec.
     assert result.definition_id == definition.id
     assert result.definition_ids == [definition.id]
-    assert result.run_ids
-    assert len(result.run_ids) == 1
+    assert result.sample_ids
+    assert len(result.sample_ids) == 1
 
-    # Emitter was awaited with the new run id and the definition id.
-    emitter.assert_awaited_once_with(result.run_ids[0], definition.id)
+    # Emitter was awaited with the new sample id and the definition id.
+    emitter.assert_awaited_once_with(result.sample_ids[0], definition.id)
 
 
 @pytest.mark.asyncio
-async def test_launch_run_raises_typed_error_when_definition_missing(monkeypatch):
-    """``launch_run`` raises ``DefinitionNotFoundError`` (not a generic
+async def test_launch_sample_raises_typed_error_when_definition_missing(monkeypatch):
+    """``launch_sample`` raises ``DefinitionNotFoundError`` (not a generic
     ``ValueError``) when the requested ``ExperimentDefinition`` row is
     absent. Callers depend on the typed exception to differentiate
     "missing definition" from other lookup failures without string-
@@ -149,4 +149,4 @@ async def test_launch_run_raises_typed_error_when_definition_missing(monkeypatch
 
     monkeypatch.setattr(launch_module, "get_session", lambda: _FakeSession())
     with pytest.raises(DefinitionNotFoundError):
-        await launch_run(uuid4(), emit_workflow_started=AsyncMock())
+        await launch_sample(uuid4(), emit_workflow_started=AsyncMock())

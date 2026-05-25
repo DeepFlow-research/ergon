@@ -68,7 +68,7 @@ async def test_evaluate_calls_ensure_sandbox_not_spawn_eval_sandbox() -> None:
     task.sandbox = sandbox
 
     ctx = CriterionContext(
-        run_id=uuid4(),
+        sample_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
         task=task,

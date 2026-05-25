@@ -30,9 +30,9 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTaskAssignment,
     ExperimentDefinitionWorker,
 )
-from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.shared.enums import SampleStatus
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.pool import StaticPool
@@ -59,12 +59,12 @@ def _session() -> Session:
 
 def _seed_run(session: Session) -> tuple[UUID, UUID]:
     """Insert a minimal experiment/definition/run with one task; return
-    (run_id, definition_id)."""
+    (sample_id, definition_id)."""
 
     definition_id = uuid4()
     instance_id = uuid4()
     task_id = uuid4()
-    run_id = uuid4()
+    sample_id = uuid4()
     task_json = _SmokeTask(
         task_slug="root",
         instance_key="sample-1",
@@ -92,42 +92,42 @@ def _seed_run(session: Session) -> tuple[UUID, UUID]:
                 task_payload_json={"problem": "p"},
                 task_json=task_json,
             ),
-            RunRecord(
-                id=run_id,
+            SampleRecord(
+                id=sample_id,
                 definition_id=definition_id,
                 benchmark_type="test",
                 instance_key="sample-1",
                 worker_team_json={},
-                status=RunStatus.EXECUTING,
+                status=SampleStatus.EXECUTING,
             ),
         ]
     )
     session.commit()
-    return run_id, definition_id
+    return sample_id, definition_id
 
 
 # ── PR 1 invariant — GREEN today ─────────────────────────────────────
 
 
 def test_prepare_run_populates_task_json_for_every_node() -> None:
-    """PR 1 invariant: every run_graph_nodes row produced by
+    """PR 1 invariant: every sample_graph_nodes row produced by
     initialize_from_definition carries a non-empty task_json
     snapshot."""
 
     session = _session()
-    run_id, definition_id = _seed_run(session)
+    sample_id, definition_id = _seed_run(session)
 
     repo = RuntimeGraphRepository()
     repo.initialize_from_definition(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         definition_id=definition_id,
         initial_node_status="pending",
         initial_edge_status="pending",
         meta=MutationMeta(actor="test", reason="smoke"),
     )
 
-    rows = session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all()
+    rows = session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all()
 
     assert rows, "prepare_run produced no nodes"
     assert all(row.task_json for row in rows), (
@@ -263,12 +263,12 @@ def test_worker_execute_emits_one_evaluate_invocation_per_evaluator() -> None:
 
 def test_evaluate_task_run_payload_is_id_only() -> None:
     """PR 4 invariant: TaskEvaluateRequest has exactly four fields:
-    run_id, task_id, execution_id, evaluator_index."""
+    sample_id, task_id, execution_id, evaluator_index."""
 
     from ergon_core.core.jobs.task.evaluate.contract import TaskEvaluateRequest
 
     assert set(TaskEvaluateRequest.model_fields) == {
-        "run_id",
+        "sample_id",
         "task_id",
         "execution_id",
         "evaluator_index",
@@ -362,19 +362,19 @@ def _patch_get_session_smoke(monkeypatch: pytest.MonkeyPatch, session: Session) 
     monkeypatch.setattr(inspection_module, "get_session", ctx_factory)
 
 
-def _seed_parent_node(session: Session, *, run_id: UUID) -> RunGraphNode:
+def _seed_parent_node(session: Session, *, sample_id: UUID) -> SampleGraphNode:
     session.add(
-        RunRecord(
-            id=run_id,
+        SampleRecord(
+            id=sample_id,
             definition_id=uuid4(),
             benchmark_type="test",
             instance_key="sample-1",
             worker_team_json={},
-            status=RunStatus.EXECUTING,
+            status=SampleStatus.EXECUTING,
         )
     )
-    node = RunGraphNode(
-        run_id=run_id,
+    node = SampleGraphNode(
+        sample_id=sample_id,
         instance_key="sample-1",
         task_slug="parent",
         description="parent task",
@@ -389,7 +389,7 @@ def _seed_parent_node(session: Session, *, run_id: UUID) -> RunGraphNode:
 
 
 @pytest.mark.asyncio
-async def test_dynamic_spawn_writes_only_to_run_graph_nodes(
+async def test_dynamic_spawn_writes_only_to_sample_graph_nodes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Δ.3 / PR 9 invariant: dynamic subtasks are graph-native."""
@@ -404,8 +404,8 @@ async def test_dynamic_spawn_writes_only_to_run_graph_nodes(
     session = Session(engine)
 
     # 2. Seed one parent graph node.
-    run_id = uuid4()
-    parent = _seed_parent_node(session, run_id=run_id)
+    sample_id = uuid4()
+    parent = _seed_parent_node(session, sample_id=sample_id)
 
     # 3. Patch get_session so service writes stay in the test session.
     _patch_get_session_smoke(monkeypatch, session)
@@ -419,7 +419,7 @@ async def test_dynamic_spawn_writes_only_to_run_graph_nodes(
     )
     task_inspect = TaskInspectionService()
     context = WorkerContext._for_job(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=parent.task_id,
         execution_id=uuid4(),
         definition_id=None,
@@ -430,7 +430,7 @@ async def test_dynamic_spawn_writes_only_to_run_graph_nodes(
         session_factory=management_module.get_session,
     )
 
-    nodes_before = session.exec(select(RunGraphNode)).all()
+    nodes_before = session.exec(select(SampleGraphNode)).all()
     defs_before = session.exec(select(ExperimentDefinitionTask)).all()
     assert len(nodes_before) == 1  # only the parent
 
@@ -446,18 +446,18 @@ async def test_dynamic_spawn_writes_only_to_run_graph_nodes(
         )
     )
 
-    # 5. Exactly one new run_graph_nodes row (is_dynamic=True); zero new
+    # 5. Exactly one new sample_graph_nodes row (is_dynamic=True); zero new
     #    experiment_definition_tasks rows.
-    nodes_after = session.exec(select(RunGraphNode)).all()
+    nodes_after = session.exec(select(SampleGraphNode)).all()
     defs_after = session.exec(select(ExperimentDefinitionTask)).all()
 
     assert len(nodes_after) == len(nodes_before) + 1
     assert len(defs_after) == len(defs_before) == 0
 
     new_node = session.exec(
-        select(RunGraphNode).where(
-            RunGraphNode.run_id == run_id,
-            RunGraphNode.task_slug == "child",
+        select(SampleGraphNode).where(
+            SampleGraphNode.sample_id == sample_id,
+            SampleGraphNode.task_slug == "child",
         )
     ).one()
     assert new_node.is_dynamic is True

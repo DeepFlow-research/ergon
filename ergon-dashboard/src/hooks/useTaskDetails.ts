@@ -15,7 +15,7 @@ import {
   ResourceState,
   SandboxState,
   TaskEvaluationState,
-  WorkflowRunState,
+  SampleWorkspaceState,
 } from "@/lib/types";
 
 export interface TaskDependencies {
@@ -49,11 +49,11 @@ export interface UseTaskDetailsResult {
 /**
  * Hook to get detailed information about a specific task within a run.
  *
- * @param runId - The workflow run ID
+ * @param sampleId - The workflow run ID
  * @param taskId - The task ID (null means no task selected)
  */
 export function useTaskDetails(
-  runState: WorkflowRunState | null,
+  runState: SampleWorkspaceState | null,
   taskId: string | null
 ): UseTaskDetailsResult {
   // Extract task

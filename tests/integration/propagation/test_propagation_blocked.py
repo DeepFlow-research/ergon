@@ -2,11 +2,11 @@
 
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphMutation, SampleGraphNode
 from ergon_core.core.application.runtime.status import BLOCKED, CANCELLED
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.core.application.runtime.models import MutationMeta
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from ergon_core.core.application.runtime.orchestration import PropagateTaskCompletionCommand
@@ -32,18 +32,18 @@ pytestmark = pytest.mark.integration
 # ---------------------------------------------------------------------------
 
 
-def _cleanup_run(run_id, defn_id) -> None:  # type: ignore[no-untyped-def]
+def _cleanup_run(sample_id, defn_id) -> None:  # type: ignore[no-untyped-def]
     """Remove all rows created by a test, in FK-safe order."""
     with get_session() as session:
         for mut in session.exec(
-            select(RunGraphMutation).where(RunGraphMutation.run_id == run_id)
+            select(SampleGraphMutation).where(SampleGraphMutation.sample_id == sample_id)
         ).all():
             session.delete(mut)
-        for edge in session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all():
+        for edge in session.exec(select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)).all():
             session.delete(edge)
-        for nd in session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all():
+        for nd in session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all():
             session.delete(nd)
-        run_row = session.get(RunRecord, run_id)
+        run_row = session.get(SampleRecord, sample_id)
         if run_row is not None:
             session.delete(run_row)
         defn_row = session.get(ExperimentDefinition, defn_id)
@@ -62,7 +62,7 @@ async def test_3_failure_cascade_successor_blocked() -> None:
     """Linear chain A→B→C. B fails. C must become BLOCKED, not CANCELLED.
 
     Also asserts:
-    - RunRecord does not transition to FAILED (the run stays EXECUTING).
+    - SampleRecord does not transition to FAILED (the run stays EXECUTING).
     - WAL entry for C records BLOCKED status.
     """
     with get_session() as session:
@@ -76,7 +76,7 @@ async def test_3_failure_cascade_successor_blocked() -> None:
             first_status="completed",
             rest_status="pending",
         )
-        run_id = run.id
+        sample_id = run.id
         defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
@@ -89,14 +89,14 @@ async def test_3_failure_cascade_successor_blocked() -> None:
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=node_a_id,
                 new_status=TaskExecutionStatus.COMPLETED,
                 meta=MutationMeta(actor="test:setup", reason="test: A completed"),
             )
             await graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=node_b_id,
                 new_status=TaskExecutionStatus.FAILED,
                 meta=MutationMeta(actor="test:setup", reason="test: B failed"),
@@ -107,7 +107,7 @@ async def test_3_failure_cascade_successor_blocked() -> None:
         svc = WorkflowService()
         await svc.propagate_failure(
             PropagateTaskCompletionCommand(
-                run_id=run_id,
+                sample_id=sample_id,
                 definition_id=defn_id,
                 task_id=node_b_id,
                 execution_id=node_b_id,
@@ -121,21 +121,21 @@ async def test_3_failure_cascade_successor_blocked() -> None:
             # WAL must have a BLOCKED entry for C
             assert_wal_has_status(session, node_c_id, BLOCKED)
 
-        # RunRecord must remain EXECUTING — propagation of a single failure must not flip the run
+        # SampleRecord must remain EXECUTING — propagation of a single failure must not flip the run
         # to FAILED while successor nodes are in the BLOCKED (operator-awaiting) state.
         with get_session() as session:
-            run_row = session.get(RunRecord, run_id)
+            run_row = session.get(SampleRecord, sample_id)
             assert run_row is not None
-            assert run_row.status == RunStatus.EXECUTING, (
-                f"RunRecord must remain EXECUTING while blocked successors await operator; "
+            assert run_row.status == SampleStatus.EXECUTING, (
+                f"SampleRecord must remain EXECUTING while blocked successors await operator; "
                 f"got {run_row.status!r}"
             )
 
         with get_session() as session:
-            assert_cross_cutting_invariants(session, run_id)
+            assert_cross_cutting_invariants(session, sample_id)
 
     finally:
-        _cleanup_run(run_id, defn_id)
+        _cleanup_run(sample_id, defn_id)
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +174,7 @@ async def test_7_parent_failure_children_blocked() -> None:
         make_edge(
             session, run.id, source_task_id=parent_node.task_id, target_task_id=child_d.task_id
         )
-        run_id = run.id
+        sample_id = run.id
         defn_id = defn.id
         parent_task_id = parent_node.task_id
         child_a_id = child_a.task_id
@@ -188,21 +188,21 @@ async def test_7_parent_failure_children_blocked() -> None:
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=parent_task_id,
                 new_status=TaskExecutionStatus.FAILED,
                 meta=MutationMeta(actor="test:setup", reason="test: parent failed"),
             )
             await graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=child_c_id,
                 new_status=TaskExecutionStatus.RUNNING,
                 meta=MutationMeta(actor="test:setup", reason="test: child-c already running"),
             )
             await graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=child_d_id,
                 new_status=TaskExecutionStatus.COMPLETED,
                 meta=MutationMeta(actor="test:setup", reason="test: child-d already completed"),
@@ -212,7 +212,7 @@ async def test_7_parent_failure_children_blocked() -> None:
         svc = WorkflowService()
         await svc.propagate_failure(
             PropagateTaskCompletionCommand(
-                run_id=run_id,
+                sample_id=sample_id,
                 definition_id=defn_id,
                 task_id=parent_task_id,
                 execution_id=parent_task_id,
@@ -241,20 +241,20 @@ async def test_7_parent_failure_children_blocked() -> None:
                 f"got {child_d_status!r}"
             )
 
-        # RunRecord must remain EXECUTING — not auto-failed by propagation
+        # SampleRecord must remain EXECUTING — not auto-failed by propagation
         with get_session() as session:
-            run_row = session.get(RunRecord, run_id)
+            run_row = session.get(SampleRecord, sample_id)
             assert run_row is not None
-            assert run_row.status == RunStatus.EXECUTING, (
-                f"RunRecord must remain EXECUTING while blocked children await operator; "
+            assert run_row.status == SampleStatus.EXECUTING, (
+                f"SampleRecord must remain EXECUTING while blocked children await operator; "
                 f"got {run_row.status!r}"
             )
 
         with get_session() as session:
-            assert_cross_cutting_invariants(session, run_id)
+            assert_cross_cutting_invariants(session, sample_id)
 
     finally:
-        _cleanup_run(run_id, defn_id)
+        _cleanup_run(sample_id, defn_id)
 
 
 # ---------------------------------------------------------------------------
@@ -279,7 +279,7 @@ async def test_10_blocked_propagates_transitively() -> None:
             first_status="running",
             rest_status="pending",
         )
-        run_id = run.id
+        sample_id = run.id
         defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
@@ -291,7 +291,7 @@ async def test_10_blocked_propagates_transitively() -> None:
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=node_a_id,
                 new_status=TaskExecutionStatus.FAILED,
                 meta=MutationMeta(actor="test:setup", reason="test: A failed"),
@@ -301,7 +301,7 @@ async def test_10_blocked_propagates_transitively() -> None:
         svc = WorkflowService()
         await svc.propagate_failure(
             PropagateTaskCompletionCommand(
-                run_id=run_id,
+                sample_id=sample_id,
                 definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
@@ -321,20 +321,20 @@ async def test_10_blocked_propagates_transitively() -> None:
             )
             assert_wal_has_status(session, node_c_id, BLOCKED)
 
-        # RunRecord must remain EXECUTING — not auto-failed by propagation
+        # SampleRecord must remain EXECUTING — not auto-failed by propagation
         with get_session() as session:
-            run_row = session.get(RunRecord, run_id)
+            run_row = session.get(SampleRecord, sample_id)
             assert run_row is not None
-            assert run_row.status == RunStatus.EXECUTING, (
-                f"RunRecord must remain EXECUTING while blocked successors await operator; "
+            assert run_row.status == SampleStatus.EXECUTING, (
+                f"SampleRecord must remain EXECUTING while blocked successors await operator; "
                 f"got {run_row.status!r}"
             )
 
         with get_session() as session:
-            assert_cross_cutting_invariants(session, run_id)
+            assert_cross_cutting_invariants(session, sample_id)
 
     finally:
-        _cleanup_run(run_id, defn_id)
+        _cleanup_run(sample_id, defn_id)
 
 
 # ---------------------------------------------------------------------------
@@ -355,7 +355,7 @@ async def test_12_running_successor_not_interrupted() -> None:
         node_a = make_node(session, run.id, task_slug="task-a", status="failed")
         node_b = make_node(session, run.id, task_slug="task-b", status="running")
         make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_b.task_id)
-        run_id = run.id
+        sample_id = run.id
         defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
@@ -366,14 +366,14 @@ async def test_12_running_successor_not_interrupted() -> None:
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=node_a_id,
                 new_status=TaskExecutionStatus.FAILED,
                 meta=MutationMeta(actor="test:setup", reason="test: A failed"),
             )
             await graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=node_b_id,
                 new_status=TaskExecutionStatus.RUNNING,
                 meta=MutationMeta(actor="test:setup", reason="test: B already running"),
@@ -383,7 +383,7 @@ async def test_12_running_successor_not_interrupted() -> None:
         svc = WorkflowService()
         await svc.propagate_failure(
             PropagateTaskCompletionCommand(
-                run_id=run_id,
+                sample_id=sample_id,
                 definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
@@ -398,16 +398,16 @@ async def test_12_running_successor_not_interrupted() -> None:
                 f"propagation must not interrupt a running task. Got {b_status!r}"
             )
 
-        # RunRecord must remain EXECUTING — B is still running, the run is not over
+        # SampleRecord must remain EXECUTING — B is still running, the run is not over
         with get_session() as session:
-            run_row = session.get(RunRecord, run_id)
+            run_row = session.get(SampleRecord, sample_id)
             assert run_row is not None
-            assert run_row.status == RunStatus.EXECUTING, (
-                f"RunRecord must remain EXECUTING while B is still running; got {run_row.status!r}"
+            assert run_row.status == SampleStatus.EXECUTING, (
+                f"SampleRecord must remain EXECUTING while B is still running; got {run_row.status!r}"
             )
 
         with get_session() as session:
-            assert_cross_cutting_invariants(session, run_id)
+            assert_cross_cutting_invariants(session, sample_id)
 
     finally:
-        _cleanup_run(run_id, defn_id)
+        _cleanup_run(sample_id, defn_id)

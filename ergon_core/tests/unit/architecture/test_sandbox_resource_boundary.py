@@ -31,15 +31,15 @@ def _import_offenders(path: Path, tree: ast.AST) -> list[str]:
 def _import_from_offenders(path: Path, node: ast.ImportFrom) -> list[str]:
     if node.module == "ergon_core.core.application.resources.repository":
         return [
-            f"{path.relative_to(ROOT)} imports RunResourceRepository"
+            f"{path.relative_to(ROOT)} imports SampleResourceRepository"
             for alias in node.names
-            if alias.name == "RunResourceRepository"
+            if alias.name == "SampleResourceRepository"
         ]
     if node.module == "ergon_core.core.persistence.telemetry.models":
         return [
-            f"{path.relative_to(ROOT)} imports RunResource"
+            f"{path.relative_to(ROOT)} imports SampleResource"
             for alias in node.names
-            if alias.name == "RunResource"
+            if alias.name == "SampleResource"
         ]
     return []
 
@@ -60,12 +60,12 @@ def _call_offenders(path: Path, tree: ast.AST) -> list[str]:
         if not isinstance(node, ast.Call):
             continue
         called = _attr_name(node.func)
-        if called == "RunResource":
-            offenders.append(f"{path.relative_to(ROOT)} constructs RunResource")
+        if called == "SampleResource":
+            offenders.append(f"{path.relative_to(ROOT)} constructs SampleResource")
         if _is_repository_append(node, called):
-            offenders.append(f"{path.relative_to(ROOT)} appends through RunResourceRepository")
-        if called == "add" and node.args and _calls_name(node.args[0], "RunResource"):
-            offenders.append(f"{path.relative_to(ROOT)} adds RunResource through session")
+            offenders.append(f"{path.relative_to(ROOT)} appends through SampleResourceRepository")
+        if called == "add" and node.args and _calls_name(node.args[0], "SampleResource"):
+            offenders.append(f"{path.relative_to(ROOT)} adds SampleResource through session")
     return offenders
 
 

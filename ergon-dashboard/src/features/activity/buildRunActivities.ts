@@ -3,13 +3,13 @@ import type {
   ContextEventState,
   ExecutionAttemptState,
   SandboxCommandState,
-  WorkflowRunState,
+  SampleWorkspaceState,
 } from "@/lib/types";
-import type { RunEvent } from "@/lib/runEvents";
+import type { RunEvent } from "@/lib/sampleEvents";
 import type { RunActivity } from "./types";
 
 export interface BuildRunActivitiesInput {
-  runState: WorkflowRunState | null;
+  runState: SampleWorkspaceState | null;
   events: RunEvent[];
   mutations: GraphMutationDto[];
   currentSequence: number | null;
@@ -27,7 +27,7 @@ function compareActivity(a: RunActivity, b: RunActivity): number {
   return a.id.localeCompare(b.id);
 }
 
-function executionLabel(execution: ExecutionAttemptState, run: WorkflowRunState): string {
+function executionLabel(execution: ExecutionAttemptState, run: SampleWorkspaceState): string {
   const task = run.tasks.get(execution.taskId);
   return task?.name ?? `Attempt ${execution.attemptNumber}`;
 }
@@ -44,7 +44,7 @@ function addMs(timestamp: string, durationMs: number | null): string | null {
 }
 
 function executionActivities(
-  run: WorkflowRunState,
+  run: SampleWorkspaceState,
 ): RunActivity[] {
   const activities: RunActivity[] = [];
   for (const executions of run.executionsByTask.values()) {
@@ -89,7 +89,7 @@ function sandboxCommandLabel(command: SandboxCommandState): string {
 }
 
 function sandboxActivities(
-  run: WorkflowRunState,
+  run: SampleWorkspaceState,
 ): RunActivity[] {
   const activities: RunActivity[] = [];
   for (const sandbox of run.sandboxesByTask.values()) {
@@ -172,7 +172,7 @@ function contextLabel(event: ContextEventState): string {
   return payloadType ?? event.eventType;
 }
 
-function contextActivities(run: WorkflowRunState): RunActivity[] {
+function contextActivities(run: SampleWorkspaceState): RunActivity[] {
   const activities: RunActivity[] = [];
   for (const [taskId, events] of run.contextEventsByTask.entries()) {
     for (const event of events) {

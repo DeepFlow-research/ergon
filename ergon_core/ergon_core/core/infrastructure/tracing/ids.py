@@ -16,9 +16,9 @@ _desired_trace_id: ContextVar[int | None] = ContextVar("desired_trace_id", defau
 _desired_span_id: ContextVar[int | None] = ContextVar("desired_span_id", default=None)
 
 
-def trace_id_from_run_id(run_id: UUID) -> int:
+def trace_id_from_sample_id(sample_id: UUID) -> int:
     """Derive a deterministic 128-bit trace ID from a run UUID."""
-    return int(run_id.hex, 16) & MAX_TRACE_ID
+    return int(sample_id.hex, 16) & MAX_TRACE_ID
 
 
 def span_id_from_key(*parts: str) -> int:

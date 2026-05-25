@@ -68,7 +68,7 @@ class BaseSandboxManager(ABC):
     _sandboxes: dict[UUID, "AsyncSandbox"] = {}
     _file_registries: dict[UUID, dict[str, str]] = {}
     _created_files_registry: dict[UUID, set[str]] = {}
-    _run_ids: dict[UUID, UUID] = {}
+    _sample_ids: dict[UUID, UUID] = {}
     _display_task_ids: dict[UUID, UUID] = {}
     _sandbox_manager_classes: dict[UUID, type["BaseSandboxManager"]] = {}
     _creation_locks: dict[UUID, asyncio.Lock] = {}
@@ -142,9 +142,9 @@ class BaseSandboxManager(ABC):
             resolved_duration_ms = int((time.time() - started_at) * 1000)
 
         max_len = settings.otel_stdout_stderr_max_length
-        resolved_run_id = self._run_ids.get(sandbox_key, sandbox_key)
+        resolved_sample_id = self._sample_ids.get(sandbox_key, sandbox_key)
         await self._event_sink.sandbox_command(
-            run_id=resolved_run_id,
+            sample_id=resolved_sample_id,
             task_id=task_id or self._get_display_task_id(sandbox_key),
             sandbox_id=resolved_sandbox_id,
             command=_truncate(command, 512) or command,
@@ -275,7 +275,7 @@ if created:
     async def create(
         self,
         sandbox_key: UUID,
-        run_id: UUID,
+        sample_id: UUID,
         timeout_minutes: int = 30,
         envs: dict[str, str] | None = None,
         display_task_id: UUID | None = None,
@@ -326,12 +326,12 @@ if created:
 
             self._sandboxes[sandbox_key] = sandbox
             self._ensure_registries(sandbox_key)
-            self._run_ids[sandbox_key] = run_id
+            self._sample_ids[sandbox_key] = sample_id
             self._display_task_ids[sandbox_key] = display_task_id
             self._sandbox_manager_classes[sandbox_key] = type(self)
 
             await self._event_sink.sandbox_created(
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=display_task_id,
                 sandbox_id=sandbox.sandbox_id,
                 timeout_minutes=timeout_minutes,
@@ -479,14 +479,14 @@ if created:
             )
             self._file_registries.pop(task_id, None)
             self._created_files_registry.pop(task_id, None)
-            self._run_ids.pop(task_id, None)
+            self._sample_ids.pop(task_id, None)
             self._display_task_ids.pop(task_id, None)
             self._sandbox_manager_classes.pop(task_id, None)
             return
 
         sandbox_id = sandbox.sandbox_id
         display_task_id = self._get_display_task_id(task_id)
-        run_id = self._run_ids.get(task_id)
+        sample_id = self._sample_ids.get(task_id)
         try:
             await sandbox.kill()
         except Exception as e:  # slopcop: ignore[no-broad-except]
@@ -495,7 +495,7 @@ if created:
         finally:
             self._file_registries.pop(task_id, None)
             self._created_files_registry.pop(task_id, None)
-            self._run_ids.pop(task_id, None)
+            self._sample_ids.pop(task_id, None)
             self._display_task_ids.pop(task_id, None)
             self._sandbox_manager_classes.pop(task_id, None)
 
@@ -503,7 +503,7 @@ if created:
                 task_id=display_task_id,
                 sandbox_id=sandbox_id,
                 reason=reason,
-                run_id=run_id,
+                sample_id=sample_id,
             )
             await self._emit_wal_entry(
                 task_id,
@@ -531,7 +531,7 @@ if created:
                 return True
 
             display_task_id = BaseSandboxManager._display_task_ids.get(task_id, task_id)
-            run_id = BaseSandboxManager._run_ids.get(task_id)
+            sample_id = BaseSandboxManager._sample_ids.get(task_id)
             try:
                 await sandbox.kill()
             except Exception as e:  # slopcop: ignore[no-broad-except]
@@ -540,7 +540,7 @@ if created:
                 BaseSandboxManager._sandboxes.pop(task_id, None)
                 BaseSandboxManager._file_registries.pop(task_id, None)
                 BaseSandboxManager._created_files_registry.pop(task_id, None)
-                BaseSandboxManager._run_ids.pop(task_id, None)
+                BaseSandboxManager._sample_ids.pop(task_id, None)
                 BaseSandboxManager._display_task_ids.pop(task_id, None)
                 BaseSandboxManager._sandbox_manager_classes.pop(task_id, None)
 
@@ -548,10 +548,10 @@ if created:
                     task_id=display_task_id,
                     sandbox_id=sandbox_id,
                     reason="completed",
-                    run_id=run_id,
+                    sample_id=sample_id,
                 )
                 await manager_cls._event_sink.sandbox_command(
-                    run_id=run_id or task_id,
+                    sample_id=sample_id or task_id,
                     task_id=display_task_id,
                     sandbox_id=sandbox_id,
                     command="sandbox.closed: completed",

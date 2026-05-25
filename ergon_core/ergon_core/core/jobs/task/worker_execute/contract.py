@@ -10,7 +10,7 @@ class WorkerExecuteRequest(InngestEventContract):
     model_config = {"extra": "allow"}
     name: ClassVar[str] = "task/worker-execute"
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
     task_id: UUID
     execution_id: UUID

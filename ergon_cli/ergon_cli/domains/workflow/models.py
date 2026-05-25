@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 class WorkflowCommandContext(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    run_id: UUID
+    sample_id: UUID
     task_id: UUID
     execution_id: UUID
     sandbox_task_key: UUID

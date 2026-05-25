@@ -19,7 +19,7 @@ class SandboxEventSink(Protocol):
 
     async def sandbox_created(
         self,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
         sandbox_id: str,
         timeout_minutes: int,
@@ -28,7 +28,7 @@ class SandboxEventSink(Protocol):
 
     async def sandbox_command(
         self,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
         sandbox_id: str,
         command: str,
@@ -43,7 +43,7 @@ class SandboxEventSink(Protocol):
         task_id: UUID,
         sandbox_id: str,
         reason: str,
-        run_id: UUID | None = None,
+        sample_id: UUID | None = None,
     ) -> None: ...
 
 
@@ -52,7 +52,7 @@ class NoopSandboxEventSink:
 
     async def sandbox_created(
         self,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
         sandbox_id: str,
         timeout_minutes: int,
@@ -62,7 +62,7 @@ class NoopSandboxEventSink:
 
     async def sandbox_command(
         self,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
         sandbox_id: str,
         command: str,
@@ -78,7 +78,7 @@ class NoopSandboxEventSink:
         task_id: UUID,
         sandbox_id: str,
         reason: str,
-        run_id: UUID | None = None,
+        sample_id: UUID | None = None,
     ) -> None:
         return
 
@@ -91,7 +91,7 @@ class DashboardEmitterSandboxEventSink:
 
     async def sandbox_created(
         self,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
         sandbox_id: str,
         timeout_minutes: int,
@@ -99,7 +99,7 @@ class DashboardEmitterSandboxEventSink:
     ) -> None:
         await self._emitter.publish(
             DashboardSandboxCreatedEvent(
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=task_id,
                 sandbox_id=sandbox_id,
                 timeout_minutes=timeout_minutes,
@@ -110,7 +110,7 @@ class DashboardEmitterSandboxEventSink:
 
     async def sandbox_command(
         self,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
         sandbox_id: str,
         command: str,
@@ -121,7 +121,7 @@ class DashboardEmitterSandboxEventSink:
     ) -> None:
         await self._emitter.publish(
             DashboardSandboxCommandEvent(
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=task_id,
                 sandbox_id=sandbox_id,
                 command=command,
@@ -138,7 +138,7 @@ class DashboardEmitterSandboxEventSink:
         task_id: UUID,
         sandbox_id: str,
         reason: str,
-        run_id: UUID | None = None,
+        sample_id: UUID | None = None,
     ) -> None:
         await self._emitter.publish(
             DashboardSandboxClosedEvent(
@@ -160,7 +160,7 @@ class PostgresSandboxEventSink:
 
     async def sandbox_created(
         self,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
         sandbox_id: str,
         timeout_minutes: int,
@@ -174,7 +174,7 @@ class PostgresSandboxEventSink:
         with get_session() as s:
             s.add(
                 SandboxEvent(
-                    run_id=run_id,
+                    sample_id=sample_id,
                     task_id=task_id,
                     sandbox_id=sandbox_id,
                     kind="sandbox_created",
@@ -186,7 +186,7 @@ class PostgresSandboxEventSink:
 
     async def sandbox_command(
         self,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
         sandbox_id: str,
         command: str,
@@ -203,7 +203,7 @@ class PostgresSandboxEventSink:
         with get_session() as s:
             s.add(
                 SandboxCommandWalEntry(
-                    run_id=run_id,
+                    sample_id=sample_id,
                     task_id=task_id,
                     sandbox_id=sandbox_id,
                     command=command,
@@ -220,9 +220,9 @@ class PostgresSandboxEventSink:
         task_id: UUID,
         sandbox_id: str,
         reason: str,
-        run_id: UUID | None = None,
+        sample_id: UUID | None = None,
     ) -> None:
-        if run_id is None:
+        if sample_id is None:
             return
         # reason: avoid import cycle with ergon_core.api package exports.
         from ergon_core.core.persistence.telemetry.models import (
@@ -232,7 +232,7 @@ class PostgresSandboxEventSink:
         with get_session() as s:
             s.add(
                 SandboxEvent(
-                    run_id=run_id,
+                    sample_id=sample_id,
                     task_id=task_id,
                     sandbox_id=sandbox_id,
                     kind="sandbox_closed",
@@ -255,7 +255,7 @@ class CompoundSandboxEventSink:
 
     async def sandbox_created(
         self,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
         sandbox_id: str,
         timeout_minutes: int,
@@ -263,7 +263,7 @@ class CompoundSandboxEventSink:
     ) -> None:
         for sink in self._sinks:
             await sink.sandbox_created(
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=task_id,
                 sandbox_id=sandbox_id,
                 timeout_minutes=timeout_minutes,
@@ -272,7 +272,7 @@ class CompoundSandboxEventSink:
 
     async def sandbox_command(
         self,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
         sandbox_id: str,
         command: str,
@@ -283,7 +283,7 @@ class CompoundSandboxEventSink:
     ) -> None:
         for sink in self._sinks:
             await sink.sandbox_command(
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=task_id,
                 sandbox_id=sandbox_id,
                 command=command,
@@ -298,12 +298,12 @@ class CompoundSandboxEventSink:
         task_id: UUID,
         sandbox_id: str,
         reason: str,
-        run_id: UUID | None = None,
+        sample_id: UUID | None = None,
     ) -> None:
         for sink in self._sinks:
             await sink.sandbox_closed(
                 task_id=task_id,
                 sandbox_id=sandbox_id,
                 reason=reason,
-                run_id=run_id,
+                sample_id=sample_id,
             )

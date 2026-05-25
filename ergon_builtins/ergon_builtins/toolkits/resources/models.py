@@ -7,14 +7,14 @@ Construct via ``from_view`` / ``from_row`` classmethods.
 from datetime import datetime
 from uuid import UUID
 
-from ergon_core.core.application.resources import RunResourceView
-from ergon_core.core.persistence.shared.enums import RunResourceKind
-from ergon_core.core.persistence.telemetry.models import RunResource, RunTaskExecution
+from ergon_core.core.application.resources import SampleResourceView
+from ergon_core.core.persistence.shared.enums import SampleResourceKind
+from ergon_core.core.persistence.telemetry.models import SampleResource, SampleTaskAttempt
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class ResourceRef(BaseModel):
-    """Subset of ``RunResourceView`` surfaced to the LLM."""
+    """Subset of ``SampleResourceView`` surfaced to the LLM."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -26,7 +26,7 @@ class ResourceRef(BaseModel):
             "tool surface."
         ),
     )
-    kind: RunResourceKind = Field(
+    kind: SampleResourceKind = Field(
         description="Canonical kind (report, output, note, ...).",
     )
     mime_type: str = Field(
@@ -49,11 +49,11 @@ class ResourceRef(BaseModel):
     )
 
     @classmethod
-    def from_view(cls, view: RunResourceView) -> "ResourceRef":
-        """Lift a ``RunResourceView`` to a ``ResourceRef``."""
+    def from_view(cls, view: SampleResourceView) -> "ResourceRef":
+        """Lift a ``SampleResourceView`` to a ``ResourceRef``."""
         return cls(
             logical_path=view.file_path,
-            kind=RunResourceKind(view.kind),
+            kind=SampleResourceKind(view.kind),
             mime_type=view.mime_type,
             file_path=view.file_path,
             content_hash=view.content_hash,
@@ -62,11 +62,11 @@ class ResourceRef(BaseModel):
         )
 
     @classmethod
-    def from_row(cls, row: RunResource) -> "ResourceRef":
-        """Lift an ORM ``RunResource`` row to a ``ResourceRef``."""
+    def from_row(cls, row: SampleResource) -> "ResourceRef":
+        """Lift an ORM ``SampleResource`` row to a ``ResourceRef``."""
         return cls(
             logical_path=row.file_path,
-            kind=RunResourceKind(row.kind),
+            kind=SampleResourceKind(row.kind),
             mime_type=row.mime_type,
             file_path=row.file_path,
             content_hash=row.content_hash,
@@ -76,7 +76,7 @@ class ResourceRef(BaseModel):
 
 
 class TaskExecutionRef(BaseModel):
-    """Subset of ``RunTaskExecution`` surfaced to the LLM."""
+    """Subset of ``SampleTaskAttempt`` surfaced to the LLM."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -98,8 +98,8 @@ class TaskExecutionRef(BaseModel):
     )
 
     @classmethod
-    def from_row(cls, row: RunTaskExecution) -> "TaskExecutionRef":
-        """Lift an ORM ``RunTaskExecution`` row to a ``TaskExecutionRef``."""
+    def from_row(cls, row: SampleTaskAttempt) -> "TaskExecutionRef":
+        """Lift an ORM ``SampleTaskAttempt`` row to a ``TaskExecutionRef``."""
         return cls(
             task_execution_id=row.id,
             status=str(row.status),

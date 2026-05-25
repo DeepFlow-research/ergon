@@ -11,11 +11,11 @@ from datetime import datetime
 from typing import ClassVar
 from uuid import UUID
 
-from ergon_core.core.views.runs.models import (
+from ergon_core.core.views.samples.models import (
     RunCommunicationMessageDto,
     RunCommunicationThreadDto,
-    RunSnapshotDto,
-    RunTaskEvaluationDto,
+    SampleSnapshotDto,
+    SampleTaskEvaluationDto,
 )
 from ergon_core.core.shared.context_parts import ContextEventType, ContextPartChunkLog
 from ergon_core.core.application.events.base import InngestEventContract
@@ -31,10 +31,10 @@ from pydantic import Field
 class DashboardWorkflowStartedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/workflow.started"
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
     workflow_name: str
-    snapshot: RunSnapshotDto
+    snapshot: SampleSnapshotDto
     started_at: datetime
     total_tasks: int
     total_leaf_tasks: int
@@ -43,7 +43,7 @@ class DashboardWorkflowStartedEvent(InngestEventContract):
 class DashboardWorkflowCompletedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/workflow.completed"
 
-    run_id: UUID
+    sample_id: UUID
     status: str
     completed_at: datetime
     duration_seconds: float
@@ -59,7 +59,7 @@ class DashboardWorkflowCompletedEvent(InngestEventContract):
 class DashboardTaskStatusChangedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/task.status_changed"
 
-    run_id: UUID
+    sample_id: UUID
     task_id: UUID
     task_name: str
     parent_task_id: UUID | None = None
@@ -72,13 +72,13 @@ class DashboardTaskStatusChangedEvent(InngestEventContract):
 
 
 class DashboardTaskEvaluationUpdatedEvent(InngestEventContract):
-    """Embeds the full RunTaskEvaluationDto as ``evaluation``."""
+    """Embeds the full SampleTaskEvaluationDto as ``evaluation``."""
 
     name: ClassVar[str] = "dashboard/task.evaluation_updated"
 
-    run_id: UUID
+    sample_id: UUID
     task_id: UUID
-    evaluation: RunTaskEvaluationDto
+    evaluation: SampleTaskEvaluationDto
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +89,7 @@ class DashboardTaskEvaluationUpdatedEvent(InngestEventContract):
 class DashboardResourcePublishedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/resource.published"
 
-    run_id: UUID
+    sample_id: UUID
     task_id: UUID
     task_execution_id: UUID
     resource_id: UUID
@@ -108,7 +108,7 @@ class DashboardResourcePublishedEvent(InngestEventContract):
 class DashboardSandboxCreatedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/sandbox.created"
 
-    run_id: UUID
+    sample_id: UUID
     task_id: UUID
     sandbox_id: str
     template: str | None = None
@@ -119,7 +119,7 @@ class DashboardSandboxCreatedEvent(InngestEventContract):
 class DashboardSandboxCommandEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/sandbox.command"
 
-    run_id: UUID
+    sample_id: UUID
     task_id: UUID
     sandbox_id: str
     command: str
@@ -149,7 +149,7 @@ class DashboardThreadMessageCreatedEvent(InngestEventContract):
 
     name: ClassVar[str] = "dashboard/thread.message_created"
 
-    run_id: UUID
+    sample_id: UUID
     thread: RunCommunicationThreadDto
     message: RunCommunicationMessageDto
 
@@ -169,9 +169,9 @@ class DashboardContextEventEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/context.event"
 
     id: UUID = Field(
-        description="RunContextEvent.id used by the frontend as a stable deduplication key."
+        description="SampleContextEvent.id used by the frontend as a stable deduplication key."
     )
-    run_id: UUID
+    sample_id: UUID
     task_execution_id: UUID
     task_id: UUID = Field(
         description=(

@@ -15,7 +15,7 @@
           "title": "Threadtopic",
           "type": "string"
         },
-        "runId": {
+        "sampleId": {
           "title": "Runid",
           "type": "string"
         },
@@ -69,7 +69,7 @@
         "id",
         "threadId",
         "threadTopic",
-        "runId",
+        "sampleId",
         "fromAgentId",
         "toAgentId",
         "content",
@@ -86,7 +86,7 @@
           "title": "Id",
           "type": "string"
         },
-        "runId": {
+        "sampleId": {
           "title": "Runid",
           "type": "string"
         },
@@ -146,7 +146,7 @@
       },
       "required": [
         "id",
-        "runId",
+        "sampleId",
         "topic",
         "agentAId",
         "agentBId",
@@ -160,7 +160,7 @@
   "additionalProperties": true,
   "description": "Embeds full RunCommunicationThreadDto + RunCommunicationMessageDto.",
   "properties": {
-    "run_id": {
+    "sample_id": {
       "format": "uuid",
       "title": "Run Id",
       "type": "string"
@@ -173,7 +173,7 @@
     }
   },
   "required": [
-    "run_id",
+    "sample_id",
     "thread",
     "message"
   ],

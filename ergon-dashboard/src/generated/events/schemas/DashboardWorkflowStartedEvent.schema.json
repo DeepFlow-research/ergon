@@ -346,7 +346,7 @@
           "title": "Threadtopic",
           "type": "string"
         },
-        "runId": {
+        "sampleId": {
           "title": "Runid",
           "type": "string"
         },
@@ -400,7 +400,7 @@
         "id",
         "threadId",
         "threadTopic",
-        "runId",
+        "sampleId",
         "fromAgentId",
         "toAgentId",
         "content",
@@ -417,7 +417,7 @@
           "title": "Id",
           "type": "string"
         },
-        "runId": {
+        "sampleId": {
           "title": "Runid",
           "type": "string"
         },
@@ -477,7 +477,7 @@
       },
       "required": [
         "id",
-        "runId",
+        "sampleId",
         "topic",
         "agentAId",
         "agentBId",
@@ -487,7 +487,7 @@
       "title": "RunCommunicationThreadDto",
       "type": "object"
     },
-    "RunContextEventDto": {
+    "SampleContextEventDto": {
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -495,7 +495,7 @@
           "title": "Id",
           "type": "string"
         },
-        "runId": {
+        "sampleId": {
           "format": "uuid",
           "title": "Runid",
           "type": "string"
@@ -567,7 +567,7 @@
       },
       "required": [
         "id",
-        "runId",
+        "sampleId",
         "taskExecutionId",
         "taskId",
         "workerBindingKey",
@@ -576,7 +576,7 @@
         "payload",
         "createdAt"
       ],
-      "title": "RunContextEventDto",
+      "title": "SampleContextEventDto",
       "type": "object"
     },
     "RunEvaluationCriterionDto": {
@@ -887,7 +887,7 @@
       "title": "RunExecutionAttemptDto",
       "type": "object"
     },
-    "RunResourceDto": {
+    "SampleResourceDto": {
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -934,7 +934,7 @@
         "sizeBytes",
         "createdAt"
       ],
-      "title": "RunResourceDto",
+      "title": "SampleResourceDto",
       "type": "object"
     },
     "RunSandboxCommandDto": {
@@ -1084,7 +1084,7 @@
       "title": "RunSandboxDto",
       "type": "object"
     },
-    "RunSnapshotDto": {
+    "SampleSnapshotDto": {
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -1105,7 +1105,7 @@
         },
         "tasks": {
           "additionalProperties": {
-            "$ref": "#/$defs/RunTaskDto"
+            "$ref": "#/$defs/SampleTaskDto"
           },
           "title": "Tasks",
           "type": "object"
@@ -1118,7 +1118,7 @@
         "resourcesByTask": {
           "additionalProperties": {
             "items": {
-              "$ref": "#/$defs/RunResourceDto"
+              "$ref": "#/$defs/SampleResourceDto"
             },
             "type": "array"
           },
@@ -1137,7 +1137,7 @@
         },
         "evaluationsByTask": {
           "additionalProperties": {
-            "$ref": "#/$defs/RunTaskEvaluationDto"
+            "$ref": "#/$defs/SampleTaskEvaluationDto"
           },
           "title": "Evaluationsbytask",
           "type": "object"
@@ -1152,7 +1152,7 @@
         "contextEventsByTask": {
           "additionalProperties": {
             "items": {
-              "$ref": "#/$defs/RunContextEventDto"
+              "$ref": "#/$defs/SampleContextEventDto"
             },
             "type": "array"
           },
@@ -1249,7 +1249,7 @@
         "metrics": {
           "anyOf": [
             {
-              "$ref": "#/$defs/RunSnapshotMetricsDto"
+              "$ref": "#/$defs/SampleSnapshotMetricsDto"
             },
             {
               "type": "null"
@@ -1276,13 +1276,13 @@
         "name",
         "status"
       ],
-      "title": "RunSnapshotDto",
+      "title": "SampleSnapshotDto",
       "type": "object"
     },
-    "RunSnapshotMetricsDto": {
+    "SampleSnapshotMetricsDto": {
       "additionalProperties": false,
       "properties": {
-        "runId": {
+        "sampleId": {
           "title": "Runid",
           "type": "string"
         },
@@ -1350,15 +1350,15 @@
         }
       },
       "required": [
-        "runId",
+        "sampleId",
         "status"
       ],
-      "title": "RunSnapshotMetricsDto",
+      "title": "SampleSnapshotMetricsDto",
       "type": "object"
     },
-    "RunTaskDto": {
+    "SampleTaskDto": {
       "additionalProperties": false,
-      "description": "REST projection of RunGraphNode for run detail pages.\n\nThis is not the canonical graph schema; graph semantics live in\napplication/graph/models.py and application/runtime/status.py.",
+      "description": "REST projection of SampleGraphNode for run detail pages.\n\nThis is not the canonical graph schema; graph semantics live in\napplication/graph/models.py and application/runtime/status.py.",
       "properties": {
         "id": {
           "title": "Id",
@@ -1469,17 +1469,17 @@
         "isLeaf",
         "level"
       ],
-      "title": "RunTaskDto",
+      "title": "SampleTaskDto",
       "type": "object"
     },
-    "RunTaskEvaluationDto": {
+    "SampleTaskEvaluationDto": {
       "additionalProperties": false,
       "properties": {
         "id": {
           "title": "Id",
           "type": "string"
         },
-        "runId": {
+        "sampleId": {
           "title": "Runid",
           "type": "string"
         },
@@ -1550,7 +1550,7 @@
       },
       "required": [
         "id",
-        "runId",
+        "sampleId",
         "evaluatorName",
         "aggregationRule",
         "totalScore",
@@ -1560,7 +1560,7 @@
         "stagesPassed",
         "createdAt"
       ],
-      "title": "RunTaskEvaluationDto",
+      "title": "SampleTaskEvaluationDto",
       "type": "object"
     },
     "SystemPromptPart": {
@@ -1731,7 +1731,7 @@
   },
   "additionalProperties": true,
   "properties": {
-    "run_id": {
+    "sample_id": {
       "format": "uuid",
       "title": "Run Id",
       "type": "string"
@@ -1746,7 +1746,7 @@
       "type": "string"
     },
     "snapshot": {
-      "$ref": "#/$defs/RunSnapshotDto"
+      "$ref": "#/$defs/SampleSnapshotDto"
     },
     "started_at": {
       "format": "date-time",
@@ -1763,7 +1763,7 @@
     }
   },
   "required": [
-    "run_id",
+    "sample_id",
     "definition_id",
     "workflow_name",
     "snapshot",

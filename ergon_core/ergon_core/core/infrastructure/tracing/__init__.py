@@ -5,7 +5,7 @@ existing public import path stable:
 
     from ergon_core.core.infrastructure.tracing import get_trace_sink
 
-Target span hierarchy (one trace per run, keyed by run_id)::
+Target span hierarchy (one trace per run, keyed by sample_id)::
 
     workflow.execute (synthetic root)
     |   experiment, instance_count
@@ -22,7 +22,7 @@ Target span hierarchy (one trace per run, keyed by run_id)::
     +-- communication.message (per ThreadMessage, optional)
     +-- workflow.complete OR workflow.failed
 
-Every span stores relational IDs (run_id, task_id, execution_id, evaluator_id)
+Every span stores relational IDs (sample_id, task_id, execution_id, evaluator_id)
 for PG lookup, not payload copies. See otel_tracing_v2.md for full attribute
 schemas per span.
 """
@@ -49,7 +49,7 @@ from ergon_core.core.infrastructure.tracing.contexts import (
 from ergon_core.core.infrastructure.tracing.ids import (
     DeterministicIdGenerator,
     span_id_from_key,
-    trace_id_from_run_id,
+    trace_id_from_sample_id,
 )
 from ergon_core.core.infrastructure.tracing.noop import NoopTraceSink
 from ergon_core.core.infrastructure.tracing.otel import OtelTraceSink
@@ -80,7 +80,7 @@ __all__ = [
     "span_id_from_key",
     "task_execute_context",
     "task_propagate_context",
-    "trace_id_from_run_id",
+    "trace_id_from_sample_id",
     "truncate_text",
     "workflow_complete_context",
     "workflow_failed_context",

@@ -10,11 +10,11 @@ class _GraphRepo:
     def __init__(self) -> None:
         self.calls = []
 
-    async def node(self, session, *, run_id, task_id, sandbox_id=None):
+    async def node(self, session, *, sample_id, task_id, sandbox_id=None):
         self.calls.append(
             {
                 "session": session,
-                "run_id": run_id,
+                "sample_id": sample_id,
                 "task_id": task_id,
                 "sandbox_id": sandbox_id,
             }
@@ -59,12 +59,12 @@ async def test_task_execution_facade_loads_task_view_by_task_id() -> None:
     graph_repo = _GraphRepo()
     service = TaskExecutionService(graph_repo=graph_repo)
     session = object()
-    run_id = uuid4()
+    sample_id = uuid4()
     task_id = uuid4()
 
     view = await service.load_task_view(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=task_id,
         sandbox_id="sandbox-1",
     )
@@ -73,7 +73,7 @@ async def test_task_execution_facade_loads_task_view_by_task_id() -> None:
     assert graph_repo.calls == [
         {
             "session": session,
-            "run_id": run_id,
+            "sample_id": sample_id,
             "task_id": task_id,
             "sandbox_id": "sandbox-1",
         }

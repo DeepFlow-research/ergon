@@ -5,7 +5,7 @@ import { getHarnessExperiment } from "@/lib/testing/dashboardHarness";
 import {
   normalizeRunMetricPoints,
   type RunMetricPoint,
-} from "@/components/experiments/runMetricExplorerModel";
+} from "@/components/experiments/sampleRunMetricExplorerModel";
 
 import { backendUnavailable, type ServerDataResult } from "./responses";
 

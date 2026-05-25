@@ -9,13 +9,13 @@ from ergon_core.core.shared.context_parts import (
     ToolResultPart,
     UserMessagePart,
 )
-from ergon_core.core.persistence.context.models import RunContextEvent
+from ergon_core.core.persistence.context.models import SampleContextEvent
 from ergon_core.core.persistence.graph.models import (
-    RunGraphAnnotation,
-    RunGraphMutation,
-    RunGraphNode,
+    SampleGraphAnnotation,
+    SampleGraphMutation,
+    SampleGraphNode,
 )
-from ergon_core.core.persistence.telemetry.models import RunRecord, RunResource
+from ergon_core.core.persistence.telemetry.models import SampleRecord, SampleResource
 from ergon_core.core.application.runtime.models import (
     GraphAnnotationDto,
     GraphEdgeDto,
@@ -63,24 +63,24 @@ def test_graph_dto_field_docs_are_schema_metadata() -> None:
 
 
 def test_sqlmodel_field_docs_are_schema_metadata() -> None:
-    assert _description(RunGraphNode, "instance_key")
-    assert _description(RunGraphNode, "task_slug")
-    assert _description(RunGraphNode, "status")
-    assert _description(RunGraphNode, "assigned_worker_slug")
-    assert _description(RunGraphNode, "parent_task_id")
-    assert _description(RunGraphNode, "level")
-    assert _description(RunContextEvent, "event_type")
-    assert _description(RunContextEvent, "payload")
-    assert _description(RunGraphAnnotation, "target_type")
-    assert _description(RunGraphMutation, "mutation_type")
-    assert _description(RunGraphMutation, "target_type")
-    assert "Canonical runtime" in (_description(RunRecord, "definition_id") or "")
-    assert "Optional v2 experiment grouping tag" in (_description(RunRecord, "experiment") or "")
-    assert "Compatibility/display-only" in (_description(RunRecord, "worker_team_json") or "")
-    assert "Compatibility/display-only" in (_description(RunRecord, "evaluator_slug") or "")
-    assert "Compatibility/display-only" in (_description(RunRecord, "sandbox_slug") or "")
-    assert "Compatibility/display-only" in (_description(RunRecord, "dependency_extras_json") or "")
-    assert _description(RunResource, "kind")
+    assert _description(SampleGraphNode, "instance_key")
+    assert _description(SampleGraphNode, "task_slug")
+    assert _description(SampleGraphNode, "status")
+    assert _description(SampleGraphNode, "assigned_worker_slug")
+    assert _description(SampleGraphNode, "parent_task_id")
+    assert _description(SampleGraphNode, "level")
+    assert _description(SampleContextEvent, "event_type")
+    assert _description(SampleContextEvent, "payload")
+    assert _description(SampleGraphAnnotation, "target_type")
+    assert _description(SampleGraphMutation, "mutation_type")
+    assert _description(SampleGraphMutation, "target_type")
+    assert "Canonical runtime" in (_description(SampleRecord, "definition_id") or "")
+    assert "Optional v2 experiment grouping tag" in (_description(SampleRecord, "experiment") or "")
+    assert "Compatibility/display-only" in (_description(SampleRecord, "worker_team_json") or "")
+    assert "Compatibility/display-only" in (_description(SampleRecord, "evaluator_slug") or "")
+    assert "Compatibility/display-only" in (_description(SampleRecord, "sandbox_slug") or "")
+    assert "Compatibility/display-only" in (_description(SampleRecord, "dependency_extras_json") or "")
+    assert _description(SampleResource, "kind")
 
 
 def test_builtin_task_schema_field_docs_are_schema_metadata() -> None:

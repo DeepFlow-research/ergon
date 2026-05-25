@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   contextPartToUiPayload,
   uiPayloadToContextPart,
-} from "../../src/lib/run-state/contextEvents";
+} from "../../src/lib/sample-state/contextEvents";
 
 test("tool_call context part converts to UI payload", () => {
   const payload = contextPartToUiPayload({

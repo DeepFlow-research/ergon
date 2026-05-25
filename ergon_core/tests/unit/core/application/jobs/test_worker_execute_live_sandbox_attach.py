@@ -26,8 +26,8 @@ class _FakeTaskExecutionService:
         self.persisted_outputs = []
         self.attached_sandboxes = []
 
-    async def load_task_view(self, _session, *, run_id, task_id, sandbox_id=None):
-        del run_id, task_id
+    async def load_task_view(self, _session, *, sample_id, task_id, sandbox_id=None):
+        del sample_id, task_id
         self._seen.append(sandbox_id)
         sandbox = SimpleNamespace(is_live=sandbox_id == "sbx-live")
         return SimpleNamespace(task=SimpleNamespace(worker=_FakeWorker(), sandbox=sandbox))
@@ -63,7 +63,7 @@ async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch) -> 
     monkeypatch.setattr(module.ContextEventService, "persist_chunk", _persist)
     monkeypatch.setattr(module, "TaskManagementService", lambda **kwargs: object())
     monkeypatch.setattr(module, "TaskInspectionService", lambda: object())
-    monkeypatch.setattr(module, "RunResourceReadService", lambda: object())
+    monkeypatch.setattr(module, "SampleResourceReadService", lambda: object())
     monkeypatch.setattr(
         module,
         "get_dashboard_event_publisher",
@@ -72,7 +72,7 @@ async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch) -> 
 
     result = await run_worker_execute_job(
         WorkerExecuteJobRequest(
-            run_id=uuid4(),
+            sample_id=uuid4(),
             definition_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
@@ -97,8 +97,8 @@ async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
     from ergon_core.core.jobs.task.worker_execute import job as module
 
     class _NonLiveTaskExecutionService:
-        async def load_task_view(self, _session, *, run_id, task_id, sandbox_id=None):
-            del run_id, task_id, sandbox_id
+        async def load_task_view(self, _session, *, sample_id, task_id, sandbox_id=None):
+            del sample_id, task_id, sandbox_id
             return SimpleNamespace(
                 task=SimpleNamespace(
                     worker=_FakeWorker(),
@@ -110,12 +110,12 @@ async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
     monkeypatch.setattr(module, "TaskExecutionService", lambda: _NonLiveTaskExecutionService())
     monkeypatch.setattr(module, "TaskManagementService", lambda: object())
     monkeypatch.setattr(module, "TaskInspectionService", lambda: object())
-    monkeypatch.setattr(module, "RunResourceReadService", lambda: object())
+    monkeypatch.setattr(module, "SampleResourceReadService", lambda: object())
 
     with pytest.raises(Exception, match="live sandbox"):
         await run_worker_execute_job(
             WorkerExecuteJobRequest(
-                run_id=uuid4(),
+                sample_id=uuid4(),
                 definition_id=uuid4(),
                 task_id=uuid4(),
                 execution_id=uuid4(),
@@ -142,7 +142,7 @@ async def test_step_aware_task_management_sends_collected_ready_events(monkeypat
             sent.append((step_id, event))
 
     task_id = uuid4()
-    run_id = uuid4()
+    sample_id = uuid4()
     definition_id = uuid4()
 
     async def _publish(_event):
@@ -156,7 +156,7 @@ async def test_step_aware_task_management_sends_collected_ready_events(monkeypat
     service = module._StepAwareTaskManagementService(SimpleNamespace(step=_Step()))
     await service._dispatch_collected_ready_events(
         "plan-subtasks-test",
-        [module._ReadyDispatch(run_id=run_id, definition_id=definition_id, task_id=task_id)],
+        [module._ReadyDispatch(sample_id=sample_id, definition_id=definition_id, task_id=task_id)],
     )
 
     assert len(sent) == 1
@@ -164,6 +164,6 @@ async def test_step_aware_task_management_sends_collected_ready_events(monkeypat
     assert step_id == f"plan-subtasks-test-dispatch-task-ready-{task_id}"
     payload = TaskReadyEvent.model_validate(event.data)
     assert event.name == TaskReadyEvent.name
-    assert payload.run_id == run_id
+    assert payload.sample_id == sample_id
     assert payload.definition_id == definition_id
     assert payload.task_id == task_id

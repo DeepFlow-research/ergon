@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Node } from "@xyflow/react";
 
-import fixture from "../../../../tests/fixtures/mas-runs/concurrent-mas-run.json";
+import fixture from "../../../../tests/fixtures/mas-samples/concurrent-mas-run.json";
 import { parseGraphMutationDtoArray } from "@/features/graph/contracts/graphMutations";
 import { createReplayInitialState, replayToSequence } from "@/features/graph/state/graphMutationReducer";
-import { deserializeRunState } from "@/lib/runState";
+import { deserializeRunState } from "@/lib/sampleState";
 import { calculateExpandedContainers, computeHierarchicalLayout } from "./hierarchicalLayout";
 import { NODE_VARIANTS, getNodeVariant } from "./layoutTypes";
 

@@ -500,12 +500,12 @@
   "additionalProperties": true,
   "properties": {
     "id": {
-      "description": "RunContextEvent.id used by the frontend as a stable deduplication key.",
+      "description": "SampleContextEvent.id used by the frontend as a stable deduplication key.",
       "format": "uuid",
       "title": "Id",
       "type": "string"
     },
-    "run_id": {
+    "sample_id": {
       "format": "uuid",
       "title": "Run Id",
       "type": "string"
@@ -577,7 +577,7 @@
   },
   "required": [
     "id",
-    "run_id",
+    "sample_id",
     "task_execution_id",
     "task_id",
     "worker_binding_key",

@@ -11,7 +11,7 @@ import { SandboxPanel } from "@/components/panels/SandboxPanel";
 import { TaskTransitionLog } from "@/components/workspace/TaskTransitionLog";
 import { ContextEventLog } from "@/features/graph/components/ContextEventLog";
 import type { RunActivity } from "@/features/activity/types";
-import type { WorkflowRunState } from "@/lib/types";
+import type { SampleWorkspaceState } from "@/lib/types";
 import { formatClockTime } from "@/lib/timeFormat";
 import { formatTaskWallTimestamp } from "@/features/graph/utils/taskTiming";
 import { filterTaskEvidenceForTime } from "./filterTaskEvidenceForTime";
@@ -149,7 +149,7 @@ export function TaskWorkspace({
   selectedSequence = null,
   selectedActivity = null,
 }: {
-  runState: WorkflowRunState | null;
+  runState: SampleWorkspaceState | null;
   taskId: string | null;
   error: string | null;
   onClearSelection?: () => void;
@@ -453,7 +453,7 @@ export function TaskWorkspace({
         {activeTab === "outputs" && (
           <WorkspaceTabPanel tabId="outputs">
             <WorkspaceSection testId="workspace-outputs" title="Outputs">
-              <ResourcePanel resources={filteredEvidence.resources} runId={runState?.id ?? null} />
+              <ResourcePanel resources={filteredEvidence.resources} sampleId={runState?.id ?? null} />
             </WorkspaceSection>
           </WorkspaceTabPanel>
         )}

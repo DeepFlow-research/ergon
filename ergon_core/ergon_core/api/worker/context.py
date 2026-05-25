@@ -9,25 +9,25 @@ from pydantic import AfterValidator, BaseModel, Field
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.errors import ContainmentViolation
 from ergon_core.api.worker.results import SpawnedTaskHandle
-from ergon_core.core.application.resources.models import RunResourceView
+from ergon_core.core.application.resources.models import SampleResourceView
 from ergon_core.core.application.runtime.task_models import SubtaskInfo
 from ergon_core.core.persistence.shared.types import NodeId, RunId
 
 if TYPE_CHECKING:
     from sqlmodel import Session
 
-    from ergon_core.core.application.resources.service import RunResourceReadService
+    from ergon_core.core.application.resources.service import SampleResourceReadService
     from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
     from ergon_core.core.application.runtime.task_management import TaskManagementService
 
     TaskManagementServiceAlias: TypeAlias = TaskManagementService
     TaskInspectionServiceAlias: TypeAlias = TaskInspectionService
-    RunResourceReadServiceAlias: TypeAlias = RunResourceReadService
+    SampleResourceReadServiceAlias: TypeAlias = SampleResourceReadService
     SessionFactory: TypeAlias = Callable[[], ContextManager[Session]]
 else:
     TaskManagementServiceAlias: TypeAlias = Any
     TaskInspectionServiceAlias: TypeAlias = Any
-    RunResourceReadServiceAlias: TypeAlias = Any
+    SampleResourceReadServiceAlias: TypeAlias = Any
     SessionFactory: TypeAlias = Callable[[], ContextManager[Any]]
 
 
@@ -45,8 +45,8 @@ TaskInspectionDependency: TypeAlias = Annotated[
     TaskInspectionServiceAlias,
     AfterValidator(_require_injected_dependency),
 ]
-RunResourceReadServiceDependency: TypeAlias = Annotated[
-    RunResourceReadServiceAlias,
+SampleResourceReadServiceDependency: TypeAlias = Annotated[
+    SampleResourceReadServiceAlias,
     AfterValidator(_require_injected_dependency),
 ]
 SessionFactoryDependency: TypeAlias = Annotated[
@@ -67,9 +67,9 @@ class WorkerContext(BaseModel):
 
     model_config = {"arbitrary_types_allowed": True}
 
-    run_id: UUID
+    sample_id: UUID
     task_id: UUID = Field(
-        description="RunGraphNode.task_id — canonical runtime task identity.",
+        description="SampleGraphNode.task_id — canonical runtime task identity.",
     )
     definition_id: UUID | None = Field(
         default=None,
@@ -96,7 +96,7 @@ class WorkerContext(BaseModel):
         exclude=True,
         repr=False,
     )
-    resource_service: RunResourceReadServiceDependency = Field(
+    resource_service: SampleResourceReadServiceDependency = Field(
         exclude=True,
         repr=False,
     )
@@ -106,14 +106,14 @@ class WorkerContext(BaseModel):
     def _for_job(
         cls,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
         execution_id: UUID,
         definition_id: UUID | None,
         sandbox_id: str,
         task_mgmt: TaskManagementServiceAlias,
         task_inspect: TaskInspectionServiceAlias,
-        resource_service: RunResourceReadServiceAlias,
+        resource_service: SampleResourceReadServiceAlias,
         session_factory: SessionFactory,
     ) -> "WorkerContext":
         """Construct the job runtime ``WorkerContext``.
@@ -124,7 +124,7 @@ class WorkerContext(BaseModel):
         """
 
         return cls(
-            run_id=run_id,
+            sample_id=sample_id,
             task_id=task_id,
             execution_id=execution_id,
             definition_id=definition_id,
@@ -146,7 +146,7 @@ class WorkerContext(BaseModel):
         """Spawn a child task under this context's task_id."""
 
         return await self.task_mgmt.spawn_dynamic_task(
-            run_id=self.run_id,
+            sample_id=self.sample_id,
             parent_task_id=self.task_id,
             task=task,
             depends_on=depends_on,
@@ -168,7 +168,7 @@ class WorkerContext(BaseModel):
         with self.session_factory() as session:
             await self.task_mgmt.cancel_task(
                 session,
-                CancelTaskCommand(run_id=RunId(self.run_id), task_id=NodeId(task_id)),
+                CancelTaskCommand(sample_id=RunId(self.sample_id), task_id=NodeId(task_id)),
             )
 
     async def refine_task(self, task_id: UUID, *, description: str) -> None:
@@ -182,7 +182,7 @@ class WorkerContext(BaseModel):
             await self.task_mgmt.refine_task(
                 session,
                 RefineTaskCommand(
-                    run_id=RunId(self.run_id),
+                    sample_id=RunId(self.sample_id),
                     task_id=NodeId(task_id),
                     new_description=description,
                 ),
@@ -198,7 +198,7 @@ class WorkerContext(BaseModel):
         with self.session_factory() as session:
             result = await self.task_mgmt.restart_task(
                 session,
-                RestartTaskCommand(run_id=RunId(self.run_id), task_id=NodeId(task_id)),
+                RestartTaskCommand(sample_id=RunId(self.sample_id), task_id=NodeId(task_id)),
             )
         return SpawnedTaskHandle(task_id=result.task_id)
 
@@ -208,7 +208,7 @@ class WorkerContext(BaseModel):
         with self.session_factory() as session:
             rows = self.task_inspect.list_subtasks(
                 session,
-                run_id=self.run_id,
+                sample_id=self.sample_id,
                 parent_task_id=self.task_id,
             )
         return tuple(rows)
@@ -217,14 +217,14 @@ class WorkerContext(BaseModel):
         """Return the transitive descendants of this context's task_id."""
 
         descendant_ids = await self.task_inspect.descendant_ids(
-            run_id=self.run_id,
+            sample_id=self.sample_id,
             root_task_id=self.task_id,
         )
         with self.session_factory() as session:
             return tuple(
                 self.task_inspect.get_subtask(
                     session,
-                    run_id=self.run_id,
+                    sample_id=self.sample_id,
                     task_id=task_id,
                 )
                 for task_id in descendant_ids
@@ -237,7 +237,7 @@ class WorkerContext(BaseModel):
         with self.session_factory() as session:
             return self.task_inspect.get_subtask(
                 session,
-                run_id=self.run_id,
+                sample_id=self.sample_id,
                 task_id=task_id,
             )
 
@@ -248,7 +248,7 @@ class WorkerContext(BaseModel):
         execution_id: UUID | None = None,
         kind: str | None = None,
         name: str | None = None,
-    ) -> tuple[RunResourceView, ...]:
+    ) -> tuple[SampleResourceView, ...]:
         """List resources visible to this worker within the current run.
 
         Resource access is run-scoped by design: workers may inspect and
@@ -257,7 +257,7 @@ class WorkerContext(BaseModel):
         """
 
         return self.resource_service.list_for_run(
-            run_id=self.run_id,
+            sample_id=self.sample_id,
             task_id=task_id,
             task_execution_id=execution_id,
             kind=kind,
@@ -268,7 +268,7 @@ class WorkerContext(BaseModel):
         """Read a visible resource blob from this run."""
 
         return self.resource_service.read_bytes(
-            run_id=self.run_id,
+            sample_id=self.sample_id,
             current_task_id=self.task_id,
             resource_id=resource_id,
         )
@@ -279,7 +279,7 @@ class WorkerContext(BaseModel):
         if task_id == self.task_id:
             return
         descendant_ids = await self.task_inspect.descendant_ids(
-            run_id=self.run_id,
+            sample_id=self.sample_id,
             root_task_id=self.task_id,
         )
         if task_id not in descendant_ids:

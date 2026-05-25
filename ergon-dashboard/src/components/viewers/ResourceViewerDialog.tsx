@@ -16,27 +16,27 @@ import { resourceContentUrl, useResourceContent } from "@/hooks/useResourceConte
 import type { ResourceState } from "@/lib/types";
 
 interface ResourceViewerDialogProps {
-  runId: string | null;
+  sampleId: string | null;
   resource: ResourceState | null;
   onClose: () => void;
 }
 
-export function ResourceViewerDialog({ runId, resource, onClose }: ResourceViewerDialogProps) {
-  const open = resource !== null && runId !== null;
+export function ResourceViewerDialog({ sampleId, resource, onClose }: ResourceViewerDialogProps) {
+  const open = resource !== null && sampleId !== null;
   const kind = resource ? resolveViewerKind(resource.mimeType) : "text";
   const wantsText = viewerWantsText(kind);
 
   const { text, error, isLoading } = useResourceContent(
-    runId,
+    sampleId,
     resource?.id ?? null,
     open && wantsText,
   );
 
   return (
     <Dialog open={open} onClose={onClose} title={resource?.name}>
-      {resource === null || runId === null ? null : (
+      {resource === null || sampleId === null ? null : (
         <ViewerBody
-          runId={runId}
+          sampleId={sampleId}
           resource={resource}
           text={text}
           error={error}
@@ -48,20 +48,20 @@ export function ResourceViewerDialog({ runId, resource, onClose }: ResourceViewe
 }
 
 function ViewerBody({
-  runId,
+  sampleId,
   resource,
   text,
   error,
   isLoading,
 }: {
-  runId: string;
+  sampleId: string;
   resource: ResourceState;
   text: string | null;
   error: string | null;
   isLoading: boolean;
 }) {
   const kind = resolveViewerKind(resource.mimeType);
-  const url = resourceContentUrl(runId, resource.id);
+  const url = resourceContentUrl(sampleId, resource.id);
 
   if (error !== null) {
     return (

@@ -143,7 +143,7 @@ def _parse_uuid_line(prefix: str, output: str) -> str:
 def benchmarked():
     """Memoize `run_benchmark` calls by explicit runtime configuration.
 
-    The stubbed E2E tests each assert against the *latest* RunRecord; re-running
+    The stubbed E2E tests each assert against the *latest* SampleRecord; re-running
     the same benchmark per-test burned ~4× subprocess launches with identical
     outcomes. This fixture runs each unique config exactly once per session and
     returns the cached `CompletedProcess`.

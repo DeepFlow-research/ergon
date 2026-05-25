@@ -121,16 +121,16 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
         if seed_resp.status_code == 401:
             pytest.skip("Test harness secret mismatch - skipping harness integration test")
         assert seed_resp.status_code == 201, seed_resp.text
-        run_id = seed_resp.json()["run_id"]
-        assert run_id  # non-empty UUID string
+        sample_id = seed_resp.json()["sample_id"]
+        assert sample_id  # non-empty UUID string
 
-        # ── Step 3: read state via GET /api/__danger__/test-harness/read/run/{run_id}/state ─────────
+        # ── Step 3: read state via GET /api/__danger__/test-harness/read/run/{sample_id}/state ─────────
         with httpx.Client(timeout=10.0) as client:
-            state_resp = client.get(f"{API}/api/__danger__/test-harness/read/run/{run_id}/state")
+            state_resp = client.get(f"{API}/api/__danger__/test-harness/read/run/{sample_id}/state")
 
         assert state_resp.status_code == 200, state_resp.text
         body = state_resp.json()
-        assert body["run_id"] == run_id
+        assert body["sample_id"] == sample_id
         assert body["status"] == "completed"
 
         # ── Step 4: reset via POST /api/__danger__/test-harness/write/reset ─────────────────────────
@@ -144,7 +144,7 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
 
         # ── Step 5: confirm the run is gone ──────────────────────────────────────
         with httpx.Client(timeout=10.0) as client:
-            gone_resp = client.get(f"{API}/api/__danger__/test-harness/read/run/{run_id}/state")
+            gone_resp = client.get(f"{API}/api/__danger__/test-harness/read/run/{sample_id}/state")
 
         assert gone_resp.status_code == 404, gone_resp.text
 

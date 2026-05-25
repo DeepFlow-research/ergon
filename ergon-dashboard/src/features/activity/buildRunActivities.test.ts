@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import fixture from "../../../tests/fixtures/mas-runs/concurrent-mas-run.json";
+import fixture from "../../../tests/fixtures/mas-samples/concurrent-mas-run.json";
 import { parseGraphMutationDtoArray } from "@/features/graph/contracts/graphMutations";
-import type { RunEvent } from "@/lib/runEvents";
-import { buildRunEvents } from "@/lib/runEvents";
-import { deserializeRunState } from "@/lib/runState";
+import type { RunEvent } from "@/lib/sampleEvents";
+import { buildRunEvents } from "@/lib/sampleEvents";
+import { deserializeRunState } from "@/lib/sampleState";
 import { TaskStatus, TaskTrigger } from "@/lib/types";
 import { buildRunActivities } from "./buildRunActivities";
 import { resolveActivitySnapshotSequence } from "./snapshotSequence";
@@ -54,7 +54,7 @@ test("buildRunActivities surfaces semantic activity kinds without creating actor
   runState.contextEventsByTask.set(noisyTaskId, [
     {
       id: "context-noisy",
-      runId: runState.id,
+      sampleId: runState.id,
       taskExecutionId: "execution-noisy",
       taskId: noisyTaskId,
       workerBindingKey: "worker-1",
@@ -78,7 +78,7 @@ test("buildRunActivities surfaces semantic activity kinds without creating actor
     ...runState.threads,
     {
       id: "thread-noisy",
-      runId: runState.id,
+      sampleId: runState.id,
       taskId: noisyTaskId,
       topic: "coordination",
       agentAId: "agent-a",
@@ -90,7 +90,7 @@ test("buildRunActivities surfaces semantic activity kinds without creating actor
           id: "message-noisy",
           threadId: "thread-noisy",
           threadTopic: "coordination",
-          runId: runState.id,
+          sampleId: runState.id,
           taskId: noisyTaskId,
           taskExecutionId: null,
           fromAgentId: "agent-a",

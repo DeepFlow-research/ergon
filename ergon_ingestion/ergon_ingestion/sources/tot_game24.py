@@ -149,7 +149,7 @@ def _event(
 
 
 def _source_run_id(record: dict[str, Any], puzzle_id: str) -> str:
-    segment_id = record.get("segment_id") or record.get("run_id") or record.get("log_id")
+    segment_id = record.get("segment_id") or record.get("sample_id") or record.get("log_id")
     if segment_id is None:
         return puzzle_id
     return f"{puzzle_id}:{segment_id}"

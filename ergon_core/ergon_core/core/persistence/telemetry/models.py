@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 import sqlalchemy as sa
 from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.shared.enums import (
-    RunStatus,
+    SampleStatus,
     TaskExecutionStatus,
 )
 from ergon_core.core.shared.rollout_status import RolloutStatus
@@ -26,12 +26,12 @@ TZDateTime = DateTime(timezone=True)
 # for table=True). Validators here protect the API/deserialization boundary.
 
 # ---------------------------------------------------------------------------
-# RunRecord
+# SampleRecord
 # ---------------------------------------------------------------------------
 
 
-class RunRecord(SQLModel, table=True):
-    __tablename__ = "runs"
+class SampleRecord(SQLModel, table=True):
+    __tablename__ = "samples"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     definition_id: UUID = Field(
@@ -84,7 +84,7 @@ class RunRecord(SQLModel, table=True):
             "for grouping related runs, not a foreign key to a retired table."
         ),
     )
-    status: RunStatus = Field(index=True)
+    status: SampleStatus = Field(index=True)
     error_message: str | None = None
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
     started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
@@ -112,31 +112,31 @@ class RunRecord(SQLModel, table=True):
         return data
 
     @model_validator(mode="after")
-    def _validate_fields(self) -> "RunRecord":
+    def _validate_fields(self) -> "SampleRecord":
         self.__class__._parse_json_object(self.worker_team_json, "worker_team_json")
         self.__class__._parse_json_object(self.dependency_extras_json, "dependency_extras_json")
         self.__class__._parse_json_object(self.assignment_json, "assignment_json")
         self.__class__._parse_json_object(self.summary_json, "summary_json")
         try:
-            RunStatus(self.status)
+            SampleStatus(self.status)
         except ValueError:
             raise ValueError(
-                f"{self.status!r} is not a valid RunStatus; "
-                f"valid values: {[e.value for e in RunStatus]}"
+                f"{self.status!r} is not a valid SampleStatus; "
+                f"valid values: {[e.value for e in SampleStatus]}"
             )
         return self
 
 
 # ---------------------------------------------------------------------------
-# RunTaskExecution
+# SampleTaskAttempt
 # ---------------------------------------------------------------------------
 
 
-class RunTaskExecution(SQLModel, table=True):
-    __tablename__ = "run_task_executions"
+class SampleTaskAttempt(SQLModel, table=True):
+    __tablename__ = "sample_task_attempts"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
+    sample_id: UUID = Field(foreign_key="samples.id", index=True)
     task_id: UUID = Field(index=True)
     definition_worker_id: UUID | None = Field(
         default=None,
@@ -157,7 +157,7 @@ class RunTaskExecution(SQLModel, table=True):
     # stuffs it onto `worker_result`, but every other context capability
     # (`run_command`, `read_resource`, ...) is fetched lazily by the
     # criterion. When that redesign lands, this column may live in a
-    # dedicated output store rather than on `RunTaskExecution`.
+    # dedicated output store rather than on `SampleTaskAttempt`.
     worker_output_json: dict | None = Field(default=None, sa_column=Column(JSON))
 
     # -- JSON accessor: output_json --
@@ -187,10 +187,10 @@ class RunTaskExecution(SQLModel, table=True):
     def validate_identity(self) -> None:
         """Require enough identity to map execution rows to a static or dynamic task."""
         if self.task_id is None:
-            raise ValueError("RunTaskExecution requires task_id")
+            raise ValueError("SampleTaskAttempt requires task_id")
 
     @model_validator(mode="after")
-    def _validate_fields(self) -> "RunTaskExecution":
+    def _validate_fields(self) -> "SampleTaskAttempt":
         self.__class__._parse_output(self.output_json)
         self.__class__._parse_error(self.error_json)
         self.validate_identity()
@@ -205,22 +205,22 @@ class RunTaskExecution(SQLModel, table=True):
 
 
 # ---------------------------------------------------------------------------
-# RunResource
+# SampleResource
 # ---------------------------------------------------------------------------
 
 
-class RunResource(SQLModel, table=True):
-    __tablename__ = "run_resources"
+class SampleResource(SQLModel, table=True):
+    __tablename__ = "sample_resources"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
+    sample_id: UUID = Field(foreign_key="samples.id", index=True)
     task_execution_id: UUID | None = Field(
         default=None,
-        foreign_key="run_task_executions.id",
+        foreign_key="sample_task_attempts.id",
     )
     kind: str = Field(
         default="output",
-        description="Canonical artifact kind from shared RunResourceKind.",
+        description="Canonical artifact kind from shared SampleResourceKind.",
     )
     name: str
     mime_type: str
@@ -234,7 +234,7 @@ class RunResource(SQLModel, table=True):
     content_hash: str | None = Field(default=None, index=True)
     copied_from_resource_id: UUID | None = Field(
         default=None,
-        foreign_key="run_resources.id",
+        foreign_key="sample_resources.id",
         index=True,
     )
 
@@ -250,32 +250,32 @@ class RunResource(SQLModel, table=True):
         return data
 
     @model_validator(mode="after")
-    def _validate_fields(self) -> "RunResource":
-        from ergon_core.core.persistence.shared.enums import RunResourceKind
+    def _validate_fields(self) -> "SampleResource":
+        from ergon_core.core.persistence.shared.enums import SampleResourceKind
 
         self.__class__._parse_metadata(self.metadata_json)
         try:
-            RunResourceKind(self.kind)
+            SampleResourceKind(self.kind)
         except ValueError:
             raise ValueError(
-                f"{self.kind!r} is not a valid RunResourceKind; "
-                f"valid values: {[e.value for e in RunResourceKind]}"
+                f"{self.kind!r} is not a valid SampleResourceKind; "
+                f"valid values: {[e.value for e in SampleResourceKind]}"
             )
         return self
 
 
 # ---------------------------------------------------------------------------
-# RunTaskEvaluation
+# SampleTaskEvaluation
 # ---------------------------------------------------------------------------
 
 
-class RunTaskEvaluation(SQLModel, table=True):
-    __tablename__ = "run_task_evaluations"
+class SampleTaskEvaluation(SQLModel, table=True):
+    __tablename__ = "sample_task_evaluations"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
+    sample_id: UUID = Field(foreign_key="samples.id", index=True)
     task_execution_id: UUID = Field(
-        foreign_key="run_task_executions.id",
+        foreign_key="sample_task_attempts.id",
         index=True,
     )
     task_id: UUID = Field(index=True)
@@ -290,7 +290,7 @@ class RunTaskEvaluation(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
     @model_validator(mode="after")
-    def _validate_summary_json(self) -> "RunTaskEvaluation":
+    def _validate_summary_json(self) -> "SampleTaskEvaluation":
         if not isinstance(self.summary_json, dict):
             raise ValueError(f"summary_json must be a dict, got {type(self.summary_json).__name__}")
         return self
@@ -303,10 +303,10 @@ class RunTaskEvaluation(SQLModel, table=True):
 
 class Thread(SQLModel, table=True):
     __tablename__ = "threads"
-    __table_args__ = (sa.UniqueConstraint("run_id", "topic", name="uq_threads_run_topic"),)
+    __table_args__ = (sa.UniqueConstraint("sample_id", "topic", name="uq_threads_run_topic"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
+    sample_id: UUID = Field(foreign_key="samples.id", index=True)
     topic: str
     summary: str | None = None
     agent_a_id: str = Field(index=True)
@@ -325,10 +325,10 @@ class ThreadMessage(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     thread_id: UUID = Field(foreign_key="threads.id", index=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
+    sample_id: UUID = Field(foreign_key="samples.id", index=True)
     task_execution_id: UUID | None = Field(
         default=None,
-        foreign_key="run_task_executions.id",
+        foreign_key="sample_task_attempts.id",
         index=True,
     )
     from_agent_id: str
@@ -376,7 +376,7 @@ class RolloutBatchRun(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     batch_id: UUID = Field(foreign_key="rollout_batches.id", index=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
+    sample_id: UUID = Field(foreign_key="samples.id", index=True)
 
 
 # ---------------------------------------------------------------------------
@@ -387,16 +387,16 @@ class RolloutBatchRun(SQLModel, table=True):
 class SandboxCommandWalEntry(SQLModel, table=True):
     """One row per bash command emitted by ``SandboxEventSink.sandbox_command``.
 
-    ``run_id`` is indexed but carries no FK constraint — the sandbox.closed
-    synthetic WAL entry may arrive with run_id=task_id due to a pre-existing
+    ``sample_id`` is indexed but carries no FK constraint — the sandbox.closed
+    synthetic WAL entry may arrive with sample_id=task_id due to a pre-existing
     quirk in the manager's teardown sequence.  Queries should filter by
-    run_id; rows with an unexpected run_id will simply not appear.
+    sample_id; rows with an unexpected sample_id will simply not appear.
     """
 
     __tablename__ = "sandbox_command_wal_entries"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(index=True)
+    sample_id: UUID = Field(index=True)
     task_id: UUID = Field(index=True)
     sandbox_id: str = Field(index=True)
     command: str
@@ -416,14 +416,14 @@ class SandboxEvent(SQLModel, table=True):
     """One row per sandbox lifecycle event emitted by ``SandboxEventSink``.
 
     ``kind`` is one of ``"sandbox_created"`` or ``"sandbox_closed"``.
-    ``run_id`` carries no FK — same teardown-sequence caveat as
+    ``sample_id`` carries no FK — same teardown-sequence caveat as
     ``SandboxCommandWalEntry``.
     """
 
     __tablename__ = "sandbox_events"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(index=True)
+    sample_id: UUID = Field(index=True)
     task_id: UUID = Field(index=True)
     sandbox_id: str = Field(index=True)
     kind: str

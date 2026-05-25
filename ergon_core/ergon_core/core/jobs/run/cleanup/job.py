@@ -8,51 +8,51 @@ from functools import partial
 from uuid import UUID
 
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.shared.enums import SampleStatus
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.core.infrastructure.inngest.errors import ConfigurationError, DataIntegrityError
 from ergon_core.core.jobs.sandbox._lifecycle import terminate_external_sandbox
-from .contract import RunCleanupEvent, RunCleanupResult
+from .contract import SampleCleanupEvent, SampleCleanupResult
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_STATUS_MAP: dict[str, RunStatus] = {
-    "completed": RunStatus.COMPLETED,
-    "failed": RunStatus.FAILED,
-    "cancelled": RunStatus.CANCELLED,
+_STATUS_MAP: dict[str, SampleStatus] = {
+    "completed": SampleStatus.COMPLETED,
+    "failed": SampleStatus.FAILED,
+    "cancelled": SampleStatus.CANCELLED,
 }
 
 
-async def run_run_cleanup_job(ctx: Any, payload: RunCleanupEvent) -> RunCleanupResult:
+async def run_sample_cleanup_job(ctx: Any, payload: SampleCleanupEvent) -> SampleCleanupResult:
     """Cleanup: terminate sandbox, ensure run status is correct."""
-    run_id = payload.run_id
+    sample_id = payload.sample_id
     status = payload.status
     error_message = payload.error_message
 
-    logger.info("run-cleanup run_id=%s status=%s", run_id, status)
+    logger.info("run-cleanup sample_id=%s status=%s", sample_id, status)
 
     return await ctx.step.run(
         "cleanup-run",
-        partial(_cleanup_run, run_id, status, error_message),
-        output_type=RunCleanupResult,
+        partial(_cleanup_run, sample_id, status, error_message),
+        output_type=SampleCleanupResult,
     )
 
 
-async def _cleanup_run(run_id: UUID, status: str, error_message: str | None) -> RunCleanupResult:
+async def _cleanup_run(sample_id: UUID, status: str, error_message: str | None) -> SampleCleanupResult:
     """Terminate sandbox and update run status."""
     expected = _STATUS_MAP.get(status)
     if expected is None:
         raise ConfigurationError(
             f"Unknown cleanup status: {status!r}",
-            run_id=run_id,
+            sample_id=sample_id,
         )
 
     session = get_session()
     try:
-        run = session.get(RunRecord, run_id)
+        run = session.get(SampleRecord, sample_id)
         if run is None:
-            raise DataIntegrityError("RunRecord", run_id)
+            raise DataIntegrityError("SampleRecord", sample_id)
 
         sandbox_id = run.parsed_summary().get("sandbox_id")
         sandbox_result = await terminate_external_sandbox(
@@ -62,8 +62,8 @@ async def _cleanup_run(run_id: UUID, status: str, error_message: str | None) -> 
 
         if sandbox_id is not None and not isinstance(sandbox_id, str):
             logger.warning(
-                "run-cleanup run_id=%s: sandbox_id has unexpected type %s, skipping termination",
-                run_id,
+                "run-cleanup sample_id=%s: sandbox_id has unexpected type %s, skipping termination",
+                sample_id,
                 type(sandbox_id).__name__,
             )
 
@@ -77,8 +77,8 @@ async def _cleanup_run(run_id: UUID, status: str, error_message: str | None) -> 
     finally:
         session.close()
 
-    return RunCleanupResult(
-        run_id=run_id,
+    return SampleCleanupResult(
+        sample_id=sample_id,
         status=status,
         sandbox_terminated=sandbox_terminated,
         sandbox_id=sandbox_id if isinstance(sandbox_id, str) else None,

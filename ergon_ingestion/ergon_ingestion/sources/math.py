@@ -148,7 +148,7 @@ def _resources(record: Record, completion: object) -> list[ParsedResource]:
 
 
 def _source_run_id(record: Record, *, fallback_id: str) -> str:
-    explicit = _first_present(record, ["source_run_id", "run_id", "problem_id", "id"])
+    explicit = _first_present(record, ["source_run_id", "sample_id", "problem_id", "id"])
     if explicit is not None:
         return str(explicit)
     return fallback_id

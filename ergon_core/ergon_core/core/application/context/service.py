@@ -19,21 +19,21 @@ from ergon_core.core.shared.context_parts import (
     ToolResultPart,
     UserMessagePart,
 )
-from ergon_core.core.persistence.context.models import RunContextEvent
+from ergon_core.core.persistence.context.models import SampleContextEvent
 from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
 
 
 class ContextEventService:
-    """Append-only write and read path for ``run_context_events``."""
+    """Append-only write and read path for ``sample_context_events``."""
 
     def __init__(self) -> None:
-        self._listeners: list[Callable[[RunContextEvent], Awaitable[None]]] = []
+        self._listeners: list[Callable[[SampleContextEvent], Awaitable[None]]] = []
         self._sequence_counters: dict[UUID, int] = {}
         self._active_turn_ids: dict[UUID, str] = {}
 
-    def add_listener(self, listener: Callable[[RunContextEvent], Awaitable[None]]) -> None:
+    def add_listener(self, listener: Callable[[SampleContextEvent], Awaitable[None]]) -> None:
         self._listeners.append(listener)
 
     def _next_sequence(self, execution_id: UUID) -> int:
@@ -41,7 +41,7 @@ class ContextEventService:
 
     def _make_event(
         self,
-        run_id: UUID,
+        sample_id: UUID,
         execution_id: UUID,
         worker_binding_key: str,
         sequence: int,
@@ -50,9 +50,9 @@ class ContextEventService:
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
         policy_version: str | None = None,
-    ) -> RunContextEvent:
-        return RunContextEvent(
-            run_id=run_id,
+    ) -> SampleContextEvent:
+        return SampleContextEvent(
+            sample_id=sample_id,
             task_execution_id=execution_id,
             worker_binding_key=worker_binding_key,
             sequence=sequence,
@@ -80,14 +80,14 @@ class ContextEventService:
         self,
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         execution_id: UUID,
         worker_binding_key: str,
         chunk: ContextPartChunk,
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
         policy_version: str | None = None,
-    ) -> RunContextEvent:
+    ) -> SampleContextEvent:
         """Enrich and persist one worker-emitted context stream chunk."""
         seq = self._next_sequence(execution_id)
         now = datetime.now(UTC)
@@ -106,7 +106,7 @@ class ContextEventService:
             policy_version=policy_version,
         )
         event = self._make_event(
-            run_id,
+            sample_id,
             execution_id,
             worker_binding_key,
             seq,
@@ -129,18 +129,18 @@ class ContextEventService:
 
         return event
 
-    def get_for_execution(self, session: Session, execution_id: UUID) -> list[RunContextEvent]:
+    def get_for_execution(self, session: Session, execution_id: UUID) -> list[SampleContextEvent]:
         stmt = (
-            select(RunContextEvent)
-            .where(RunContextEvent.task_execution_id == execution_id)
-            .order_by(RunContextEvent.sequence)
+            select(SampleContextEvent)
+            .where(SampleContextEvent.task_execution_id == execution_id)
+            .order_by(SampleContextEvent.sequence)
         )
         return list(session.exec(stmt).all())
 
-    def get_for_run(self, session: Session, run_id: UUID) -> list[RunContextEvent]:
+    def get_for_run(self, session: Session, sample_id: UUID) -> list[SampleContextEvent]:
         stmt = (
-            select(RunContextEvent)
-            .where(RunContextEvent.run_id == run_id)
-            .order_by(RunContextEvent.task_execution_id, RunContextEvent.sequence)
+            select(SampleContextEvent)
+            .where(SampleContextEvent.sample_id == sample_id)
+            .order_by(SampleContextEvent.task_execution_id, SampleContextEvent.sequence)
         )
         return list(session.exec(stmt).all())

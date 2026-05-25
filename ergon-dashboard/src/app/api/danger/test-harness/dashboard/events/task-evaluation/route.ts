@@ -5,10 +5,10 @@ import { TaskEvaluationState } from "@/lib/types";
 
 export async function POST(request: Request) {
   const payload = (await request.json()) as {
-    runId: string;
+    sampleId: string;
     taskId: string | null;
     evaluation: TaskEvaluationState;
   };
-  emitHarnessTaskEvaluation(payload.runId, payload.taskId, payload.evaluation);
+  emitHarnessTaskEvaluation(payload.sampleId, payload.taskId, payload.evaluation);
   return NextResponse.json({ ok: true });
 }

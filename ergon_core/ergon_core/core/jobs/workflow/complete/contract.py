@@ -8,7 +8,7 @@ from pydantic import BaseModel
 class WorkflowCompleteResult(BaseModel):
     model_config = {"frozen": True}
 
-    run_id: UUID
+    sample_id: UUID
     status: Literal["completed"] = "completed"
     final_score: float | None = None
     normalized_score: float | None = None

@@ -11,10 +11,10 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTask,
 )
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
+from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
-    RunRecord,
-    RunTaskExecution,
+    SampleRecord,
+    SampleTaskAttempt,
 )
 from sqlmodel import select
 
@@ -37,10 +37,10 @@ def swebench_execution() -> tuple[UUID, UUID]:
     """Seed the minimal FK chain needed by SWEBenchSandboxManager._install_dependencies.
 
     Seeds: ExperimentDefinition → ExperimentDefinitionInstance →
-    ExperimentDefinitionTask + RunRecord → RunTaskExecution(id=execution_id).
+    ExperimentDefinitionTask + SampleRecord → SampleTaskAttempt(id=execution_id).
 
-    Yields (execution_id, run_id) so tests can pass execution_id as
-    sandbox_key and run_id as run_id to mgr.create().
+    Yields (execution_id, sample_id) so tests can pass execution_id as
+    sandbox_key and sample_id as sample_id to mgr.create().
 
     Cleans up all seeded rows after the test.
     """
@@ -71,36 +71,36 @@ def swebench_execution() -> tuple[UUID, UUID]:
         session.flush()
         session.refresh(task)
 
-        run = RunRecord(
+        run = SampleRecord(
             definition_id=defn.id,
             workflow_definition_id=defn.id,
             benchmark_type="swebench-verified",
             instance_key="django__django-1",
-            status=RunStatus.EXECUTING,
+            status=SampleStatus.EXECUTING,
         )
         session.add(run)
         session.flush()
         session.refresh(run)
 
-        execution = RunTaskExecution(
+        execution = SampleTaskAttempt(
             id=execution_id,
-            run_id=run.id,
+            sample_id=run.id,
             task_id=task.id,
             status=TaskExecutionStatus.RUNNING,
         )
         session.add(execution)
         session.commit()
 
-        run_id: UUID = run.id
+        sample_id: UUID = run.id
         defn_id: UUID = defn.id
 
-    yield execution_id, run_id
+    yield execution_id, sample_id
 
     with get_session() as session:
-        exec_row = session.get(RunTaskExecution, execution_id)
+        exec_row = session.get(SampleTaskAttempt, execution_id)
         if exec_row is not None:
             session.delete(exec_row)
-        run_row = session.get(RunRecord, run_id)
+        run_row = session.get(SampleRecord, sample_id)
         if run_row is not None:
             session.delete(run_row)
         for t in session.exec(

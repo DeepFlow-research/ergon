@@ -31,13 +31,13 @@ class _PublishService:
 @pytest.mark.asyncio
 async def test_worker_final_message_is_not_published_as_run_resource(monkeypatch) -> None:
     monkeypatch.setattr(persist_outputs, "SandboxResourcePublisher", _Publisher)
-    monkeypatch.setattr(persist_outputs, "RunResourcePublishService", _PublishService)
+    monkeypatch.setattr(persist_outputs, "SampleResourcePublishService", _PublishService)
 
     count = await persist_outputs.publish_public_sandbox_resources(
         _Manager().get_sandbox(uuid4()),
         PersistOutputsRequest.model_validate(
             {
-                "run_id": uuid4(),
+                "sample_id": uuid4(),
                 "definition_id": uuid4(),
                 "task_id": uuid4(),
                 "execution_id": uuid4(),

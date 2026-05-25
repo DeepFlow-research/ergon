@@ -3,18 +3,18 @@ from uuid import UUID, uuid4
 
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.persistence.shared.enums import (
-    RunResourceKind,
-    RunStatus,
+    SampleResourceKind,
+    SampleStatus,
     TaskExecutionStatus,
 )
 from ergon_core.core.persistence.telemetry.models import (
-    RunRecord,
-    RunResource,
-    RunTaskExecution,
+    SampleRecord,
+    SampleResource,
+    SampleTaskAttempt,
 )
-from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
+from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -32,15 +32,15 @@ def _session() -> Session:
 
 def _node(
     *,
-    run_id: UUID,
+    sample_id: UUID,
     slug: str,
     description: str | None = None,
     status: str = "completed",
     parent_task_id: UUID | None = None,
     level: int = 0,
-) -> RunGraphNode:
-    return RunGraphNode(
-        run_id=run_id,
+) -> SampleGraphNode:
+    return SampleGraphNode(
+        sample_id=sample_id,
         instance_key="instance",
         task_slug=slug,
         description=description or f"Task {slug}",
@@ -51,9 +51,9 @@ def _node(
     )
 
 
-def _edge(*, run_id: UUID, source_task_id: UUID, target_task_id: UUID) -> RunGraphEdge:
-    return RunGraphEdge(
-        run_id=run_id,
+def _edge(*, sample_id: UUID, source_task_id: UUID, target_task_id: UUID) -> SampleGraphEdge:
+    return SampleGraphEdge(
+        sample_id=sample_id,
         source_task_id=source_task_id,
         target_task_id=target_task_id,
         status="satisfied",
@@ -62,12 +62,12 @@ def _edge(*, run_id: UUID, source_task_id: UUID, target_task_id: UUID) -> RunGra
 
 def _execution(
     *,
-    run_id: UUID,
+    sample_id: UUID,
     task_id: UUID,
     status: TaskExecutionStatus = TaskExecutionStatus.COMPLETED,
-) -> RunTaskExecution:
-    return RunTaskExecution(
-        run_id=run_id,
+) -> SampleTaskAttempt:
+    return SampleTaskAttempt(
+        sample_id=sample_id,
         task_id=task_id,
         status=status,
         final_assistant_message=f"output for {task_id}",
@@ -76,16 +76,16 @@ def _execution(
 
 def _resource(
     *,
-    run_id: UUID,
+    sample_id: UUID,
     execution_id: UUID,
     name: str,
     path: Path,
     content: bytes,
-    kind: RunResourceKind = RunResourceKind.REPORT,
-) -> RunResource:
+    kind: SampleResourceKind = SampleResourceKind.REPORT,
+) -> SampleResource:
     path.write_bytes(content)
-    return RunResource(
-        run_id=run_id,
+    return SampleResource(
+        sample_id=sample_id,
         task_execution_id=execution_id,
         kind=kind.value,
         name=name,
@@ -97,60 +97,60 @@ def _resource(
 
 
 def _run(session: Session) -> UUID:
-    run_id = uuid4()
+    sample_id = uuid4()
     definition_id = uuid4()
     session.add(
-        RunRecord(
-            id=run_id,
+        SampleRecord(
+            id=sample_id,
             definition_id=definition_id,
             benchmark_type="ci-workflow-service",
             instance_key="sample-1",
             worker_team_json={"primary": "test-worker"},
-            status=RunStatus.EXECUTING,
+            status=SampleStatus.EXECUTING,
         )
     )
-    return run_id
+    return sample_id
 
 
 def test_input_scope_uses_immediate_upstream_resources_only(tmp_path: Path) -> None:
     session = _session()
-    run_id = _run(session)
-    a = _node(run_id=run_id, slug="a")
-    b = _node(run_id=run_id, slug="b")
-    c = _node(run_id=run_id, slug="c")
+    sample_id = _run(session)
+    a = _node(sample_id=sample_id, slug="a")
+    b = _node(sample_id=sample_id, slug="b")
+    c = _node(sample_id=sample_id, slug="c")
     session.add_all([a, b, c])
     session.flush()
     session.add_all(
         [
-            RunGraphEdge(
-                run_id=run_id,
+            SampleGraphEdge(
+                sample_id=sample_id,
                 source_task_id=a.task_id,
                 target_task_id=b.task_id,
                 status="satisfied",
             ),
-            RunGraphEdge(
-                run_id=run_id,
+            SampleGraphEdge(
+                sample_id=sample_id,
                 source_task_id=b.task_id,
                 target_task_id=c.task_id,
                 status="satisfied",
             ),
         ]
     )
-    exec_a = _execution(run_id=run_id, task_id=a.task_id)
-    exec_b = _execution(run_id=run_id, task_id=b.task_id)
+    exec_a = _execution(sample_id=sample_id, task_id=a.task_id)
+    exec_b = _execution(sample_id=sample_id, task_id=b.task_id)
     session.add_all([exec_a, exec_b])
     session.flush()
     session.add_all(
         [
             _resource(
-                run_id=run_id,
+                sample_id=sample_id,
                 execution_id=exec_a.id,
                 name="a.txt",
                 path=tmp_path / "a.txt",
                 content=b"a",
             ),
             _resource(
-                run_id=run_id,
+                sample_id=sample_id,
                 execution_id=exec_b.id,
                 name="b.txt",
                 path=tmp_path / "b.txt",
@@ -162,7 +162,7 @@ def test_input_scope_uses_immediate_upstream_resources_only(tmp_path: Path) -> N
 
     resources = WorkflowService().list_resources(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=c.task_id,
         scope="input",
     )
@@ -172,28 +172,28 @@ def test_input_scope_uses_immediate_upstream_resources_only(tmp_path: Path) -> N
 
 def test_visible_scope_stays_inside_current_run(tmp_path: Path) -> None:
     session = _session()
-    run_id = _run(session)
+    sample_id = _run(session)
     other_run_id = _run(session)
-    current = _node(run_id=run_id, slug="current")
-    peer = _node(run_id=run_id, slug="peer")
-    other = _node(run_id=other_run_id, slug="other")
+    current = _node(sample_id=sample_id, slug="current")
+    peer = _node(sample_id=sample_id, slug="peer")
+    other = _node(sample_id=other_run_id, slug="other")
     session.add_all([current, peer, other])
     session.flush()
-    peer_exec = _execution(run_id=run_id, task_id=peer.task_id)
-    other_exec = _execution(run_id=other_run_id, task_id=other.task_id)
+    peer_exec = _execution(sample_id=sample_id, task_id=peer.task_id)
+    other_exec = _execution(sample_id=other_run_id, task_id=other.task_id)
     session.add_all([peer_exec, other_exec])
     session.flush()
     session.add_all(
         [
             _resource(
-                run_id=run_id,
+                sample_id=sample_id,
                 execution_id=peer_exec.id,
                 name="peer.txt",
                 path=tmp_path / "peer.txt",
                 content=b"peer",
             ),
             _resource(
-                run_id=other_run_id,
+                sample_id=other_run_id,
                 execution_id=other_exec.id,
                 name="other.txt",
                 path=tmp_path / "other.txt",
@@ -205,7 +205,7 @@ def test_visible_scope_stays_inside_current_run(tmp_path: Path) -> None:
 
     resources = WorkflowService().list_resources(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=current.task_id,
         scope="visible",
     )
@@ -216,24 +216,24 @@ def test_visible_scope_stays_inside_current_run(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_materialize_resource_creates_current_task_owned_copy(tmp_path: Path) -> None:
     session = _session()
-    run_id = _run(session)
-    producer = _node(run_id=run_id, slug="producer")
-    consumer = _node(run_id=run_id, slug="consumer")
+    sample_id = _run(session)
+    producer = _node(sample_id=sample_id, slug="producer")
+    consumer = _node(sample_id=sample_id, slug="consumer")
     session.add_all([producer, consumer])
     session.flush()
-    producer_exec = _execution(run_id=run_id, task_id=producer.task_id)
+    producer_exec = _execution(sample_id=sample_id, task_id=producer.task_id)
     consumer_exec = _execution(
-        run_id=run_id, task_id=consumer.task_id, status=TaskExecutionStatus.RUNNING
+        sample_id=sample_id, task_id=consumer.task_id, status=TaskExecutionStatus.RUNNING
     )
     session.add_all([producer_exec, consumer_exec])
     session.flush()
     source = _resource(
-        run_id=run_id,
+        sample_id=sample_id,
         execution_id=producer_exec.id,
         name="paper.pdf",
         path=tmp_path / "paper.pdf",
         content=b"paper",
-        kind=RunResourceKind.REPORT,
+        kind=SampleResourceKind.REPORT,
     )
     session.add(source)
     session.commit()
@@ -249,7 +249,7 @@ async def test_materialize_resource_creates_current_task_owned_copy(tmp_path: Pa
         sandbox_manager_factory=lambda _benchmark_type: manager
     ).materialize_resource(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         current_task_id=consumer.task_id,
         current_execution_id=consumer_exec.id,
         sandbox_task_key=consumer.task_id,
@@ -260,13 +260,13 @@ async def test_materialize_resource_creates_current_task_owned_copy(tmp_path: Pa
     )
 
     copy = session.exec(
-        select(RunResource).where(RunResource.id == result.copied_resource_id)
+        select(SampleResource).where(SampleResource.id == result.copied_resource_id)
     ).one()
-    original = session.get(RunResource, source.id)
+    original = session.get(SampleResource, source.id)
 
     assert copy.id != source.id
     assert copy.task_execution_id == consumer_exec.id
-    assert copy.kind == RunResourceKind.IMPORT.value
+    assert copy.kind == SampleResourceKind.IMPORT.value
     assert copy.name == "paper (copy).pdf"
     assert copy.file_path == source.file_path
     assert copy.content_hash == source.content_hash
@@ -283,19 +283,19 @@ async def test_materialize_resource_dry_run_keeps_copy_name_for_explicit_destina
     tmp_path: Path,
 ) -> None:
     session = _session()
-    run_id = _run(session)
-    producer = _node(run_id=run_id, slug="producer")
-    consumer = _node(run_id=run_id, slug="consumer")
+    sample_id = _run(session)
+    producer = _node(sample_id=sample_id, slug="producer")
+    consumer = _node(sample_id=sample_id, slug="consumer")
     session.add_all([producer, consumer])
     session.flush()
-    producer_exec = _execution(run_id=run_id, task_id=producer.task_id)
+    producer_exec = _execution(sample_id=sample_id, task_id=producer.task_id)
     consumer_exec = _execution(
-        run_id=run_id, task_id=consumer.task_id, status=TaskExecutionStatus.RUNNING
+        sample_id=sample_id, task_id=consumer.task_id, status=TaskExecutionStatus.RUNNING
     )
     session.add_all([producer_exec, consumer_exec])
     session.flush()
     source = _resource(
-        run_id=run_id,
+        sample_id=sample_id,
         execution_id=producer_exec.id,
         name="paper.pdf",
         path=tmp_path / "paper.pdf",
@@ -306,7 +306,7 @@ async def test_materialize_resource_dry_run_keeps_copy_name_for_explicit_destina
 
     result = await WorkflowService().materialize_resource(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         current_task_id=consumer.task_id,
         current_execution_id=consumer_exec.id,
         sandbox_task_key=consumer.task_id,
@@ -322,15 +322,15 @@ async def test_materialize_resource_dry_run_keeps_copy_name_for_explicit_destina
 
 def test_resource_location_describes_producer_and_workspace_destination(tmp_path: Path) -> None:
     session = _session()
-    run_id = _run(session)
-    producer = _node(run_id=run_id, slug="producer")
+    sample_id = _run(session)
+    producer = _node(sample_id=sample_id, slug="producer")
     session.add(producer)
     session.flush()
-    producer_exec = _execution(run_id=run_id, task_id=producer.task_id)
+    producer_exec = _execution(sample_id=sample_id, task_id=producer.task_id)
     session.add(producer_exec)
     session.flush()
     source = _resource(
-        run_id=run_id,
+        sample_id=sample_id,
         execution_id=producer_exec.id,
         name="paper.pdf",
         path=tmp_path / "paper.pdf",
@@ -341,7 +341,7 @@ def test_resource_location_describes_producer_and_workspace_destination(tmp_path
 
     location = WorkflowService().get_resource_location(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         resource_id=source.id,
     )
 
@@ -353,33 +353,33 @@ def test_resource_location_describes_producer_and_workspace_destination(tmp_path
 
 def test_task_workspace_reports_latest_execution_and_resources(tmp_path: Path) -> None:
     session = _session()
-    run_id = _run(session)
-    current = _node(run_id=run_id, slug="current", status="running")
-    upstream = _node(run_id=run_id, slug="upstream")
+    sample_id = _run(session)
+    current = _node(sample_id=sample_id, slug="current", status="running")
+    upstream = _node(sample_id=sample_id, slug="upstream")
     session.add_all([current, upstream])
     session.flush()
     current_exec = _execution(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=current.task_id,
         status=TaskExecutionStatus.RUNNING,
     )
-    upstream_exec = _execution(run_id=run_id, task_id=upstream.task_id)
+    upstream_exec = _execution(sample_id=sample_id, task_id=upstream.task_id)
     session.add_all([current_exec, upstream_exec])
     session.flush()
     session.add(
-        _edge(run_id=run_id, source_task_id=upstream.task_id, target_task_id=current.task_id)
+        _edge(sample_id=sample_id, source_task_id=upstream.task_id, target_task_id=current.task_id)
     )
     session.add_all(
         [
             _resource(
-                run_id=run_id,
+                sample_id=sample_id,
                 execution_id=current_exec.id,
                 name="own.txt",
                 path=tmp_path / "own.txt",
                 content=b"own",
             ),
             _resource(
-                run_id=run_id,
+                sample_id=sample_id,
                 execution_id=upstream_exec.id,
                 name="input.txt",
                 path=tmp_path / "input.txt",
@@ -391,7 +391,7 @@ def test_task_workspace_reports_latest_execution_and_resources(tmp_path: Path) -
 
     workspace = WorkflowService().get_task_workspace(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=current.task_id,
     )
 
@@ -407,21 +407,21 @@ async def test_materialize_resource_rejects_parent_directory_destination(
     tmp_path: Path,
 ) -> None:
     session = _session()
-    run_id = _run(session)
-    producer = _node(run_id=run_id, slug="producer")
-    consumer = _node(run_id=run_id, slug="consumer")
+    sample_id = _run(session)
+    producer = _node(sample_id=sample_id, slug="producer")
+    consumer = _node(sample_id=sample_id, slug="consumer")
     session.add_all([producer, consumer])
     session.flush()
-    producer_exec = _execution(run_id=run_id, task_id=producer.task_id)
+    producer_exec = _execution(sample_id=sample_id, task_id=producer.task_id)
     consumer_exec = _execution(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=consumer.task_id,
         status=TaskExecutionStatus.RUNNING,
     )
     session.add_all([producer_exec, consumer_exec])
     session.flush()
     source = _resource(
-        run_id=run_id,
+        sample_id=sample_id,
         execution_id=producer_exec.id,
         name="paper.pdf",
         path=tmp_path / "paper.pdf",
@@ -433,7 +433,7 @@ async def test_materialize_resource_rejects_parent_directory_destination(
     with pytest.raises(ValueError, match="destination must stay inside /workspace"):
         await WorkflowService().materialize_resource(
             session,
-            run_id=run_id,
+            sample_id=sample_id,
             current_task_id=consumer.task_id,
             current_execution_id=consumer_exec.id,
             sandbox_task_key=consumer.task_id,
@@ -447,15 +447,15 @@ async def test_materialize_resource_rejects_parent_directory_destination(
 @pytest.mark.asyncio
 async def test_add_edge_writes_dependency_between_slugs() -> None:
     session = _session()
-    run_id = _run(session)
-    source = _node(run_id=run_id, slug="source")
-    target = _node(run_id=run_id, slug="target")
+    sample_id = _run(session)
+    source = _node(sample_id=sample_id, slug="source")
+    target = _node(sample_id=sample_id, slug="target")
     session.add_all([source, target])
     session.commit()
 
     result = await WorkflowService().add_edge(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         source_task_slug="source",
         target_task_slug="target",
         dry_run=False,
@@ -463,7 +463,7 @@ async def test_add_edge_writes_dependency_between_slugs() -> None:
 
     assert result.action == "add-edge"
     assert result.edge is not None
-    edge = session.get(RunGraphEdge, result.edge.edge_id)
+    edge = session.get(SampleGraphEdge, result.edge.edge_id)
     assert edge is not None
     assert edge.source_task_id == source.task_id
     assert edge.target_task_id == target.task_id
@@ -473,20 +473,20 @@ async def test_add_edge_writes_dependency_between_slugs() -> None:
 @pytest.mark.asyncio
 async def test_update_task_description_changes_only_description() -> None:
     session = _session()
-    run_id = _run(session)
-    node = _node(run_id=run_id, slug="target", description="Old")
+    sample_id = _run(session)
+    node = _node(sample_id=sample_id, slug="target", description="Old")
     session.add(node)
     session.commit()
 
     result = await WorkflowService().update_task_description(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         task_slug="target",
         description="New description",
         dry_run=False,
     )
 
-    refreshed = session.get(RunGraphNode, (run_id, node.task_id))
+    refreshed = session.get(SampleGraphNode, (sample_id, node.task_id))
     assert refreshed is not None
     assert refreshed.description == "New description"
     assert refreshed.task_slug == "target"

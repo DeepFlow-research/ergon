@@ -7,6 +7,6 @@ from pydantic import BaseModel
 class WorkflowStartResult(BaseModel):
     model_config = {"frozen": True}
 
-    run_id: UUID
+    sample_id: UUID
     initial_ready_tasks: int = 0
     total_tasks: int = 0

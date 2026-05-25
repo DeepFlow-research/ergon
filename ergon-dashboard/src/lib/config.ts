@@ -26,7 +26,7 @@ export const config = {
   enableTestHarness: true,
 
   // Store
-  maxRunsToKeep: parseInt(process.env.MAX_RUNS_TO_KEEP || "50", 10),
+  maxSamplesToKeep: parseInt(process.env.MAX_SAMPLES_TO_KEEP || "50", 10),
 } as const;
 
 export type Config = typeof config;

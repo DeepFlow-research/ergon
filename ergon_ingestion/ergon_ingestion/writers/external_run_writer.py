@@ -14,12 +14,12 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
 )
-from ergon_core.core.persistence.graph.models import RunGraphAnnotation, RunGraphNode
-from ergon_core.core.persistence.shared.enums import RunResourceKind, RunStatus, TaskExecutionStatus
+from ergon_core.core.persistence.graph.models import SampleGraphAnnotation, SampleGraphNode
+from ergon_core.core.persistence.shared.enums import SampleResourceKind, SampleStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
-    RunRecord,
-    RunResource,
-    RunTaskExecution,
+    SampleRecord,
+    SampleResource,
+    SampleTaskAttempt,
 )
 from ergon_ingestion.models import ImportSource, ParsedResource, ParsedRun
 
@@ -31,7 +31,7 @@ MAX_DB_JSON_FIELD_BYTES = 512 * 1024
 class WriteRunResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    run_id: UUID
+    sample_id: UUID
     task_id: UUID
     task_execution_id: UUID
 
@@ -77,12 +77,12 @@ class ExternalRunWriter:
         self._session.add(task)
         self._session.flush()
 
-        run = RunRecord(
+        run = SampleRecord(
             definition_id=definition.id,
             benchmark_type=f"imported:{self._source.dataset}",
             instance_key=parsed.instance_key,
             sample_id=parsed.source_run_id,
-            status=RunStatus.COMPLETED,
+            status=SampleStatus.COMPLETED,
             summary_json={
                 "imported": True,
                 "source_slug": self._source.dataset,
@@ -96,8 +96,8 @@ class ExternalRunWriter:
         self._session.add(run)
         self._session.flush()
 
-        node = RunGraphNode(
-            run_id=run.id,
+        node = SampleGraphNode(
+            sample_id=run.id,
             task_id=task.id,
             instance_key=parsed.instance_key,
             task_slug="imported-root",
@@ -107,8 +107,8 @@ class ExternalRunWriter:
         self._session.add(node)
         self._session.flush()
 
-        execution = RunTaskExecution(
-            run_id=run.id,
+        execution = SampleTaskAttempt(
+            sample_id=run.id,
             task_id=node.task_id,
             status=TaskExecutionStatus.COMPLETED,
             output_json={
@@ -122,8 +122,8 @@ class ExternalRunWriter:
 
         for sequence, annotation in enumerate(parsed.annotations, start=1):
             self._session.add(
-                RunGraphAnnotation(
-                    run_id=run.id,
+                SampleGraphAnnotation(
+                    sample_id=run.id,
                     target_type="node",
                     target_id=node.task_id,
                     namespace=annotation.namespace,
@@ -135,7 +135,7 @@ class ExternalRunWriter:
         for resource in parsed.resources:
             self._session.add(self._resource_row(run.id, execution.id, resource))
 
-        return WriteRunResult(run_id=run.id, task_id=node.task_id, task_execution_id=execution.id)
+        return WriteRunResult(sample_id=run.id, task_id=node.task_id, task_execution_id=execution.id)
 
     def _definition_row(self) -> ExperimentDefinition:
         if self._definition is None:
@@ -158,15 +158,15 @@ class ExternalRunWriter:
 
     def _resource_row(
         self,
-        run_id: UUID,
+        sample_id: UUID,
         task_execution_id: UUID,
         resource: ParsedResource,
-    ) -> RunResource:
-        path, content_hash, size = self._materialize_resource(run_id, resource)
-        return RunResource(
-            run_id=run_id,
+    ) -> SampleResource:
+        path, content_hash, size = self._materialize_resource(sample_id, resource)
+        return SampleResource(
+            sample_id=sample_id,
             task_execution_id=task_execution_id,
-            kind=RunResourceKind(resource.kind).value,
+            kind=SampleResourceKind(resource.kind).value,
             name=resource.name,
             mime_type=resource.mime_type,
             file_path=str(path),
@@ -177,7 +177,7 @@ class ExternalRunWriter:
 
     def _materialize_resource(
         self,
-        run_id: UUID,
+        sample_id: UUID,
         resource: ParsedResource,
     ) -> tuple[Path, str, int]:
         if resource.path is not None:
@@ -194,7 +194,7 @@ class ExternalRunWriter:
             ).encode()
             suffix = Path(resource.name).suffix or ".json"
         content_hash = hashlib.sha256(data).hexdigest()
-        directory = self._blob_root / str(run_id)
+        directory = self._blob_root / str(sample_id)
         directory.mkdir(parents=True, exist_ok=True)
         path = directory / f"{content_hash}{suffix}"
         path.write_bytes(data)

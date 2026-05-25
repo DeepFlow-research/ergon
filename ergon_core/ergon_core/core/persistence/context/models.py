@@ -1,5 +1,5 @@
 # ergon_core/ergon_core/core/persistence/context/models.py
-"""ORM model for run_context_events."""
+"""ORM model for sample_context_events."""
 
 from datetime import UTC, datetime
 from typing import Any
@@ -22,17 +22,17 @@ def _utcnow() -> datetime:
 _PAYLOAD_ADAPTER: TypeAdapter[ContextPartChunkLog] = TypeAdapter(ContextPartChunkLog)
 
 
-class RunContextEvent(SQLModel, table=True):
-    __tablename__ = "run_context_events"
+class SampleContextEvent(SQLModel, table=True):
+    __tablename__ = "sample_context_events"
     __table_args__ = (
         sa.UniqueConstraint(
-            "task_execution_id", "sequence", name="uq_run_context_events_execution_sequence"
+            "task_execution_id", "sequence", name="uq_sample_context_events_execution_sequence"
         ),
     )
 
     id: UUID = Field(default_factory=new_id, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
-    task_execution_id: UUID = Field(foreign_key="run_task_executions.id", index=True)
+    sample_id: UUID = Field(foreign_key="samples.id", index=True)
+    task_execution_id: UUID = Field(foreign_key="sample_task_attempts.id", index=True)
     worker_binding_key: str = Field(index=True)
     sequence: int
     event_type: str = Field(

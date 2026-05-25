@@ -14,7 +14,7 @@ from ergon_core.core.application.communication.models import (
 )
 from ergon_core.core.shared.utils import utcnow
 from ergon_core.core.views.dashboard_events.contracts import DashboardThreadMessageCreatedEvent
-from ergon_core.core.views.runs.models import (
+from ergon_core.core.views.samples.models import (
     RunCommunicationMessageDto,
     RunCommunicationThreadDto,
 )
@@ -32,7 +32,7 @@ class CommunicationService:
         with get_session() as session:
             thread = self._get_or_create_thread(
                 session,
-                run_id=request.run_id,
+                sample_id=request.sample_id,
                 agent_a_id=request.from_agent_id,
                 agent_b_id=request.to_agent_id,
                 topic=request.thread_topic,
@@ -50,7 +50,7 @@ class CommunicationService:
 
             message = ThreadMessage(
                 thread_id=thread.id,
-                run_id=request.run_id,
+                sample_id=request.sample_id,
                 task_execution_id=request.task_execution_id,
                 from_agent_id=request.from_agent_id,
                 to_agent_id=request.to_agent_id,
@@ -68,7 +68,7 @@ class CommunicationService:
             response = MessageResponse(
                 message_id=message.id,
                 thread_id=thread.id,
-                run_id=message.run_id,
+                sample_id=message.sample_id,
                 thread_topic=thread.topic,
                 from_agent_id=message.from_agent_id,
                 to_agent_id=message.to_agent_id,
@@ -80,7 +80,7 @@ class CommunicationService:
 
         thread_dto = RunCommunicationThreadDto(
             id=str(thread.id),
-            run_id=str(thread.run_id),
+            sample_id=str(thread.sample_id),
             topic=thread.topic,
             summary=thread.summary,
             agent_a_id=thread.agent_a_id,
@@ -93,7 +93,7 @@ class CommunicationService:
             id=str(message.id),
             thread_id=str(message.thread_id),
             thread_topic=thread.topic,
-            run_id=str(message.run_id),
+            sample_id=str(message.sample_id),
             from_agent_id=message.from_agent_id,
             to_agent_id=message.to_agent_id,
             content=message.content,
@@ -104,7 +104,7 @@ class CommunicationService:
         try:
             await get_dashboard_event_publisher().publish(
                 DashboardThreadMessageCreatedEvent(
-                    run_id=request.run_id,
+                    sample_id=request.sample_id,
                     thread=thread_dto,
                     message=message_dto,
                 )
@@ -132,7 +132,7 @@ class CommunicationService:
                 MessageResponse(
                     message_id=m.id,
                     thread_id=m.thread_id,
-                    run_id=m.run_id,
+                    sample_id=m.sample_id,
                     thread_topic=thread.topic,
                     from_agent_id=m.from_agent_id,
                     to_agent_id=m.to_agent_id,
@@ -144,10 +144,10 @@ class CommunicationService:
                 for m in messages
             ]
 
-    def get_all_threads_for_run(self, run_id: UUID) -> list[ThreadSummary]:
+    def get_all_threads_for_run(self, sample_id: UUID) -> list[ThreadSummary]:
         """Return summaries for every thread belonging to a run."""
         with get_session() as session:
-            threads = list(session.exec(select(Thread).where(Thread.run_id == run_id)).all())
+            threads = list(session.exec(select(Thread).where(Thread.sample_id == sample_id)).all())
 
             summaries: list[ThreadSummary] = []
             for thread in threads:
@@ -157,7 +157,7 @@ class CommunicationService:
                 summaries.append(
                     ThreadSummary(
                         thread_id=thread.id,
-                        run_id=thread.run_id,
+                        sample_id=thread.sample_id,
                         topic=thread.topic,
                         summary=thread.summary,
                         agent_a_id=thread.agent_a_id,
@@ -179,7 +179,7 @@ class CommunicationService:
             messages = self.get_thread_messages(thread_id)
             return ThreadWithMessages(
                 thread_id=thread.id,
-                run_id=thread.run_id,
+                sample_id=thread.sample_id,
                 topic=thread.topic,
                 summary=thread.summary,
                 agent_a_id=thread.agent_a_id,
@@ -197,17 +197,17 @@ class CommunicationService:
     def _get_or_create_thread(
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         agent_a_id: str,
         agent_b_id: str,
         topic: str,
         thread_summary: str | None = None,
     ) -> Thread:
-        # Threads are keyed by (run_id, topic) only — all senders on the same
+        # Threads are keyed by (sample_id, topic) only — all senders on the same
         # topic share one thread per run (broadcast/group semantics).
         # The unique constraint uq_threads_run_topic enforces this at the DB level
         # and lets us safely retry on concurrent INSERT races.
-        stmt = select(Thread).where(Thread.run_id == run_id).where(Thread.topic == topic)
+        stmt = select(Thread).where(Thread.sample_id == sample_id).where(Thread.topic == topic)
         existing = session.exec(stmt).first()
         if existing is not None:
             if existing.summary is None and thread_summary:
@@ -217,7 +217,7 @@ class CommunicationService:
 
         a, b = sorted([agent_a_id, agent_b_id])
         thread = Thread(
-            run_id=run_id,
+            sample_id=sample_id,
             topic=topic,
             summary=thread_summary,
             agent_a_id=a,

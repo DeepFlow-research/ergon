@@ -15,12 +15,12 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
 )
-from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
+from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
-    RunRecord,
-    RunTaskEvaluation,
-    RunTaskExecution,
+    SampleRecord,
+    SampleTaskEvaluation,
+    SampleTaskAttempt,
 )
 
 
@@ -39,7 +39,7 @@ def _seed_inline_evaluator_run(session: Session) -> tuple:
     instance_id = uuid4()
     task_id = uuid4()
     evaluator_id = uuid4()
-    run_id = uuid4()
+    sample_id = uuid4()
     execution_id = uuid4()
     session.add_all(
         [
@@ -70,32 +70,32 @@ def _seed_inline_evaluator_run(session: Session) -> tuple:
                 evaluator_type="rubric",
                 snapshot_json={"name": "judge"},
             ),
-            RunRecord(
-                id=run_id,
+            SampleRecord(
+                id=sample_id,
                 definition_id=definition_id,
                 benchmark_type="bench",
                 instance_key="sample-1",
                 worker_team_json={},
-                status=RunStatus.EXECUTING,
+                status=SampleStatus.EXECUTING,
             ),
-            RunGraphNode(
-                run_id=run_id,
+            SampleGraphNode(
+                sample_id=sample_id,
                 task_id=task_id,
                 instance_key="sample-1",
                 task_slug="root",
                 description="root task",
                 status="running",
             ),
-            RunTaskExecution(
+            SampleTaskAttempt(
                 id=execution_id,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=task_id,
                 status=TaskExecutionStatus.RUNNING,
             ),
         ]
     )
     session.commit()
-    return run_id, task_id, evaluator_id, execution_id
+    return sample_id, task_id, evaluator_id, execution_id
 
 
 @pytest.mark.asyncio
@@ -105,11 +105,11 @@ async def test_persist_success_links_inline_evaluator_definition_row(monkeypatch
     session = _session()
     monkeypatch.setattr(module, "get_session", lambda: session)
     monkeypatch.setattr(session, "close", lambda: None)
-    run_id, task_id, evaluator_id, execution_id = _seed_inline_evaluator_run(session)
+    sample_id, task_id, evaluator_id, execution_id = _seed_inline_evaluator_run(session)
     service = EvaluationService()
 
     await service.persist_success(
-        run_id=run_id,
+        sample_id=sample_id,
         task_execution_id=execution_id,
         task_id=task_id,
         binding_key="judge",
@@ -125,7 +125,7 @@ async def test_persist_success_links_inline_evaluator_definition_row(monkeypatch
         ),
     )
 
-    rows = session.exec(select(RunTaskEvaluation)).all()
+    rows = session.exec(select(SampleTaskEvaluation)).all()
     assert len(rows) == 1
     assert rows[0].definition_evaluator_id == evaluator_id
 
@@ -137,18 +137,18 @@ async def test_persist_failure_links_inline_evaluator_definition_row(monkeypatch
     session = _session()
     monkeypatch.setattr(module, "get_session", lambda: session)
     monkeypatch.setattr(session, "close", lambda: None)
-    run_id, task_id, evaluator_id, execution_id = _seed_inline_evaluator_run(session)
+    sample_id, task_id, evaluator_id, execution_id = _seed_inline_evaluator_run(session)
     service = EvaluationService()
 
     await service.persist_failure(
-        run_id=run_id,
+        sample_id=sample_id,
         task_execution_id=execution_id,
         task_id=task_id,
         binding_key="judge",
         exc=RuntimeError("boom"),
     )
 
-    rows = session.exec(select(RunTaskEvaluation)).all()
+    rows = session.exec(select(SampleTaskEvaluation)).all()
     assert len(rows) == 1
     assert rows[0].definition_evaluator_id == evaluator_id
 
@@ -162,11 +162,11 @@ async def test_persist_success_creates_dynamic_inline_evaluator_definition_row(
     session = _session()
     monkeypatch.setattr(module, "get_session", lambda: session)
     monkeypatch.setattr(session, "close", lambda: None)
-    run_id, task_id, _evaluator_id, execution_id = _seed_inline_evaluator_run(session)
+    sample_id, task_id, _evaluator_id, execution_id = _seed_inline_evaluator_run(session)
     service = EvaluationService()
 
     await service.persist_success(
-        run_id=run_id,
+        sample_id=sample_id,
         task_execution_id=execution_id,
         task_id=task_id,
         binding_key="dynamic-judge",
@@ -187,5 +187,5 @@ async def test_persist_success_creates_dynamic_inline_evaluator_definition_row(
             ExperimentDefinitionEvaluator.binding_key == "dynamic-judge"
         )
     ).one()
-    rows = session.exec(select(RunTaskEvaluation)).all()
+    rows = session.exec(select(SampleTaskEvaluation)).all()
     assert rows[-1].definition_evaluator_id == evaluator_row.id

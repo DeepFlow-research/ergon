@@ -20,24 +20,24 @@ from ergon_core.api import Benchmark
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.criterion import CriterionOutcome
 from ergon_core.api.worker import WorkerOutput
-from ergon_core.core.application.resources import RunResourceView
-from ergon_core.core.persistence.shared.enums import RunResourceKind
+from ergon_core.core.application.resources import SampleResourceView
+from ergon_core.core.persistence.shared.enums import SampleResourceKind
 from ergon_core.api.benchmark import Task
 from ergon_core.test_support.task_factory import task_with_id
 
 
 def _resource_view(
     *,
-    kind: RunResourceKind,
+    kind: SampleResourceKind,
     name: str,
     sandbox_origin: str,
     text: str,
-) -> tuple[RunResourceView, bytes]:
+) -> tuple[SampleResourceView, bytes]:
     resource_id = uuid4()
     return (
-        RunResourceView(
+        SampleResourceView(
             id=resource_id,
-            run_id=uuid4(),
+            sample_id=uuid4(),
             task_execution_id=uuid4(),
             kind=kind,
             name=name,
@@ -223,13 +223,13 @@ class TestResearchRubricsJudgeCriterion:
         tmp_path: Path,
     ) -> None:
         final_resource, final_blob = _resource_view(
-            kind=RunResourceKind.REPORT,
+            kind=SampleResourceKind.REPORT,
             name="report.md",
             sandbox_origin="/workspace/final_output/report.md",
             text="# Final report\nThis is the primary answer artifact.",
         )
         scratch_resource, scratch_blob = _resource_view(
-            kind=RunResourceKind.NOTE,
+            kind=SampleResourceKind.NOTE,
             name="notes.md",
             sandbox_origin="/workspace/notes.md",
             text="scratch notes",
@@ -243,7 +243,7 @@ class TestResearchRubricsJudgeCriterion:
         captured_user_prompts: list[str] = []
 
         context = CriterionContext(
-            run_id=uuid4(),
+            sample_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
             task=task_with_id(

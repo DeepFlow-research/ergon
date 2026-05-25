@@ -5,10 +5,10 @@ import { ContextEventState } from "@/lib/types";
 
 export async function POST(request: Request) {
   const payload = (await request.json()) as {
-    runId: string;
+    sampleId: string;
     taskId: string;
     event: ContextEventState;
   };
-  emitHarnessContextEvent(payload.runId, payload.taskId, payload.event);
+  emitHarnessContextEvent(payload.sampleId, payload.taskId, payload.event);
   return NextResponse.json({ ok: true });
 }

@@ -11,18 +11,18 @@ Everything else is captured as artifacts.
 
 Artifact layout:
 
-    tests/real_llm/.rollouts/<timestamp>-<run_id>/
+    tests/real_llm/.rollouts/<timestamp>-<sample_id>/
     ├── manifest.json            # run metadata + key fingerprints
     ├── db/                      # one jsonl/json per persistence table
     │   ├── run_record.json
-    │   ├── run_task_executions.jsonl
-    │   ├── run_resources.jsonl
-    │   ├── run_task_evaluations.jsonl
+    │   ├── sample_task_attempts.jsonl
+    │   ├── sample_resources.jsonl
+    │   ├── sample_task_evaluations.jsonl
     │   ├── sandbox_events.jsonl
-    │   ├── run_graph_nodes.jsonl
-    │   ├── run_graph_edges.jsonl
-    │   ├── run_graph_mutations.jsonl
-    │   └── run_context_events.jsonl
+    │   ├── sample_graph_nodes.jsonl
+    │   ├── sample_graph_edges.jsonl
+    │   ├── sample_graph_mutations.jsonl
+    │   └── sample_context_events.jsonl
     ├── screenshots/
     │   ├── experiment_index.png
     │   └── run_detail.png
@@ -45,10 +45,10 @@ logger = logging.getLogger(__name__)
 _ROLLOUTS_ROOT = Path(__file__).parent / ".rollouts"
 
 
-def rollout_dir(run_id: UUID) -> Path:
-    """Return (and ensure) ``tests/real_llm/.rollouts/<ts>-<run_id>/``."""
+def rollout_dir(sample_id: UUID) -> Path:
+    """Return (and ensure) ``tests/real_llm/.rollouts/<ts>-<sample_id>/``."""
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out = _ROLLOUTS_ROOT / f"{ts}-{run_id}"
+    out = _ROLLOUTS_ROOT / f"{ts}-{sample_id}"
     (out / "db").mkdir(parents=True, exist_ok=True)
     (out / "screenshots").mkdir(parents=True, exist_ok=True)
     return out
@@ -79,15 +79,15 @@ def _write_mapping_jsonl(
     return len(rows)
 
 
-def dump_rollout(run_id: UUID, out_dir: Path) -> dict[str, int]:
+def dump_rollout(sample_id: UUID, out_dir: Path) -> dict[str, int]:
     """Dump every persistence table for a run into ``out_dir/db/``.
 
     Returns a ``{table_name: row_count}`` map for the manifest.
 
-    Each table's rows are filtered by ``run_id`` (all relevant tables
+    Each table's rows are filtered by ``sample_id`` (all relevant tables
     carry it as either an FK or an indexed column).  Rows are serialised
     via SQLModel's ``.model_dump_json()`` so the dump preserves the
-    exact Pydantic schema — downstream readers can ``RunRecord.model_validate_json``
+    exact Pydantic schema — downstream readers can ``SampleRecord.model_validate_json``
     to round-trip.
     """
     # reason: importing persistence models at module import time triggers a
@@ -95,16 +95,16 @@ def dump_rollout(run_id: UUID, out_dir: Path) -> dict[str, int]:
     # pure report helpers from this module. The DB models are only needed for
     # live rollout dumping, so keep this import scoped to that operation.
     from ergon_core.core.persistence.graph.models import (
-        RunGraphEdge,
-        RunGraphMutation,
-        RunGraphNode,
+        SampleGraphEdge,
+        SampleGraphMutation,
+        SampleGraphNode,
     )
     from ergon_core.core.persistence.shared.db import get_session
     from ergon_core.core.persistence.telemetry.models import (
-        RunRecord,
-        RunResource,
-        RunTaskEvaluation,
-        RunTaskExecution,
+        SampleRecord,
+        SampleResource,
+        SampleTaskEvaluation,
+        SampleTaskAttempt,
         SandboxEvent,
     )
     from sqlalchemy import text
@@ -114,69 +114,69 @@ def dump_rollout(run_id: UUID, out_dir: Path) -> dict[str, int]:
     counts: dict[str, int] = {}
 
     with get_session() as session:
-        run = session.exec(select(RunRecord).where(RunRecord.id == run_id)).first()
+        run = session.exec(select(SampleRecord).where(SampleRecord.id == sample_id)).first()
         if run is None:
-            raise RuntimeError(f"run {run_id} not found in DB — cannot dump rollout")
+            raise RuntimeError(f"run {sample_id} not found in DB — cannot dump rollout")
         _write_json_model(db_dir / "run_record.json", run)
         counts["run_record"] = 1
 
-        counts["run_task_executions"] = _write_jsonl(
-            db_dir / "run_task_executions.jsonl",
+        counts["sample_task_attempts"] = _write_jsonl(
+            db_dir / "sample_task_attempts.jsonl",
             list(
                 session.exec(
-                    select(RunTaskExecution).where(RunTaskExecution.run_id == run_id)
+                    select(SampleTaskAttempt).where(SampleTaskAttempt.sample_id == sample_id)
                 ).all()
             ),
         )
-        counts["run_resources"] = _write_jsonl(
-            db_dir / "run_resources.jsonl",
-            list(session.exec(select(RunResource).where(RunResource.run_id == run_id)).all()),
+        counts["sample_resources"] = _write_jsonl(
+            db_dir / "sample_resources.jsonl",
+            list(session.exec(select(SampleResource).where(SampleResource.sample_id == sample_id)).all()),
         )
-        counts["run_task_evaluations"] = _write_jsonl(
-            db_dir / "run_task_evaluations.jsonl",
+        counts["sample_task_evaluations"] = _write_jsonl(
+            db_dir / "sample_task_evaluations.jsonl",
             list(
                 session.exec(
-                    select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)
+                    select(SampleTaskEvaluation).where(SampleTaskEvaluation.sample_id == sample_id)
                 ).all()
             ),
         )
         counts["sandbox_events"] = _write_jsonl(
             db_dir / "sandbox_events.jsonl",
-            list(session.exec(select(SandboxEvent).where(SandboxEvent.run_id == run_id)).all()),
+            list(session.exec(select(SandboxEvent).where(SandboxEvent.sample_id == sample_id)).all()),
         )
-        counts["run_graph_nodes"] = _write_jsonl(
-            db_dir / "run_graph_nodes.jsonl",
-            list(session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all()),
+        counts["sample_graph_nodes"] = _write_jsonl(
+            db_dir / "sample_graph_nodes.jsonl",
+            list(session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all()),
         )
-        counts["run_graph_edges"] = _write_jsonl(
-            db_dir / "run_graph_edges.jsonl",
-            list(session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all()),
+        counts["sample_graph_edges"] = _write_jsonl(
+            db_dir / "sample_graph_edges.jsonl",
+            list(session.exec(select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)).all()),
         )
-        counts["run_graph_mutations"] = _write_jsonl(
-            db_dir / "run_graph_mutations.jsonl",
+        counts["sample_graph_mutations"] = _write_jsonl(
+            db_dir / "sample_graph_mutations.jsonl",
             list(
                 session.exec(
-                    select(RunGraphMutation).where(RunGraphMutation.run_id == run_id)
+                    select(SampleGraphMutation).where(SampleGraphMutation.sample_id == sample_id)
                 ).all()
             ),
         )
-        # Avoid importing RunContextEvent here: that model depends on context
+        # Avoid importing SampleContextEvent here: that model depends on context
         # payloads, which currently have a circular import through api.Worker.
         rows = [
             dict(row)
             for row in session.connection()
             .execute(
                 text(
-                    "select * from run_context_events "
-                    "where run_id = :run_id order by sequence asc, created_at asc"
+                    "select * from sample_context_events "
+                    "where sample_id = :sample_id order by sequence asc, created_at asc"
                 ),
-                {"run_id": str(run_id)},
+                {"sample_id": str(sample_id)},
             )
             .mappings()
             .all()
         ]
-        counts["run_context_events"] = _write_mapping_jsonl(
-            db_dir / "run_context_events.jsonl",
+        counts["sample_context_events"] = _write_mapping_jsonl(
+            db_dir / "sample_context_events.jsonl",
             rows,
         )
 
@@ -184,14 +184,14 @@ def dump_rollout(run_id: UUID, out_dir: Path) -> dict[str, int]:
 
 
 async def capture_dashboard(
-    run_id: UUID,
+    sample_id: UUID,
     playwright_context: Any,  # slopcop: ignore[no-typing-any]
     out_dir: Path,
 ) -> dict[str, str]:
     """Screenshot the two dashboard pages that matter for a rollout.
 
     ``/`` — experiment index (confirms the run exists in the aggregate list).
-    ``/run/<run_id>`` — run detail (agent graph, turn timeline, outputs).
+    ``/run/<sample_id>`` — run detail (agent graph, turn timeline, outputs).
 
     Returns a ``{page_name: screenshot_path}`` map.  Failures on either
     page are logged and the entry is omitted — a missing screenshot is
@@ -219,13 +219,13 @@ async def capture_dashboard(
 
     page = await playwright_context.new_page()
     try:
-        await page.goto(f"/run/{run_id}")
+        await page.goto(f"/run/{sample_id}")
         await page.wait_for_load_state("networkidle")
         shot = shots_dir / "run_detail.png"
         await page.screenshot(path=str(shot), full_page=True)
         captured["run_detail"] = str(shot.relative_to(out_dir))
     except Exception:  # slopcop: ignore[no-broad-except]
-        logger.exception("capture_dashboard: run_detail screenshot failed for run_id=%s", run_id)
+        logger.exception("capture_dashboard: run_detail screenshot failed for sample_id=%s", sample_id)
     finally:
         await page.close()
 
@@ -242,7 +242,7 @@ def _fingerprint(value: str | None) -> str | None:
 def write_manifest(  # slopcop: ignore[max-function-params]
     out_dir: Path,
     *,
-    run_id: UUID,
+    sample_id: UUID,
     benchmark: str,
     worker: str,
     evaluator: str,
@@ -258,7 +258,7 @@ def write_manifest(  # slopcop: ignore[max-function-params]
 ) -> Path:
     """Write ``manifest.json`` — the top-level index into the rollout."""
     manifest: dict[str, Any] = {  # slopcop: ignore[no-typing-any]
-        "run_id": str(run_id),
+        "sample_id": str(sample_id),
         "benchmark": benchmark,
         "worker": worker,
         "evaluator": evaluator,
@@ -293,7 +293,7 @@ def write_report(out_dir: Path, manifest_path: Path) -> Path:
     duration = manifest.get("wall_clock", {}).get("duration_seconds")
 
     lines: list[str] = [
-        f"# Rollout {manifest['run_id']}",
+        f"# Rollout {manifest['sample_id']}",
         "",
         f"- benchmark: `{manifest['benchmark']}`",
         f"- worker: `{manifest['worker']}`",
@@ -355,11 +355,11 @@ def write_report(out_dir: Path, manifest_path: Path) -> Path:
             "",
             "- `db/run_record.json` — one row.  `summary_json` carries the run-wide",
             "  outcome fields; `status`, `started_at`, `completed_at` anchor the timeline.",
-            "- `db/run_context_events.jsonl` — every recorded context event in order.",
+            "- `db/sample_context_events.jsonl` — every recorded context event in order.",
             "  Tool calls + returns + thinking + text reconstruct what the agent did.",
-            "- `db/run_graph_nodes.jsonl` + `run_graph_mutations.jsonl` — agent's",
+            "- `db/sample_graph_nodes.jsonl` + `sample_graph_mutations.jsonl` — agent's",
             "  subtask structure over time.",
-            "- `db/run_task_evaluations.jsonl` — rubric scores, if the evaluator ran.",
+            "- `db/sample_task_evaluations.jsonl` — rubric scores, if the evaluator ran.",
             "- `db/sandbox_events.jsonl` — commands executed in the E2B sandbox.",
             "- `screenshots/` — what the dashboard renders for this run.",
         ]

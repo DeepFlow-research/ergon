@@ -4,7 +4,7 @@ import type {
   TaskState,
   TaskTransitionRecord,
   UnhandledMutationRecord,
-  WorkflowRunState,
+  SampleWorkspaceState,
 } from "@/lib/types";
 import { TaskStatus } from "@/lib/types";
 import type { DashboardGraphMutationData } from "@/lib/contracts/events";
@@ -25,7 +25,7 @@ import {
   NodeFieldChangedValueSchema,
   NodeStatusChangedValueSchema,
 } from "@/features/graph/contracts/graphMutations";
-import { inferTrigger } from "@/lib/runEvents";
+import { inferTrigger } from "@/lib/sampleEvents";
 
 const TERMINAL_STATUSES: Set<string> = new Set([
   "completed",
@@ -60,23 +60,23 @@ function ctxFromMutation(mutation: DashboardGraphMutationData): MutationContext 
   };
 }
 
-function ensureAnnotations(state: WorkflowRunState): Map<string, AnnotationState[]> {
+function ensureAnnotations(state: SampleWorkspaceState): Map<string, AnnotationState[]> {
   if (!state.annotationsByTarget) state.annotationsByTarget = new Map();
   return state.annotationsByTarget;
 }
 
-function ensureEdges(state: WorkflowRunState): Map<string, EdgeState> {
+function ensureEdges(state: SampleWorkspaceState): Map<string, EdgeState> {
   if (!state.edges) state.edges = new Map();
   return state.edges;
 }
 
-function ensureUnhandled(state: WorkflowRunState): UnhandledMutationRecord[] {
+function ensureUnhandled(state: SampleWorkspaceState): UnhandledMutationRecord[] {
   if (!state.unhandledMutations) state.unhandledMutations = [];
   return state.unhandledMutations;
 }
 
 function recordUnhandled(
-  state: WorkflowRunState,
+  state: SampleWorkspaceState,
   mutation: DashboardGraphMutationData,
   note: string,
 ): void {
@@ -97,7 +97,7 @@ function edgeId(sourceId: string, targetId: string): string {
 }
 
 /**
- * Apply a single graph mutation to a WorkflowRunState.
+ * Apply a single graph mutation to a SampleWorkspaceState.
  *
  * Returns a new object reference (shallow copy) for React state updates.
  * Exhaustive on mutation_type — adding a new variant without handling
@@ -107,10 +107,10 @@ function edgeId(sourceId: string, targetId: string): string {
  * (b) is recorded in `unhandledMutations`. No mutation is ever silently dropped.
  */
 export function applyGraphMutation(
-  state: WorkflowRunState,
+  state: SampleWorkspaceState,
   mutation: DashboardGraphMutationData,
-): WorkflowRunState {
-  const next: WorkflowRunState = { ...state, tasks: new Map(state.tasks) };
+): SampleWorkspaceState {
+  const next: SampleWorkspaceState = { ...state, tasks: new Map(state.tasks) };
   if (state.edges) next.edges = new Map(state.edges);
   if (state.annotationsByTarget)
     next.annotationsByTarget = new Map(state.annotationsByTarget);
@@ -193,10 +193,10 @@ export function applyGraphMutation(
 }
 
 function applyNodeAdded(
-  state: WorkflowRunState,
+  state: SampleWorkspaceState,
   nodeId: string,
   value: NodeAddedValue,
-): WorkflowRunState {
+): SampleWorkspaceState {
   if (state.tasks.has(nodeId)) return state;
 
   const task: TaskState = {
@@ -224,11 +224,11 @@ function applyNodeAdded(
 }
 
 function applyNodeStatusChange(
-  state: WorkflowRunState,
+  state: SampleWorkspaceState,
   nodeId: string,
   value: NodeStatusChangedValue,
   ctx: MutationContext,
-): WorkflowRunState {
+): SampleWorkspaceState {
   const task = state.tasks.get(nodeId);
   if (!task) return state;
 
@@ -264,10 +264,10 @@ function applyNodeStatusChange(
 }
 
 function applyNodeFieldChange(
-  state: WorkflowRunState,
+  state: SampleWorkspaceState,
   nodeId: string,
   value: NodeFieldChangedValue,
-): WorkflowRunState {
+): SampleWorkspaceState {
   const task = state.tasks.get(nodeId);
   if (!task) return state;
 
@@ -286,10 +286,10 @@ function applyNodeFieldChange(
 }
 
 function applyEdgeAdded(
-  state: WorkflowRunState,
+  state: SampleWorkspaceState,
   value: EdgeAddedValue,
   ctx: MutationContext,
-): WorkflowRunState {
+): SampleWorkspaceState {
   const source = state.tasks.get(value.source_task_id);
   const target = state.tasks.get(value.target_task_id);
 
@@ -336,10 +336,10 @@ function applyEdgeAdded(
 }
 
 function applyEdgeRemoved(
-  state: WorkflowRunState,
+  state: SampleWorkspaceState,
   targetEdgeId: string,
   _ctx: MutationContext,
-): WorkflowRunState {
+): SampleWorkspaceState {
   const edges = ensureEdges(state);
   // `target_id` for edge mutations is documented as the edge id — we look it up
   // either directly or by the source::target convention.
@@ -381,11 +381,11 @@ function applyEdgeRemoved(
 }
 
 function applyEdgeStatusChanged(
-  state: WorkflowRunState,
+  state: SampleWorkspaceState,
   targetEdgeId: string,
   value: EdgeStatusChangedValue,
   ctx: MutationContext,
-): WorkflowRunState {
+): SampleWorkspaceState {
   const edges = ensureEdges(state);
   const existing = edges.get(targetEdgeId);
   edges.set(targetEdgeId, {
@@ -399,11 +399,11 @@ function applyEdgeStatusChanged(
 }
 
 function applyAnnotationSet(
-  state: WorkflowRunState,
+  state: SampleWorkspaceState,
   targetId: string,
   value: AnnotationValue,
   ctx: MutationContext,
-): WorkflowRunState {
+): SampleWorkspaceState {
   const annotations = ensureAnnotations(state);
   const existing = annotations.get(targetId) ?? [];
   const next = existing.filter((a) => a.namespace !== value.namespace);
@@ -418,11 +418,11 @@ function applyAnnotationSet(
 }
 
 function applyAnnotationDeleted(
-  state: WorkflowRunState,
+  state: SampleWorkspaceState,
   targetId: string,
   value: AnnotationValue,
   ctx: MutationContext,
-): WorkflowRunState {
+): SampleWorkspaceState {
   const annotations = ensureAnnotations(state);
   const existing = annotations.get(targetId);
   if (!existing) return state;
@@ -435,7 +435,7 @@ function applyAnnotationDeleted(
   return state;
 }
 
-function recalculateMetrics(state: WorkflowRunState): void {
+function recalculateMetrics(state: SampleWorkspaceState): void {
   let completed = 0,
     running = 0,
     failed = 0;
@@ -501,10 +501,10 @@ function countStatus(
  * existed at `upToSequence`, then lets status/annotation mutations replay on top.
  */
 export function createReplayInitialState(
-  runState: WorkflowRunState,
+  runState: SampleWorkspaceState,
   mutations: GraphMutationDto[],
   upToSequence: number,
-): WorkflowRunState {
+): SampleWorkspaceState {
   const includedNodeIds = nodeIdsAddedAtOrBefore(mutations, upToSequence);
   const initialNodeValues = initialNodeValueById(mutations, upToSequence);
   const tasks = new Map<string, TaskState>();
@@ -563,11 +563,11 @@ export function createReplayInitialState(
 export function replayToSequence(
   mutations: GraphMutationDto[],
   upToSequence: number,
-  initialState: WorkflowRunState,
-  snapshotCache?: Map<number, WorkflowRunState>,
-): WorkflowRunState {
+  initialState: SampleWorkspaceState,
+  snapshotCache?: Map<number, SampleWorkspaceState>,
+): SampleWorkspaceState {
   let startSeq = -1;
-  let state: WorkflowRunState = {
+  let state: SampleWorkspaceState = {
     ...initialState,
     tasks: new Map(initialState.tasks),
   };

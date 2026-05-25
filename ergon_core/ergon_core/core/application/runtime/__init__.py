@@ -1,4 +1,4 @@
-"""Runtime application owner for run graph and task lifecycle behavior."""
+"""Runtime application owner for sample graph and task lifecycle behavior."""
 
 from importlib import import_module
 from types import ModuleType
@@ -8,8 +8,8 @@ _ALIASES = {
     "inspection": "task_inspection",
     "management": "task_management",
     "propagation": "lifecycle",
-    "runs": "run_records",
-    "service": "run_lifecycle",
+    "samples": "sample_records",
+    "service": "sample_lifecycle",
 }
 
 __all__ = [
@@ -17,7 +17,7 @@ __all__ = [
     "inspection",
     "management",
     "propagation",
-    "runs",
+    "samples",
     "service",
 ]
 

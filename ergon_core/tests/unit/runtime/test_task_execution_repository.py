@@ -1,9 +1,9 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
-from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution
+from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
+from ergon_core.core.persistence.telemetry.models import SampleRecord, SampleTaskAttempt
 from ergon_core.core.application.runtime.task_execution_repository import TaskExecutionRepository
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
@@ -20,23 +20,23 @@ def _session() -> Session:
 
 
 def _run(session: Session) -> UUID:
-    run_id = uuid4()
+    sample_id = uuid4()
     session.add(
-        RunRecord(
-            id=run_id,
+        SampleRecord(
+            id=sample_id,
             definition_id=uuid4(),
             benchmark_type="ci-task-execution-repository",
             instance_key="sample-1",
             worker_team_json={"primary": "test-worker"},
-            status=RunStatus.EXECUTING,
+            status=SampleStatus.EXECUTING,
         )
     )
-    return run_id
+    return sample_id
 
 
-def _node(session: Session, run_id: UUID) -> UUID:
-    node = RunGraphNode(
-        run_id=run_id,
+def _node(session: Session, sample_id: UUID) -> UUID:
+    node = SampleGraphNode(
+        sample_id=sample_id,
         instance_key="sample-1",
         task_slug="task",
         description="Task",
@@ -49,14 +49,14 @@ def _node(session: Session, run_id: UUID) -> UUID:
 
 def _execution(
     *,
-    run_id: UUID,
+    sample_id: UUID,
     task_id: UUID,
     attempt_number: int,
     started_at: datetime,
     message: str = "output",
-) -> RunTaskExecution:
-    return RunTaskExecution(
-        run_id=run_id,
+) -> SampleTaskAttempt:
+    return SampleTaskAttempt(
+        sample_id=sample_id,
         task_id=task_id,
         attempt_number=attempt_number,
         status=TaskExecutionStatus.COMPLETED,
@@ -67,25 +67,25 @@ def _execution(
 
 def test_latest_for_node_orders_by_attempt_then_started_at() -> None:
     session = _session()
-    run_id = _run(session)
-    node_id = _node(session, run_id)
+    sample_id = _run(session)
+    node_id = _node(session, sample_id)
     now = datetime(2026, 4, 28, 12, 0, tzinfo=UTC)
     older_attempt_two = _execution(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=node_id,
         attempt_number=2,
         started_at=now,
         message="attempt-two-old",
     )
     newer_attempt_one = _execution(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=node_id,
         attempt_number=1,
         started_at=now + timedelta(minutes=10),
         message="attempt-one-newer",
     )
     newer_attempt_two = _execution(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=node_id,
         attempt_number=2,
         started_at=now + timedelta(minutes=5),
@@ -103,15 +103,15 @@ def test_latest_for_node_orders_by_attempt_then_started_at() -> None:
 
 def test_next_attempt_counts_existing_node_executions() -> None:
     session = _session()
-    run_id = _run(session)
-    node_id = _node(session, run_id)
+    sample_id = _run(session)
+    node_id = _node(session, sample_id)
     now = datetime(2026, 4, 28, 12, 0, tzinfo=UTC)
     session.add_all(
         [
-            _execution(run_id=run_id, task_id=node_id, attempt_number=1, started_at=now),
-            _execution(run_id=run_id, task_id=node_id, attempt_number=2, started_at=now),
+            _execution(sample_id=sample_id, task_id=node_id, attempt_number=1, started_at=now),
+            _execution(sample_id=sample_id, task_id=node_id, attempt_number=2, started_at=now),
         ]
     )
     session.commit()
 
-    assert TaskExecutionRepository().next_attempt_for_node(session, run_id, node_id) == 3
+    assert TaskExecutionRepository().next_attempt_for_node(session, sample_id, node_id) == 3

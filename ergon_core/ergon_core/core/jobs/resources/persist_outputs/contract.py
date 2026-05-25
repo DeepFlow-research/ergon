@@ -9,7 +9,7 @@ class PersistOutputsRequest(InngestEventContract):
     model_config = {"extra": "allow"}
     name: ClassVar[str] = "task/persist-outputs"
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
     task_id: UUID
     execution_id: UUID

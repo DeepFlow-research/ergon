@@ -38,8 +38,8 @@ class _FakeTaskExecutionService:
     def __init__(self, sandbox: _PublicSandbox) -> None:
         self._sandbox = sandbox
 
-    async def load_task_view(self, _session, *, run_id, task_id, sandbox_id=None):
-        del run_id, task_id, sandbox_id
+    async def load_task_view(self, _session, *, sample_id, task_id, sandbox_id=None):
+        del sample_id, task_id, sandbox_id
         return SimpleNamespace(task=SimpleNamespace(sandbox=self._sandbox))
 
 
@@ -54,7 +54,7 @@ async def test_sandbox_setup_provisions_public_sandbox(monkeypatch) -> None:
     result = await run_sandbox_setup_job(
         _FakeCtx(),
         SandboxSetupRequest(
-            run_id=uuid4(),
+            sample_id=uuid4(),
             definition_id=uuid4(),
             task_id=uuid4(),
             benchmark_type="benchmark",

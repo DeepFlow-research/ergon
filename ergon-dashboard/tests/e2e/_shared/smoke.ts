@@ -4,10 +4,10 @@
  * Each per-env spec (researchrubrics / minif2f / swebench-verified)
  * invokes ``defineSmokeSpec`` and the factory handles:
  *
- * - Parsing ``SMOKE_EXPERIMENT_JSON`` (array of ``{run_id, kind}``) so a
+ * - Parsing ``SMOKE_EXPERIMENT_JSON`` (array of ``{sample_id, kind}``) so a
  *   heterogeneous experiment group (happy + sad slots) dispatches per-kind.
  * - Per-run assertions against the backend harness DTO + dashboard UI.
- * - Screenshot capture points keyed on run_id + kind.
+ * - Screenshot capture points keyed on sample_id + kind.
  *
  * Contract with the dashboard: all assertions use ``data-testid``
  * attributes.  See ``docs/superpowers/plans/test-refactor/03-dashboard-and-playwright.md §6``.
@@ -24,11 +24,11 @@ import { EXPECTED_NESTED_SUBTASK_SLUGS, EXPECTED_SUBTASK_SLUGS } from "./expecte
 export interface SmokeSpecConfig {
   env: string;
   /** Optional per-run additional assertions (e.g. env-specific UI check) */
-  extraRunAssertions?: (page: Page, runId: string) => Promise<void>;
+  extraRunAssertions?: (page: Page, sampleId: string) => Promise<void>;
 }
 
 interface ExperimentGroupMember {
-  run_id: string;
+  sample_id: string;
   kind: "happy" | "sad";
 }
 
@@ -75,7 +75,7 @@ function graphElementForTask(page: Page, taskId: string): Locator {
 async function selectRenderedGraphTask(
   page: Page,
   state: BackendRunState,
-  runId: string,
+  sampleId: string,
   evaluatedTaskIds: Set<string>,
 ): Promise<BackendRunState["graph_nodes"][number]> {
   const candidates = [
@@ -99,7 +99,7 @@ async function selectRenderedGraphTask(
     }
   }
 
-  throw new Error(`no rendered graph task found for run ${runId}`);
+  throw new Error(`no rendered graph task found for run ${sampleId}`);
 }
 
 async function openWorkspaceForGraphTask(page: Page, taskId: string): Promise<void> {
@@ -126,7 +126,7 @@ async function expectNoTimelinePlaybackControls(page: Page): Promise<void> {
 async function assertRunWorkspace(
   page: Page,
   state: BackendRunState,
-  runId: string,
+  sampleId: string,
 ): Promise<void> {
   await expect(page.getByTestId("run-header")).toBeVisible();
   await expect(page.getByTestId("graph-canvas")).toBeVisible();
@@ -134,7 +134,7 @@ async function assertRunWorkspace(
   await expect(page.locator('[data-testid^="activity-bar-"]').first()).toBeVisible();
 
   const evaluatedTaskIds = new Set(state.evaluations.map((evaluation) => evaluation.task_id));
-  const selected = await selectRenderedGraphTask(page, state, runId, evaluatedTaskIds);
+  const selected = await selectRenderedGraphTask(page, state, sampleId, evaluatedTaskIds);
 
   await openWorkspaceForGraphTask(page, selected.id);
   await expect(page.getByTestId("workspace-region")).toBeVisible();
@@ -209,9 +209,9 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
   const experimentRuns = readExperimentGroupFromEnv();
 
   test.describe(`${cfg.env} canonical smoke`, () => {
-    for (const { run_id, kind } of experimentRuns) {
-      test(`run ${run_id} (${kind})`, async ({ page }) => {
-        const state = await client.getRunState(run_id);
+    for (const { sample_id, kind } of experimentRuns) {
+      test(`run ${sample_id} (${kind})`, async ({ page }) => {
+        const state = await client.getRunState(sample_id);
 
         // Backend-DTO assertions are the load-bearing contract.  The UI
         // assertions below use graph-canvas + page-load + screenshot
@@ -250,24 +250,24 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
           const successfulEval = state.evaluations.some((e) => e.score === 1.0);
           expect(successfulEval).toBe(true);
 
-          await page.goto(`/run/${run_id}`);
-          await assertRunWorkspace(page, state, run_id);
+          await page.goto(`/samples/${sample_id}`);
+          await assertRunWorkspace(page, state, sample_id);
 
           await screenshot(
             page,
-            path.join(screenshotDir, cfg.env, `${run_id}-happy.png`),
+            path.join(screenshotDir, cfg.env, `${sample_id}-happy.png`),
           );
           await screenshot(
             page,
-            path.join(screenshotDir, cfg.env, `${run_id}-visual-debugger-full.png`),
+            path.join(screenshotDir, cfg.env, `${sample_id}-visual-debugger-full.png`),
           );
           await locatorScreenshot(
             page.getByTestId("activity-stack-region"),
-            path.join(screenshotDir, cfg.env, `${run_id}-activity-stack.png`),
+            path.join(screenshotDir, cfg.env, `${sample_id}-activity-stack.png`),
           );
 
           if (cfg.extraRunAssertions) {
-            await cfg.extraRunAssertions(page, run_id);
+            await cfg.extraRunAssertions(page, sample_id);
           }
           return;
         }
@@ -288,19 +288,19 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
         expect(statusBySlug.get("l_2")).toBe("failed");
         expect(statusBySlug.get("l_3")).toBe("blocked");
 
-        await page.goto(`/run/${run_id}`);
-        await assertRunWorkspace(page, state, run_id);
+        await page.goto(`/samples/${sample_id}`);
+        await assertRunWorkspace(page, state, sample_id);
         await screenshot(
           page,
-          path.join(screenshotDir, cfg.env, `${run_id}-sad.png`),
+          path.join(screenshotDir, cfg.env, `${sample_id}-sad.png`),
         );
         await screenshot(
           page,
-          path.join(screenshotDir, cfg.env, `${run_id}-visual-debugger-full.png`),
+          path.join(screenshotDir, cfg.env, `${sample_id}-visual-debugger-full.png`),
         );
         await locatorScreenshot(
           page.getByTestId("activity-stack-region"),
-          path.join(screenshotDir, cfg.env, `${run_id}-activity-stack.png`),
+          path.join(screenshotDir, cfg.env, `${sample_id}-activity-stack.png`),
         );
       });
     }

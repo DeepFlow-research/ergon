@@ -141,7 +141,7 @@
           "title": "Id",
           "type": "string"
         },
-        "run_id": {
+        "sample_id": {
           "format": "uuid",
           "title": "Run Id",
           "type": "string"
@@ -301,7 +301,7 @@
       },
       "required": [
         "id",
-        "run_id",
+        "sample_id",
         "sequence",
         "mutation_type",
         "target_type",

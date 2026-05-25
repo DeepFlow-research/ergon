@@ -9,7 +9,7 @@ class TaskEvaluateRequest(InngestEventContract):
     model_config = {"frozen": True}
     name: ClassVar[str] = "task/evaluate"
 
-    run_id: UUID
+    sample_id: UUID
     task_id: UUID
     execution_id: UUID
     evaluator_index: int

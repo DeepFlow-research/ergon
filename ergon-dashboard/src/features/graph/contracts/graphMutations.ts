@@ -71,7 +71,7 @@ export type AnnotationValue = z.infer<typeof AnnotationValueSchema>;
 
 export const GraphMutationDtoSchema = z.object({
   id: z.string().uuid(),
-  run_id: z.string().uuid(),
+  sample_id: z.string().uuid(),
   sequence: z.number().int().nonnegative(),
   mutation_type: MutationTypeSchema,
   target_type: GraphTargetTypeSchema,

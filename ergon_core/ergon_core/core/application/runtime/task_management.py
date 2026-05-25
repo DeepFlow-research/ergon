@@ -20,7 +20,7 @@ from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.application.ports import DashboardEventPublisher
-from ergon_core.core.persistence.graph.models import RunGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.application.runtime.status import (
     BLOCKED,
     CANCELLED,
@@ -35,7 +35,7 @@ from ergon_core.core.application.runtime.events import (
     RuntimeEventDispatcher,
     TaskReadyDispatcher,
 )
-from ergon_core.core.application.runtime.run_identity import definition_id_for_run
+from ergon_core.core.application.runtime.sample_identity import definition_id_for_run
 from ergon_core.core.application.runtime.task_errors import (
     TaskAlreadyTerminalError,
     TaskNotTerminalError,
@@ -60,7 +60,7 @@ from ergon_core.core.application.runtime.task_models import (
     RestartTaskResult,
 )
 from ergon_core.core.application.runtime.task_execution_repository import TaskExecutionRepository
-from ergon_core.core.persistence.graph.models import RunGraphMutation
+from ergon_core.core.persistence.graph.models import SampleGraphMutation
 from ergon_core.core.views.dashboard_events.graph_mutations import (
     dashboard_graph_mutation_event_from_row,
 )
@@ -72,10 +72,10 @@ _MANAGER_META = MutationMeta(actor="manager-worker", reason="manager_decision")
 
 
 class _LegacyDashboardGraphMutationEmitter(Protocol):
-    def graph_mutation(self, row: RunGraphMutation) -> Awaitable[None] | None: ...
+    def graph_mutation(self, row: SampleGraphMutation) -> Awaitable[None] | None: ...
 
 
-def _count_non_terminal_descendants(session: Session, run_id: UUID, task_id: UUID) -> int:
+def _count_non_terminal_descendants(session: Session, sample_id: UUID, task_id: UUID) -> int:
     """Count non-terminal descendants via iterative BFS on parent_task_id.
 
     Uses Python-level BFS rather than a recursive CTE so the logic is
@@ -83,7 +83,7 @@ def _count_non_terminal_descendants(session: Session, run_id: UUID, task_id: UUI
     """
     return sum(
         1
-        for descendant in descendants(session, run_id=run_id, root_task_id=task_id)
+        for descendant in descendants(session, sample_id=sample_id, root_task_id=task_id)
         if descendant.status not in TERMINAL_STATUSES
     )
 
@@ -109,12 +109,12 @@ class TaskManagementService:
         self._dashboard_publisher = dashboard_publisher or get_dashboard_event_publisher()
         self._graph_repo.add_mutation_listener(self._publish_graph_mutation)
 
-    async def _publish_graph_mutation(self, row: RunGraphMutation) -> None:
+    async def _publish_graph_mutation(self, row: SampleGraphMutation) -> None:
         if self._dashboard_publisher is None:
             return
         await self._dashboard_publisher.publish(dashboard_graph_mutation_event_from_row(row))
 
-    async def _legacy_publish_graph_mutation(self, row: RunGraphMutation) -> None:
+    async def _legacy_publish_graph_mutation(self, row: SampleGraphMutation) -> None:
         result = self._legacy_graph_mutation_listener(row)
         if inspect.isawaitable(result):
             await result
@@ -124,7 +124,7 @@ class TaskManagementService:
     async def spawn_dynamic_task(
         self,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         parent_task_id: UUID,
         task: Task,
         depends_on: tuple[UUID, ...] = (),
@@ -133,15 +133,15 @@ class TaskManagementService:
 
         Used by WorkerContext.spawn_task to make dynamic subtasks
         graph-native. No experiment_definition_tasks row is written —
-        the full Task snapshot lives in run_graph_nodes.task_json with
+        the full Task snapshot lives in sample_graph_nodes.task_json with
         is_dynamic=True.
         """
         dispatch: tuple[UUID, UUID, UUID] | None = None
         with get_session() as session:
-            parent = self._graph_repo.get_node(session, run_id=run_id, task_id=parent_task_id)
+            parent = self._graph_repo.get_node(session, sample_id=sample_id, task_id=parent_task_id)
             node = await self._graph_repo.add_node(
                 session,
-                run_id,
+                sample_id,
                 task_slug=task.task_slug,
                 instance_key=task.instance_key,
                 description=task.description,
@@ -156,7 +156,7 @@ class TaskManagementService:
             for dep in depends_on:
                 await self._graph_repo.add_edge(
                     session,
-                    run_id,
+                    sample_id,
                     source_task_id=dep,
                     target_task_id=node.task_id,
                     status=EDGE_PENDING,
@@ -164,13 +164,13 @@ class TaskManagementService:
                 )
             task_id = node.task_id
             if not depends_on:
-                definition_id = definition_id_for_run(session, run_id)
-                dispatch = (run_id, definition_id, task_id)
+                definition_id = definition_id_for_run(session, sample_id)
+                dispatch = (sample_id, definition_id, task_id)
             session.commit()
 
         if dispatch is not None:
             await self._runtime_events.dispatch_task_ready(
-                run_id=dispatch[0],
+                sample_id=dispatch[0],
                 definition_id=dispatch[1],
                 task_id=dispatch[2],
             )
@@ -189,7 +189,7 @@ class TaskManagementService:
         Uses only_if_not_terminal to avoid races. Counts non-terminal
         descendants so the caller knows the cascade scope.
         """
-        node = self._graph_repo.get_node(session, run_id=command.run_id, task_id=command.task_id)
+        node = self._graph_repo.get_node(session, sample_id=command.sample_id, task_id=command.task_id)
         old_status = node.status
 
         if old_status in TERMINAL_STATUSES:
@@ -202,7 +202,7 @@ class TaskManagementService:
         # rather than a double-write.
         applied = await self._graph_repo.update_node_status(
             session,
-            run_id=command.run_id,
+            sample_id=command.sample_id,
             task_id=command.task_id,
             new_status=CANCELLED,
             meta=_MANAGER_META,
@@ -211,15 +211,15 @@ class TaskManagementService:
 
         cascaded = 0
         if applied:
-            cascaded = _count_non_terminal_descendants(session, command.run_id, command.task_id)
+            cascaded = _count_non_terminal_descendants(session, command.sample_id, command.task_id)
 
         session.commit()
 
         if applied:
-            definition_id = definition_id_for_run(session, command.run_id)
+            definition_id = definition_id_for_run(session, command.sample_id)
             event = self._task_cancelled_event(
                 session,
-                run_id=command.run_id,
+                sample_id=command.sample_id,
                 definition_id=definition_id,
                 task_id=command.task_id,
                 cause="manager_decision",
@@ -248,7 +248,7 @@ class TaskManagementService:
         self,
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         definition_id: UUID,
         parent_task_id: UUID,
         cause: PropagationCancelCause,
@@ -257,12 +257,12 @@ class TaskManagementService:
         meta = MutationMeta(actor="system:cascade", reason=cause)
         transitioned: list[UUID] = []
 
-        for child in descendants(session, run_id=run_id, root_task_id=parent_task_id):
+        for child in descendants(session, sample_id=sample_id, root_task_id=parent_task_id):
             if child.status in TERMINAL_STATUSES:
                 continue
             applied = await self._graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=child.task_id,
                 new_status=CANCELLED,
                 meta=meta,
@@ -274,7 +274,7 @@ class TaskManagementService:
         events = [
             self._task_cancelled_event(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 definition_id=definition_id,
                 task_id=nid,
                 cause=cause,
@@ -291,7 +291,7 @@ class TaskManagementService:
         self,
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         parent_task_id: UUID,
         cause: str,
     ) -> list[UUID]:
@@ -299,12 +299,12 @@ class TaskManagementService:
         meta = MutationMeta(actor="system:cascade", reason=cause)
         blocked: list[UUID] = []
 
-        for child in descendants(session, run_id=run_id, root_task_id=parent_task_id):
+        for child in descendants(session, sample_id=sample_id, root_task_id=parent_task_id):
             if child.status == RUNNING or child.status in TERMINAL_STATUSES:
                 continue
             applied = await self._graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=child.task_id,
                 new_status=BLOCKED,
                 meta=meta,
@@ -333,7 +333,7 @@ class TaskManagementService:
         The graph node's description is the single source of truth --
         no definition row to keep in sync.
         """
-        node = self._graph_repo.get_node(session, run_id=command.run_id, task_id=command.task_id)
+        node = self._graph_repo.get_node(session, sample_id=command.sample_id, task_id=command.task_id)
         old_description = node.description
 
         if node.status == RUNNING:
@@ -341,7 +341,7 @@ class TaskManagementService:
 
         await self._graph_repo.update_node_field(
             session,
-            run_id=command.run_id,
+            sample_id=command.sample_id,
             task_id=command.task_id,
             field="description",
             value=command.new_description,
@@ -378,7 +378,7 @@ class TaskManagementService:
         cancels non-terminal downstream targets (stale input) and
         recurses into COMPLETED downstream targets (stale output).
         """
-        node = self._graph_repo.get_node(session, run_id=command.run_id, task_id=command.task_id)
+        node = self._graph_repo.get_node(session, sample_id=command.sample_id, task_id=command.task_id)
         old_status = node.status
 
         if old_status not in TERMINAL_STATUSES:
@@ -386,19 +386,19 @@ class TaskManagementService:
 
         invalidated_task_ids = await self._invalidate_downstream(
             session,
-            run_id=command.run_id,
+            sample_id=command.sample_id,
             task_id=command.task_id,
         )
 
         # Reset this node's outgoing edges so they re-satisfy on re-run.
         outgoing = self._graph_repo.get_outgoing_edges(
-            session, run_id=command.run_id, task_id=command.task_id
+            session, sample_id=command.sample_id, task_id=command.task_id
         )
         for edge in outgoing:
             if edge.status != EDGE_PENDING:
                 await self._graph_repo.update_edge_status(
                     session,
-                    run_id=command.run_id,
+                    sample_id=command.sample_id,
                     edge_id=edge.id,
                     new_status=EDGE_PENDING,
                     meta=_MANAGER_META,
@@ -409,7 +409,7 @@ class TaskManagementService:
         # check above already rejected non-terminal inputs.
         await self._graph_repo.update_node_status(
             session,
-            run_id=command.run_id,
+            sample_id=command.sample_id,
             task_id=command.task_id,
             new_status=PENDING,
             meta=_MANAGER_META,
@@ -418,9 +418,9 @@ class TaskManagementService:
 
         session.commit()
 
-        definition_id = definition_id_for_run(session, command.run_id)
+        definition_id = definition_id_for_run(session, command.sample_id)
         await self._runtime_events.dispatch_task_ready(
-            run_id=command.run_id,
+            sample_id=command.sample_id,
             definition_id=definition_id,
             task_id=command.task_id,
         )
@@ -444,7 +444,7 @@ class TaskManagementService:
         self,
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
     ) -> list[UUID]:
         """Cascade invalidate downstream targets whose input is becoming stale.
@@ -482,23 +482,23 @@ class TaskManagementService:
 
         while stack:
             current = stack.pop()
-            outgoing = self._graph_repo.get_outgoing_edges(session, run_id=run_id, task_id=current)
+            outgoing = self._graph_repo.get_outgoing_edges(session, sample_id=sample_id, task_id=current)
             for edge in outgoing:
                 target_id = edge.target_task_id
                 if target_id in seen:
                     continue
                 seen.add(target_id)
 
-                target = self._graph_repo.get_node(session, run_id=run_id, task_id=target_id)
+                target = self._graph_repo.get_node(session, sample_id=sample_id, task_id=target_id)
 
                 if target.status == COMPLETED:
                     # Stale output — cancel, reset incoming edges (so
                     # other fan-in parents re-satisfy them on their next
                     # completion), reset outgoing edges, then recurse.
-                    await self._cancel_for_invalidation(session, run_id=run_id, task_id=target_id)
+                    await self._cancel_for_invalidation(session, sample_id=sample_id, task_id=target_id)
                     invalidated.append(target_id)
-                    await self._reset_incoming_edges(session, run_id=run_id, task_id=target_id)
-                    await self._reset_outgoing_edges(session, run_id=run_id, task_id=target_id)
+                    await self._reset_incoming_edges(session, sample_id=sample_id, task_id=target_id)
+                    await self._reset_outgoing_edges(session, sample_id=sample_id, task_id=target_id)
                     stack.append(target_id)
                 elif target.status in TERMINAL_STATUSES:
                     # FAILED or CANCELLED — no stale output, no recursion.
@@ -512,9 +512,9 @@ class TaskManagementService:
                     # siblings must re-satisfy them before the target
                     # re-activates. Do NOT recurse into outgoing: the
                     # target never completed, so no stale downstream.
-                    await self._cancel_for_invalidation(session, run_id=run_id, task_id=target_id)
+                    await self._cancel_for_invalidation(session, sample_id=sample_id, task_id=target_id)
                     invalidated.append(target_id)
-                    await self._reset_incoming_edges(session, run_id=run_id, task_id=target_id)
+                    await self._reset_incoming_edges(session, sample_id=sample_id, task_id=target_id)
 
         return invalidated
 
@@ -522,7 +522,7 @@ class TaskManagementService:
         self,
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
     ) -> None:
         """Cancel a node as part of downstream invalidation and emit task/cancelled.
@@ -535,7 +535,7 @@ class TaskManagementService:
         """
         await self._graph_repo.update_node_status(
             session,
-            run_id=run_id,
+            sample_id=sample_id,
             task_id=task_id,
             new_status=CANCELLED,
             meta=MutationMeta(
@@ -545,10 +545,10 @@ class TaskManagementService:
             only_if_not_terminal=False,
         )
 
-        definition_id = definition_id_for_run(session, run_id)
+        definition_id = definition_id_for_run(session, sample_id)
         event = self._task_cancelled_event(
             session,
-            run_id=run_id,
+            sample_id=sample_id,
             definition_id=definition_id,
             task_id=task_id,
             cause="downstream_invalidation",
@@ -564,7 +564,7 @@ class TaskManagementService:
         self,
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
     ) -> None:
         """Reset a node's outgoing edges to EDGE_PENDING.
@@ -573,12 +573,12 @@ class TaskManagementService:
         downstream edges are ready to re-satisfy when this node is
         eventually re-run (via its own restart or via re-activation).
         """
-        outgoing = self._graph_repo.get_outgoing_edges(session, run_id=run_id, task_id=task_id)
+        outgoing = self._graph_repo.get_outgoing_edges(session, sample_id=sample_id, task_id=task_id)
         for edge in outgoing:
             if edge.status != EDGE_PENDING:
                 await self._graph_repo.update_edge_status(
                     session,
-                    run_id=run_id,
+                    sample_id=sample_id,
                     edge_id=edge.id,
                     new_status=EDGE_PENDING,
                     meta=MutationMeta(
@@ -591,7 +591,7 @@ class TaskManagementService:
         self,
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
     ) -> None:
         """Reset a node's incoming edges to EDGE_PENDING.
@@ -606,12 +606,12 @@ class TaskManagementService:
         edge status), so this does not affect whether the target
         re-activates — it only keeps the edge WAL honest.
         """
-        incoming = self._graph_repo.get_incoming_edges(session, run_id=run_id, task_id=task_id)
+        incoming = self._graph_repo.get_incoming_edges(session, sample_id=sample_id, task_id=task_id)
         for edge in incoming:
             if edge.status != EDGE_PENDING:
                 await self._graph_repo.update_edge_status(
                     session,
-                    run_id=run_id,
+                    sample_id=sample_id,
                     edge_id=edge.id,
                     new_status=EDGE_PENDING,
                     meta=MutationMeta(
@@ -624,14 +624,14 @@ class TaskManagementService:
         self,
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         definition_id: UUID,
         task_id: UUID,
         cause: CancelCause,
     ) -> TaskCancelledEvent:
         execution = self._task_execution_repo.latest_for_node(session, task_id)
         return TaskCancelledEvent(
-            run_id=run_id,
+            sample_id=sample_id,
             definition_id=definition_id,
             task_id=task_id,
             execution_id=None if execution is None else execution.id,

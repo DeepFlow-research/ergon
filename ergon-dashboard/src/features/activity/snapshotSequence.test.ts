@@ -28,7 +28,7 @@ function activity(overrides: Partial<RunActivity> = {}): RunActivity {
 function mutation(sequence: number, createdAt: string): GraphMutationDto {
   return {
     id: "00000000-0000-4000-8000-000000000001",
-    run_id: "00000000-0000-4000-8000-000000000002",
+    sample_id: "00000000-0000-4000-8000-000000000002",
     sequence,
     mutation_type: "node.added",
     target_type: "node",

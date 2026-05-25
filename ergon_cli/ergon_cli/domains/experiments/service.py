@@ -80,7 +80,7 @@ def _detail_view(detail: ExperimentDetailDto) -> ExperimentDetailView:
         sample_selection=detail.sample_selection,
         runs=tuple(
             ExperimentRunView(
-                run_id=run.run_id,
+                sample_id=run.sample_id,
                 instance_key=run.instance_key,
                 status=run.status,
                 model_target=run.model_target,

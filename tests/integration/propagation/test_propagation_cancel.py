@@ -4,17 +4,17 @@ Tests that cancelling a PENDING node writes CANCELLED status and a WAL
 entry. This is expected to pass with current code — cancellation is
 already implemented. No xfail needed.
 
-If this were asserting RunRecord status assertions that aren't yet wired,
+If this were asserting SampleRecord status assertions that aren't yet wired,
 it would need xfail; but the simple node-level cancel works today.
 """
 
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphMutation, SampleGraphNode
 from ergon_core.core.application.runtime.status import CANCELLED
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.core.application.runtime.models import MutationMeta
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from sqlmodel import select
@@ -35,17 +35,17 @@ pytestmark = pytest.mark.integration
 # ---------------------------------------------------------------------------
 
 
-def _cleanup_run(run_id, defn_id) -> None:  # type: ignore[no-untyped-def]
+def _cleanup_run(sample_id, defn_id) -> None:  # type: ignore[no-untyped-def]
     with get_session() as session:
         for mut in session.exec(
-            select(RunGraphMutation).where(RunGraphMutation.run_id == run_id)
+            select(SampleGraphMutation).where(SampleGraphMutation.sample_id == sample_id)
         ).all():
             session.delete(mut)
-        for edge in session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all():
+        for edge in session.exec(select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)).all():
             session.delete(edge)
-        for nd in session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all():
+        for nd in session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all():
             session.delete(nd)
-        run_row = session.get(RunRecord, run_id)
+        run_row = session.get(SampleRecord, sample_id)
         if run_row is not None:
             session.delete(run_row)
         defn_row = session.get(ExperimentDefinition, defn_id)
@@ -71,7 +71,7 @@ async def test_6_manager_decision_cancel_pending_node() -> None:
         defn = make_experiment_definition(session)
         run = make_run(session, defn.id)
         node_a = make_node(session, run.id, task_slug="cancel-target", status="pending")
-        run_id = run.id
+        sample_id = run.id
         defn_id = defn.id
         node_a_id = node_a.task_id
         session.commit()
@@ -83,7 +83,7 @@ async def test_6_manager_decision_cancel_pending_node() -> None:
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=node_a_id,
                 new_status=TaskExecutionStatus.PENDING,
                 meta=MutationMeta(actor="test:setup", reason="test setup: node pending"),
@@ -94,7 +94,7 @@ async def test_6_manager_decision_cancel_pending_node() -> None:
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=node_a_id,
                 new_status=CANCELLED,
                 meta=MutationMeta(
@@ -117,10 +117,10 @@ async def test_6_manager_decision_cancel_pending_node() -> None:
             )
 
         with get_session() as session:
-            assert_cross_cutting_invariants(session, run_id)
+            assert_cross_cutting_invariants(session, sample_id)
 
     finally:
-        _cleanup_run(run_id, defn_id)
+        _cleanup_run(sample_id, defn_id)
 
 
 @pytest.mark.asyncio
@@ -135,7 +135,7 @@ async def test_6b_cancel_does_not_affect_already_terminal_node() -> None:
         defn = make_experiment_definition(session)
         run = make_run(session, defn.id)
         node_a = make_node(session, run.id, task_slug="already-completed", status="completed")
-        run_id = run.id
+        sample_id = run.id
         defn_id = defn.id
         node_a_id = node_a.task_id
         session.commit()
@@ -147,7 +147,7 @@ async def test_6b_cancel_does_not_affect_already_terminal_node() -> None:
             # Stamp COMPLETED into WAL
             await graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=node_a_id,
                 new_status=TaskExecutionStatus.COMPLETED,
                 meta=MutationMeta(actor="test:setup", reason="test setup: node completed"),
@@ -158,7 +158,7 @@ async def test_6b_cancel_does_not_affect_already_terminal_node() -> None:
         with get_session() as session:
             applied = await graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=node_a_id,
                 new_status=CANCELLED,
                 meta=MutationMeta(actor="test:operator", reason="late cancel attempt"),
@@ -175,7 +175,7 @@ async def test_6b_cancel_does_not_affect_already_terminal_node() -> None:
             )
 
         with get_session() as session:
-            assert_cross_cutting_invariants(session, run_id)
+            assert_cross_cutting_invariants(session, sample_id)
 
     finally:
-        _cleanup_run(run_id, defn_id)
+        _cleanup_run(sample_id, defn_id)

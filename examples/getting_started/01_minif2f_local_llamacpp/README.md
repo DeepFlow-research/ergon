@@ -25,8 +25,8 @@ If `llama-server` is installed somewhere else, pass its path with
 
 From the repository root, pass a Hugging Face GGUF reference in
 `<repo-id>:<filename.gguf>` form. The example downloads the file into the model
-cache, starts `llama-server`, waits for `/v1/models`, launches the MiniF2F run,
-and cleans up the model server when the run command exits.
+cache, starts `llama-server`, waits for `/v1/models`, launches the MiniF2F sample,
+and cleans up the model server when the example command exits.
 
 ```bash
 uv run ergon examples run minif2f-local-llamacpp \
@@ -115,12 +115,12 @@ The script:
 4. Builds `MiniF2FBenchmark(limit=3, worker_factory=make_worker)`.
 5. Binds `make_minif2f_worker(model="llamacpp:<base-url>", max_iterations=12)`.
 6. Persists the benchmark definition with `persist_benchmark`.
-7. Launches a run with `launch_run`.
-8. Prints the definition id, run id, model target, and observation commands.
+7. Launches a sample with `launch_sample`.
+8. Prints the definition id, sample id, model target, and observation commands.
 
 MiniF2F is a real theorem-proving benchmark. Local model quality, quantization,
-and context length strongly affect proof success. A terminal run with failed
-proofs is still an honest first-run outcome: inspect the attempts, proof files,
+and context length strongly affect proof success. A terminal sample with failed
+proofs is still an honest first-sample outcome: inspect the attempts, proof files,
 tool calls, and evaluator feedback before changing models or iteration limits.
 
 ## Manual Readiness Notes
@@ -140,9 +140,9 @@ failures rather than successful benchmark launches:
 - Missing MiniF2F Lean template or E2B provisioning failure: build/pin the
   template with `uv run ergon benchmark setup minif2f`, then retry.
 - Model tool-call incompatibility: try a model and prompt configuration that can
-  use OpenAI-compatible tool calls, or inspect the run artifacts for the failed
+  use OpenAI-compatible tool calls, or inspect the sample artifacts for the failed
   attempts.
 
-Do not treat theorem failures as setup failures. A run that launches all three
+Do not treat theorem failures as setup failures. A sample that launches all three
 tasks and records failed proof attempts is still useful evidence about the local
 model, context length, and iteration budget.

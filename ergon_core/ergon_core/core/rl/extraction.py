@@ -1,5 +1,5 @@
 # ergon_core/ergon_core/core/rl/extraction.py
-"""Per-agent trajectory extraction from RunContextEvent rows.
+"""Per-agent trajectory extraction from SampleContextEvent rows.
 
 Reads the lossless per-event records and builds the flat
 (prompt_ids, completion_ids, logprobs, env_mask, reward) tuples that
@@ -23,7 +23,7 @@ from ergon_core.core.shared.context_parts import (
     ToolResultPart,
     UserMessagePart,
 )
-from ergon_core.core.persistence.context.models import RunContextEvent
+from ergon_core.core.persistence.context.models import SampleContextEvent
 from ergon_core.core.rl.rewards import IndependentTaskReward, RewardStrategy
 from pydantic import BaseModel, Field
 
@@ -48,7 +48,7 @@ class AgentTrajectory(BaseModel):
 
 
 def extract_agent_trajectories(
-    context_events: list[RunContextEvent],
+    context_events: list[SampleContextEvent],
     eval_scores: dict[str, float],
     tokenizer: Tokenizer,
     *,
@@ -62,7 +62,7 @@ def extract_agent_trajectories(
     if reward_strategy is None:
         reward_strategy = IndependentTaskReward()
 
-    by_worker: dict[str, list[RunContextEvent]] = defaultdict(list)
+    by_worker: dict[str, list[SampleContextEvent]] = defaultdict(list)
     for event in context_events:
         by_worker[event.worker_binding_key].append(event)
 
@@ -115,7 +115,7 @@ def extract_agent_trajectories(
     return trajectories
 
 
-def _build_prompt_text(events: list[RunContextEvent]) -> str:
+def _build_prompt_text(events: list[SampleContextEvent]) -> str:
     parts: list[str] = []
     for event in events:
         payload = event.parsed_payload()
@@ -157,7 +157,7 @@ def _get_logprobs(parsed: ContextPartChunkLog, n_tokens: int) -> list[float]:
     return scalars[:n_tokens]
 
 
-def _count_turns(events: list[RunContextEvent]) -> int:
+def _count_turns(events: list[SampleContextEvent]) -> int:
     seen: set[str] = set()
     for event in events:
         parsed = event.parsed_payload()

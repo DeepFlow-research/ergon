@@ -16,7 +16,7 @@ import { formatDate } from "@/lib/timeFormat";
 
 interface ResourcePanelProps {
   resources: ResourceState[];
-  runId?: string | null;
+  sampleId?: string | null;
 }
 
 /**
@@ -186,7 +186,7 @@ function ResourceItem({ resource, onOpen }: ResourceItemProps) {
   return <div className={className}>{content}</div>;
 }
 
-export function ResourcePanel({ resources, runId = null }: ResourcePanelProps) {
+export function ResourcePanel({ resources, sampleId = null }: ResourcePanelProps) {
   const [selected, setSelected] = useState<ResourceState | null>(null);
 
   if (resources.length === 0) {
@@ -211,9 +211,9 @@ export function ResourcePanel({ resources, runId = null }: ResourcePanelProps) {
     );
   }
 
-  // onOpen is only wired when we have a runId — otherwise clicking has no
+  // onOpen is only wired when we have a sampleId — otherwise clicking has no
   // way to fetch content, so keep the row as a non-interactive div.
-  const onOpen = runId !== null ? setSelected : undefined;
+  const onOpen = sampleId !== null ? setSelected : undefined;
 
   return (
     <div className="space-y-2">
@@ -226,7 +226,7 @@ export function ResourcePanel({ resources, runId = null }: ResourcePanelProps) {
         ))}
       </div>
       <ResourceViewerDialog
-        runId={runId}
+        sampleId={sampleId}
         resource={selected}
         onClose={() => setSelected(null)}
       />

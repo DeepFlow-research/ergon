@@ -38,7 +38,7 @@ class ExperimentSummaryView(BaseModel):
 class ExperimentRunView(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    run_id: UUID
+    sample_id: UUID
     instance_key: str
     status: str
     model_target: str | None = None

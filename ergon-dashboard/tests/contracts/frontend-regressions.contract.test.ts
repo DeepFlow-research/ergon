@@ -9,7 +9,7 @@ test("experiment detail does not pass server functions into client components", 
 });
 
 test("run display state keeps live mode separate from graph sequence zero", () => {
-  const source = readFileSync("src/components/run/useRunDisplayState.ts", "utf8");
+  const source = readFileSync("src/components/sample/useSampleDisplayState.ts", "utf8");
 
   assert.doesNotMatch(source, /snapshotSequence\s*\?\?\s*0/);
 });
@@ -17,12 +17,12 @@ test("run display state keeps live mode separate from graph sequence zero", () =
 test("experiment detail bottom run table exposes each row as run navigation", () => {
   const source = readFileSync("src/app/experiments/[definitionId]/page.tsx", "utf8");
 
-  assert.match(source, /data-testid=\{`experiment-run-row-\$\{point\.runId\}`\}/);
-  assert.match(source, /href=\{runHref\(point\.runId\)\}/);
+  assert.match(source, /data-testid=\{`experiment-run-row-\$\{point\.sampleId\}`\}/);
+  assert.match(source, /href=\{runHref\(point\.sampleId\)\}/);
 });
 
 test("run workspace can collapse the bottom activity timeline", () => {
-  const source = readFileSync("src/components/run/RunWorkspacePage.tsx", "utf8");
+  const source = readFileSync("src/components/sample/SampleWorkspacePage.tsx", "utf8");
 
   assert.match(source, /const \[isTimelineOpen, setIsTimelineOpen\] = useState\(true\)/);
   assert.match(source, /data-testid="activity-timeline-toggle"/);
@@ -30,7 +30,7 @@ test("run workspace can collapse the bottom activity timeline", () => {
 });
 
 test("run workspace keeps replay arrows available outside the timeline panel", () => {
-  const source = readFileSync("src/components/run/RunWorkspacePage.tsx", "utf8");
+  const source = readFileSync("src/components/sample/SampleWorkspacePage.tsx", "utf8");
 
   assert.match(source, /data-testid="replay-step-previous"/);
   assert.match(source, /data-testid="replay-step-next"/);
@@ -39,7 +39,7 @@ test("run workspace keeps replay arrows available outside the timeline panel", (
 });
 
 test("run workspace does not render the task inspection placeholder", () => {
-  const source = readFileSync("src/components/run/RunWorkspacePage.tsx", "utf8");
+  const source = readFileSync("src/components/sample/SampleWorkspacePage.tsx", "utf8");
 
   assert.doesNotMatch(source, /Task inspection/);
   assert.doesNotMatch(source, /Click node/);
@@ -47,7 +47,7 @@ test("run workspace does not render the task inspection placeholder", () => {
 });
 
 test("run workspace links back to the owning experiment detail", () => {
-  const source = readFileSync("src/components/run/RunWorkspacePage.tsx", "utf8");
+  const source = readFileSync("src/components/sample/SampleWorkspacePage.tsx", "utf8");
 
   assert.match(source, /const experimentHref = runState\?\.definitionId \? `\/experiments\/\$\{runState\.definitionId\}` : "\/experiments"/);
   assert.match(source, /href=\{experimentHref\}/);

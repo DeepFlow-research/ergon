@@ -14,7 +14,7 @@ from ergon_core.core.shared.context_parts import (
     ToolResultPart,
     UserMessagePart,
 )
-from ergon_core.core.persistence.context.models import RunContextEvent
+from ergon_core.core.persistence.context.models import SampleContextEvent
 from pydantic import BaseModel
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse
 from pydantic_ai.messages import ModelRequestPart as PydanticModelRequestPart

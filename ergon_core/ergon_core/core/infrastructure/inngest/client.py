@@ -26,12 +26,12 @@ inngest_client = inngest.Inngest(
     logger=logging.getLogger("ergon_core.inngest"),
 )
 
-# All orchestration functions carry run_id in their trigger event data.
-# Sending a run/cancelled event with a matching run_id kills them in-flight.
+# All orchestration functions carry sample_id in their trigger event data.
+# Sending a sample/cancelled event with a matching sample_id kills them in-flight.
 RUN_CANCEL = [
     inngest.Cancel(
-        event="run/cancelled",
-        if_exp="event.data.run_id == async.data.run_id",
+        event="sample/cancelled",
+        if_exp="event.data.sample_id == async.data.sample_id",
     )
 ]
 

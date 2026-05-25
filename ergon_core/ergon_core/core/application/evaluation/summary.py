@@ -1,4 +1,4 @@
-"""Strongly-typed model for RunTaskEvaluation.summary_json.
+"""Strongly-typed model for SampleTaskEvaluation.summary_json.
 
 This is the canonical schema for evaluation summary persistence.
 Both the write side (evaluate_task_run.py) and read side (runs.py)
@@ -52,7 +52,7 @@ class CriterionOutcomeEntry(BaseModel):
 
 
 class EvaluationSummary(BaseModel):
-    """Typed schema for RunTaskEvaluation.summary_json."""
+    """Typed schema for SampleTaskEvaluation.summary_json."""
 
     evaluator_name: str
     max_score: float = 1.0

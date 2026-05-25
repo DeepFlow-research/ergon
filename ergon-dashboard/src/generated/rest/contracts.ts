@@ -9,7 +9,7 @@ type JsonScalar =
   | Array<string | number | number | boolean | null>;
 
 const status = z.union([z.string(), z.null()]).optional();
-const RunSummaryDto = z
+const SampleSummaryDto = z
   .object({
     id: z.string().uuid(),
     name: z.string(),
@@ -53,7 +53,7 @@ const HTTPValidationError = z
   .object({ detail: z.array(ValidationError) })
   .partial()
   .passthrough();
-const RunTaskDto = z.object({
+const SampleTaskDto = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
@@ -68,7 +68,7 @@ const RunTaskDto = z.object({
   startedAt: z.union([z.string(), z.null()]).optional(),
   completedAt: z.union([z.string(), z.null()]).optional(),
 });
-const RunResourceDto = z.object({
+const SampleResourceDto = z.object({
   id: z.string(),
   taskId: z.string(),
   taskExecutionId: z.string(),
@@ -121,9 +121,9 @@ const RunEvaluationCriterionDto = z.object({
     .optional(),
   error: z.union([z.object({}).partial().passthrough(), z.null()]).optional(),
 });
-const RunTaskEvaluationDto = z.object({
+const SampleTaskEvaluationDto = z.object({
   id: z.string(),
-  runId: z.string(),
+  sampleId: z.string(),
   taskId: z.union([z.string(), z.null()]).optional(),
   evaluatorName: z.string(),
   aggregationRule: z.string(),
@@ -248,9 +248,9 @@ const ContextPartChunkLog = z
     policy_version: z.union([z.string(), z.null()]).optional(),
   })
   .passthrough();
-const RunContextEventDto = z.object({
+const SampleContextEventDto = z.object({
   id: z.string().uuid(),
-  runId: z.string().uuid(),
+  sampleId: z.string().uuid(),
   taskExecutionId: z.string().uuid(),
   taskId: z.string().uuid(),
   workerBindingKey: z.string(),
@@ -272,7 +272,7 @@ const RunCommunicationMessageDto = z.object({
   id: z.string(),
   threadId: z.string(),
   threadTopic: z.string(),
-  runId: z.string(),
+  sampleId: z.string(),
   taskId: z.union([z.string(), z.null()]).optional(),
   taskExecutionId: z.union([z.string(), z.null()]).optional(),
   fromAgentId: z.string(),
@@ -283,7 +283,7 @@ const RunCommunicationMessageDto = z.object({
 });
 const RunCommunicationThreadDto = z.object({
   id: z.string(),
-  runId: z.string(),
+  sampleId: z.string(),
   taskId: z.union([z.string(), z.null()]).optional(),
   topic: z.string(),
   summary: z.union([z.string(), z.null()]).optional(),
@@ -293,8 +293,8 @@ const RunCommunicationThreadDto = z.object({
   updatedAt: z.string().datetime({ offset: true }),
   messages: z.array(RunCommunicationMessageDto).optional(),
 });
-const RunSnapshotMetricsDto = z.object({
-  runId: z.string(),
+const SampleSnapshotMetricsDto = z.object({
+  sampleId: z.string(),
   status: z.string(),
   durationMs: z.union([z.number(), z.null()]).optional(),
   totalTasks: z.number().int().optional().default(0),
@@ -304,18 +304,18 @@ const RunSnapshotMetricsDto = z.object({
   totalCostUsd: z.union([z.number(), z.null()]).optional(),
   costObserved: z.boolean().optional().default(false),
 });
-const RunSnapshotDto = z.object({
+const SampleSnapshotDto = z.object({
   id: z.string(),
   definitionId: z.string(),
   name: z.string(),
   status: z.string(),
-  tasks: z.record(z.string(), RunTaskDto).optional(),
+  tasks: z.record(z.string(), SampleTaskDto).optional(),
   rootTaskId: z.string().optional().default(""),
-  resourcesByTask: z.record(z.string(), z.array(RunResourceDto)).optional(),
+  resourcesByTask: z.record(z.string(), z.array(SampleResourceDto)).optional(),
   executionsByTask: z.record(z.string(), z.array(RunExecutionAttemptDto)).optional(),
-  evaluationsByTask: z.record(z.string(), RunTaskEvaluationDto).optional(),
+  evaluationsByTask: z.record(z.string(), SampleTaskEvaluationDto).optional(),
   sandboxesByTask: z.record(z.string(), RunSandboxDto).optional(),
-  contextEventsByTask: z.record(z.string(), z.array(RunContextEventDto)).optional(),
+  contextEventsByTask: z.record(z.string(), z.array(SampleContextEventDto)).optional(),
   threads: z.array(RunCommunicationThreadDto).optional(),
   startedAt: z.union([z.string(), z.null()]).optional(),
   completedAt: z.union([z.string(), z.null()]).optional(),
@@ -327,7 +327,7 @@ const RunSnapshotDto = z.object({
   runningTasks: z.number().int().optional().default(0),
   cancelledTasks: z.number().int().optional().default(0),
   finalScore: z.union([z.number(), z.null()]).optional(),
-  metrics: z.union([RunSnapshotMetricsDto, z.null()]).optional(),
+  metrics: z.union([SampleSnapshotMetricsDto, z.null()]).optional(),
   error: z.union([z.string(), z.null()]).optional(),
 });
 const NodeAddedMutation = z
@@ -402,7 +402,7 @@ const AnnotationDeletedMutation = z
 const GraphMutationRecordDto = z
   .object({
     id: z.string().uuid(),
-    run_id: z.string().uuid(),
+    sample_id: z.string().uuid(),
     sequence: z.number().int(),
     mutation_type: z.enum([
       "node.added",
@@ -485,7 +485,7 @@ const ExperimentSummaryDto = z
   .passthrough();
 const ExperimentRunMetricsDto = z
   .object({
-    run_id: z.string().uuid(),
+    sample_id: z.string().uuid(),
     run_name: z.union([z.string(), z.null()]).optional(),
     status: z.string(),
     sample_label: z.union([z.string(), z.null()]).optional(),
@@ -506,7 +506,7 @@ const ExperimentRunMetricsDto = z
   .passthrough();
 const ExperimentRunRowDto = z
   .object({
-    run_id: z.string().uuid(),
+    sample_id: z.string().uuid(),
     definition_id: z.string().uuid(),
     benchmark_type: z.string(),
     instance_key: z.string(),
@@ -567,7 +567,7 @@ const run_experiment_experiments__definition_id__run_post_Body = z.union([
 const ExperimentRunResult = z
   .object({
     definition_id: z.string().uuid(),
-    run_ids: z.array(z.string().uuid()),
+    sample_ids: z.array(z.string().uuid()),
     definition_ids: z.array(z.string().uuid()).optional(),
   })
   .passthrough();
@@ -589,13 +589,13 @@ const RolloutStatus = z.enum([
 const SubmitResponse = z
   .object({
     batch_id: z.string().uuid(),
-    run_ids: z.array(z.string().uuid()),
+    sample_ids: z.array(z.string().uuid()),
     status: RolloutStatus.optional(),
   })
   .passthrough();
 const Trajectory = z
   .object({
-    run_id: z.string().uuid(),
+    sample_id: z.string().uuid(),
     agent_id: z.string(),
     prompt_ids: z.array(z.number().int()),
     completion_ids: z.array(z.number().int()),
@@ -606,7 +606,7 @@ const Trajectory = z
   })
   .passthrough();
 const EpisodeFailure = z
-  .object({ run_id: z.string().uuid(), error: z.string() })
+  .object({ sample_id: z.string().uuid(), error: z.string() })
   .passthrough();
 const PollResponse = z
   .object({
@@ -658,7 +658,7 @@ const TestExecutionDto = z
   .passthrough();
 const TestRunStateDto = z
   .object({
-    run_id: z.string().uuid(),
+    sample_id: z.string().uuid(),
     status: z.string(),
     graph_nodes: z.array(TestGraphNodeDto),
     mutations: z.array(TestGraphMutationDto),
@@ -672,7 +672,7 @@ const TestRunStateDto = z
   })
   .passthrough();
 const TestExperimentRunDto = z
-  .object({ run_id: z.string().uuid(), status: z.string() })
+  .object({ sample_id: z.string().uuid(), status: z.string() })
   .passthrough();
 const SeedRunRequest = z
   .object({
@@ -701,19 +701,19 @@ const SubmitExperimentRunsRequest = z
   })
   .passthrough();
 const SubmitExperimentRunsResponse = z
-  .object({ run_ids: z.array(z.string().uuid()) })
+  .object({ sample_ids: z.array(z.string().uuid()) })
   .passthrough();
 
 export const schemas = {
   status,
-  RunSummaryDto,
+  SampleSummaryDto,
   ValidationError,
   HTTPValidationError,
-  RunTaskDto,
-  RunResourceDto,
+  SampleTaskDto,
+  SampleResourceDto,
   RunExecutionAttemptDto,
   RunEvaluationCriterionDto,
-  RunTaskEvaluationDto,
+  SampleTaskEvaluationDto,
   RunSandboxCommandDto,
   RunSandboxDto,
   SystemPromptPart,
@@ -728,11 +728,11 @@ export const schemas = {
   TokenLogprob,
   ProviderTokenUsage,
   ContextPartChunkLog,
-  RunContextEventDto,
+  SampleContextEventDto,
   RunCommunicationMessageDto,
   RunCommunicationThreadDto,
-  RunSnapshotMetricsDto,
-  RunSnapshotDto,
+  SampleSnapshotMetricsDto,
+  SampleSnapshotDto,
   NodeAddedMutation,
   NodeRemovedMutation,
   NodeStatusChangedMutation,

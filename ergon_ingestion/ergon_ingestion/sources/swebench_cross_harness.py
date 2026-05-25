@@ -225,7 +225,7 @@ def _patch_payload_or_path(record: Record) -> tuple[str, Path | None]:
 
 
 def _source_run_id(record: Record, *, instance_id: str, harness: str) -> str:
-    explicit = record.get("source_run_id") or record.get("run_id") or record.get("id")
+    explicit = record.get("source_run_id") or record.get("sample_id") or record.get("id")
     if explicit is not None:
         return str(explicit)
     return f"swebench-cross-harness:{instance_id}:{harness}"

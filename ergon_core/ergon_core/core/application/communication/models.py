@@ -7,12 +7,12 @@ from pydantic import BaseModel, Field
 
 
 class CreateMessageRequest(BaseModel):
-    run_id: UUID
+    sample_id: UUID
     from_agent_id: str = Field(
-        description="ID of the sending agent, e.g. '{run_id}:worker'",
+        description="ID of the sending agent, e.g. '{sample_id}:worker'",
     )
     to_agent_id: str = Field(
-        description="ID of the receiving agent, e.g. '{run_id}:stakeholder'",
+        description="ID of the receiving agent, e.g. '{sample_id}:stakeholder'",
     )
     thread_topic: str
     thread_summary: str | None = Field(
@@ -26,7 +26,7 @@ class CreateMessageRequest(BaseModel):
 class MessageResponse(BaseModel):
     message_id: UUID
     thread_id: UUID
-    run_id: UUID
+    sample_id: UUID
     thread_topic: str
     from_agent_id: str
     to_agent_id: str
@@ -38,7 +38,7 @@ class MessageResponse(BaseModel):
 
 class ThreadSummary(BaseModel):
     thread_id: UUID
-    run_id: UUID
+    sample_id: UUID
     topic: str
     summary: str | None = None
     agent_a_id: str
@@ -50,7 +50,7 @@ class ThreadSummary(BaseModel):
 
 class ThreadWithMessages(BaseModel):
     thread_id: UUID
-    run_id: UUID
+    sample_id: UUID
     topic: str
     summary: str | None = None
     agent_a_id: str

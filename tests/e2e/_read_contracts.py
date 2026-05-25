@@ -8,7 +8,7 @@ from ergon_core.core.views.runs.models import RunSnapshotDto
 from ergon_core.core.views.runs.service import RunReadService
 
 
-def require_run_snapshot(run_id: UUID) -> RunSnapshotDto:
-    snapshot = RunReadService().build_run_snapshot(run_id)
-    assert snapshot is not None, f"RunReadService returned no snapshot for run {run_id}"
+def require_run_snapshot(sample_id: UUID) -> RunSnapshotDto:
+    snapshot = RunReadService().build_run_snapshot(sample_id)
+    assert snapshot is not None, f"RunReadService returned no snapshot for run {sample_id}"
     return snapshot

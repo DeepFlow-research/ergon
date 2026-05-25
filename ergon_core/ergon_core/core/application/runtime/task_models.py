@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 class CancelTaskCommand(BaseModel):
     """Command to cancel a subtask."""
 
-    run_id: RunId
+    sample_id: RunId
     task_id: NodeId
 
     model_config = {"frozen": True}
@@ -36,7 +36,7 @@ class CancelTaskResult(BaseModel):
 class RefineTaskCommand(BaseModel):
     """Command to update description on a pending sub-task."""
 
-    run_id: RunId
+    sample_id: RunId
     task_id: NodeId
     new_description: str = Field(min_length=1)
 
@@ -64,7 +64,7 @@ class RestartTaskCommand(BaseModel):
     ``restart_task`` to put the node back in the scheduling queue.
     """
 
-    run_id: RunId
+    sample_id: RunId
     task_id: NodeId
 
     model_config = {"frozen": True}
@@ -112,7 +112,7 @@ class SubtaskInfo(BaseModel):
 class CleanupResult(BaseModel):
     """Result of cleaning up a cancelled task execution."""
 
-    run_id: RunId
+    sample_id: RunId
     task_id: NodeId
     execution_id: UUID | None
     sandbox_id: str | None = None

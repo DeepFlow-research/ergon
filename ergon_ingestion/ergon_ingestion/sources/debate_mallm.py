@@ -235,7 +235,7 @@ def _source_run_id(record: Record, *, fallback_id: str) -> str:
         record.get("debate_id")
         or record.get("conversation_id")
         or record.get("source_run_id")
-        or record.get("run_id")
+        or record.get("sample_id")
     )
     return fallback_id if value is None else str(value)
 

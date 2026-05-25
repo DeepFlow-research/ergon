@@ -10,24 +10,24 @@ from uuid import UUID
 from sqlmodel import Session
 
 from ergon_core.core.application.ports import ResourceBlobWriter, SandboxFileReader
-from ergon_core.core.application.resources.models import RunResourceView
-from ergon_core.core.application.resources.repository import RunResourceRepository
+from ergon_core.core.application.resources.models import SampleResourceView
+from ergon_core.core.application.resources.repository import SampleResourceRepository
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.enums import RunResourceKind
+from ergon_core.core.persistence.shared.enums import SampleResourceKind
 
 SessionFactory: TypeAlias = Callable[[], AbstractContextManager[Session]]
 
 
-class RunResourcePublishService:
+class SampleResourcePublishService:
     """Owns resource append/dedup semantics for sandbox outputs."""
 
     def __init__(
         self,
         *,
-        repository: RunResourceRepository | None = None,
+        repository: SampleResourceRepository | None = None,
         session_factory: SessionFactory = get_session,
     ) -> None:
-        self._resource_repo = repository or RunResourceRepository()
+        self._resource_repo = repository or SampleResourceRepository()
         self._session_factory = session_factory
 
     async def publish_sandbox_files(
@@ -35,12 +35,12 @@ class RunResourcePublishService:
         *,
         reader: SandboxFileReader,
         blob_store: ResourceBlobWriter,
-        run_id: UUID,
+        sample_id: UUID,
         task_execution_id: UUID,
-        publish_dirs: tuple[tuple[str, RunResourceKind], ...],
-    ) -> list[RunResourceView]:
+        publish_dirs: tuple[tuple[str, SampleResourceKind], ...],
+    ) -> list[SampleResourceView]:
         """Publish changed files from configured sandbox dirs as run resources."""
-        created: list[RunResourceView] = []
+        created: list[SampleResourceView] = []
         for sandbox_dir, resource_kind in publish_dirs:
             entries = await reader.list_sandbox_dir(sandbox_dir)
             for entry in entries:
@@ -66,7 +66,7 @@ class RunResourcePublishService:
                 with self._session_factory() as session:
                     row = self._resource_repo.append(
                         session,
-                        run_id=run_id,
+                        sample_id=sample_id,
                         task_execution_id=task_execution_id,
                         kind=resource_kind.value,
                         name=entry_name,
@@ -79,7 +79,7 @@ class RunResourcePublishService:
                     )
                     session.commit()
                     session.refresh(row)
-                created.append(RunResourceView.from_row(row))
+                created.append(SampleResourceView.from_row(row))
 
         return created
 
@@ -87,13 +87,13 @@ class RunResourcePublishService:
         self,
         *,
         blob_store: ResourceBlobWriter,
-        run_id: UUID,
+        sample_id: UUID,
         task_execution_id: UUID,
-        kind: RunResourceKind,
+        kind: SampleResourceKind,
         name: str,
         content: str,
         mime_type: str = "text/plain",
-    ) -> RunResourceView | None:
+    ) -> SampleResourceView | None:
         """Publish an explicit value as a run resource, deduping by content hash."""
         content_bytes = content.encode("utf-8")
         content_hash = self._content_hash(content_bytes)
@@ -112,7 +112,7 @@ class RunResourcePublishService:
         with self._session_factory() as session:
             row = self._resource_repo.append(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_execution_id=task_execution_id,
                 kind=kind.value,
                 name=name,
@@ -124,7 +124,7 @@ class RunResourcePublishService:
             )
             session.commit()
             session.refresh(row)
-        return RunResourceView.from_row(row)
+        return SampleResourceView.from_row(row)
 
     @staticmethod
     def _coerce_bytes(content: bytes | str) -> bytes:

@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphMutation, SampleGraphNode
 from ergon_core.core.application.runtime.status import (
     CANCELLED,
     EDGE_PENDING,
@@ -19,7 +19,7 @@ from ergon_core.core.application.runtime.status import (
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.core.application.runtime.task_models import RestartTaskCommand
 from ergon_core.core.application.runtime.task_management import TaskManagementService
 from sqlmodel import select
@@ -59,7 +59,7 @@ async def test_completed_successor_is_cancelled_by_invalidation() -> None:
             target_task_id=node_b.task_id,
             status=EDGE_SATISFIED,
         )
-        run_id = run.id
+        sample_id = run.id
         defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
@@ -73,7 +73,7 @@ async def test_completed_successor_is_cancelled_by_invalidation() -> None:
             with get_session() as session:
                 result = await svc.restart_task(
                     session,
-                    RestartTaskCommand(run_id=run_id, task_id=node_a_id),
+                    RestartTaskCommand(sample_id=sample_id, task_id=node_a_id),
                 )
 
         assert node_b_id in result.invalidated_task_ids, (
@@ -85,11 +85,11 @@ async def test_completed_successor_is_cancelled_by_invalidation() -> None:
             assert get_node_status(session, node_b_id) == CANCELLED, (
                 "B must be CANCELLED — its output is stale after A was restarted"
             )
-            assert get_edge_status(session, run_id, node_a_id, node_b_id) == EDGE_PENDING, (
+            assert get_edge_status(session, sample_id, node_a_id, node_b_id) == EDGE_PENDING, (
                 "Edge A→B must be reset to EDGE_PENDING so re-run of A can re-satisfy it"
             )
     finally:
-        cleanup_run(run_id, defn_id)
+        cleanup_run(sample_id, defn_id)
 
 
 @pytest.mark.asyncio
@@ -119,7 +119,7 @@ async def test_pending_successor_is_cancelled_but_cascade_stops_there() -> None:
             target_task_id=node_c.task_id,
             status=EDGE_SATISFIED,
         )
-        run_id = run.id
+        sample_id = run.id
         defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
@@ -134,7 +134,7 @@ async def test_pending_successor_is_cancelled_but_cascade_stops_there() -> None:
             with get_session() as session:
                 result = await svc.restart_task(
                     session,
-                    RestartTaskCommand(run_id=run_id, task_id=node_a_id),
+                    RestartTaskCommand(sample_id=sample_id, task_id=node_a_id),
                 )
 
         assert node_b_id in result.invalidated_task_ids, "B must be invalidated"
@@ -150,7 +150,7 @@ async def test_pending_successor_is_cancelled_but_cascade_stops_there() -> None:
                 "C must remain COMPLETED — cascade does not recurse through non-terminal B"
             )
     finally:
-        cleanup_run(run_id, defn_id)
+        cleanup_run(sample_id, defn_id)
 
 
 @pytest.mark.asyncio
@@ -181,7 +181,7 @@ async def test_failed_and_cancelled_successors_are_skipped() -> None:
             target_task_id=node_c.task_id,
             status=EDGE_SATISFIED,
         )
-        run_id = run.id
+        sample_id = run.id
         defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
@@ -196,7 +196,7 @@ async def test_failed_and_cancelled_successors_are_skipped() -> None:
             with get_session() as session:
                 result = await svc.restart_task(
                     session,
-                    RestartTaskCommand(run_id=run_id, task_id=node_a_id),
+                    RestartTaskCommand(sample_id=sample_id, task_id=node_a_id),
                 )
 
         assert result.invalidated_task_ids == [], (
@@ -211,14 +211,14 @@ async def test_failed_and_cancelled_successors_are_skipped() -> None:
             assert get_node_status(session, node_c_id) == CANCELLED, (
                 "CANCELLED successor must not be overwritten"
             )
-            assert get_edge_status(session, run_id, node_a_id, node_b_id) == EDGE_PENDING, (
+            assert get_edge_status(session, sample_id, node_a_id, node_b_id) == EDGE_PENDING, (
                 "A→B edge must be reset to EDGE_PENDING so B can be retried later"
             )
-            assert get_edge_status(session, run_id, node_a_id, node_c_id) == EDGE_PENDING, (
+            assert get_edge_status(session, sample_id, node_a_id, node_c_id) == EDGE_PENDING, (
                 "A→C edge must be reset to EDGE_PENDING so C can be retried later"
             )
     finally:
-        cleanup_run(run_id, defn_id)
+        cleanup_run(sample_id, defn_id)
 
 
 @pytest.mark.asyncio
@@ -248,7 +248,7 @@ async def test_cascade_invalidation_recurses_through_completed_chain() -> None:
             target_task_id=node_c.task_id,
             status=EDGE_SATISFIED,
         )
-        run_id = run.id
+        sample_id = run.id
         defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
@@ -263,7 +263,7 @@ async def test_cascade_invalidation_recurses_through_completed_chain() -> None:
             with get_session() as session:
                 result = await svc.restart_task(
                     session,
-                    RestartTaskCommand(run_id=run_id, task_id=node_a_id),
+                    RestartTaskCommand(sample_id=sample_id, task_id=node_a_id),
                 )
 
         assert set(result.invalidated_task_ids) == {node_b_id, node_c_id}, (
@@ -279,9 +279,9 @@ async def test_cascade_invalidation_recurses_through_completed_chain() -> None:
             assert get_node_status(session, node_c_id) == CANCELLED, (
                 "C must be CANCELLED (COMPLETED via recursion through B)"
             )
-            assert get_edge_status(session, run_id, node_a_id, node_b_id) == EDGE_PENDING
-            assert get_edge_status(session, run_id, node_b_id, node_c_id) == EDGE_PENDING, (
+            assert get_edge_status(session, sample_id, node_a_id, node_b_id) == EDGE_PENDING
+            assert get_edge_status(session, sample_id, node_b_id, node_c_id) == EDGE_PENDING, (
                 "B→C edge must also be reset to EDGE_PENDING by the cascade"
             )
     finally:
-        cleanup_run(run_id, defn_id)
+        cleanup_run(sample_id, defn_id)

@@ -15,7 +15,7 @@ class TraceContext(BaseModel):
     trace_id: int
     span_id: int
     parent_span_id: int | None = None
-    run_id: UUID | None = None
+    sample_id: UUID | None = None
     task_id: UUID | None = None
     execution_id: UUID | None = None
     evaluator_id: UUID | None = None
@@ -59,7 +59,7 @@ class TraceSink(Protocol):
         parent: TraceContext,
         *,
         span_key: str,
-        run_id: UUID | None = None,
+        sample_id: UUID | None = None,
         task_id: UUID | None = None,
         execution_id: UUID | None = None,
         evaluator_id: UUID | None = None,

@@ -3,20 +3,20 @@ import { z } from "zod";
 import { schemas } from "@/generated/rest/contracts";
 
 export const BenchmarkNameSchema = z.string();
-export const RunStatusSchema = z.enum(["pending", "executing", "evaluating", "completed", "failed", "cancelled"]);
+export const SampleStatusSchema = z.enum(["pending", "executing", "evaluating", "completed", "failed", "cancelled"]);
 export const TaskStatusSchema = z.string();
 
 export const ExperimentDetailSchema = schemas.ExperimentDetailDto;
 
 export const RunExecutionAttemptSchema = schemas.RunExecutionAttemptDto;
-export const RunResourceSchema = schemas.RunResourceDto;
+export const SampleResourceSchema = schemas.SampleResourceDto;
 export const RunSandboxCommandSchema = schemas.RunSandboxCommandDto;
 export const RunSandboxSchema = schemas.RunSandboxDto;
-export const RunTaskSchema = schemas.RunTaskDto;
+export const SampleTaskSchema = schemas.SampleTaskDto;
 export const RunCommunicationMessageSchema = schemas.RunCommunicationMessageDto;
 export const RunCommunicationThreadSchema = schemas.RunCommunicationThreadDto;
-export const RunTaskEvaluationSchema = schemas.RunTaskEvaluationDto;
-export const RunSnapshotSchema = schemas.RunSnapshotDto;
+export const SampleTaskEvaluationSchema = schemas.SampleTaskEvaluationDto;
+export const RunSnapshotSchema = schemas.SampleSnapshotDto;
 
 type KnownKeys<T> = {
   [K in keyof T as string extends K ? never : number extends K ? never : symbol extends K
@@ -25,21 +25,21 @@ type KnownKeys<T> = {
 };
 
 export type BenchmarkName = z.infer<typeof BenchmarkNameSchema>;
-export type RunLifecycleStatus = z.infer<typeof RunStatusSchema>;
+export type RunLifecycleStatus = z.infer<typeof SampleStatusSchema>;
 export type TaskStatusValue = z.infer<typeof TaskStatusSchema>;
 
 type RawExperimentDetail = KnownKeys<z.infer<typeof ExperimentDetailSchema>>;
 type RawExperimentRunRow = KnownKeys<NonNullable<RawExperimentDetail["runs"]>[number]>;
 type RawExperimentSummary = KnownKeys<RawExperimentDetail["experiment"]>;
 type RawRunExecutionAttempt = KnownKeys<z.infer<typeof RunExecutionAttemptSchema>>;
-type RawRunResource = KnownKeys<z.infer<typeof RunResourceSchema>>;
+type RawSampleResource = KnownKeys<z.infer<typeof SampleResourceSchema>>;
 type RawRunSandboxCommand = KnownKeys<z.infer<typeof RunSandboxCommandSchema>>;
 type RawRunSandbox = KnownKeys<z.infer<typeof RunSandboxSchema>>;
-type RawRunTask = KnownKeys<z.infer<typeof RunTaskSchema>>;
+type RawSampleTask = KnownKeys<z.infer<typeof SampleTaskSchema>>;
 type RawRunCommunicationMessage = KnownKeys<z.infer<typeof RunCommunicationMessageSchema>>;
 type RawRunCommunicationThread = KnownKeys<z.infer<typeof RunCommunicationThreadSchema>>;
-type RawRunTaskEvaluation = KnownKeys<z.infer<typeof RunTaskEvaluationSchema>>;
-type RawRunEvaluationCriterion = KnownKeys<NonNullable<RawRunTaskEvaluation["criterionResults"]>[number]>;
+type RawSampleTaskEvaluation = KnownKeys<z.infer<typeof SampleTaskEvaluationSchema>>;
+type RawRunEvaluationCriterion = KnownKeys<NonNullable<RawSampleTaskEvaluation["criterionResults"]>[number]>;
 type RawRunSnapshot = KnownKeys<z.infer<typeof RunSnapshotSchema>>;
 type RawRunSnapshotMetrics = KnownKeys<NonNullable<RawRunSnapshot["metrics"]>>;
 
@@ -58,7 +58,7 @@ export interface ExperimentStatusCounts {
 }
 
 export interface ExperimentRunMetrics {
-  run_id: string;
+  sample_id: string;
   run_name?: string | null;
   status: string;
   sample_label?: string | null;
@@ -164,7 +164,7 @@ export interface RunExecutionAttempt
   startedAt: string | null;
 }
 
-export type RunResource = RawRunResource;
+export type SampleResource = RawSampleResource;
 
 export interface RunSandboxCommand
   extends Omit<RawRunSandboxCommand, "durationMs" | "exitCode" | "stderr" | "stdout"> {
@@ -185,13 +185,13 @@ export interface RunSandbox
 /**
  * Per-task row in {@link RunSnapshot.tasks} (camelCase on the wire).
  *
- * Semantics mirror the backend `RunTaskDto` field descriptions:
+ * Semantics mirror the backend `SampleTaskDto` field descriptions:
  * - `startedAt`: null only while the task has not actually started yet (e.g. pending / ready).
  * - `completedAt`: null until a terminal outcome; may be null together with `startedAt` if not started.
  */
-export interface RunTask
+export interface SampleTask
   extends Omit<
-    RawRunTask,
+    RawSampleTask,
     "assignedWorkerId" | "assignedWorkerSlug" | "childIds" | "completedAt" | "dependsOnIds" | "parentId" | "startedAt"
   > {
   assignedWorkerId: string | null;
@@ -222,8 +222,8 @@ export interface RunEvaluationCriterion
   evaluatedResourceIds: string[];
 }
 
-export interface RunTaskEvaluation
-  extends Omit<RawRunTaskEvaluation, "criterionResults" | "failedGate" | "taskId"> {
+export interface SampleTaskEvaluation
+  extends Omit<RawSampleTaskEvaluation, "criterionResults" | "failedGate" | "taskId"> {
   criterionResults: RunEvaluationCriterion[];
   failedGate: string | null;
   taskId: string | null;
@@ -247,13 +247,13 @@ export interface RunSnapshot
   completedAt: string | null;
   durationSeconds: number | null;
   error: string | null;
-  evaluationsByTask: Record<string, RunTaskEvaluation>;
+  evaluationsByTask: Record<string, SampleTaskEvaluation>;
   executionsByTask: Record<string, RunExecutionAttempt[]>;
   finalScore: number | null;
-  resourcesByTask: Record<string, RunResource[]>;
+  resourcesByTask: Record<string, SampleResource[]>;
   sandboxesByTask: Record<string, RunSandbox>;
   startedAt: string;
-  tasks: Record<string, RunTask>;
+  tasks: Record<string, SampleTask>;
   threads: RunCommunicationThread[];
 }
 
@@ -291,7 +291,7 @@ function normalizeRunSandbox(sandbox: RawRunSandbox): RunSandbox {
   };
 }
 
-function normalizeRunTask(task: RawRunTask): RunTask {
+function normalizeSampleTask(task: RawSampleTask): SampleTask {
   return {
     ...task,
     assignedWorkerId: task.assignedWorkerId ?? null,
@@ -320,7 +320,7 @@ function normalizeRunCommunicationThread(thread: RawRunCommunicationThread): Run
   };
 }
 
-function normalizeRunTaskEvaluation(evaluation: RawRunTaskEvaluation): RunTaskEvaluation {
+function normalizeSampleTaskEvaluation(evaluation: RawSampleTaskEvaluation): SampleTaskEvaluation {
   return {
     ...evaluation,
     criterionResults: (evaluation.criterionResults ?? []).map((criterion) => ({
@@ -389,8 +389,8 @@ export function parseRunCommunicationThread(input: unknown): RunCommunicationThr
   return normalizeRunCommunicationThread(RunCommunicationThreadSchema.parse(input));
 }
 
-export function parseRunTaskEvaluation(input: unknown): RunTaskEvaluation {
-  return normalizeRunTaskEvaluation(RunTaskEvaluationSchema.parse(input));
+export function parseSampleTaskEvaluation(input: unknown): SampleTaskEvaluation {
+  return normalizeSampleTaskEvaluation(SampleTaskEvaluationSchema.parse(input));
 }
 
 export function parseRunSnapshot(input: unknown): RunSnapshot {
@@ -403,7 +403,7 @@ export function parseRunSnapshot(input: unknown): RunSnapshot {
     evaluationsByTask: Object.fromEntries(
       Object.entries(snapshot.evaluationsByTask ?? {}).map(([taskId, evaluation]) => [
         taskId,
-        normalizeRunTaskEvaluation(evaluation),
+        normalizeSampleTaskEvaluation(evaluation),
       ]),
     ),
     executionsByTask: Object.fromEntries(
@@ -422,7 +422,7 @@ export function parseRunSnapshot(input: unknown): RunSnapshot {
     ),
     startedAt: snapshot.startedAt ?? new Date(0).toISOString(),
     tasks: Object.fromEntries(
-      Object.entries(snapshot.tasks ?? {}).map(([taskId, task]) => [taskId, normalizeRunTask(task)]),
+      Object.entries(snapshot.tasks ?? {}).map(([taskId, task]) => [taskId, normalizeSampleTask(task)]),
     ),
     threads: (snapshot.threads ?? []).map(normalizeRunCommunicationThread),
   };

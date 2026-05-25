@@ -11,11 +11,11 @@ import {
   CommunicationThreadState,
   ContextEventState,
   ExperimentDetail,
-  SerializedWorkflowRunState,
+  SerializedSampleWorkspaceState,
   TaskEvaluationState,
   TaskStatus,
 } from "@/lib/types";
-import { deserializeRunState, serializeRunState } from "@/lib/runState";
+import { deserializeRunState, serializeRunState } from "@/lib/sampleState";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -30,7 +30,7 @@ declare global {
 
 export interface DashboardHarnessSeedPayload {
   experimentDetails?: Record<string, ExperimentDetail>;
-  runs?: SerializedWorkflowRunState[];
+  runs?: SerializedSampleWorkspaceState[];
   mutations?: Record<string, unknown[]>;
 }
 
@@ -79,22 +79,22 @@ export function getHarnessExperiment(definitionId: string): ExperimentDetail | n
   return getHarnessState().experimentDetails[definitionId] ?? null;
 }
 
-export function getHarnessRun(runId: string): SerializedWorkflowRunState | null {
+export function getHarnessRun(sampleId: string): SerializedSampleWorkspaceState | null {
   requireHarnessEnabled();
-  if (!getHarnessState().seededRunIds.has(runId)) {
+  if (!getHarnessState().seededRunIds.has(sampleId)) {
     return null;
   }
-  const run = store.getRun(runId);
+  const run = store.getRun(sampleId);
   return run ? serializeRunState(run) : null;
 }
 
-export function getHarnessRunMutations(runId: string): unknown[] | null {
+export function getHarnessRunMutations(sampleId: string): unknown[] | null {
   requireHarnessEnabled();
-  return getHarnessState().mutationsByRun[runId] ?? null;
+  return getHarnessState().mutationsByRun[sampleId] ?? null;
 }
 
 export function emitHarnessRunCompleted(data: {
-  runId: string;
+  sampleId: string;
   status: "completed" | "failed";
   durationSeconds: number;
   finalScore: number | null;
@@ -102,7 +102,7 @@ export function emitHarnessRunCompleted(data: {
 }): void {
   requireHarnessEnabled();
   store.completeRun(
-    data.runId,
+    data.sampleId,
     data.status,
     new Date().toISOString(),
     data.durationSeconds,
@@ -110,7 +110,7 @@ export function emitHarnessRunCompleted(data: {
     data.error,
   );
   broadcastRunCompleted(
-    data.runId,
+    data.sampleId,
     data.status,
     new Date().toISOString(),
     data.durationSeconds,
@@ -121,7 +121,7 @@ export function emitHarnessRunCompleted(data: {
 }
 
 export function emitHarnessTaskStatus(data: {
-  runId: string;
+  sampleId: string;
   taskId: string;
   status: TaskStatus;
   assignedWorkerId?: string | null;
@@ -129,7 +129,7 @@ export function emitHarnessTaskStatus(data: {
 }): void {
   requireHarnessEnabled();
   store.updateTaskStatus(
-    data.runId,
+    data.sampleId,
     data.taskId,
     data.status,
     new Date().toISOString(),
@@ -137,7 +137,7 @@ export function emitHarnessTaskStatus(data: {
     data.assignedWorkerName,
   );
   broadcastTaskStatus(
-    data.runId,
+    data.sampleId,
     data.taskId,
     data.status,
     new Date().toISOString(),
@@ -146,14 +146,14 @@ export function emitHarnessTaskStatus(data: {
   );
 }
 
-export function emitHarnessThreadMessage(runId: string, thread: CommunicationThreadState): void {
+export function emitHarnessThreadMessage(sampleId: string, thread: CommunicationThreadState): void {
   requireHarnessEnabled();
-  store.upsertThread(runId, thread);
+  store.upsertThread(sampleId, thread);
   const messages = thread.messages ?? [];
   const message = messages[messages.length - 1];
   if (message) {
     broadcastThreadMessage({
-      run_id: runId,
+      sample_id: sampleId,
       thread,
       message,
     });
@@ -161,24 +161,24 @@ export function emitHarnessThreadMessage(runId: string, thread: CommunicationThr
 }
 
 export function emitHarnessContextEvent(
-  runId: string,
+  sampleId: string,
   taskId: string,
   event: ContextEventState,
 ): void {
   requireHarnessEnabled();
-  store.addContextEvent(runId, taskId, event);
-  broadcastContextEvent(runId, taskId, event);
+  store.addContextEvent(sampleId, taskId, event);
+  broadcastContextEvent(sampleId, taskId, event);
 }
 
 export function emitHarnessTaskEvaluation(
-  runId: string,
+  sampleId: string,
   taskId: string | null,
   evaluation: TaskEvaluationState,
 ): void {
   requireHarnessEnabled();
-  store.upsertEvaluation(runId, taskId, evaluation);
+  store.upsertEvaluation(sampleId, taskId, evaluation);
   broadcastTaskEvaluation({
-    run_id: runId,
+    sample_id: sampleId,
     task_id: taskId,
     evaluation,
   });

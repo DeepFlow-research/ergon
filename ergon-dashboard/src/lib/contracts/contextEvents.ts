@@ -1,6 +1,6 @@
 // ergon-dashboard/src/lib/contracts/contextEvents.ts
 /**
- * TypeScript types for run_context_events — mirrors Python ContextEventPayload.
+ * TypeScript types for sample_context_events — mirrors Python ContextEventPayload.
  * Must stay in sync with ergon_core/ergon_core/core/persistence/context/event_payloads.py
  */
 
@@ -63,7 +63,7 @@ export type ContextEventPayload =
 
 export interface ContextEventState {
   id: string;
-  runId: string;
+  sampleId: string;
   taskExecutionId: string;
   taskId: string;
   workerBindingKey: string;

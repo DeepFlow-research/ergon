@@ -3,21 +3,21 @@
 from uuid import UUID
 
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphMutation, SampleGraphNode
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from sqlmodel import select
 
 
-def cleanup_run(run_id: UUID, defn_id: UUID) -> None:
+def cleanup_run(sample_id: UUID, defn_id: UUID) -> None:
     with get_session() as session:
         for mut in session.exec(
-            select(RunGraphMutation).where(RunGraphMutation.run_id == run_id)
+            select(SampleGraphMutation).where(SampleGraphMutation.sample_id == sample_id)
         ).all():
             session.delete(mut)
-        for edge in session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all():
+        for edge in session.exec(select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)).all():
             session.delete(edge)
-        nodes = list(session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all())
+        nodes = list(session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all())
         remaining = {node.task_id: node for node in nodes}
         while remaining:
             parent_ids = {
@@ -30,7 +30,7 @@ def cleanup_run(run_id: UUID, defn_id: UUID) -> None:
                 session.delete(node)
                 remaining.pop(node.task_id)
             session.flush()
-        run_row = session.get(RunRecord, run_id)
+        run_row = session.get(SampleRecord, sample_id)
         if run_row is not None:
             session.delete(run_row)
         defn_row = session.get(ExperimentDefinition, defn_id)
@@ -39,12 +39,12 @@ def cleanup_run(run_id: UUID, defn_id: UUID) -> None:
         session.commit()
 
 
-def get_edge_status(session, run_id: UUID, source_id: UUID, target_id: UUID) -> str:  # type: ignore[no-untyped-def]
+def get_edge_status(session, sample_id: UUID, source_id: UUID, target_id: UUID) -> str:  # type: ignore[no-untyped-def]
     edge = session.exec(
-        select(RunGraphEdge).where(
-            RunGraphEdge.run_id == run_id,
-            RunGraphEdge.source_task_id == source_id,
-            RunGraphEdge.target_task_id == target_id,
+        select(SampleGraphEdge).where(
+            SampleGraphEdge.sample_id == sample_id,
+            SampleGraphEdge.source_task_id == source_id,
+            SampleGraphEdge.target_task_id == target_id,
         )
     ).first()
     assert edge is not None, f"No edge from {source_id} to {target_id}"

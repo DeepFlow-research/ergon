@@ -9,7 +9,7 @@ import logging
 from uuid import UUID
 
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
-from ergon_core.core.persistence.telemetry.models import RunTaskExecution
+from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
 from ergon_core.core.application.runtime.task_models import CleanupResult
 from sqlmodel import Session, select
 
@@ -28,14 +28,14 @@ class TaskCleanupService:
         self,
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
         execution_id: UUID | None,
     ) -> CleanupResult:
         """Mark execution CANCELLED and release resources. Idempotent."""
         if execution_id is None:
             return CleanupResult(
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=task_id,
                 execution_id=None,
                 sandbox_id=None,
@@ -55,7 +55,7 @@ class TaskCleanupService:
             sandbox_id,
         )
         return CleanupResult(
-            run_id=run_id,
+            sample_id=sample_id,
             task_id=task_id,
             execution_id=execution_id,
             sandbox_id=sandbox_id,
@@ -63,12 +63,12 @@ class TaskCleanupService:
             execution_row_updated=execution_updated,
         )
 
-    def _execution(self, session: Session, execution_id: UUID) -> RunTaskExecution | None:
+    def _execution(self, session: Session, execution_id: UUID) -> SampleTaskAttempt | None:
         return session.exec(
-            select(RunTaskExecution).where(RunTaskExecution.id == execution_id)
+            select(SampleTaskAttempt).where(SampleTaskAttempt.id == execution_id)
         ).first()
 
-    def _mark_execution_cancelled(self, session: Session, exe: RunTaskExecution | None) -> bool:
+    def _mark_execution_cancelled(self, session: Session, exe: SampleTaskAttempt | None) -> bool:
         """Idempotent: skip if already terminal."""
         if exe is None or exe.status in {
             TaskExecutionStatus.COMPLETED,

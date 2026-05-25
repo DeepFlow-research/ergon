@@ -19,14 +19,14 @@ logger = logging.getLogger(__name__)
 
 async def run_sandbox_setup_job(ctx: Any, payload: SandboxSetupRequest) -> SandboxReadyResult:
     """Create and configure a sandbox for task execution."""
-    run_id = payload.run_id
+    sample_id = payload.sample_id
     task_id = payload.task_id
     benchmark_type = payload.benchmark_type
     span_start = datetime.now(UTC)
 
     logger.info(
-        "sandbox-setup run_id=%s task_id=%s benchmark=%s",
-        run_id,
+        "sandbox-setup sample_id=%s task_id=%s benchmark=%s",
+        sample_id,
         task_id,
         benchmark_type,
     )
@@ -35,7 +35,7 @@ async def run_sandbox_setup_job(ctx: Any, payload: SandboxSetupRequest) -> Sandb
     with get_session() as session:
         view = await task_execution.load_task_view(
             session,
-            run_id=run_id,
+            sample_id=sample_id,
             task_id=task_id,
         )
 
@@ -48,11 +48,11 @@ async def run_sandbox_setup_job(ctx: Any, payload: SandboxSetupRequest) -> Sandb
     get_trace_sink().emit_span(
         CompletedSpan(
             name="sandbox.setup",
-            context=sandbox_setup_context(run_id, task_id),
+            context=sandbox_setup_context(sample_id, task_id),
             start_time=span_start,
             end_time=datetime.now(UTC),
             attributes={
-                "run_id": str(run_id),
+                "sample_id": str(sample_id),
                 "task_id": str(task_id),
                 "benchmark_type": benchmark_type,
                 "sandbox_id": result.sandbox_id,

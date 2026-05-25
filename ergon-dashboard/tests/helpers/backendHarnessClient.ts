@@ -10,7 +10,7 @@
  */
 
 export interface BackendRunState {
-  run_id: string;
+  sample_id: string;
   status: "completed" | "failed" | "cancelled" | "in_progress" | string;
   graph_nodes: {
     id: string;
@@ -44,16 +44,16 @@ export interface BackendRunState {
 }
 
 export interface BackendExperimentRun {
-  run_id: string;
+  sample_id: string;
   status: string;
 }
 
 export class BackendHarnessClient {
   constructor(private readonly baseUrl: string) {}
 
-  async getRunState(runId: string): Promise<BackendRunState> {
+  async getRunState(sampleId: string): Promise<BackendRunState> {
     const r = await fetch(
-      `${this.baseUrl}/api/__danger__/test-harness/read/run/${runId}/state`,
+      `${this.baseUrl}/api/__danger__/test-harness/read/samples/${sampleId}/state`,
     );
     if (!r.ok) {
       throw new Error(`harness ${r.status}: ${await r.text()}`);
@@ -63,7 +63,7 @@ export class BackendHarnessClient {
 
   async getExperimentRuns(experiment: string): Promise<BackendExperimentRun[]> {
     const r = await fetch(
-      `${this.baseUrl}/api/__danger__/test-harness/read/experiment/${encodeURIComponent(experiment)}/runs`,
+      `${this.baseUrl}/api/__danger__/test-harness/read/experiment/${encodeURIComponent(experiment)}/samples`,
     );
     if (!r.ok) {
       throw new Error(`harness ${r.status}: ${await r.text()}`);

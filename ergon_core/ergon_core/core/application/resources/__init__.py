@@ -1,5 +1,5 @@
-from ergon_core.core.application.resources.errors import RunResourceNotFoundError
-from ergon_core.core.application.resources.models import RunResourceView
-from ergon_core.core.application.resources.service import RunResourceReadService
+from ergon_core.core.application.resources.errors import SampleResourceNotFoundError
+from ergon_core.core.application.resources.models import SampleResourceView
+from ergon_core.core.application.resources.service import SampleResourceReadService
 
-__all__ = ["RunResourceNotFoundError", "RunResourceReadService", "RunResourceView"]
+__all__ = ["SampleResourceNotFoundError", "SampleResourceReadService", "SampleResourceView"]

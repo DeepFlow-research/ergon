@@ -1,7 +1,7 @@
 from uuid import uuid4
 
-from ergon_core.core.persistence.context.models import RunContextEvent
-from ergon_core.core.views.runs.models import RunContextEventDto
+from ergon_core.core.persistence.context.models import SampleContextEvent
+from ergon_core.core.views.samples.models import SampleContextEventDto
 from ergon_core.core.views.dashboard_events.context_events import (
     context_event_to_dashboard_event,
 )
@@ -18,7 +18,7 @@ def test_rest_and_dashboard_context_events_share_typed_payload_shape() -> None:
     )
     common = {
         "id": uuid4(),
-        "run_id": uuid4(),
+        "sample_id": uuid4(),
         "task_execution_id": uuid4(),
         "task_id": uuid4(),
         "worker_binding_key": "worker",
@@ -30,7 +30,7 @@ def test_rest_and_dashboard_context_events_share_typed_payload_shape() -> None:
         "completed_at": None,
     }
 
-    rest = RunContextEventDto.model_validate(common)
+    rest = SampleContextEventDto.model_validate(common)
     dashboard = DashboardContextEventEvent.model_validate(common)
 
     assert rest.payload == dashboard.payload
@@ -40,7 +40,7 @@ def test_rest_and_dashboard_context_events_share_typed_payload_shape() -> None:
 def test_dashboard_context_event_serializes_canonical_task_id_field() -> None:
     event = DashboardContextEventEvent(
         id=uuid4(),
-        run_id=uuid4(),
+        sample_id=uuid4(),
         task_execution_id=uuid4(),
         task_id=uuid4(),
         worker_binding_key="worker",
@@ -64,7 +64,7 @@ def test_dashboard_context_event_serializes_canonical_task_id_field() -> None:
 
 
 def test_context_event_row_mapper_uses_execution_task_map() -> None:
-    run_id = uuid4()
+    sample_id = uuid4()
     execution_id = uuid4()
     task_id = uuid4()
     payload = ContextPartChunkLog(
@@ -73,9 +73,9 @@ def test_context_event_row_mapper_uses_execution_task_map() -> None:
         worker_binding_key="worker",
         turn_id="turn-1",
     )
-    row = RunContextEvent(
+    row = SampleContextEvent(
         id=uuid4(),
-        run_id=run_id,
+        sample_id=sample_id,
         task_execution_id=execution_id,
         worker_binding_key="worker",
         sequence=1,
@@ -90,7 +90,7 @@ def test_context_event_row_mapper_uses_execution_task_map() -> None:
 
     assert event == DashboardContextEventEvent(
         id=row.id,
-        run_id=run_id,
+        sample_id=sample_id,
         task_execution_id=execution_id,
         task_id=task_id,
         worker_binding_key="worker",
@@ -104,9 +104,9 @@ def test_context_event_row_mapper_uses_execution_task_map() -> None:
 
 
 def test_context_event_row_mapper_returns_none_for_unknown_execution() -> None:
-    row = RunContextEvent(
+    row = SampleContextEvent(
         id=uuid4(),
-        run_id=uuid4(),
+        sample_id=uuid4(),
         task_execution_id=uuid4(),
         worker_binding_key="worker",
         sequence=1,

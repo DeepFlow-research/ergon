@@ -56,7 +56,7 @@ def make_workflow_cli_tool(
         maybe_output = execute_command(
             command,
             context=WorkflowCommandContext(
-                run_id=worker_context.run_id,
+                sample_id=worker_context.sample_id,
                 task_id=worker_context.task_id,
                 execution_id=worker_context.execution_id,
                 sandbox_task_key=sandbox_task_key,

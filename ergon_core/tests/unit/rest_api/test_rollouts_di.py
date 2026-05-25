@@ -8,12 +8,12 @@ from fastapi.testclient import TestClient
 class _FakeRolloutService:
     def __init__(self) -> None:
         self.batch_id = uuid4()
-        self.run_id = uuid4()
+        self.sample_id = uuid4()
 
     def submit(self, _request: object) -> dict[str, object]:
         return {
             "batch_id": self.batch_id,
-            "run_ids": [self.run_id],
+            "sample_ids": [self.sample_id],
             "status": "pending",
         }
 

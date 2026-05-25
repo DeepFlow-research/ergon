@@ -51,7 +51,7 @@ def test_sharded_export_writes_parquet_manifest_state_and_resources(tmp_path: Pa
     assert set(run_rows[0]) >= {
         "dataset",
         "batch",
-        "run_id",
+        "sample_id",
         "sample_id",
         "instance_key",
         "observed_fields_json",

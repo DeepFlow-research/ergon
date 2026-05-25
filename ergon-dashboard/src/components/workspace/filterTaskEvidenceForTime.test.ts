@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import fixture from "../../../tests/fixtures/mas-runs/concurrent-mas-run.json";
-import { deserializeRunState } from "@/lib/runState";
+import fixture from "../../../tests/fixtures/mas-samples/concurrent-mas-run.json";
+import { deserializeRunState } from "@/lib/sampleState";
 import { filterTaskEvidenceForTime } from "./filterTaskEvidenceForTime";
 
 const searchTaskId = "10000000-0000-4000-8000-000000000002";

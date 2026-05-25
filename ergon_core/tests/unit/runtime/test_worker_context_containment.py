@@ -4,7 +4,7 @@ Covers three scenarios that exercise the facade methods landed in
 PR 9 Tasks 2-3:
 
 - ``spawn_task`` round-trips through ``TaskManagementService.spawn_dynamic_task``
-  and writes only to ``run_graph_nodes`` (never ``experiment_definition_tasks``).
+  and writes only to ``sample_graph_nodes`` (never ``experiment_definition_tasks``).
 - The spawned dynamic node inflates correctly through
   ``RuntimeGraphRepository.node`` (is_dynamic=True + correct task_slug).
 - ``cancel_task`` enforces containment via ``_assert_descendant``,
@@ -26,14 +26,14 @@ from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
 from ergon_core.api.errors import ContainmentViolation
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import SpawnedTaskHandle
-from ergon_core.core.application.runtime.models import RunGraphNodeView
+from ergon_core.core.application.runtime.models import SampleGraphNodeView
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from ergon_core.core.application.runtime import inspection as inspection_module
 from ergon_core.core.application.runtime import management as management_module
 from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
 from ergon_core.core.application.runtime.task_management import TaskManagementService
 from ergon_core.core.persistence.definitions.models import ExperimentDefinitionTask
-from ergon_core.core.persistence.graph.models import RunGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -75,14 +75,14 @@ def _make_session() -> Session:
 def _seed_node(
     session: Session,
     *,
-    run_id: UUID,
+    sample_id: UUID,
     slug: str,
     parent_task_id: UUID | None = None,
     level: int = 0,
     status: str = "RUNNING",
-) -> RunGraphNode:
-    node = RunGraphNode(
-        run_id=run_id,
+) -> SampleGraphNode:
+    node = SampleGraphNode(
+        sample_id=sample_id,
         instance_key="sample-1",
         task_slug=slug,
         description=f"Task {slug}",
@@ -126,13 +126,13 @@ def _patch_get_session(monkeypatch: pytest.MonkeyPatch, session: Session) -> Non
 
 def _build_context(
     *,
-    run_id: UUID,
+    sample_id: UUID,
     task_id: UUID,
     task_mgmt: object,
     task_inspect: object,
 ) -> WorkerContext:
     return WorkerContext._for_job(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=task_id,
         execution_id=uuid4(),
         definition_id=None,
@@ -156,8 +156,8 @@ async def test_spawn_task_via_worker_context_does_not_write_definition_row(
     """spawn_task through the facade writes one run-graph row, zero definition rows."""
 
     session = _make_session()
-    run_id = uuid4()
-    parent = _seed_node(session, run_id=run_id, slug="parent")
+    sample_id = uuid4()
+    parent = _seed_node(session, sample_id=sample_id, slug="parent")
     _patch_get_session(monkeypatch, session)
 
     monkeypatch.setattr(
@@ -169,19 +169,19 @@ async def test_spawn_task_via_worker_context_does_not_write_definition_row(
     )
     task_inspect = TaskInspectionService()
     context = _build_context(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=parent.task_id,
         task_mgmt=task_mgmt,
         task_inspect=task_inspect,
     )
 
-    nodes_before = session.exec(select(RunGraphNode)).all()
+    nodes_before = session.exec(select(SampleGraphNode)).all()
     defs_before = session.exec(select(ExperimentDefinitionTask)).all()
     assert len(nodes_before) == 1  # only the parent
 
     handle = await context.spawn_task(_make_task())
 
-    nodes_after = session.exec(select(RunGraphNode)).all()
+    nodes_after = session.exec(select(SampleGraphNode)).all()
     defs_after = session.exec(select(ExperimentDefinitionTask)).all()
 
     # Exactly one new run-graph row, no new definition rows.
@@ -189,9 +189,9 @@ async def test_spawn_task_via_worker_context_does_not_write_definition_row(
     assert len(defs_after) == len(defs_before) == 0
 
     new_node = session.exec(
-        select(RunGraphNode).where(
-            RunGraphNode.run_id == run_id,
-            RunGraphNode.task_slug == "child",
+        select(SampleGraphNode).where(
+            SampleGraphNode.sample_id == sample_id,
+            SampleGraphNode.task_slug == "child",
         )
     ).one()
 
@@ -209,8 +209,8 @@ async def test_spawned_task_inflates_through_graph_repo_node(
     """The spawned dynamic node round-trips through graph_repo.node as is_dynamic=True."""
 
     session = _make_session()
-    run_id = uuid4()
-    parent = _seed_node(session, run_id=run_id, slug="parent")
+    sample_id = uuid4()
+    parent = _seed_node(session, sample_id=sample_id, slug="parent")
     _patch_get_session(monkeypatch, session)
 
     monkeypatch.setattr(
@@ -222,7 +222,7 @@ async def test_spawned_task_inflates_through_graph_repo_node(
     )
     task_inspect = TaskInspectionService()
     context = _build_context(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=parent.task_id,
         task_mgmt=task_mgmt,
         task_inspect=task_inspect,
@@ -231,9 +231,9 @@ async def test_spawned_task_inflates_through_graph_repo_node(
     handle = await context.spawn_task(_make_task())
 
     graph_repo = RuntimeGraphRepository()
-    view = await graph_repo.node(session, run_id=run_id, task_id=handle.task_id)
+    view = await graph_repo.node(session, sample_id=sample_id, task_id=handle.task_id)
 
-    assert isinstance(view, RunGraphNodeView)
+    assert isinstance(view, SampleGraphNodeView)
     assert view.is_dynamic is True
     assert view.task_id == handle.task_id
     assert view.task.task_slug == "child"
@@ -246,16 +246,16 @@ async def test_worker_context_cancel_raises_on_non_descendant(
     """cancel_task enforces containment: non-descendant → ContainmentViolation."""
 
     session = _make_session()
-    run_id = uuid4()
-    root = _seed_node(session, run_id=run_id, slug="root")
+    sample_id = uuid4()
+    root = _seed_node(session, sample_id=sample_id, slug="root")
     child = _seed_node(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         slug="child",
         parent_task_id=root.task_id,
         level=1,
     )
-    sibling = _seed_node(session, run_id=run_id, slug="sibling")  # peer of root, no parent
+    sibling = _seed_node(session, sample_id=sample_id, slug="sibling")  # peer of root, no parent
     _patch_get_session(monkeypatch, session)
 
     # Real inspection service so _assert_descendant queries the actual graph;
@@ -266,7 +266,7 @@ async def test_worker_context_cancel_raises_on_non_descendant(
     task_inspect = TaskInspectionService()
 
     context = _build_context(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=root.task_id,
         task_mgmt=task_mgmt,
         task_inspect=task_inspect,
@@ -285,5 +285,5 @@ async def test_worker_context_cancel_raises_on_non_descendant(
 
     args = task_mgmt.cancel_task.await_args.args
     assert args[0] is session
-    assert args[1].run_id == run_id
+    assert args[1].sample_id == sample_id
     assert args[1].task_id == child.task_id

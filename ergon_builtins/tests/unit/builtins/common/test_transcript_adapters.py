@@ -13,7 +13,7 @@ from ergon_core.core.shared.context_parts import (
     UserMessagePart as ErgonUserMessagePart,
 )
 from ergon_core.core.shared.context_parts import ContextEventType
-from ergon_core.core.persistence.context.models import RunContextEvent
+from ergon_core.core.persistence.context.models import SampleContextEvent
 from pydantic_ai.messages import (
     ModelRequest,
     ModelResponse,
@@ -25,15 +25,15 @@ from pydantic_ai.messages import (
 )
 
 
-def _make_event(part, sequence: int, turn_id: str | None = None) -> RunContextEvent:
+def _make_event(part, sequence: int, turn_id: str | None = None) -> SampleContextEvent:
     payload = ContextPartChunkLog(
         part=part,
         sequence=sequence,
         worker_binding_key="test-worker",
         turn_id=turn_id,
     )
-    return RunContextEvent(
-        run_id=uuid4(),
+    return SampleContextEvent(
+        sample_id=uuid4(),
         task_execution_id=uuid4(),
         worker_binding_key="test-worker",
         sequence=sequence,

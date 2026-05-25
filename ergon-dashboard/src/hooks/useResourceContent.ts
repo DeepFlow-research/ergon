@@ -2,7 +2,7 @@
 
 /**
  * Fetches text content for a resource through the Next.js proxy (which in turn
- * calls GET /runs/{runId}/resources/{resourceId}/content on the Ergon API).
+ * calls GET /samples/{sampleId}/resources/{resourceId}/content on the Ergon API).
  * Responses are cached in a module-level Map so re-opening a viewer is free.
  */
 
@@ -10,8 +10,8 @@ import { useEffect, useState } from "react";
 
 const textCache = new Map<string, string>();
 
-export function resourceContentUrl(runId: string, resourceId: string): string {
-  return `/api/runs/${runId}/resources/${resourceId}/content`;
+export function resourceContentUrl(sampleId: string, resourceId: string): string {
+  return `/api/samples/${sampleId}/resources/${resourceId}/content`;
 }
 
 interface UseResourceContentResult {
@@ -21,7 +21,7 @@ interface UseResourceContentResult {
 }
 
 export function useResourceContent(
-  runId: string | null,
+  sampleId: string | null,
   resourceId: string | null,
   enabled: boolean,
 ): UseResourceContentResult {
@@ -30,14 +30,14 @@ export function useResourceContent(
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (!enabled || runId === null || resourceId === null) {
+    if (!enabled || sampleId === null || resourceId === null) {
       setText(null);
       setError(null);
       setIsLoading(false);
       return;
     }
 
-    const cacheKey = `${runId}:${resourceId}`;
+    const cacheKey = `${sampleId}:${resourceId}`;
     const cached = textCache.get(cacheKey);
     if (cached !== undefined) {
       setText(cached);
@@ -51,7 +51,7 @@ export function useResourceContent(
     setError(null);
     setText(null);
 
-    fetch(resourceContentUrl(runId, resourceId), {
+    fetch(resourceContentUrl(sampleId, resourceId), {
       cache: "no-store",
       signal: controller.signal,
     })
@@ -73,7 +73,7 @@ export function useResourceContent(
       });
 
     return () => controller.abort();
-  }, [runId, resourceId, enabled]);
+  }, [sampleId, resourceId, enabled]);
 
   return { text, error, isLoading };
 }

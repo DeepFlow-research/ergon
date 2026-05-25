@@ -12,8 +12,8 @@ import pyarrow.parquet as pq
 from sqlmodel import Session, select
 
 from ergon_core.core.persistence.telemetry.models import (
-    RunRecord,
-    RunResource,
+    SampleRecord,
+    SampleResource,
 )
 from ergon_ingestion.exports.models import (
     DatasetExportManifest,
@@ -116,20 +116,20 @@ def export_dataset_from_config(config: ShardedExportConfig) -> DatasetExportMani
         return export_dataset(session=session, config=config)
 
 
-def _load_runs(*, session: Session, dataset: str, batch: str) -> list[RunRecord]:
+def _load_runs(*, session: Session, dataset: str, batch: str) -> list[SampleRecord]:
     statement = (
-        select(RunRecord)
-        .where(RunRecord.benchmark_type == f"imported:{dataset}")
-        .order_by(RunRecord.created_at, RunRecord.id)
+        select(SampleRecord)
+        .where(SampleRecord.benchmark_type == f"imported:{dataset}")
+        .order_by(SampleRecord.created_at, SampleRecord.id)
     )
     runs = list(session.exec(statement))
     return [run for run in runs if run.summary_json.get("import_batch_id") == batch]
 
 
 def _export_resources(
-    session: Session, output_dir: Path, run_id: UUID, config: ShardedExportConfig
+    session: Session, output_dir: Path, sample_id: UUID, config: ShardedExportConfig
 ) -> tuple[list[dict[str, object]], int]:
-    resources = list(session.exec(select(RunResource).where(RunResource.run_id == run_id)))
+    resources = list(session.exec(select(SampleResource).where(SampleResource.sample_id == sample_id)))
     descriptors: list[dict[str, object]] = []
     copied_bytes = 0
     for resource in resources:
@@ -169,12 +169,12 @@ def _export_resources(
 
 
 def _run_row(
-    config: ShardedExportConfig, run: RunRecord, resources: list[dict[str, object]]
+    config: ShardedExportConfig, run: SampleRecord, resources: list[dict[str, object]]
 ) -> dict[str, object]:
     return {
         "dataset": config.dataset,
         "batch": config.batch,
-        "run_id": str(run.id),
+        "sample_id": str(run.id),
         "definition_id": str(run.definition_id),
         "benchmark_type": run.benchmark_type,
         "instance_key": run.instance_key,
@@ -191,13 +191,13 @@ def _run_row(
 
 
 def _load_reducer_rows(
-    *, session: Session, config: ShardedExportConfig, runs: list[RunRecord]
+    *, session: Session, config: ShardedExportConfig, runs: list[SampleRecord]
 ) -> list[dict[str, object]]:
     return []
 
 
 def _load_drop_rows(
-    *, session: Session, config: ShardedExportConfig, runs: list[RunRecord]
+    *, session: Session, config: ShardedExportConfig, runs: list[SampleRecord]
 ) -> list[dict[str, object]]:
     return []
 
@@ -250,7 +250,7 @@ def _shard_batches(
         yield batch
 
 
-def _malformed_source_records(runs: list[RunRecord]) -> int:
+def _malformed_source_records(runs: list[SampleRecord]) -> int:
     return sum(
         1 for run in runs if "source_parse_error" in run.summary_json.get("observed_fields", {})
     )

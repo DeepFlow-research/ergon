@@ -150,7 +150,7 @@ def _source_run_id(record: Record, *, fallback_id: str) -> str:
     explicit = (
         record.get("question_id")
         or record.get("source_run_id")
-        or record.get("run_id")
+        or record.get("sample_id")
         or record.get("id")
     )
     return str(explicit) if explicit is not None else fallback_id

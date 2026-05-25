@@ -23,7 +23,7 @@ from .contract import TaskCancelledEvent
 logger = logging.getLogger(__name__)
 
 
-async def run_cleanup_cancelled_task_job(ctx: Any, payload: TaskCancelledEvent) -> JsonObject:
+async def sample_cleanup_cancelled_task_job(ctx: Any, payload: TaskCancelledEvent) -> JsonObject:
     """Clean up a single cancelled task's resources."""
     logger.info(
         "cleanup-cancelled task_id=%s execution_id=%s cause=%s",
@@ -34,7 +34,7 @@ async def run_cleanup_cancelled_task_job(ctx: Any, payload: TaskCancelledEvent) 
 
     if payload.execution_id is None:
         return CleanupResult(
-            run_id=RunId(payload.run_id),
+            sample_id=RunId(payload.sample_id),
             task_id=NodeId(payload.task_id),
             execution_id=None,
             sandbox_id=None,
@@ -48,7 +48,7 @@ async def run_cleanup_cancelled_task_job(ctx: Any, payload: TaskCancelledEvent) 
         with get_session() as session:
             result = svc.cleanup(
                 session,
-                run_id=payload.run_id,
+                sample_id=payload.sample_id,
                 task_id=payload.task_id,
                 execution_id=payload.execution_id,
             )
@@ -67,7 +67,7 @@ async def run_cleanup_cancelled_task_job(ctx: Any, payload: TaskCancelledEvent) 
 
     await get_dashboard_event_publisher().publish(
         DashboardTaskStatusChangedEvent(
-            run_id=payload.run_id,
+            sample_id=payload.sample_id,
             task_id=payload.task_id,
             task_name="",
             parent_task_id=None,

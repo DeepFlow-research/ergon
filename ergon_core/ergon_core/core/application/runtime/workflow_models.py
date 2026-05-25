@@ -18,7 +18,7 @@ class WorkflowResourceRef(BaseModel):
     model_config = {"frozen": True}
 
     resource_id: UUID
-    run_id: UUID
+    sample_id: UUID
     task_execution_id: UUID | None
     task_id: UUID | None
     task_slug: str | None
