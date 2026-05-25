@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 import pytest
 from sqlmodel import SQLModel, Session, create_engine
 
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition  # noqa: F401
+from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.samples.models import (
     SampleAnnotationEventRow,
     SampleEdgeEventRow,
@@ -14,9 +14,11 @@ from ergon_core.core.persistence.samples.models import (
     SampleTaskEventRow,
     SampleWorkerEventRow,
 )
-from ergon_core.core.persistence.telemetry.models import SampleRecord  # noqa: F401
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.core.application.samples.events import SampleRuntimeEventAppender
 from ergon_core.core.application.samples.state import reconstruct_sample_runtime_state_at
+
+_REGISTERED_TABLE_MODELS = (ExperimentDefinition, SampleRecord)
 
 
 @pytest.fixture()

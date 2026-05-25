@@ -1,3 +1,4 @@
+from importlib import import_module
 from pathlib import Path
 
 from sqlmodel import SQLModel
@@ -8,7 +9,7 @@ CORE_ROOT = ROOT / "ergon_core" / "ergon_core"
 
 
 def test_typed_sample_wal_uses_separate_tables_without_component_interner() -> None:
-    import ergon_core.core.persistence.samples.models  # noqa: F401
+    import_module("ergon_core.core.persistence.samples.models")
 
     expected_tables = {
         "sample_status_events",
