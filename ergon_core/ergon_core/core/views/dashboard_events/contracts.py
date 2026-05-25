@@ -20,7 +20,7 @@ from ergon_core.core.views.samples.models import (
 from ergon_core.core.shared.context_parts import ContextEventType, ContextPartChunkLog
 from ergon_core.core.application.events.base import InngestEventContract
 from ergon_core.core.application.runtime.status import NodeStatus
-from ergon_core.core.application.runtime.models import GraphMutationRecordDto
+from ergon_core.core.application.samples.events import SampleRuntimeEventView
 from pydantic import Field
 
 # ---------------------------------------------------------------------------
@@ -155,14 +155,14 @@ class DashboardThreadMessageCreatedEvent(InngestEventContract):
 
 
 # ---------------------------------------------------------------------------
-# Graph mutation events (dynamic delegation observability)
+# Sample runtime WAL events
 # ---------------------------------------------------------------------------
 
 
-class DashboardGraphMutationEvent(InngestEventContract):
-    name: ClassVar[str] = "dashboard/graph.mutation"
+class DashboardSampleRuntimeEvent(InngestEventContract):
+    name: ClassVar[str] = "dashboard/sample.runtime_event"
 
-    mutation: GraphMutationRecordDto
+    event: SampleRuntimeEventView
 
 
 class DashboardContextEventEvent(InngestEventContract):

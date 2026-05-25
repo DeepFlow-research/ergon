@@ -29,7 +29,7 @@ class _FakeGraphRepo:
         self.added_edges: list[dict] = []
         self.parent = SimpleNamespace(task_id=uuid4(), instance_key="sample-1", level=2)
 
-    def add_mutation_listener(self, listener) -> None:
+    def add_runtime_event_listener(self, listener) -> None:
         del listener
 
     def get_node(self, session, *, sample_id, task_id):

@@ -88,10 +88,10 @@ def test_core_schema_source_imports_are_directional() -> None:
     forbidden_pairs = {
         "ergon_core.core.views.samples.models": (
             "EvalCriterionStatus = Literal",
-            "GraphMutationValue =",
+            "SampleRuntimeEventRow =",
         ),
         "ergon_core.core.views.dashboard_events.contracts": (
-            "GraphMutationValue =",
+            "SampleRuntimeEventRow =",
             "CancelCause = Literal",
         ),
     }

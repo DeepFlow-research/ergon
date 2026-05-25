@@ -4,10 +4,15 @@ import time
 from uuid import UUID
 
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import (
-    SampleGraphEdge,
-    SampleGraphMutation,
-    SampleGraphNode,
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
+from ergon_core.core.persistence.samples.models import (
+    SampleAnnotationEventRow,
+    SampleEdgeEventRow,
+    SampleEvaluatorEventRow,
+    SampleSandboxEventRow,
+    SampleStatusEventRow,
+    SampleTaskEventRow,
+    SampleWorkerEventRow,
 )
 from ergon_core.core.application.runtime.status import TERMINAL_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
@@ -37,11 +42,26 @@ def get_node_status(session: Session, task_id: UUID) -> str:
     return node.status
 
 
-def get_wal_entries(session: Session, task_id: UUID) -> list[SampleGraphMutation]:
+SAMPLE_WAL_MODELS = (
+    SampleAnnotationEventRow,
+    SampleEdgeEventRow,
+    SampleEvaluatorEventRow,
+    SampleSandboxEventRow,
+    SampleStatusEventRow,
+    SampleTaskEventRow,
+    SampleWorkerEventRow,
+)
+
+
+def delete_typed_sample_wal(session: Session, sample_id: UUID) -> None:
+    for model in SAMPLE_WAL_MODELS:
+        for row in session.exec(select(model).where(model.sample_id == sample_id)).all():
+            session.delete(row)
+
+
+def get_wal_entries(session: Session, task_id: UUID) -> list[SampleTaskEventRow]:
     return list(
-        session.exec(
-            select(SampleGraphMutation).where(SampleGraphMutation.target_id == task_id)
-        ).all()
+        session.exec(select(SampleTaskEventRow).where(SampleTaskEventRow.task_id == task_id)).all()
     )
 
 
@@ -53,15 +73,16 @@ def assert_wal_has_status(
     cause_contains: str | None = None,
 ) -> None:
     entries = get_wal_entries(session, task_id)
-    matching = [e for e in entries if e.new_value.get("status") == status]
+    matching = [e for e in entries if e.status == status or e.payload_json.get("status") == status]
     assert matching, (
         f"No WAL entry with status={status!r} for node {task_id}. "
-        f"Entries: {[e.new_value for e in entries]}"
+        f"Entries: {[e.payload_json for e in entries]}"
     )
     if cause_contains is not None:
-        assert any(e.reason and cause_contains in e.reason for e in matching), (
-            f"No WAL entry with cause containing {cause_contains!r} for node {task_id}"
-        )
+        assert any(
+            e.actor and cause_contains in e.actor or cause_contains in str(e.payload_json)
+            for e in matching
+        ), f"No WAL entry with cause containing {cause_contains!r} for node {task_id}"
 
 
 def assert_cross_cutting_invariants(session: Session, sample_id: UUID) -> None:

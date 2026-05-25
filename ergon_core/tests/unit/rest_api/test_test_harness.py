@@ -61,7 +61,7 @@ def test_read_state_dto_exposes_live_playwright_contract_fields() -> None:
     assert {
         "executions",
         "execution_count",
-        "mutation_count",
+        "event_count",
         "resource_count",
         "thread_count",
         "context_event_count",

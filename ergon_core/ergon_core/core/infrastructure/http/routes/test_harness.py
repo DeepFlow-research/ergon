@@ -67,10 +67,11 @@ class TestEvaluationDto(BaseModel):
     reason: str
 
 
-class TestGraphMutationDto(BaseModel):
-    sequence: int
-    mutation_type: str
-    target_task_slug: str | None
+class TestSampleRuntimeEventDto(BaseModel):
+    table: str
+    event_type: str
+    target_id: UUID | None
+    payload: dict
 
 
 class TestExecutionDto(BaseModel):
@@ -83,11 +84,11 @@ class TestRunStateDto(BaseModel):
     sample_id: UUID
     status: str
     graph_nodes: list[TestGraphNodeDto]
-    mutations: list[TestGraphMutationDto]
+    events: list[TestSampleRuntimeEventDto]
     evaluations: list[TestEvaluationDto]
     executions: list[TestExecutionDto]
     execution_count: int
-    mutation_count: int
+    event_count: int
     resource_count: int
     thread_count: int
     context_event_count: int

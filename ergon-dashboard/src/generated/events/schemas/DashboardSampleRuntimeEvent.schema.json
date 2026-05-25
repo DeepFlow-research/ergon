@@ -1,0 +1,126 @@
+{
+  "$defs": {
+    "JsonObject": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "type": "object"
+    },
+    "JsonScalar": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "JsonValue": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/JsonScalar"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "SampleRuntimeEventView": {
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "sample_id": {
+          "format": "uuid",
+          "title": "Sample Id",
+          "type": "string"
+        },
+        "event_timestamp": {
+          "format": "date-time",
+          "title": "Event Timestamp",
+          "type": "string"
+        },
+        "table": {
+          "enum": [
+            "sample_status_events",
+            "sample_task_events",
+            "sample_edge_events",
+            "sample_worker_events",
+            "sample_evaluator_events",
+            "sample_sandbox_events",
+            "sample_annotation_events"
+          ],
+          "title": "Table",
+          "type": "string"
+        },
+        "event_type": {
+          "title": "Event Type",
+          "type": "string"
+        },
+        "target_type": {
+          "title": "Target Type",
+          "type": "string"
+        },
+        "target_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target Id"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonObject",
+          "description": "Typed event payload copied from the source sample runtime WAL row."
+        }
+      },
+      "required": [
+        "id",
+        "sample_id",
+        "event_timestamp",
+        "table",
+        "event_type",
+        "target_type",
+        "target_id"
+      ],
+      "title": "SampleRuntimeEventView",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "event": {
+      "$ref": "#/$defs/SampleRuntimeEventView"
+    }
+  },
+  "required": [
+    "event"
+  ],
+  "title": "DashboardSampleRuntimeEvent",
+  "type": "object"
+}

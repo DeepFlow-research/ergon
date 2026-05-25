@@ -6,7 +6,7 @@ from uuid import UUID
 
 from ergon_core.core.persistence.context.models import SampleContextEvent
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import SampleGraphMutation, SampleGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.db import get_engine
 from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import (
@@ -16,7 +16,8 @@ from ergon_core.core.persistence.telemetry.models import (
     SampleTaskAttempt,
     Thread,
 )
-from sqlmodel import Session, asc, select
+from ergon_core.core.application.samples.events import SampleRuntimeEventReadService
+from sqlmodel import Session, select
 
 
 class UnknownSampleStatusError(ValueError):
@@ -46,10 +47,11 @@ class HarnessEvaluation:
 
 
 @dataclass(frozen=True)
-class HarnessGraphMutation:
-    sequence: int
-    mutation_type: str
-    target_task_slug: str | None
+class HarnessSampleRuntimeEvent:
+    table: str
+    event_type: str
+    target_id: UUID | None
+    payload: dict
 
 
 @dataclass(frozen=True)
@@ -64,11 +66,11 @@ class HarnessRunState:
     sample_id: UUID
     status: str
     graph_nodes: list[HarnessGraphNode]
-    mutations: list[HarnessGraphMutation]
+    events: list[HarnessSampleRuntimeEvent]
     evaluations: list[HarnessEvaluation]
     executions: list[HarnessExecution]
     execution_count: int
-    mutation_count: int
+    event_count: int
     resource_count: int
     thread_count: int
     context_event_count: int
@@ -108,20 +110,15 @@ def read_run_state(sample_id: UUID, session: Session) -> HarnessRunState | None:
         for n in nodes
     ]
 
-    mutation_rows = list(
-        session.exec(
-            select(SampleGraphMutation)
-            .where(SampleGraphMutation.sample_id == sample_id)
-            .order_by(asc(SampleGraphMutation.sequence))
-        ).all()
-    )
-    mutations = [
-        HarnessGraphMutation(
-            sequence=m.sequence,
-            mutation_type=m.mutation_type,
-            target_task_slug=slug_by_task_id.get(m.target_id) if m.target_id else None,
+    event_rows = SampleRuntimeEventReadService().list_events(session, sample_id)
+    events = [
+        HarnessSampleRuntimeEvent(
+            table=event.table,
+            event_type=event.event_type,
+            target_id=event.target_id,
+            payload=dict(event.payload),
         )
-        for m in mutation_rows
+        for event in event_rows
     ]
 
     eval_rows = list(
@@ -173,11 +170,11 @@ def read_run_state(sample_id: UUID, session: Session) -> HarnessRunState | None:
         sample_id=sample_id,
         status=run.status,
         graph_nodes=graph_nodes,
-        mutations=mutations,
+        events=events,
         evaluations=evaluations,
         executions=executions,
         execution_count=len(execution_rows),
-        mutation_count=len(mutation_rows),
+        event_count=len(event_rows),
         resource_count=resource_count,
         thread_count=thread_count,
         context_event_count=context_event_count,

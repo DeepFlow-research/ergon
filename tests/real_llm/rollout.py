@@ -21,7 +21,13 @@ Artifact layout:
     │   ├── sandbox_events.jsonl
     │   ├── sample_graph_nodes.jsonl
     │   ├── sample_graph_edges.jsonl
-    │   ├── sample_graph_mutations.jsonl
+    │   ├── sample_status_events.jsonl
+    │   ├── sample_task_events.jsonl
+    │   ├── sample_edge_events.jsonl
+    │   ├── sample_worker_events.jsonl
+    │   ├── sample_evaluator_events.jsonl
+    │   ├── sample_sandbox_events.jsonl
+    │   ├── sample_annotation_events.jsonl
     │   └── sample_context_events.jsonl
     ├── screenshots/
     │   ├── experiment_index.png
@@ -96,8 +102,16 @@ def dump_rollout(sample_id: UUID, out_dir: Path) -> dict[str, int]:
     # live rollout dumping, so keep this import scoped to that operation.
     from ergon_core.core.persistence.graph.models import (
         SampleGraphEdge,
-        SampleGraphMutation,
         SampleGraphNode,
+    )
+    from ergon_core.core.persistence.samples.models import (
+        SampleAnnotationEventRow,
+        SampleEdgeEventRow,
+        SampleEvaluatorEventRow,
+        SampleSandboxEventRow,
+        SampleStatusEventRow,
+        SampleTaskEventRow,
+        SampleWorkerEventRow,
     )
     from ergon_core.core.persistence.shared.db import get_session
     from ergon_core.core.persistence.telemetry.models import (
@@ -166,14 +180,19 @@ def dump_rollout(sample_id: UUID, out_dir: Path) -> dict[str, int]:
                 ).all()
             ),
         )
-        counts["sample_graph_mutations"] = _write_jsonl(
-            db_dir / "sample_graph_mutations.jsonl",
-            list(
-                session.exec(
-                    select(SampleGraphMutation).where(SampleGraphMutation.sample_id == sample_id)
-                ).all()
-            ),
-        )
+        for table_name, model in (
+            ("sample_status_events", SampleStatusEventRow),
+            ("sample_task_events", SampleTaskEventRow),
+            ("sample_edge_events", SampleEdgeEventRow),
+            ("sample_worker_events", SampleWorkerEventRow),
+            ("sample_evaluator_events", SampleEvaluatorEventRow),
+            ("sample_sandbox_events", SampleSandboxEventRow),
+            ("sample_annotation_events", SampleAnnotationEventRow),
+        ):
+            counts[table_name] = _write_jsonl(
+                db_dir / f"{table_name}.jsonl",
+                list(session.exec(select(model).where(model.sample_id == sample_id)).all()),
+            )
         # Avoid importing SampleContextEvent here: that model depends on context
         # payloads, which currently have a circular import through api.Worker.
         rows = [
@@ -373,8 +392,8 @@ def write_report(out_dir: Path, manifest_path: Path) -> Path:
             "  outcome fields; `status`, `started_at`, `completed_at` anchor the timeline.",
             "- `db/sample_context_events.jsonl` — every recorded context event in order.",
             "  Tool calls + returns + thinking + text reconstruct what the agent did.",
-            "- `db/sample_graph_nodes.jsonl` + `sample_graph_mutations.jsonl` — agent's",
-            "  subtask structure over time.",
+            "- `db/sample_graph_nodes.jsonl` + typed `sample_*_events.jsonl` files —",
+            "  agent's subtask structure and runtime state over time.",
             "- `db/sample_task_evaluations.jsonl` — rubric scores, if the evaluator ran.",
             "- `db/sandbox_events.jsonl` — commands executed in the E2B sandbox.",
             "- `screenshots/` — what the dashboard renders for this run.",

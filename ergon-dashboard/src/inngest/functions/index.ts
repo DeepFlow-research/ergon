@@ -410,8 +410,8 @@ const onSandboxClosed = inngest.createFunction(
 // =============================================================================
 
 const onGraphMutation = inngest.createFunction(
-  { id: "handle-graph-mutation", name: "Handle Graph Mutation" },
-  { event: "dashboard/graph.mutation" },
+  { id: "handle-sample-runtime-event", name: "Handle Sample Runtime Event" },
+  { event: "dashboard/sample.runtime_event" },
   async ({ event }) => {
     const mutation = parseDashboardGraphMutationData(event.data);
     store.applyGraphMutation(mutation.sample_id, mutation);

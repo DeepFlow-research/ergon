@@ -6,7 +6,7 @@ from ergon_core.core.views.samples.models import (
     SampleSummaryDto,
     SampleSnapshotDto,
 )
-from ergon_core.core.application.runtime.models import GraphMutationRecordDto
+from ergon_core.core.application.samples.events import SampleRuntimeEventView
 from ergon_core.core.views.errors import ResourceTooLargeError
 from ergon_core.core.views.samples.service import SampleSnapshotReadService
 from fastapi import APIRouter, HTTPException
@@ -42,13 +42,13 @@ def get_sample_snapshot(sample_id: UUID) -> SampleSnapshotDto:
     return snapshot
 
 
-@router.get("/{sample_id}/mutations", response_model=list[GraphMutationRecordDto])
-def get_mutations(sample_id: UUID) -> list[GraphMutationRecordDto]:
-    """Return the append-only mutation log for a sample, ordered by sequence."""
-    mutations = SampleSnapshotReadService().list_mutations(sample_id)
-    if mutations is None:
+@router.get("/{sample_id}/events", response_model=list[SampleRuntimeEventView])
+def get_sample_runtime_events(sample_id: UUID) -> list[SampleRuntimeEventView]:
+    """Return the typed append-only runtime event stream for a sample."""
+    events = SampleSnapshotReadService().list_events(sample_id)
+    if events is None:
         raise HTTPException(status_code=404, detail=f"Sample {sample_id} not found")
-    return mutations
+    return events
 
 
 @router.get("/{sample_id}/resources/{resource_id}/content")
