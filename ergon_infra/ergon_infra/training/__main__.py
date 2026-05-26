@@ -10,7 +10,7 @@ Example::
 
     python -m ergon_infra.training \\
         --benchmark smoke-test \\
-        --definition-id <uuid> \\
+        --experiment-id <uuid> \\
         --model Qwen/Qwen2.5-1.5B \\
         --vllm-mode colocate \\
         --output-dir /checkpoints/test

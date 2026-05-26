@@ -20,7 +20,7 @@ def handle_train(args: Namespace) -> int:
         benchmark=args.benchmark,
         evaluator=args.evaluator,
         limit=args.limit,
-        definition_id=args.definition_id,
+        experiment_id=args.experiment_id,
         model=args.model,
         device=args.device,
         vllm_mode=None if args.device == "cpu" else args.vllm_mode,

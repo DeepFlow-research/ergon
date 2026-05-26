@@ -10,7 +10,7 @@ def _train_args(**overrides: object) -> Namespace:
         "benchmark": "bench",
         "evaluator": "stub-rubric",
         "limit": None,
-        "definition_id": None,
+        "experiment_id": None,
         "model": "Qwen/Qwen2.5-1.5B",
         "device": "cuda",
         "vllm_mode": "server",
@@ -43,8 +43,11 @@ def test_train_local_builds_typed_command_before_optional_dependency_check(monke
 
     monkeypatch.setattr(training_commands, "run_training", fake_run_training)
 
-    rc = training_commands.handle_train(_train_args(device="cpu", vllm_mode="server"))
+    rc = training_commands.handle_train(
+        _train_args(device="cpu", vllm_mode="server", experiment_id="experiment-1")
+    )
 
     assert rc == 0
+    assert captured["command"].experiment_id == "experiment-1"
     assert captured["command"].device == "cpu"
     assert captured["command"].vllm_mode is None

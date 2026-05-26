@@ -26,7 +26,7 @@ def run_training(command: TrainingCommand) -> int:
         benchmark=command.benchmark,
         evaluator=command.evaluator,
         limit=command.limit,
-        definition_id=command.definition_id,
+        experiment_id=command.experiment_id,
         model=command.model,
         device=command.device,
         vllm_mode=None if command.device == "cpu" else command.vllm_mode,

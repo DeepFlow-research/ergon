@@ -11,7 +11,7 @@ class TrainingCommand(BaseModel):
     benchmark: str
     evaluator: str
     limit: int | None
-    definition_id: str | None
+    experiment_id: str | None
     model: str
     device: Literal["cpu", "cuda"]
     vllm_mode: Literal["colocate", "server"] | None
