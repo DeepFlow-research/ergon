@@ -278,7 +278,9 @@ class WorkflowService:
                 task_slug=node.task_slug,
                 parent_task_id=node.parent_task_id,
             )
-            for node in sorted(nodes, key=lambda node: (node.level, node.task_slug, str(node.task_id)))
+            for node in sorted(
+                nodes, key=lambda node: (node.level, node.task_slug, str(node.task_id))
+            )
         ]
         return InitializedWorkflow(
             sample_id=command.sample_id,

@@ -1092,8 +1092,16 @@
           "type": "string"
         },
         "definitionId": {
-          "title": "Definitionid",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Definitionid"
         },
         "name": {
           "title": "Name",
@@ -1272,7 +1280,6 @@
       },
       "required": [
         "id",
-        "definitionId",
         "name",
         "status"
       ],
