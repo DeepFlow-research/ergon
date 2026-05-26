@@ -1,4 +1,5 @@
 from collections.abc import Iterator, Sequence
+from importlib import import_module
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Literal
@@ -7,11 +8,6 @@ from uuid import uuid4
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-import ergon_core.core.persistence.definitions.models  # noqa: F401
-import ergon_core.core.persistence.experiments.models  # noqa: F401
-import ergon_core.core.persistence.graph.models  # noqa: F401
-import ergon_core.core.persistence.samples.models  # noqa: F401
-import ergon_core.core.persistence.telemetry.models  # noqa: F401
 from ergon_core.api import Environment, Experiment, RandomSampler, Sample
 from ergon_core.api.experiment.sampling import SamplingContext
 from ergon_core.core.application.events.runtime import WorkflowStartedEvent
@@ -24,6 +20,15 @@ from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.samples.models import SampleEdgeEventRow, SampleTaskEventRow
 from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.test_support.task_factory import task_with_id
+
+for module_name in (
+    "ergon_core.core.persistence.definitions.models",
+    "ergon_core.core.persistence.experiments.models",
+    "ergon_core.core.persistence.graph.models",
+    "ergon_core.core.persistence.samples.models",
+    "ergon_core.core.persistence.telemetry.models",
+):
+    import_module(module_name)
 
 
 class FakeEventBus:

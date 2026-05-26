@@ -1,14 +1,10 @@
 from collections.abc import Iterable, Iterator
+from importlib import import_module
 from uuid import uuid4
 
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-import ergon_core.core.persistence.definitions.models  # noqa: F401
-import ergon_core.core.persistence.experiments.models  # noqa: F401
-import ergon_core.core.persistence.graph.models  # noqa: F401
-import ergon_core.core.persistence.samples.models  # noqa: F401
-import ergon_core.core.persistence.telemetry.models  # noqa: F401
 from ergon_core.api import Sample
 from ergon_core.api.benchmark import Task
 from ergon_core.api.criterion.outcome import CriterionOutcome
@@ -31,6 +27,15 @@ from ergon_core.core.persistence.samples.models import SampleStatusEventRow, Sam
 from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.test_support.task_factory import task_with_id
+
+for module_name in (
+    "ergon_core.core.persistence.definitions.models",
+    "ergon_core.core.persistence.experiments.models",
+    "ergon_core.core.persistence.graph.models",
+    "ergon_core.core.persistence.samples.models",
+    "ergon_core.core.persistence.telemetry.models",
+):
+    import_module(module_name)
 
 
 class StartPathEvaluator(Evaluator):
