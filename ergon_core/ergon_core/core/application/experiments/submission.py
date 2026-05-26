@@ -81,7 +81,7 @@ class ExperimentSubmissionService:
                 samples=candidates,
                 k=k,
                 context=SamplingContext(
-                    experiment_id=handle.experiment_id,
+                    experiment_ref_id=handle.id,
                     candidate_pool_size=pool_size,
                 ),
             )
@@ -106,7 +106,7 @@ class ExperimentSubmissionService:
         self._session.commit()
         await self._start_samples(sample_ids)
         return ExperimentSubmitResult(
-            experiment_id=handle.experiment_id,
+            experiment_ref_id=handle.id,
             sampler_invocation_id=invocation.id,
             requested_k=k,
             candidate_pool_size=pool_size,

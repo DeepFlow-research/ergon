@@ -222,7 +222,7 @@ async def test_submit_records_selected_sample_provenance(
 
     sample_rows = session.exec(select(SampleRecord).order_by(SampleRecord.created_at)).all()
     assert [row.id for row in sample_rows] == list(result.sample_ids)
-    assert {row.experiment_id for row in sample_rows} == {result.experiment_id}
+    assert {row.experiment_id for row in sample_rows} == {result.experiment_ref_id}
     assert all(row.environment_id for row in sample_rows)
     assert all(row.pool_entry_id for row in sample_rows)
     assert all(row.sampler_invocation_id == result.sampler_invocation_id for row in sample_rows)

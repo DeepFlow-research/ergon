@@ -195,7 +195,7 @@ class SampleSnapshotMetricsDto(CamelModel):
 
 class SampleSnapshotDto(CamelModel):
     id: str
-    definition_id: str
+    definition_id: str | None = None
     name: str
     status: str
     tasks: dict[str, SampleTaskDto] = Field(default_factory=dict)
@@ -231,7 +231,7 @@ class SampleSummaryDto(BaseModel):
     completed_at: datetime | None = None
     latest_activity_at: datetime | None = None
     duration_seconds: float | None = None
-    definition_id: UUID
+    definition_id: UUID | None = None
     definition_name: str | None = None
     experiment: str | None = None
     benchmark_type: str

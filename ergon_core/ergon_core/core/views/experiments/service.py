@@ -76,6 +76,8 @@ class ExperimentReadService:
             )
             latest_by_definition: dict[UUID, SampleRecord] = {}
             for run in runs:
+                if run.definition_id is None:
+                    continue
                 latest_by_definition.setdefault(run.definition_id, run)
 
             rows: list[ExperimentTagDefinitionDto] = []

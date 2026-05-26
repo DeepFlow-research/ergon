@@ -61,7 +61,7 @@ class ExperimentRunMetricsDto(BaseModel):
 
 class ExperimentRunRowDto(BaseModel):
     sample_id: UUID
-    definition_id: UUID
+    definition_id: UUID | None = None
     benchmark_type: str
     instance_key: str
     status: str

@@ -34,6 +34,11 @@ class MaterializedEnvironment(Environment):
         )
 
 
+class FakeEventBus:
+    async def publish(self, event) -> None:
+        pass
+
+
 @pytest.fixture()
 def session() -> Iterator[Session]:
     engine = create_engine("sqlite:///:memory:")
@@ -50,7 +55,7 @@ async def test_public_experiment_submit_materializes_samples_and_typed_wal(sessi
     experiment = Experiment(name="mini-smoke", environments=[env])
 
     result = await experiment.submit(
-        service=ExperimentSubmissionService.for_session(session),
+        service=ExperimentSubmissionService.for_session(session, event_bus=FakeEventBus()),
         k=1,
         sampler=RandomSampler(seed=0),
     )

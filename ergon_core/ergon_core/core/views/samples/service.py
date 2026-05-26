@@ -83,11 +83,12 @@ class SampleSnapshotReadService:
                 stmt = stmt.where(SampleRecord.experiment == experiment)
             stmt = stmt.offset(offset).limit(limit)
             rows = list(session.exec(stmt).all())
+            definition_ids = [row.definition_id for row in rows if row.definition_id is not None]
             definition_names = {
                 definition.id: definition.name
                 for definition in session.exec(
                     select(ExperimentDefinition).where(
-                        col(ExperimentDefinition.id).in_([row.definition_id for row in rows])
+                        col(ExperimentDefinition.id).in_(definition_ids)
                     )
                 ).all()
             }
@@ -95,7 +96,11 @@ class SampleSnapshotReadService:
         return [
             _run_summary(
                 row,
-                definition_name=definition_names.get(row.definition_id),
+                definition_name=(
+                    definition_names.get(row.definition_id)
+                    if row.definition_id is not None
+                    else None
+                ),
                 task_counts=task_counts.get(row.id),
             )
             for row in rows
@@ -112,11 +117,11 @@ class SampleSnapshotReadService:
             if run is None:
                 return None
 
-            definition = session.get(ExperimentDefinition, run.definition_id)
-            if definition is None:
-                return None
-
-            def_id = run.definition_id
+            definition = (
+                session.get(ExperimentDefinition, run.definition_id)
+                if run.definition_id is not None
+                else None
+            )
             nodes = list(
                 session.exec(
                     select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)
@@ -127,12 +132,16 @@ class SampleSnapshotReadService:
                     select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)
                 ).all()
             )
-            def_workers = list(
-                session.exec(
-                    select(ExperimentDefinitionWorker).where(
-                        ExperimentDefinitionWorker.experiment_definition_id == def_id
-                    )
-                ).all()
+            def_workers = (
+                list(
+                    session.exec(
+                        select(ExperimentDefinitionWorker).where(
+                            ExperimentDefinitionWorker.experiment_definition_id == run.definition_id
+                        )
+                    ).all()
+                )
+                if run.definition_id is not None
+                else []
             )
             executions = list(
                 session.exec(
@@ -198,12 +207,18 @@ class SampleSnapshotReadService:
         sample_id_str = str(run.id)
         run_summary = run.parsed_summary()
         aggregated_metrics = aggregate_run_metrics(context_events, summary=run_summary)
-        meta = definition.parsed_metadata()
-        run_name = str(meta.get("name", definition.benchmark_type))
+        assignment = run.parsed_assignment()
+        meta = definition.parsed_metadata() if definition is not None else assignment
+        run_name = str(
+            run_summary.get("name")
+            or assignment.get("sample_name")
+            or meta.get("name")
+            or run.benchmark_type
+        )
 
         return SampleSnapshotDto(
             id=sample_id_str,
-            definition_id=str(run.definition_id),
+            definition_id=str(run.definition_id) if run.definition_id is not None else None,
             name=run_name,
             status=run.status,
             tasks=task_map,
