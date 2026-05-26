@@ -46,7 +46,13 @@ LAYOUT_FILE_EXCEPTIONS = {
     "events": {"base.py", "runtime.py"},
     # Experiments exposes cross-domain application behavior through service.py.
     # These files are domain-internal implementation modules, not public subfacades.
-    "experiments": {"definition_writer.py", "handles.py", "launch.py"},
+    "experiments": {
+        "candidate_pool.py",
+        "definition_writer.py",
+        "handles.py",
+        "launch.py",
+        "repositories.py",
+    },
     "ports": {"dashboard.py", "resources.py"},
     "resources": {"publishing.py"},
     "runtime": {

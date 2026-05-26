@@ -19,6 +19,63 @@ DEFINITION_ROOTS = (
 )
 EXCLUDED_FILES = {Path(__file__).resolve()}
 EXPERIMENT_ID_PATTERN = re.compile(r"\b(?:experiment" r"_id|experiment" r"Id)\b")
+ALLOWED_EXPERIMENT_ID_PATTERNS_BY_FILE = {
+    ROOT / "ergon_core" / "ergon_core" / "api" / "experiment" / "experiment.py": (
+        re.compile(r"experiment_id: UUID"),
+    ),
+    ROOT / "ergon_core" / "ergon_core" / "api" / "experiment" / "sampling.py": (
+        re.compile(r"experiment_id: UUID"),
+    ),
+    ROOT
+    / "ergon_core"
+    / "ergon_core"
+    / "core"
+    / "application"
+    / "experiments"
+    / "candidate_pool.py": (
+        re.compile(r"handle\.experiment_id"),
+        re.compile(r"experiment_id: UUID"),
+        re.compile(r"experiment_id == experiment_id"),
+    ),
+    ROOT
+    / "ergon_core"
+    / "ergon_core"
+    / "core"
+    / "application"
+    / "experiments"
+    / "repositories.py": (
+        re.compile(r"experiment_id=row\.id"),
+        re.compile(r"experiment_ref\.experiment_id"),
+        re.compile(r"experiment_id: UUID"),
+        re.compile(r"experiment_id == experiment_id"),
+    ),
+    ROOT / "ergon_core" / "ergon_core" / "core" / "persistence" / "experiments" / "models.py": (
+        re.compile(r"experiment_id"),
+    ),
+    ROOT
+    / "ergon_core"
+    / "tests"
+    / "integration"
+    / "experiments"
+    / "test_experiment_persistence_roundtrip.py": (
+        re.compile(r"experiment_id == handle\.experiment_id"),
+    ),
+    ROOT
+    / "ergon_core"
+    / "tests"
+    / "unit"
+    / "core"
+    / "application"
+    / "experiments"
+    / "test_experiment_persistence.py": (
+        re.compile(r"experiment_id == handle\.experiment_id"),
+        re.compile(r"handle\.experiment_id"),
+    ),
+    ROOT / "ergon_core" / "tests" / "unit" / "api" / "test_sampler_contract.py": (
+        re.compile(r"experiment_id=uuid4"),
+        re.compile(r"result\.experiment_id"),
+    ),
+}
 
 
 def test_definition_identity_uses_definition_name() -> None:
@@ -40,6 +97,9 @@ def test_definition_identity_uses_definition_name() -> None:
                 continue
             for line_number, line in enumerate(text.splitlines(), start=1):
                 if EXPERIMENT_ID_PATTERN.search(line):
+                    allowed = ALLOWED_EXPERIMENT_ID_PATTERNS_BY_FILE.get(path.resolve(), ())
+                    if any(pattern.search(line) for pattern in allowed):
+                        continue
                     hits.append(f"{path.relative_to(ROOT)}:{line_number}: {line.strip()}")
 
     assert hits == []

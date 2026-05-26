@@ -9,7 +9,10 @@ VERSIONS = ROOT / "ergon_core" / "migrations" / "versions"
 
 def test_v2_has_one_initial_migration() -> None:
     migrations = sorted(path.name for path in VERSIONS.glob("*.py"))
-    assert migrations == ["00000000_initial_v2.py"]
+    assert migrations == [
+        "00000000_initial_v2.py",
+        "00000001_add_experiment_persistence.py",
+    ]
 
 
 def test_initial_migration_has_no_parent() -> None:
