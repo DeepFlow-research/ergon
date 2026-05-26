@@ -9,7 +9,7 @@ from ergon_core.core.persistence.telemetry.models import SampleRecord
 from sqlmodel import Session, select
 
 
-def definition_id_for_run(session: Session, sample_id: UUID) -> UUID:
+def definition_id_for_run(session: Session, sample_id: UUID) -> UUID | None:
     """Return the definition id for a run or fail the runtime invariant loudly."""
     run = session.exec(select(SampleRecord).where(SampleRecord.id == sample_id)).first()
     if run is None:

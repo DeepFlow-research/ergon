@@ -125,7 +125,7 @@ class TaskManagementService:
         the full Task snapshot lives in sample_graph_nodes.task_json with
         is_dynamic=True.
         """
-        dispatch: tuple[UUID, UUID, UUID] | None = None
+        dispatch: tuple[UUID, UUID | None, UUID] | None = None
         with get_session() as session:
             parent = self._graph_repo.get_node(session, sample_id=sample_id, task_id=parent_task_id)
             node = await self._graph_repo.add_node(
@@ -240,7 +240,7 @@ class TaskManagementService:
         session: Session,
         *,
         sample_id: UUID,
-        definition_id: UUID,
+        definition_id: UUID | None,
         parent_task_id: UUID,
         cause: PropagationCancelCause,
     ) -> CancelOrphansResult:
@@ -636,7 +636,7 @@ class TaskManagementService:
         session: Session,
         *,
         sample_id: UUID,
-        definition_id: UUID,
+        definition_id: UUID | None,
         task_id: UUID,
         cause: CancelCause,
     ) -> TaskCancelledEvent:

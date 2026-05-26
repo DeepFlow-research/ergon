@@ -10,7 +10,7 @@ class PersistOutputsRequest(InngestEventContract):
     name: ClassVar[str] = "task/persist-outputs"
 
     sample_id: UUID
-    definition_id: UUID
+    definition_id: UUID | None = None
     task_id: UUID
     execution_id: UUID
     sandbox_id: str | None = None

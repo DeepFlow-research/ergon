@@ -3,16 +3,16 @@ from typing import Literal
 from uuid import uuid4
 
 import pytest
-from sqlmodel import select
+from sqlmodel import Session, SQLModel, create_engine, select
 
+import ergon_core.core.persistence.definitions.models  # noqa: F401
+import ergon_core.core.persistence.experiments.models  # noqa: F401
+import ergon_core.core.persistence.graph.models  # noqa: F401
+import ergon_core.core.persistence.samples.models  # noqa: F401
+import ergon_core.core.persistence.telemetry.models  # noqa: F401
 from ergon_core.api import Environment, Experiment, RandomSampler, Sample
 from ergon_core.core.persistence.samples.models import SampleTaskEventRow
 from ergon_core.test_support.task_factory import task_with_id
-
-pytestmark = pytest.mark.xfail(
-    strict=True,
-    reason="PR05 implements ExperimentSubmissionService materialization and runtime start",
-)
 
 
 class MaterializedEnvironment(Environment):
@@ -32,6 +32,14 @@ class MaterializedEnvironment(Environment):
                 )
             ],
         )
+
+
+@pytest.fixture()
+def session() -> Iterator[Session]:
+    engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as session:
+        yield session
 
 
 @pytest.mark.asyncio

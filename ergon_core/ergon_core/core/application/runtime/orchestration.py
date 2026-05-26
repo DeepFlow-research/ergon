@@ -36,14 +36,14 @@ class InitializeWorkflowCommand(BaseModel):
     model_config = {"frozen": True}
 
     sample_id: UUID
-    definition_id: UUID
+    definition_id: UUID | None = None
 
 
 class InitializedWorkflow(BaseModel):
     model_config = {"frozen": True}
 
     sample_id: UUID
-    definition_id: UUID
+    definition_id: UUID | None = None
     benchmark_type: str
     total_tasks: int
     total_root_tasks: int
@@ -55,7 +55,7 @@ class PrepareTaskExecutionCommand(BaseModel):
     model_config = {"frozen": True}
 
     sample_id: UUID
-    definition_id: UUID
+    definition_id: UUID | None = None
     task_id: UUID
 
 
@@ -69,7 +69,7 @@ class PreparedTaskExecution(BaseModel):
     model_config = {"frozen": True}
 
     sample_id: UUID
-    definition_id: UUID
+    definition_id: UUID | None = None
     task_id: UUID
     task_slug: str
     task_description: str
@@ -110,7 +110,7 @@ class PropagateTaskCompletionCommand(BaseModel):
     model_config = {"frozen": True}
 
     sample_id: UUID
-    definition_id: UUID
+    definition_id: UUID | None = None
     task_id: UUID
     execution_id: UUID
 
@@ -119,7 +119,7 @@ class PropagationResult(BaseModel):
     model_config = {"frozen": True}
 
     sample_id: UUID
-    definition_id: UUID
+    definition_id: UUID | None = None
     completed_task_id: UUID
     ready_tasks: list[TaskDescriptor] = Field(default_factory=list)
     workflow_terminal_state: WorkflowTerminalState = WorkflowTerminalState.NONE
@@ -129,7 +129,7 @@ class FinalizeWorkflowCommand(BaseModel):
     model_config = {"frozen": True}
 
     sample_id: UUID
-    definition_id: UUID
+    definition_id: UUID | None = None
 
 
 class FinalizedWorkflowResult(BaseModel):

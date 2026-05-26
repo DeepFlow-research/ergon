@@ -26,7 +26,7 @@ async def _cancel_orphans_for(
     ctx: Any,
     *,
     sample_id: UUID,
-    definition_id: UUID,
+    definition_id: UUID | None,
     parent_task_id: UUID,
     cause: PropagationCancelCause,
 ) -> int:

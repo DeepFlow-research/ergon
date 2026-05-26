@@ -18,7 +18,7 @@ from ergon_core.core.application.events import TaskReadyEvent
 
 logger = logging.getLogger(__name__)
 
-TaskReadyDispatcher = Callable[[UUID, UUID, UUID], Awaitable[None]]
+TaskReadyDispatcher = Callable[[UUID, UUID | None, UUID], Awaitable[None]]
 
 
 class RuntimeEventDispatcher:
@@ -31,7 +31,7 @@ class RuntimeEventDispatcher:
         self,
         *,
         sample_id: UUID,
-        definition_id: UUID,
+        definition_id: UUID | None,
         task_id: UUID,
     ) -> None:
         """Emit the canonical ``task/ready`` event for a committed task state."""

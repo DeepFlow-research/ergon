@@ -9,6 +9,7 @@ from ergon_core.core.application.events.service import get_dashboard_event_publi
 from ergon_core.core.application.runtime.orchestration import InitializeWorkflowCommand
 from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
 from ergon_core.core.jobs._events import send_job_events
+from sqlmodel import Session
 from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     get_trace_sink,
@@ -49,21 +50,22 @@ async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStart
 
     await send_job_events(events)
 
-    snapshot = SampleSnapshotReadService().build_snapshot(payload.sample_id)
-    if snapshot is None:
-        raise RuntimeError(f"Run snapshot {payload.sample_id} not found after workflow start")
+    if payload.definition_id is not None:
+        snapshot = SampleSnapshotReadService().build_snapshot(payload.sample_id)
+        if snapshot is None:
+            raise RuntimeError(f"Run snapshot {payload.sample_id} not found after workflow start")
 
-    await get_dashboard_event_publisher().publish(
-        DashboardWorkflowStartedEvent(
-            sample_id=payload.sample_id,
-            definition_id=payload.definition_id,
-            workflow_name=initialized.benchmark_type,
-            snapshot=snapshot,
-            started_at=snapshot.started_at or utcnow(),
-            total_tasks=snapshot.total_tasks,
-            total_leaf_tasks=snapshot.total_leaf_tasks,
+        await get_dashboard_event_publisher().publish(
+            DashboardWorkflowStartedEvent(
+                sample_id=payload.sample_id,
+                definition_id=payload.definition_id,
+                workflow_name=initialized.benchmark_type,
+                snapshot=snapshot,
+                started_at=snapshot.started_at or utcnow(),
+                total_tasks=snapshot.total_tasks,
+                total_leaf_tasks=snapshot.total_leaf_tasks,
+            )
         )
-    )
 
     result = WorkflowStartResult(
         sample_id=payload.sample_id,
@@ -92,3 +94,23 @@ async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStart
         result.total_tasks,
     )
     return result
+
+
+async def run_workflow_start_job(
+    *,
+    session: Session,
+    event: WorkflowStartedEvent,
+) -> WorkflowStartResult:
+    svc = WorkflowService()
+    initialized = await svc.initialize(
+        InitializeWorkflowCommand(
+            sample_id=event.sample_id,
+            definition_id=event.definition_id,
+        ),
+        session=session,
+    )
+    return WorkflowStartResult(
+        sample_id=event.sample_id,
+        initial_ready_tasks=len(initialized.initial_ready_tasks),
+        total_tasks=initialized.total_tasks,
+    )

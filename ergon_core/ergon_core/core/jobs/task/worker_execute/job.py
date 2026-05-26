@@ -208,7 +208,7 @@ class _ReadyDispatch(BaseModel):
     model_config = {"frozen": True}
 
     sample_id: UUID
-    definition_id: UUID
+    definition_id: UUID | None = None
     task_id: UUID
 
 
@@ -272,7 +272,7 @@ class _StepAwareTaskManagementService(TaskManagementService):
     async def _collect_ready_dispatch(
         self,
         sample_id: UUID,
-        definition_id: UUID,
+        definition_id: UUID | None,
         task_id: UUID,
     ) -> None:
         if self._active_ready_dispatches is None:

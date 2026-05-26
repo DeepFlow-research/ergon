@@ -5,9 +5,10 @@ from uuid import UUID, uuid4
 
 from sqlmodel import Session
 
+from ergon_core.api.benchmark import Task
+from ergon_core.api.benchmark.task import EmptyTaskPayload
 from ergon_core.api.experiment.experiment import Experiment, ExperimentRef
 from ergon_core.api.experiment.sample import Sample
-from ergon_core.api.benchmark import Task
 from ergon_core.core.application.experiments.repository import (
     ExperimentRepository,
 )
@@ -126,5 +127,9 @@ async def _task_from_candidate_snapshot(task_json: object) -> Task:
     # Candidate-pool rows are not runtime materializations. We use the existing
     # `_type` dispatch path to rebuild object-bound config, then clear the
     # temporary id so materialization remains the only runtime-id boundary.
+    if isinstance(task.dependency_task_slugs, list):
+        task.dependency_task_slugs = tuple(task.dependency_task_slugs)
+    if isinstance(task.task_payload, dict) and not task.task_payload:
+        task.task_payload = EmptyTaskPayload()
     task._task_id = None
     return task

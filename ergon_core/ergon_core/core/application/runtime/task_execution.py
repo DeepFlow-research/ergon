@@ -1,8 +1,10 @@
 """Task execution lifecycle: prepare, finalize success, finalize failure."""
 
 import logging
+from collections.abc import Mapping
 from uuid import UUID
 
+from pydantic import JsonValue
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
@@ -155,18 +157,29 @@ class TaskExecutionService:
                     sample_id=command.sample_id,
                     task_id=lookup_id,
                 )
-            definition = require_not_none(
-                session.get(ExperimentDefinition, command.definition_id),
-                f"Definition {command.definition_id} not found",
-            )
-
             assigned_worker_slug = node.assigned_worker_slug
-            worker_type, model_target, definition_worker_id = self._resolve_worker_config(
-                session,
-                definition_id=command.definition_id,
-                sample_id=command.sample_id,
-                assigned_worker_slug=assigned_worker_slug,
+            run_record = require_not_none(
+                session.get(SampleRecord, command.sample_id),
+                f"SampleRecord {command.sample_id} not found",
             )
+            if command.definition_id is None:
+                worker_type, model_target, definition_worker_id = _resolve_sample_worker_config(
+                    node.task_json,
+                    assigned_worker_slug=assigned_worker_slug,
+                )
+                benchmark_type = run_record.benchmark_type
+            else:
+                definition = require_not_none(
+                    session.get(ExperimentDefinition, command.definition_id),
+                    f"Definition {command.definition_id} not found",
+                )
+                worker_type, model_target, definition_worker_id = self._resolve_worker_config(
+                    session,
+                    definition_id=command.definition_id,
+                    sample_id=command.sample_id,
+                    assigned_worker_slug=assigned_worker_slug,
+                )
+                benchmark_type = definition.benchmark_type
 
             execution = SampleTaskAttempt(
                 sample_id=command.sample_id,
@@ -183,10 +196,7 @@ class TaskExecutionService:
             # Snapshot ORM-derived scalars before commit. SQLAlchemy's
             # `expire_on_commit=True` default expires every loaded
             # instance on commit, and `with get_session() as session:`
-            # closes the session immediately after — so the post-commit
-            # reads of `definition.benchmark_type` / `execution.id`
-            # below would raise DetachedInstanceError.
-            benchmark_type = definition.benchmark_type
+            # closes the session immediately after.
             execution_id = execution.id
             await self._graph_repo.update_node_status(
                 session,
@@ -308,3 +318,41 @@ class TaskExecutionService:
                 new_status=graph_status.FAILED,
                 old_status=graph_status.RUNNING,
             )
+
+
+def _resolve_sample_worker_config(
+    task_json: Mapping[str, JsonValue],
+    *,
+    assigned_worker_slug: str | None,
+) -> tuple[str | None, str | None, None]:
+    worker_snapshot = _component_snapshot(task_json.get("worker"))
+    if worker_snapshot is None:
+        return assigned_worker_slug, None, None
+    worker_slug = assigned_worker_slug or _component_slug(worker_snapshot, fallback="worker")
+    return (
+        _component_type(worker_snapshot, fallback=worker_slug),
+        _component_model_target(worker_snapshot),
+        None,
+    )
+
+
+def _component_snapshot(value: JsonValue | None) -> Mapping[str, JsonValue] | None:
+    return value if isinstance(value, dict) else None
+
+
+def _component_slug(snapshot: Mapping[str, JsonValue], *, fallback: str) -> str:
+    value = snapshot.get("type_slug") or snapshot.get("slug") or snapshot.get("name")
+    if isinstance(value, str) and value:
+        return value
+    component_type = _component_type(snapshot, fallback=fallback)
+    return component_type.rsplit(":", 1)[-1].rsplit(".", 1)[-1]
+
+
+def _component_type(snapshot: Mapping[str, JsonValue], *, fallback: str) -> str:
+    value = snapshot.get("_type") or snapshot.get("type")
+    return value if isinstance(value, str) and value else fallback
+
+
+def _component_model_target(snapshot: Mapping[str, JsonValue]) -> str | None:
+    value = snapshot.get("model") or snapshot.get("model_target")
+    return value if isinstance(value, str) else None

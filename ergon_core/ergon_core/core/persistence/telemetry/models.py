@@ -34,11 +34,18 @@ class SampleRecord(SQLModel, table=True):
     __tablename__ = "samples"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    definition_id: UUID = Field(
+    definition_id: UUID | None = Field(
+        default=None,
         foreign_key="experiment_definitions.id",
         index=True,
         description="Canonical runtime ExperimentDefinition id for this run.",
     )
+    experiment_id: UUID | None = Field(default=None, index=True)
+    environment_id: UUID | None = Field(default=None, index=True)
+    sampler_invocation_id: UUID | None = Field(default=None, index=True)
+    pool_entry_id: UUID | None = Field(default=None, index=True)
+    sample_key: str | None = Field(default=None, index=True)
+    sample_ref_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     benchmark_type: str = Field(index=True)
     instance_key: str = Field(index=True)
     sample_id: str | None = Field(default=None, index=True)

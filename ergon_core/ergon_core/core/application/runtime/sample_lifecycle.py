@@ -105,45 +105,88 @@ class WorkflowService:
         self._task_execution_repo = TaskExecutionRepository()
         self._runtime_events = RuntimeEventDispatcher(task_ready_dispatcher)
 
-    async def initialize(self, command: InitializeWorkflowCommand) -> InitializedWorkflow:
+    async def initialize(
+        self,
+        command: InitializeWorkflowCommand,
+        *,
+        session: Session | None = None,
+    ) -> InitializedWorkflow:
         """Load a definition, seed graph state, and return initially ready tasks."""
+        if session is not None:
+            return await self._initialize_in_session(session, command, commit=False)
         with get_session() as session:
-            definition = require_not_none(
-                session.get(ExperimentDefinition, command.definition_id),
-                f"Definition {command.definition_id} not found",
-            )
-            all_tasks = list(
-                session.exec(
-                    select(ExperimentDefinitionTask).where(
-                        ExperimentDefinitionTask.experiment_definition_id == command.definition_id,
-                    )
-                ).all()
-            )
+            return await self._initialize_in_session(session, command, commit=True)
 
-            self._graph_repo.initialize_from_definition(
+    async def _initialize_in_session(
+        self,
+        session: Session,
+        command: InitializeWorkflowCommand,
+        *,
+        commit: bool,
+    ) -> InitializedWorkflow:
+        materialized_nodes = list(
+            session.exec(
+                select(SampleGraphNode).where(SampleGraphNode.sample_id == command.sample_id)
+            ).all()
+        )
+        if materialized_nodes:
+            return await self._initialize_materialized_sample(
                 session,
-                command.sample_id,
-                command.definition_id,
-                initial_node_status=graph_status.PENDING,
-                initial_edge_status=graph_status.EDGE_PENDING,
-                meta=MutationMeta(actor="system:workflow_init"),
+                command,
+                nodes=materialized_nodes,
+                commit=commit,
             )
+        if command.definition_id is None:
+            raise ValueError(
+                f"Sample {command.sample_id} has no materialized graph and no definition_id"
+            )
+        return await self._initialize_definition_backed_sample(session, command, commit=commit)
+
+    async def _initialize_definition_backed_sample(
+        self,
+        session: Session,
+        command: InitializeWorkflowCommand,
+        *,
+        commit: bool,
+    ) -> InitializedWorkflow:
+        definition = require_not_none(
+            session.get(ExperimentDefinition, command.definition_id),
+            f"Definition {command.definition_id} not found",
+        )
+        all_tasks = list(
+            session.exec(
+                select(ExperimentDefinitionTask).where(
+                    ExperimentDefinitionTask.experiment_definition_id == command.definition_id,
+                )
+            ).all()
+        )
+
+        self._graph_repo.initialize_from_definition(
+            session,
+            command.sample_id,
+            command.definition_id,
+            initial_node_status=graph_status.PENDING,
+            initial_edge_status=graph_status.EDGE_PENDING,
+            meta=MutationMeta(actor="system:workflow_init"),
+        )
+        if commit:
             session.commit()
 
-            task_descriptors = [
-                TaskDescriptor(
-                    task_id=t.id,
-                    task_slug=t.task_slug,
-                    parent_task_id=t.parent_task_id,
-                )
-                for t in all_tasks
-            ]
-            graph_lookup = GraphNodeLookup(session, command.sample_id)
-
-            run_record = require_not_none(
-                session.get(SampleRecord, command.sample_id),
-                f"SampleRecord {command.sample_id} not found",
+        task_descriptors = [
+            TaskDescriptor(
+                task_id=t.id,
+                task_slug=t.task_slug,
+                parent_task_id=t.parent_task_id,
             )
+            for t in all_tasks
+        ]
+        graph_lookup = GraphNodeLookup(session, command.sample_id)
+
+        run_record = require_not_none(
+            session.get(SampleRecord, command.sample_id),
+            f"SampleRecord {command.sample_id} not found",
+        )
+        if run_record.status == SampleStatus.PENDING:
             run_record.status = SampleStatus.EXECUTING
             run_record.started_at = utcnow()
             session.add(run_record)
@@ -156,27 +199,96 @@ class WorkflowService:
                     event_timestamp=run_record.started_at,
                 )
             )
+        if commit:
             session.commit()
 
-            ready_ids = await get_initial_ready_tasks(
-                session,
-                command.sample_id,
-                command.definition_id,
-                graph_repo=self._graph_repo,
-                graph_lookup=graph_lookup,
-            )
-            ready_id_set = set(ready_ids)
-            root_count = sum(1 for t in all_tasks if t.parent_task_id is None)
+        ready_ids = await get_initial_ready_tasks(
+            session,
+            command.sample_id,
+            command.definition_id,
+            graph_repo=self._graph_repo,
+            graph_lookup=graph_lookup,
+            commit=commit,
+        )
+        if not commit:
+            session.flush()
+        ready_id_set = set(ready_ids)
+        root_count = sum(1 for t in all_tasks if t.parent_task_id is None)
 
-            return InitializedWorkflow(
-                sample_id=command.sample_id,
-                definition_id=command.definition_id,
-                benchmark_type=definition.benchmark_type,
-                total_tasks=len(all_tasks),
-                total_root_tasks=root_count,
-                pending_tasks=task_descriptors,
-                initial_ready_tasks=[td for td in task_descriptors if td.task_id in ready_id_set],
+        return InitializedWorkflow(
+            sample_id=command.sample_id,
+            definition_id=command.definition_id,
+            benchmark_type=definition.benchmark_type,
+            total_tasks=len(all_tasks),
+            total_root_tasks=root_count,
+            pending_tasks=task_descriptors,
+            initial_ready_tasks=[td for td in task_descriptors if td.task_id in ready_id_set],
+        )
+
+    async def _initialize_materialized_sample(
+        self,
+        session: Session,
+        command: InitializeWorkflowCommand,
+        *,
+        nodes: list[SampleGraphNode],
+        commit: bool,
+    ) -> InitializedWorkflow:
+        graph_lookup = GraphNodeLookup(session, command.sample_id)
+        run_record = require_not_none(
+            session.get(SampleRecord, command.sample_id),
+            f"SampleRecord {command.sample_id} not found",
+        )
+        if run_record.status == SampleStatus.PENDING:
+            run_record.status = SampleStatus.EXECUTING
+            run_record.started_at = utcnow()
+            session.add(run_record)
+            SampleRuntimeEventAppender(session).append_status_event(
+                SampleStatusEventRow(
+                    sample_id=command.sample_id,
+                    event_type="sample.status_changed",
+                    status=SampleStatus.EXECUTING,
+                    actor="system:workflow_init",
+                    event_timestamp=run_record.started_at,
+                )
             )
+        ready_ids = await get_initial_ready_tasks(
+            session,
+            command.sample_id,
+            None,
+            graph_repo=self._graph_repo,
+            graph_lookup=graph_lookup,
+            commit=commit,
+        )
+        if commit:
+            session.commit()
+        else:
+            session.flush()
+
+        ready_id_set = set(ready_ids)
+        dependency_target_ids = set(
+            session.exec(
+                select(SampleGraphEdge.target_task_id).where(
+                    SampleGraphEdge.sample_id == command.sample_id
+                )
+            ).all()
+        )
+        task_descriptors = [
+            TaskDescriptor(
+                task_id=node.task_id,
+                task_slug=node.task_slug,
+                parent_task_id=node.parent_task_id,
+            )
+            for node in sorted(nodes, key=lambda node: (node.level, node.task_slug, str(node.task_id)))
+        ]
+        return InitializedWorkflow(
+            sample_id=command.sample_id,
+            definition_id=command.definition_id,
+            benchmark_type=run_record.benchmark_type,
+            total_tasks=len(nodes),
+            total_root_tasks=sum(1 for node in nodes if node.task_id not in dependency_target_ids),
+            pending_tasks=task_descriptors,
+            initial_ready_tasks=[td for td in task_descriptors if td.task_id in ready_id_set],
+        )
 
     def finalize(self, command: FinalizeWorkflowCommand) -> FinalizedWorkflowResult:
         """Aggregate evaluations and close the run."""
