@@ -1,43 +1,26 @@
 """Materialize authored Samples into typed runtime WAL and graph projections."""
 
-from collections.abc import Mapping
 from uuid import UUID, uuid4
 
-from pydantic import JsonValue
 from sqlmodel import Session
 
+from ergon_core.api._serialization import component_type_path
 from ergon_core.api.experiment.sample import Sample
 from ergon_core.core.application.runtime import status as graph_status
-from ergon_core.core.application.samples.events import SampleRuntimeEventAppender
+from ergon_core.core.application.samples.events import (
+    SampleRuntimeEventAppender,
+    append_sample_status_changed,
+)
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.persistence.samples.models import (
     SampleEdgeEventRow,
     SampleEvaluatorEventRow,
     SampleSandboxEventRow,
-    SampleStatusEventRow,
     SampleTaskEventRow,
     SampleWorkerEventRow,
 )
 from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord
-
-
-def component_slug(snapshot: Mapping[str, JsonValue], *, fallback: str) -> str:
-    value = snapshot.get("type_slug") or snapshot.get("slug") or snapshot.get("name")
-    if isinstance(value, str) and value:
-        return value
-    component_type = component_type_path(snapshot, fallback=fallback)
-    return component_type.rsplit(":", 1)[-1].rsplit(".", 1)[-1]
-
-
-def component_type_path(snapshot: Mapping[str, JsonValue], *, fallback: str) -> str:
-    value = snapshot.get("_type") or snapshot.get("type")
-    return value if isinstance(value, str) and value else fallback
-
-
-def component_model_target(snapshot: Mapping[str, JsonValue]) -> str | None:
-    value = snapshot.get("model") or snapshot.get("model_target")
-    return value if isinstance(value, str) else None
 
 
 def materialize_sample(
@@ -47,14 +30,12 @@ def materialize_sample(
     sample_row: SampleRecord,
 ) -> None:
     wal = SampleRuntimeEventAppender(session)
-    wal.append_status_event(
-        SampleStatusEventRow(
-            sample_id=sample_row.id,
-            event_type="sample.status_changed",
-            status=SampleStatus.PENDING,
-            payload_json={"reason": "materialized"},
-            actor="system:materialization",
-        )
+    append_sample_status_changed(
+        session,
+        sample_id=sample_row.id,
+        status=SampleStatus.PENDING,
+        payload={"reason": "materialized"},
+        actor="system:materialization",
     )
 
     task_ids_by_key: dict[str, UUID] = {}
@@ -62,10 +43,11 @@ def materialize_sample(
         task_id = uuid4()
         task_ids_by_key[task.task_slug] = task_id
         task_json = task.model_dump(mode="json")
-        worker_snapshot = _required_component_snapshot(task_json, "worker")
-        sandbox_snapshot = _required_component_snapshot(task_json, "sandbox")
-        worker_slug = component_slug(worker_snapshot, fallback="worker")
-        sandbox_slug = component_slug(sandbox_snapshot, fallback="sandbox")
+        worker_snapshot = task.worker.model_dump(mode="json")
+        sandbox_snapshot = task.sandbox.model_dump(mode="json")
+        worker_slug = task.worker.type_slug
+        sandbox_type = component_type_path(task.sandbox)
+        sandbox_slug = _component_display_slug(sandbox_type)
 
         session.add(
             SampleGraphNode(
@@ -80,7 +62,7 @@ def materialize_sample(
                 assigned_worker_slug=worker_slug,
             )
         )
-        task_event = wal.append_task_event(
+        wal.append_task_event(
             SampleTaskEventRow(
                 sample_id=sample_row.id,
                 task_id=task_id,
@@ -103,8 +85,8 @@ def materialize_sample(
                 task_id=task_id,
                 event_type="worker.added",
                 worker_slug=worker_slug,
-                worker_type=component_type_path(worker_snapshot, fallback=worker_slug),
-                model_target=component_model_target(worker_snapshot),
+                worker_type=task.worker.type_slug,
+                model_target=task.worker.model,
                 worker_snapshot_json=worker_snapshot,
                 payload_json={"task_id": str(task_id), "worker": worker_snapshot},
                 actor="system:materialization",
@@ -116,27 +98,26 @@ def materialize_sample(
                 task_id=task_id,
                 event_type="sandbox.added",
                 sandbox_slug=sandbox_slug,
-                sandbox_type=component_type_path(sandbox_snapshot, fallback=sandbox_slug),
+                sandbox_type=sandbox_type,
                 sandbox_snapshot_json=sandbox_snapshot,
                 payload_json={"task_id": str(task_id), "sandbox": sandbox_snapshot},
                 actor="system:materialization",
             )
         )
-        for evaluator_snapshot in _evaluator_snapshots(task_json):
-            evaluator_slug = component_slug(evaluator_snapshot, fallback="default")
+        for evaluator in task.evaluators:
+            evaluator_snapshot = evaluator.model_dump(mode="json")
             wal.append_evaluator_event(
                 SampleEvaluatorEventRow(
                     sample_id=sample_row.id,
                     task_id=task_id,
                     event_type="evaluator.added",
-                    evaluator_slug=evaluator_slug,
-                    evaluator_type=component_type_path(evaluator_snapshot, fallback=evaluator_slug),
+                    evaluator_slug=evaluator.type_slug,
+                    evaluator_type=evaluator.type_slug,
                     evaluator_snapshot_json=evaluator_snapshot,
                     payload_json={"task_id": str(task_id), "evaluator": evaluator_snapshot},
                     actor="system:materialization",
                 )
             )
-        session.add(task_event)
 
     session.flush()
     for task in sample.tasks:
@@ -175,15 +156,5 @@ def materialize_sample(
     session.flush()
 
 
-def _required_component_snapshot(task_json: Mapping[str, JsonValue], key: str) -> dict:
-    value = task_json.get(key)
-    if not isinstance(value, dict):
-        raise ValueError(f"Task snapshot is missing object-bound {key}")
-    return value
-
-
-def _evaluator_snapshots(task_json: Mapping[str, JsonValue]) -> list[dict]:
-    evaluators = task_json.get("evaluators", [])
-    if not isinstance(evaluators, list):
-        return []
-    return [snapshot for snapshot in evaluators if isinstance(snapshot, dict)]
+def _component_display_slug(type_path: str) -> str:
+    return type_path.rsplit(":", 1)[-1].rsplit(".", 1)[-1]

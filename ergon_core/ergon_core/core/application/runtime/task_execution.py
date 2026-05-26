@@ -1,10 +1,9 @@
 """Task execution lifecycle: prepare, finalize success, finalize failure."""
 
 import logging
-from collections.abc import Mapping
 from uuid import UUID
 
-from pydantic import JsonValue
+from ergon_core.api.benchmark import Task
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
@@ -163,8 +162,13 @@ class TaskExecutionService:
                 f"SampleRecord {command.sample_id} not found",
             )
             if command.definition_id is None:
-                worker_type, model_target, definition_worker_id = _resolve_sample_worker_config(
+                (
+                    worker_type,
+                    model_target,
+                    definition_worker_id,
+                ) = await _resolve_sample_worker_config(
                     node.task_json,
+                    task_id=view.task_id,
                     assigned_worker_slug=assigned_worker_slug,
                 )
                 benchmark_type = run_record.benchmark_type
@@ -320,39 +324,11 @@ class TaskExecutionService:
             )
 
 
-def _resolve_sample_worker_config(
-    task_json: Mapping[str, JsonValue],
+async def _resolve_sample_worker_config(
+    task_json: dict,
     *,
+    task_id: UUID,
     assigned_worker_slug: str | None,
-) -> tuple[str | None, str | None, None]:
-    worker_snapshot = _component_snapshot(task_json.get("worker"))
-    if worker_snapshot is None:
-        return assigned_worker_slug, None, None
-    worker_slug = assigned_worker_slug or _component_slug(worker_snapshot, fallback="worker")
-    return (
-        _component_type(worker_snapshot, fallback=worker_slug),
-        _component_model_target(worker_snapshot),
-        None,
-    )
-
-
-def _component_snapshot(value: JsonValue | None) -> Mapping[str, JsonValue] | None:
-    return value if isinstance(value, dict) else None
-
-
-def _component_slug(snapshot: Mapping[str, JsonValue], *, fallback: str) -> str:
-    value = snapshot.get("type_slug") or snapshot.get("slug") or snapshot.get("name")
-    if isinstance(value, str) and value:
-        return value
-    component_type = _component_type(snapshot, fallback=fallback)
-    return component_type.rsplit(":", 1)[-1].rsplit(".", 1)[-1]
-
-
-def _component_type(snapshot: Mapping[str, JsonValue], *, fallback: str) -> str:
-    value = snapshot.get("_type") or snapshot.get("type")
-    return value if isinstance(value, str) and value else fallback
-
-
-def _component_model_target(snapshot: Mapping[str, JsonValue]) -> str | None:
-    value = snapshot.get("model") or snapshot.get("model_target")
-    return value if isinstance(value, str) else None
+) -> tuple[str, str, None]:
+    task = await Task.from_definition(task_json, task_id=task_id)
+    return assigned_worker_slug or task.worker.type_slug, task.worker.model, None

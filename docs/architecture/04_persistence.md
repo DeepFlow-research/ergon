@@ -80,7 +80,12 @@ sampler invocation, marks selected candidate rows, and creates one
 remain provenance rows; they are not serialized into the runtime replay
 contract. `workflow/started` may now carry only `sample_id` when the sample
 graph already exists, while the definition-backed initialization path remains as
-a temporary bridge until the runtime consolidation PR removes it.
+a temporary bridge.
+
+TODO(PR09): remove the definition-backed initialization bridge when runtime
+launch no longer reads `experiment_definitions`, `experiment_definition_tasks`,
+or definition worker/evaluator bindings. The remaining path should initialize
+from already-materialized sample graph/WAL rows only.
 
 ### Manager-spawned subtasks (dynamic graph growth)
 

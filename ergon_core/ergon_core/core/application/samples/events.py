@@ -14,6 +14,7 @@ from ergon_core.core.persistence.samples.models import (
     SampleWorkerEventRow,
 )
 from ergon_core.core.shared.json_types import JsonObject
+from ergon_core.core.shared.utils import utcnow
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
@@ -108,6 +109,27 @@ class SampleRuntimeEventAppender:
         self._session.add(row)
         self._session.flush()
         return row
+
+
+def append_sample_status_changed(
+    session: Session,
+    *,
+    sample_id: UUID,
+    status: str,
+    actor: str,
+    event_timestamp: datetime | None = None,
+    payload: JsonObject | None = None,
+) -> SampleStatusEventRow:
+    return SampleRuntimeEventAppender(session).append_status_event(
+        SampleStatusEventRow(
+            sample_id=sample_id,
+            event_type="sample.status_changed",
+            status=status,
+            actor=actor,
+            event_timestamp=event_timestamp or utcnow(),
+            payload_json=dict(payload or {}),
+        )
+    )
 
 
 class SampleRuntimeEventReadService:

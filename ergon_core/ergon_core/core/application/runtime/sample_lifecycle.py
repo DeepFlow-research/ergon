@@ -9,7 +9,6 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.application.runtime import status as graph_status
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
-from ergon_core.core.persistence.samples.models import SampleStatusEventRow
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import (
     SampleResourceKind,
@@ -41,7 +40,7 @@ from ergon_core.core.application.runtime.lifecycle import (
 )
 from ergon_core.core.application.runtime.graph_traversal import descendant_ids
 from ergon_core.core.application.runtime.models import GraphEdgeDto, GraphNodeDto, MutationMeta
-from ergon_core.core.application.samples.events import SampleRuntimeEventAppender
+from ergon_core.core.application.samples.events import append_sample_status_changed
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from ergon_core.core.application.runtime.orchestration import (
     FinalizedWorkflowResult,
@@ -190,14 +189,12 @@ class WorkflowService:
             run_record.status = SampleStatus.EXECUTING
             run_record.started_at = utcnow()
             session.add(run_record)
-            SampleRuntimeEventAppender(session).append_status_event(
-                SampleStatusEventRow(
-                    sample_id=command.sample_id,
-                    event_type="sample.status_changed",
-                    status=SampleStatus.EXECUTING,
-                    actor="system:workflow_init",
-                    event_timestamp=run_record.started_at,
-                )
+            append_sample_status_changed(
+                session,
+                sample_id=command.sample_id,
+                status=SampleStatus.EXECUTING,
+                actor="system:workflow_init",
+                event_timestamp=run_record.started_at,
             )
         if commit:
             session.commit()
@@ -242,14 +239,12 @@ class WorkflowService:
             run_record.status = SampleStatus.EXECUTING
             run_record.started_at = utcnow()
             session.add(run_record)
-            SampleRuntimeEventAppender(session).append_status_event(
-                SampleStatusEventRow(
-                    sample_id=command.sample_id,
-                    event_type="sample.status_changed",
-                    status=SampleStatus.EXECUTING,
-                    actor="system:workflow_init",
-                    event_timestamp=run_record.started_at,
-                )
+            append_sample_status_changed(
+                session,
+                sample_id=command.sample_id,
+                status=SampleStatus.EXECUTING,
+                actor="system:workflow_init",
+                event_timestamp=run_record.started_at,
             )
         ready_ids = await get_initial_ready_tasks(
             session,
@@ -326,14 +321,12 @@ class WorkflowService:
                 "cost_observed": completion.cost_observed,
             }
             session.add(run_record)
-            SampleRuntimeEventAppender(session).append_status_event(
-                SampleStatusEventRow(
-                    sample_id=command.sample_id,
-                    event_type="sample.status_changed",
-                    status=SampleStatus.COMPLETED,
-                    actor="system:workflow_finalize",
-                    event_timestamp=completion.completed_at,
-                )
+            append_sample_status_changed(
+                session,
+                sample_id=command.sample_id,
+                status=SampleStatus.COMPLETED,
+                actor="system:workflow_finalize",
+                event_timestamp=completion.completed_at,
             )
             session.commit()
 
