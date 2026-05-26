@@ -37,10 +37,8 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "CriterionEvidence",
         "EvidenceMessage",
         # PR 5 — object-bound authoring surface.
-        # PR 6.5 — Experiment wrapper deleted; persist_benchmark replaces it.
         "Evaluator",
         "persist_experiment",
-        "persist_benchmark",
         "RandomSampler",
         "Rubric",
         "Sample",
@@ -70,6 +68,7 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "EnvironmentSource",
         "ExperimentHandle",
         "ExperimentRunHandle",
+        "persist_benchmark",
         "SourceDescriptor",
         # Toolkit is a ReAct/builtins implementation detail, not a core
         # authoring API concept.

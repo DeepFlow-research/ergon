@@ -3,8 +3,8 @@
 Each subdirectory is one benchmark.  Import from Python; **there is no
 CLI authoring path** (PR 6.5 deleted `ergon experiment define` /
 `ergon run <benchmark>`).  Authoring is Python-only; the CLI is for
-observation (`ergon experiment show` / `ergon run status`, added in
-PR 8).
+observation (`ergon experiment show`, `ergon sample status`, and related read
+commands).
 
 ## Catalogue
 
@@ -35,21 +35,15 @@ runtime dispatch dict; no per-benchmark `experiment.py` file.
 import asyncio
 from ergon_builtins.benchmarks.minif2f import MiniF2FBenchmark
 from ergon_builtins.benchmarks.minif2f.worker_factory import make_minif2f_worker
-from ergon_core.api import persist_benchmark
-# launch_run lives in core.application.experiments.launch
 
 async def main():
     benchmark = MiniF2FBenchmark(
         worker_factory=make_minif2f_worker,
         limit=10,
     )
-    handle = persist_benchmark(
-        benchmark,
-        name="minif2f-react",
-        # experiment="ablation-2026-05-15",   # optional grouping tag
-    )
-    print(f"DEFINITION_ID={handle.definition_id}")
-    # Then kick the run via the dashboard or programmatic launch.
+    # Submit this configured benchmark through a higher-level
+    # experiment/environment authoring flow.
+    print(benchmark.type_slug)
 
 asyncio.run(main())
 ```
@@ -67,18 +61,11 @@ for label, worker_factory in [
     # ("cot", make_minif2f_cot_worker),   # when CoTWorker lands
 ]:
     benchmark = MiniF2FBenchmark(worker_factory=worker_factory, limit=10)
-    persist_benchmark(
-        benchmark,
-        name=f"minif2f-{label}",
-        experiment=EXPERIMENT,
-        metadata={"strategy": label},
-    )
+    metadata = {"strategy": label}
+    # Add benchmark plus metadata to your experiment/environment authoring flow.
 ```
 
-The `experiment` argument is the optional grouping tag — definitions
-tagged with the same string belong to the same logical experiment.
-Use `ergon experiment by-tag <tag>` (PR 8) to list all definitions
-sharing a tag and see their latest run status.
+The experiment tag groups related submissions for read models and dashboards.
 
 ## Why no CLI authoring path?
 

@@ -33,7 +33,6 @@ from ergon_core.api.experiment import (
     SamplingContext,
     SamplingHistory,
 )
-from ergon_core.core.application.experiments.service import persist_benchmark
 from ergon_core.api.rubric import Evaluator, Rubric, TaskEvaluationResult
 from ergon_core.api.sandbox import Sandbox, SandboxRuntime
 from ergon_core.api.worker import (
@@ -73,7 +72,6 @@ __all__ = [
     "Evaluator",
     "EvidenceMessage",
     "persist_experiment",
-    "persist_benchmark",
     "RandomSampler",
     "Rubric",
     "Sample",

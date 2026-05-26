@@ -136,12 +136,13 @@ def handle_experiment_list(args: Namespace) -> int:
     if not result.experiments:
         print("No experiments found.")
         return exit_codes.OK
-    lines = ["EXPERIMENT_ID\tNAME\tSAMPLES\tSAMPLER_INVOCATIONS"]
+    lines = ["EXPERIMENT_ID\tNAME\tENVIRONMENTS\tSAMPLES\tSAMPLER_INVOCATIONS"]
     lines.extend(
         "\t".join(
             [
                 str(experiment.experiment_id),
                 experiment.name,
+                ", ".join(environment.environment_name for environment in experiment.environments),
                 str(experiment.sample_count),
                 str(experiment.sampler_invocation_count),
             ]

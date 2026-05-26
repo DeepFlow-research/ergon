@@ -8,8 +8,8 @@ from ergon_cli.main import build_parser
 from ergon_core.core.views.experiments.models import (
     EnvironmentContributionView,
     ExperimentDetailView as CoreExperimentDetailView,
-    ExperimentSampleSummaryView,
     ExperimentListView,
+    ExperimentSampleSummaryView,
 )
 
 
@@ -17,7 +17,18 @@ def _experiment_state(**overrides) -> CoreExperimentDetailView:
     data = {
         "experiment_id": uuid4(),
         "name": "ci experiment",
+        "environments": [
+            EnvironmentContributionView(
+                environment_id=uuid4(),
+                environment_name="mini-validation",
+                source_mode="materialized",
+                sample_count=2,
+                selected_count=2,
+            )
+        ],
         "sample_count": 2,
+        "samples": [],
+        "sampler_invocations": [],
         "created_at": "2026-04-27T12:00:00Z",
     }
     data.update(overrides)
@@ -25,7 +36,7 @@ def _experiment_state(**overrides) -> CoreExperimentDetailView:
 
 
 def test_experiment_subcommands_are_registered_in_main_parser() -> None:
-    """Show and list are registered for current definition-backed experiments."""
+    """Show and list are registered for current experiments."""
     parser = build_parser()
 
     show_args = parser.parse_args(["experiment", "show", str(uuid4())])
@@ -75,8 +86,8 @@ def test_experiment_list_prints_rows(monkeypatch, capsys):
             assert limit == 3
             return ExperimentListView(
                 items=[
-                    _experiment_state(name="alpha", sample_count=1),
-                    _experiment_state(name="beta", sample_count=2),
+                    _experiment_state(name="alpha"),
+                    _experiment_state(name="beta", sample_count=4),
                 ]
             )
 
@@ -88,6 +99,8 @@ def test_experiment_list_prints_rows(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "alpha" in out
     assert "beta" in out
+    assert "mini-validation" in out
+    assert "DEFINITION_ID" not in out
     assert "EXPERIMENT_ID" in out
 
 
@@ -138,11 +151,10 @@ def test_experiment_show_prints_detail(monkeypatch, capsys):
     assert "definition" not in out.lower()
 
 
-def test_experiment_tag_subcommands_are_not_registered() -> None:
+def test_experiment_tag_subcommands_are_no_longer_registered() -> None:
     parser = build_parser()
 
     with pytest.raises(SystemExit):
         parser.parse_args(["experiment", "tags"])
-
     with pytest.raises(SystemExit):
         parser.parse_args(["experiment", "by-tag", "alpha"])

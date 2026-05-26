@@ -112,3 +112,13 @@ def test_experiment_child_routes(monkeypatch) -> None:
     assert "runId" not in samples.text
     assert invocations.status_code == 200
     assert invocations.json()["items"][0]["samplerName"] == "random"
+
+
+def test_definition_run_route_is_not_registered() -> None:
+    app = FastAPI()
+    app.include_router(router)
+    client = TestClient(app)
+
+    response = client.post(f"/experiments/{uuid4()}/run", json={})
+
+    assert response.status_code == 404
