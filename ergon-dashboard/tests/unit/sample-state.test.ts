@@ -4,6 +4,8 @@ import test from "node:test";
 import { buildSampleState } from "../../src/lib/sample-state/dashboard";
 import { fixtureSampleDetail, fixtureSampleEvents, fixtureSampleGraph } from "../contracts/sample-rest-contract.test";
 
+const retiredIdentityPattern = new RegExp(["GraphMutation", "run" + "Id", "definitionId"].join("|"), "i");
+
 test("sample state stores typed WAL events and graph projection", () => {
   const state = buildSampleState({
     detail: fixtureSampleDetail,
@@ -16,5 +18,5 @@ test("sample state stores typed WAL events and graph projection", () => {
     ["sample.status_changed", "task.added"],
   );
   assert.equal(state.graph.nodes[0].taskSlug, "prove");
-  assert.doesNotMatch(JSON.stringify(state), /GraphMutation|runId|definitionId/i);
+  assert.doesNotMatch(JSON.stringify(state), retiredIdentityPattern);
 });

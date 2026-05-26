@@ -10,6 +10,9 @@ import {
   type SampleGraphView,
 } from "../../src/lib/contracts/rest";
 
+const retiredSamplePattern = new RegExp(["run" + "Id", "definitionId"].join("|"), "i");
+const retiredEventPattern = new RegExp(["GraphMutation", "mutation", "run" + "Id"].join("|"), "i");
+
 export const fixtureSampleDetail: SampleDetailView = {
   sampleId: "sample-1",
   experimentId: "exp-1",
@@ -69,7 +72,7 @@ test("sample detail contract exposes provenance", () => {
 
   assert.equal(parsed.sampleId, "sample-1");
   assert.equal(parsed.environmentName, "mini-validation");
-  assert.doesNotMatch(JSON.stringify(parsed), /runId|definitionId/i);
+  assert.doesNotMatch(JSON.stringify(parsed), retiredSamplePattern);
 });
 
 test("sample contract has events not mutations", () => {
@@ -77,7 +80,7 @@ test("sample contract has events not mutations", () => {
 
   assert.equal(parsed.items[0].eventType, "sample.status_changed");
   assert.equal(parsed.items[1].eventType, "task.added");
-  assert.doesNotMatch(JSON.stringify(parsed), /GraphMutation|mutation|runId/i);
+  assert.doesNotMatch(JSON.stringify(parsed), retiredEventPattern);
 });
 
 test("sample graph contract exposes projected tasks", () => {

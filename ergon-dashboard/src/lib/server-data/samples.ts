@@ -112,7 +112,7 @@ export async function loadSampleState(sampleId: string): Promise<ServerDataResul
 
   try {
     const [detailResponse, eventsResponse, graphResponse] = await Promise.all([
-      fetchErgonApi(`/samples/${sampleId}`),
+      fetchErgonApi(`/samples/${sampleId}/detail`),
       fetchErgonApi(`/samples/${sampleId}/events`),
       fetchErgonApi(`/samples/${sampleId}/graph`),
     ]);

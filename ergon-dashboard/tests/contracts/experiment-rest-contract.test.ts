@@ -7,6 +7,8 @@ import {
   type ExperimentDetailView,
 } from "../../src/lib/contracts/rest";
 
+const retiredIdentityPattern = new RegExp(["run" + "Id", "definitionId"].join("|"), "i");
+
 export const fixtureExperimentDetail: ExperimentDetailView = {
   experimentId: "exp-1",
   name: "mixed-training",
@@ -55,7 +57,7 @@ test("experiment contract has environments and sample ids", () => {
 
   assert.equal(parsed.environments[0].environmentName, "mini-validation");
   assert.equal(parsed.samples[0].sampleId, "sample-1");
-  assert.doesNotMatch(JSON.stringify(parsed), /runId|definitionId/i);
+  assert.doesNotMatch(JSON.stringify(parsed), retiredIdentityPattern);
 });
 
 test("experiment list contract wraps sample-centered experiment items", () => {

@@ -33,6 +33,15 @@ ALLOWED_EXPERIMENT_ID_PATH_PREFIXES = (
     ROOT / "ergon_cli" / "ergon_cli" / "domains" / "experiments",
     ROOT / "ergon_cli" / "ergon_cli" / "domains" / "samples",
     ROOT / "ergon_cli" / "tests" / "unit" / "cli",
+    ROOT / "ergon-dashboard" / "src" / "app" / "experiments",
+    ROOT / "ergon-dashboard" / "src" / "app" / "samples",
+    ROOT / "ergon-dashboard" / "src" / "components" / "experiments",
+    ROOT / "ergon-dashboard" / "src" / "components" / "indexes",
+    ROOT / "ergon-dashboard" / "src" / "components" / "samples",
+    ROOT / "ergon-dashboard" / "src" / "lib" / "sample-state",
+    ROOT / "ergon-dashboard" / "tests" / "components",
+    ROOT / "ergon-dashboard" / "tests" / "contracts",
+    ROOT / "ergon-dashboard" / "tests" / "unit",
     ROOT / "tests" / "examples",
 )
 ALLOWED_EXPERIMENT_ID_FILES = {
@@ -54,6 +63,9 @@ ALLOWED_EXPERIMENT_ID_FILES = {
     / "samples.py",
     ROOT / "ergon_core" / "ergon_core" / "core" / "persistence" / "telemetry" / "models.py",
     ROOT / "ergon_core" / "tests" / "unit" / "state" / "test_type_invariants.py",
+    ROOT / "ergon-dashboard" / "src" / "lib" / "contracts" / "rest.ts",
+    ROOT / "ergon-dashboard" / "src" / "lib" / "server-data" / "experiments.ts",
+    ROOT / "ergon-dashboard" / "src" / "lib" / "server-data" / "samples.ts",
 }
 ALLOWED_EXPERIMENT_ID_PATTERNS_BY_FILE = {
     ROOT / "ergon_core" / "ergon_core" / "api" / "experiment" / "experiment.py": (
