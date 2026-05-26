@@ -3,16 +3,15 @@
 from collections.abc import Sequence
 from uuid import UUID, uuid4
 
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from ergon_core.api.experiment.experiment import Experiment, ExperimentRef
 from ergon_core.api.experiment.sample import Sample
 from ergon_core.api.benchmark import Task
-from ergon_core.core.persistence.experiments.models import (
-    ExperimentEnvironmentRow,
-    ExperimentSamplePoolEntryRow,
+from ergon_core.core.application.experiments.repositories import (
+    ExperimentRepository,
 )
-from ergon_core.core.shared.utils import utcnow
+from ergon_core.core.persistence.experiments.models import ExperimentSamplePoolEntryRow
 
 
 class SampleCandidatePool:
@@ -21,8 +20,9 @@ class SampleCandidatePool:
         session: Session,
         *,
         max_duplicate_pulls_per_environment: int = 1_000,
+        repository: ExperimentRepository | None = None,
     ) -> None:
-        self._session = session
+        self._repository = repository or ExperimentRepository(session)
         self._max_duplicate_pulls_per_environment = max_duplicate_pulls_per_environment
 
     def fill(
@@ -32,15 +32,18 @@ class SampleCandidatePool:
         handle: ExperimentRef,
         candidate_pool_size: int,
     ) -> list[ExperimentSamplePoolEntryRow]:
-        entries = self._pending_unselected_entries(handle.experiment_id)
+        entries = self._repository.pending_unselected_pool_entries(handle.experiment_id)
         if len(entries) >= candidate_pool_size:
             return entries[:candidate_pool_size]
 
         env_rows = {
-            environment.name: self._environment_row(handle.experiment_id, environment.name)
+            environment.name: self._repository.experiment_environment_row(
+                experiment_id=handle.experiment_id,
+                environment_name=environment.name,
+            )
             for environment in experiment.environments
         }
-        known_keys = self._known_keys_by_environment(handle.experiment_id)
+        known_keys = self._repository.known_sample_keys_by_environment(handle.experiment_id)
         iterators = {
             environment.name: iter(environment.iter_samples())
             for environment in experiment.environments
@@ -68,7 +71,7 @@ class SampleCandidatePool:
                 duplicate_pulls[environment_name] = 0
                 env_row = env_rows[environment_name]
                 entries.append(
-                    self._record_candidate(
+                    self._repository.record_candidate(
                         handle=handle,
                         environment_id=env_row.id,
                         sample=sample,
@@ -85,67 +88,10 @@ class SampleCandidatePool:
         *,
         sampler_invocation_id: UUID,
     ) -> None:
-        selected_at = utcnow()
-        for entry in entries:
-            entry.selected = True
-            entry.selected_at = selected_at
-            entry.sampler_invocation_id = sampler_invocation_id
-            self._session.add(entry)
-        self._session.flush()
-
-    def _pending_unselected_entries(
-        self,
-        experiment_id: UUID,
-    ) -> list[ExperimentSamplePoolEntryRow]:
-        return self._session.exec(
-            select(ExperimentSamplePoolEntryRow)
-            .where(ExperimentSamplePoolEntryRow.experiment_id == experiment_id)
-            .where(ExperimentSamplePoolEntryRow.selected.is_(False))
-            .where(ExperimentSamplePoolEntryRow.discarded.is_(False))
-            .order_by(ExperimentSamplePoolEntryRow.created_at, ExperimentSamplePoolEntryRow.id)
-        ).all()
-
-    def _environment_row(
-        self,
-        experiment_id: UUID,
-        environment_name: str,
-    ) -> ExperimentEnvironmentRow:
-        return self._session.exec(
-            select(ExperimentEnvironmentRow)
-            .where(ExperimentEnvironmentRow.experiment_id == experiment_id)
-            .where(ExperimentEnvironmentRow.name == environment_name)
-        ).one()
-
-    def _known_keys_by_environment(self, experiment_id: UUID) -> dict[str, set[str]]:
-        rows = self._session.exec(
-            select(ExperimentSamplePoolEntryRow, ExperimentEnvironmentRow.name)
-            .join(
-                ExperimentEnvironmentRow,
-                ExperimentSamplePoolEntryRow.environment_id == ExperimentEnvironmentRow.id,
-            )
-            .where(ExperimentSamplePoolEntryRow.experiment_id == experiment_id)
-        ).all()
-        known: dict[str, set[str]] = {}
-        for entry, environment_name in rows:
-            known.setdefault(environment_name, set()).add(entry.sample_key)
-        return known
-
-    def _record_candidate(
-        self,
-        *,
-        handle: ExperimentRef,
-        environment_id: UUID,
-        sample: Sample,
-    ) -> ExperimentSamplePoolEntryRow:
-        row = ExperimentSamplePoolEntryRow(
-            experiment_id=handle.experiment_id,
-            environment_id=environment_id,
-            sample_key=sample.sample_key,
-            sample_json=sample.model_dump(mode="json"),
+        self._repository.mark_pool_entries_selected(
+            list(entries),
+            sampler_invocation_id=sampler_invocation_id,
         )
-        self._session.add(row)
-        self._session.flush()
-        return row
 
 
 async def sample_from_pool_entry(entry: ExperimentSamplePoolEntryRow) -> Sample:

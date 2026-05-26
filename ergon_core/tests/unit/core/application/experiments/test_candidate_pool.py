@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 from importlib import import_module
+from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
@@ -201,6 +202,15 @@ def test_candidate_pool_stops_after_duplicate_pull_budget(
 
     assert [entry.sample_key for entry in entries] == ["duplicate"]
     assert duplicate_env.pull_count == 4
+
+
+def test_candidate_pool_keeps_sql_access_in_repository() -> None:
+    source = Path(
+        "ergon_core/ergon_core/core/application/experiments/candidate_pool.py"
+    ).read_text()
+
+    assert "session.exec" not in source
+    assert "select(" not in source
 
 
 @pytest.mark.asyncio
