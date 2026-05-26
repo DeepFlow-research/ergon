@@ -160,7 +160,7 @@ def test_info_prints_prerequisites_options_and_script_path(
     assert "E2B_API_KEY" in out
     assert "--limit" in out
     assert "--base-url" in out
-    assert "examples/getting_started/01_minif2f_local_llamacpp/run.py" in out
+    assert "examples/getting_started/01_minif2f_local_llamacpp/submit.py" in out
 
 
 def test_check_runs_preflight_without_launching(
@@ -301,7 +301,7 @@ def test_run_invokes_example_script_with_translated_args(
     assert (
         Path(command[5])
         .as_posix()
-        .endswith("examples/getting_started/01_minif2f_local_llamacpp/run.py")
+        .endswith("examples/getting_started/01_minif2f_local_llamacpp/submit.py")
     )
     assert command[6:] == [
         "--limit",
@@ -351,7 +351,7 @@ def test_run_can_use_configured_repo_root(
     tmp_path: Path,
 ) -> None:
     fake_repo = tmp_path / "repo"
-    script = fake_repo / "examples/getting_started/01_minif2f_local_llamacpp/run.py"
+    script = fake_repo / "examples/getting_started/01_minif2f_local_llamacpp/submit.py"
     script.parent.mkdir(parents=True)
     (fake_repo / "examples/pyproject.toml").write_text("[project]\nname='fake'\nversion='0'\n")
     script.write_text("print('ok')\n")

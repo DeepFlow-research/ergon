@@ -81,7 +81,7 @@ The plain Python script remains the source of benchmark behavior and is useful
 when you want to read or edit the example directly:
 
 ```bash
-uv run --project examples python examples/getting_started/01_minif2f_local_llamacpp/run.py
+uv run --project examples python examples/getting_started/01_minif2f_local_llamacpp/submit.py
 ```
 
 The script defaults to:
@@ -94,7 +94,7 @@ The script defaults to:
 You can override the same values on the command line:
 
 ```bash
-uv run --project examples python examples/getting_started/01_minif2f_local_llamacpp/run.py \
+uv run --project examples python examples/getting_started/01_minif2f_local_llamacpp/submit.py \
   --limit 3 \
   --base-url http://localhost:8080 \
   --model local-proof-model \
