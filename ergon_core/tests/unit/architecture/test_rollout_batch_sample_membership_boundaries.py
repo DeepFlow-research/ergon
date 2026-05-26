@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from ergon_core.core.persistence.telemetry.models import RolloutBatch
+
 
 ROOT = Path(__file__).resolve().parents[4]
 
@@ -24,3 +26,11 @@ def test_rollout_batch_sample_membership_no_longer_uses_runs() -> None:
                     offenders.append(f"{path.relative_to(ROOT)} contains {symbol!r}")
 
     assert offenders == []
+
+
+def test_rollout_batch_definition_id_is_documented_as_temporary_bridge() -> None:
+    field = RolloutBatch.model_fields["definition_id"]
+
+    assert field.description is not None
+    assert "Temporary compatibility bridge" in field.description
+    assert "experiment-backed" in field.description

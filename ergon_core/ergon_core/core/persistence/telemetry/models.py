@@ -357,6 +357,7 @@ class RolloutBatch(SQLModel, table=True):
         default=None,
         foreign_key="experiment_definitions.id",
         index=True,
+        description="Temporary compatibility bridge until rollout batches are experiment-backed.",
     )
     sampler_invocation_id: UUID | None = Field(default=None, index=True)
     status: RolloutStatus = Field(default=RolloutStatus.PENDING, index=True)
@@ -381,6 +382,7 @@ class RolloutBatchSampleMembership(SQLModel, table=True):
 
     batch_id: UUID = Field(foreign_key="rollout_batches.id", primary_key=True)
     sample_id: UUID = Field(foreign_key="samples.id", primary_key=True)
+    ordinal: int = Field(index=True)
     environment_id: UUID | None = Field(default=None, index=True)
     pool_entry_id: UUID | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)

@@ -112,6 +112,7 @@ class RolloutService:
                     RolloutBatchSampleMembership(
                         batch_id=batch_id,
                         sample_id=sample_id,
+                        ordinal=index,
                     )
                 )
                 sample_ids.append(sample_id)
@@ -157,11 +158,12 @@ class RolloutService:
         )
         session.add(batch)
         session.flush()
-        for sample_id in sample_ids:
+        for ordinal, sample_id in enumerate(sample_ids):
             session.add(
                 RolloutBatchSampleMembership(
                     batch_id=batch.id,
                     sample_id=sample_id,
+                    ordinal=ordinal,
                 )
             )
         session.flush()
@@ -292,8 +294,11 @@ class RolloutService:
     def _batch_sample_ids(self, session: Session, batch_id: UUID) -> list[UUID]:
         memberships = list(
             session.exec(
-                select(RolloutBatchSampleMembership).where(
-                    RolloutBatchSampleMembership.batch_id == batch_id
+                select(RolloutBatchSampleMembership)
+                .where(RolloutBatchSampleMembership.batch_id == batch_id)
+                .order_by(
+                    RolloutBatchSampleMembership.ordinal,
+                    RolloutBatchSampleMembership.sample_id,
                 )
             ).all()
         )
