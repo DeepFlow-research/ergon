@@ -67,9 +67,7 @@ def _build_training_parser() -> argparse.ArgumentParser:
     p.add_argument("--benchmark", type=str, required=True, help="Benchmark slug")
     p.add_argument("--evaluator", type=str, default="stub-rubric", help="Evaluator slug")
     p.add_argument("--limit", type=int, default=None, help="Max tasks per episode")
-    p.add_argument(
-        "--experiment-id", type=str, default=None, help="Existing experiment UUID"
-    )
+    p.add_argument("--experiment-id", type=str, default=None, help="Existing experiment UUID")
 
     p.add_argument("--model", type=str, default="Qwen/Qwen2.5-1.5B", help="HuggingFace model ID")
 

@@ -25,14 +25,19 @@ ALLOWED_EXPERIMENT_ID_PATH_PREFIXES = (
     ROOT / "ergon_core" / "ergon_core" / "core" / "persistence" / "experiments",
     ROOT / "ergon_core" / "ergon_core" / "core" / "views" / "experiments",
     ROOT / "ergon_core" / "ergon_core" / "core" / "views" / "samples",
+    ROOT / "ergon_core" / "ergon_core" / "core" / "rl",
     ROOT / "ergon_core" / "tests" / "integration" / "experiments",
     ROOT / "ergon_core" / "tests" / "unit" / "api",
     ROOT / "ergon_core" / "tests" / "unit" / "core" / "application" / "experiments",
     ROOT / "ergon_core" / "tests" / "unit" / "read_models",
     ROOT / "ergon_core" / "tests" / "unit" / "rest_api",
+    ROOT / "ergon_core" / "tests" / "unit" / "rl",
     ROOT / "ergon_cli" / "ergon_cli" / "domains" / "experiments",
     ROOT / "ergon_cli" / "ergon_cli" / "domains" / "samples",
     ROOT / "ergon_cli" / "tests" / "unit" / "cli",
+    ROOT / "ergon_infra" / "ergon_infra" / "adapters",
+    ROOT / "ergon_infra" / "ergon_infra" / "training",
+    ROOT / "ergon_infra" / "tests" / "unit",
     ROOT / "ergon-dashboard" / "src" / "app" / "experiments",
     ROOT / "ergon-dashboard" / "src" / "app" / "samples",
     ROOT / "ergon-dashboard" / "src" / "components" / "experiments",
@@ -66,6 +71,7 @@ ALLOWED_EXPERIMENT_ID_FILES = {
     ROOT / "ergon-dashboard" / "src" / "lib" / "contracts" / "rest.ts",
     ROOT / "ergon-dashboard" / "src" / "lib" / "server-data" / "experiments.ts",
     ROOT / "ergon-dashboard" / "src" / "lib" / "server-data" / "samples.ts",
+    ROOT / "ergon_core" / "ergon_core" / "core" / "infrastructure" / "http" / "routes" / "rollouts.py",
 }
 ALLOWED_EXPERIMENT_ID_PATTERNS_BY_FILE = {
     ROOT / "ergon_core" / "ergon_core" / "api" / "experiment" / "experiment.py": (

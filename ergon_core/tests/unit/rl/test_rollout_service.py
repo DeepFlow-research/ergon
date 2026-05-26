@@ -78,3 +78,20 @@ def test_rollout_submit_uses_rollout_batch_and_run_definition_without_legacy_rec
     assert {run.model_target for run in runs} == {"openai:test"}
     assert {membership.sample_id for membership in memberships} == {run.id for run in runs}
     assert len(sent_events) == 2
+
+
+def test_rollout_submit_rejects_missing_definition_without_fallback(session_factory) -> None:
+    service = RolloutService(
+        session_factory=session_factory,
+        inngest_send=lambda event: None,
+        tokenizer_name="unused-in-submit",
+    )
+    definition_id = uuid4()
+
+    with pytest.raises(ValueError, match=f"Definition {definition_id} not found"):
+        service.submit(
+            SubmitRequest(
+                definition_id=definition_id,
+                num_episodes=1,
+            )
+        )

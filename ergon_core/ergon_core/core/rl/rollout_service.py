@@ -14,7 +14,7 @@ from uuid import UUID, uuid4
 import inngest
 from ergon_core.api.experiment.experiment import ExperimentRef
 from ergon_core.core.application.experiments.candidate_pool import sample_from_pool_entry
-from ergon_core.core.application.experiments.repositories import (
+from ergon_core.core.application.experiments.repository import (
     ExperimentRepository,
     record_sampler_invocation,
 )
@@ -99,7 +99,9 @@ class RolloutService:
 
         with self._session_factory() as session:
             definition = session.get(ExperimentDefinition, request.definition_id)
-            benchmark_type = definition.benchmark_type if definition else "rl-rollout"
+            if definition is None:
+                raise ValueError(f"Definition {request.definition_id} not found")
+            benchmark_type = definition.benchmark_type
             session.add(
                 RolloutBatch(
                     id=batch_id,
@@ -235,7 +237,7 @@ class RolloutService:
                 experiment_ref=ExperimentRef(
                     id=experiment.id,
                     name=experiment.name,
-                    environment_ids=repository.environment_ids_for_experiment(experiment.id),
+                    environment_ids={},
                     created_at=experiment.created_at,
                     metadata=experiment.metadata_json,
                 ),
