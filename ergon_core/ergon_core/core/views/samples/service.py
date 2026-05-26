@@ -375,7 +375,9 @@ def _sample_environment(session: Session, sample: SampleRecord) -> ExperimentEnv
         raise ValueError(f"Sample {sample.id} is missing environment provenance")
     environment = session.get(ExperimentEnvironmentRow, sample.environment_id)
     if environment is None:
-        raise ValueError(f"Sample {sample.id} points at missing environment {sample.environment_id}")
+        raise ValueError(
+            f"Sample {sample.id} points at missing environment {sample.environment_id}"
+        )
     return environment
 
 

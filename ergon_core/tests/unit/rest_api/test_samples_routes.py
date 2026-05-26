@@ -10,6 +10,7 @@ from ergon_core.core.views.samples.models import (
     SampleEventsView,
     SampleGraphNodeView,
     SampleGraphView,
+    SampleSnapshotDto,
 )
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -51,6 +52,15 @@ class _FakeSampleSnapshotReadService:
                 completed_tasks=1,
             )
         ]
+
+    def build_snapshot(self, sample_id: UUID) -> SampleSnapshotDto:
+        return SampleSnapshotDto(
+            id=str(sample_id),
+            name="route snapshot",
+            status="completed",
+            definition_id=str(uuid4()),
+        )
+
 
 def test_list_samples_route_passes_filters_to_read_service(monkeypatch) -> None:
     app = FastAPI()
@@ -161,3 +171,18 @@ def test_sample_mutations_route_is_removed(monkeypatch) -> None:
     response = client.get(f"/samples/{service.sample_id}/mutations")
 
     assert response.status_code in {404, 405}
+
+
+def test_sample_workspace_route_preserves_dashboard_contract(monkeypatch) -> None:
+    service = _FakeSampleSnapshotReadService()
+    sample_id = uuid4()
+    monkeypatch.setattr(module, "SampleSnapshotReadService", lambda: service)
+    app = FastAPI()
+    app.include_router(router)
+    client = TestClient(app)
+
+    response = client.get(f"/samples/{sample_id}/workspace")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == str(sample_id)
+    assert response.json()["name"] == "route snapshot"

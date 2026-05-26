@@ -6,6 +6,7 @@ from ergon_core.core.views.samples.models import (
     SampleDetailView,
     SampleEventsView,
     SampleGraphView,
+    SampleSnapshotDto,
     SampleSummaryDto,
 )
 from ergon_core.core.views.errors import ResourceTooLargeError
@@ -32,6 +33,15 @@ def list_samples(
         experiment=experiment,
         offset=offset,
     )
+
+
+@router.get("/{sample_id}/workspace", response_model=SampleSnapshotDto)
+def get_sample_workspace(sample_id: UUID) -> SampleSnapshotDto:
+    """Get the existing dashboard-compatible sample snapshot contract."""
+    snapshot = SampleSnapshotReadService().build_snapshot(sample_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail=f"Sample {sample_id} not found")
+    return snapshot
 
 
 @router.get("/{sample_id}", response_model=SampleDetailView)

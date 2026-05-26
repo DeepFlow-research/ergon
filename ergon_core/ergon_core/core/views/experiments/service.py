@@ -47,7 +47,9 @@ class ExperimentReadService:
         with self._session_scope() as session:
             rows = list(
                 session.exec(
-                    select(ExperimentRow).order_by(col(ExperimentRow.created_at).desc()).limit(limit)
+                    select(ExperimentRow)
+                    .order_by(col(ExperimentRow.created_at).desc())
+                    .limit(limit)
                 ).all()
             )
             return ExperimentListView(
@@ -77,7 +79,6 @@ class ExperimentReadService:
                 items=[
                     _sample_summary_view(sample, environment_names=environment_names)
                     for sample in samples
-                    if sample.environment_id is not None
                 ]
             )
 
@@ -489,7 +490,7 @@ def _experiment_state(
         samples=[
             _sample_summary_view(sample, environment_names=environment_names)
             for sample in sample_rows
-            if include_samples and sample.environment_id is not None
+            if include_samples
         ],
         sampler_invocations=[_sampler_invocation_view(invocation) for invocation in sampler_rows],
         metadata=row.metadata_json,
@@ -499,7 +500,9 @@ def _experiment_state(
 
 def _environment_names(session: Session, experiment_id: UUID) -> dict[UUID, str]:
     rows = session.exec(
-        select(ExperimentEnvironmentRow).where(ExperimentEnvironmentRow.experiment_id == experiment_id)
+        select(ExperimentEnvironmentRow).where(
+            ExperimentEnvironmentRow.experiment_id == experiment_id
+        )
     ).all()
     return {row.id: row.name for row in rows}
 
@@ -511,13 +514,18 @@ def _sample_summary_view(
 ) -> ExperimentSampleSummaryView:
     if sample.experiment_id is None or sample.environment_id is None:
         raise ValueError("Sample is missing experiment/environment provenance")
+    environment_name = environment_names.get(sample.environment_id)
+    if environment_name is None:
+        raise ValueError(
+            f"Sample {sample.id} points at missing environment {sample.environment_id}"
+        )
     assignment = sample.parsed_assignment()
     source_metadata = assignment.get("source_metadata", {})
     return ExperimentSampleSummaryView(
         sample_id=sample.id,
         experiment_id=sample.experiment_id,
         environment_id=sample.environment_id,
-        environment_name=environment_names.get(sample.environment_id, ""),
+        environment_name=environment_name,
         sample_key=sample.sample_key or sample.instance_key,
         sample_ref=sample.sample_ref_json,
         source_metadata=source_metadata if isinstance(source_metadata, dict) else {},
