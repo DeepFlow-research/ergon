@@ -71,7 +71,14 @@ ALLOWED_EXPERIMENT_ID_FILES = {
     ROOT / "ergon-dashboard" / "src" / "lib" / "contracts" / "rest.ts",
     ROOT / "ergon-dashboard" / "src" / "lib" / "server-data" / "experiments.ts",
     ROOT / "ergon-dashboard" / "src" / "lib" / "server-data" / "samples.ts",
-    ROOT / "ergon_core" / "ergon_core" / "core" / "infrastructure" / "http" / "routes" / "rollouts.py",
+    ROOT
+    / "ergon_core"
+    / "ergon_core"
+    / "core"
+    / "infrastructure"
+    / "http"
+    / "routes"
+    / "rollouts.py",
 }
 ALLOWED_EXPERIMENT_ID_PATTERNS_BY_FILE = {
     ROOT / "ergon_core" / "ergon_core" / "api" / "experiment" / "experiment.py": (
