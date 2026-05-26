@@ -15,6 +15,7 @@ from ergon_core.core.rl.rollout_types import (
     RolloutBatchSummary,
     SubmitRequest,
     SubmitResponse,
+    TrainingRolloutRequest,
     WeightSyncRequest,
     WeightSyncResponse,
 )
@@ -49,6 +50,25 @@ def submit_rollout(
 ) -> SubmitResponse:
     """Start a batch of episodes. Returns immediately with batch_id."""
     return service.submit(request)
+
+
+@router.post(
+    "/experiments/{experiment_id}/rollout-batches",
+    response_model=RolloutBatchSummary,
+    status_code=202,
+)
+async def submit_experiment_rollout_batch(
+    experiment_id: UUID,
+    request: TrainingRolloutRequest,
+    service: Annotated[RolloutService, Depends(get_rollout_service)],
+) -> RolloutBatchSummary:
+    """Start a trainer batch from a persisted experiment candidate pool."""
+    if request.experiment_id != experiment_id:
+        raise HTTPException(400, "experiment_id mismatch")
+    try:
+        return await service.submit_experiment_batch(request)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @router.get("/{batch_id}", response_model=PollResponse)

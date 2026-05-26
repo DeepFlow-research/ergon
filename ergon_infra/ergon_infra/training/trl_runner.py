@@ -46,11 +46,11 @@ def run_trl_training(config: TrainingConfig) -> int:
             "(e.g. http://localhost:9000/api for local dev)."
         )
 
-    definition_id = config.definition_id
-    if not definition_id:
+    experiment_id = config.experiment_id
+    if not experiment_id:
         raise ValueError(
-            "--definition-id is required. Create one via: "
-            "ergon experiment define <slug> --limit 1 --worker <worker> --model <model>"
+            "--experiment-id is required. Create one via the Python experiment API "
+            "and persist its candidate pool before starting trainer rollouts."
         )
 
     tokenizer = AutoTokenizer.from_pretrained(config.model)
@@ -59,7 +59,7 @@ def run_trl_training(config: TrainingConfig) -> int:
 
     rollout_func = make_ergon_http_rollout_func(
         ergon_url=config.ergon_url,
-        definition_id=definition_id,
+        experiment_id=experiment_id,
         timeout_s=config.timeout_s,
     )
 
@@ -99,7 +99,7 @@ def run_trl_training(config: TrainingConfig) -> int:
     logger.info("Starting TRL GRPO training")
     logger.info("  Ergon API:     %s", config.ergon_url)
     logger.info("  Model:         %s", config.model)
-    logger.info("  Definition:    %s", definition_id)
+    logger.info("  Experiment:    %s", experiment_id)
     logger.info("  Device:        %s", config.device)
     logger.info("  Output dir:    %s", config.output_dir)
 

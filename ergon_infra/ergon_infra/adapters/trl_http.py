@@ -9,7 +9,7 @@ Usage::
 
     rollout_func = make_ergon_http_rollout_func(
         ergon_url="http://macbook:9000/api",
-        definition_id="<uuid>",
+        experiment_id="<uuid>",
     )
     trainer = GRPOTrainer(..., rollout_func=rollout_func)
 """
@@ -40,7 +40,9 @@ class TRLTrainerContext(Protocol):
 
 def make_ergon_http_rollout_func(
     ergon_url: str,
-    definition_id: str,
+    experiment_id: str,
+    sampler: str = "random",
+    candidate_pool_size: int | None = None,
     poll_interval_s: float = 2.0,
     timeout_s: float = 300.0,
 ) -> Callable[[list, TRLTrainerContext], "RolloutBatch"]:
@@ -48,7 +50,7 @@ def make_ergon_http_rollout_func(
 
     Args:
         ergon_url: base URL of the Ergon API (e.g. ``http://localhost:9000/api``).
-        definition_id: ExperimentDefinition UUID to run episodes against.
+        experiment_id: persisted experiment UUID to sample from.
         poll_interval_s: seconds between poll requests.
         timeout_s: max wall-clock seconds to wait for a batch to complete.
 
@@ -59,10 +61,13 @@ def make_ergon_http_rollout_func(
 
     def rollout_func(prompts: list, trainer: TRLTrainerContext) -> RolloutBatch:
         resp = client.post(
-            "/rollouts/submit",
+            f"/rollouts/experiments/{experiment_id}/rollout-batches",
             json={
-                "definition_id": definition_id,
-                "num_episodes": len(prompts),
+                "experimentId": experiment_id,
+                "k": len(prompts),
+                "sampler": sampler,
+                "samplerConfig": {},
+                "candidatePoolSize": candidate_pool_size,
             },
         )
         resp.raise_for_status()

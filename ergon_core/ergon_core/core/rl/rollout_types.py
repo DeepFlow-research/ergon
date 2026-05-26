@@ -7,7 +7,12 @@ HTTP adapters (client-side). Framework-agnostic — no TRL/veRL imports.
 from uuid import UUID
 
 from ergon_core.core.shared.rollout_status import RolloutStatus as BatchStatus
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+def _to_camel(value: str) -> str:
+    parts = value.split("_")
+    return parts[0] + "".join(part.capitalize() for part in parts[1:])
 
 
 class SubmitRequest(BaseModel):
@@ -25,6 +30,18 @@ class SubmitResponse(BaseModel):
     batch_id: UUID
     sample_ids: list[UUID]
     status: BatchStatus = BatchStatus.PENDING
+
+
+class TrainingRolloutRequest(BaseModel):
+    """Trainer → Ergon: select and launch samples from a persisted experiment."""
+
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
+
+    experiment_id: UUID
+    k: int = Field(ge=1)
+    sampler: str = "random"
+    sampler_config: dict[str, object] = Field(default_factory=dict)
+    candidate_pool_size: int | None = None
 
 
 class RolloutBatchSummary(BaseModel):

@@ -12,8 +12,20 @@ from collections.abc import Callable, Sequence
 from uuid import UUID, uuid4
 
 import inngest
+from ergon_core.api.experiment.experiment import ExperimentRef
+from ergon_core.core.application.experiments.candidate_pool import sample_from_pool_entry
+from ergon_core.core.application.experiments.repositories import (
+    ExperimentRepository,
+    record_sampler_invocation,
+)
+from ergon_core.core.application.samples.materialization import materialize_sample
 from ergon_core.core.persistence.context.models import SampleContextEvent
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
+from ergon_core.core.persistence.experiments.models import (
+    ExperimentRow,
+    ExperimentSamplerInvocationRow,
+    ExperimentSamplePoolEntryRow,
+)
 from ergon_core.core.persistence.shared.enums import (
     TERMINAL_SAMPLE_STATUSES,
     SampleStatus,
@@ -39,6 +51,7 @@ from ergon_core.core.rl.rollout_types import (
     SubmitRequest,
     SubmitResponse,
     Trajectory,
+    TrainingRolloutRequest,
 )
 from ergon_core.core.application.events.runtime import WorkflowStartedEvent
 from sqlmodel import Session, select
@@ -192,6 +205,110 @@ class RolloutService:
         """Load durable batch membership using the service session factory."""
         with self._session_factory() as session:
             return self.get_rollout_batch(session, batch_id)
+
+    async def submit_experiment_batch(
+        self,
+        request: TrainingRolloutRequest,
+    ) -> RolloutBatchSummary:
+        """Launch a trainer batch from already-buffered experiment candidates."""
+        with self._session_factory() as session:
+            experiment = session.get(ExperimentRow, request.experiment_id)
+            if experiment is None:
+                raise ValueError(f"Experiment {request.experiment_id} not found")
+
+            repository = ExperimentRepository(session)
+            pool_size = request.candidate_pool_size or request.k
+            candidates = repository.pending_unselected_pool_entries(request.experiment_id)
+            if len(candidates) < request.k:
+                raise ValueError(
+                    "Experiment candidate pool does not contain enough unselected samples. "
+                    "Submit through the Python experiment API to replenish streamed environments."
+                )
+            selected_entries = _select_candidate_entries(
+                candidates[:pool_size],
+                k=request.k,
+                sampler=request.sampler,
+                sampler_config=request.sampler_config,
+            )
+            invocation = record_sampler_invocation(
+                session=session,
+                experiment_ref=ExperimentRef(
+                    id=experiment.id,
+                    name=experiment.name,
+                    environment_ids=repository.environment_ids_for_experiment(experiment.id),
+                    created_at=experiment.created_at,
+                    metadata=experiment.metadata_json,
+                ),
+                sampler_name=request.sampler,
+                requested_k=request.k,
+                candidate_pool_size=pool_size,
+                selected_count=len(selected_entries),
+                sampler_config=request.sampler_config,
+            )
+            repository.mark_pool_entries_selected(
+                list(selected_entries),
+                sampler_invocation_id=invocation.id,
+            )
+            sample_ids = await self._materialize_pool_entries(
+                session=session,
+                invocation=invocation,
+                entries=selected_entries,
+            )
+            summary = self.create_rollout_batch(
+                session,
+                sample_ids=sample_ids,
+                sampler_invocation_id=invocation.id,
+            )
+            session.commit()
+
+        for sample_id in summary.sample_ids:
+            self._inngest_send(
+                inngest.Event(
+                    name=WorkflowStartedEvent.name,
+                    data=WorkflowStartedEvent(sample_id=sample_id).model_dump(mode="json"),
+                )
+            )
+        return summary
+
+    async def _materialize_pool_entries(
+        self,
+        *,
+        session: Session,
+        invocation: ExperimentSamplerInvocationRow,
+        entries: Sequence[ExperimentSamplePoolEntryRow],
+    ) -> list[UUID]:
+        sample_ids: list[UUID] = []
+        for entry in entries:
+            sample = await sample_from_pool_entry(entry)
+            row = SampleRecord(
+                experiment_id=entry.experiment_id,
+                environment_id=entry.environment_id,
+                sampler_invocation_id=invocation.id,
+                pool_entry_id=entry.id,
+                sample_key=sample.sample_key,
+                sample_ref_json=dict(sample.sample_ref),
+                benchmark_type="experiment",
+                instance_key=sample.sample_key,
+                sample_id=sample.sample_key,
+                worker_team_json={},
+                dependency_extras_json={},
+                assignment_json={
+                    "sample_key": sample.sample_key,
+                    "sample_name": sample.name,
+                    "environment_name": sample.environment_name,
+                    "sample_ref": dict(sample.sample_ref),
+                    "source_metadata": dict(sample.source_metadata),
+                    "metadata": dict(sample.metadata),
+                },
+                experiment=str(entry.experiment_id),
+                status=SampleStatus.PENDING,
+            )
+            session.add(row)
+            session.flush()
+            materialize_sample(session=session, sample=sample, sample_row=row)
+            sample_ids.append(row.id)
+        session.flush()
+        return sample_ids
 
     def poll(self, batch_id: UUID) -> PollResponse | None:
         """Non-blocking status check. Extracts trajectories when all done."""
@@ -374,3 +491,20 @@ class RolloutService:
                     )
                 )
         return result
+
+
+def _select_candidate_entries(
+    entries: Sequence[ExperimentSamplePoolEntryRow],
+    *,
+    k: int,
+    sampler: str,
+    sampler_config: dict[str, object],
+) -> list[ExperimentSamplePoolEntryRow]:
+    selected = list(entries)
+    if sampler == "random":
+        import random
+
+        random.Random(sampler_config.get("seed")).shuffle(selected)
+    elif sampler not in {"sequential", "all"}:
+        raise ValueError(f"Unsupported trainer sampler: {sampler}")
+    return selected[: min(k, len(selected))]
