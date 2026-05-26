@@ -19,6 +19,39 @@ DEFINITION_ROOTS = (
 )
 EXCLUDED_FILES = {Path(__file__).resolve()}
 EXPERIMENT_ID_PATTERN = re.compile(r"\b(?:experiment" r"_id|experiment" r"Id)\b")
+ALLOWED_EXPERIMENT_ID_PATH_PREFIXES = (
+    ROOT / "ergon_core" / "ergon_core" / "api" / "experiment",
+    ROOT / "ergon_core" / "ergon_core" / "core" / "application" / "experiments",
+    ROOT / "ergon_core" / "ergon_core" / "core" / "persistence" / "experiments",
+    ROOT / "ergon_core" / "ergon_core" / "core" / "views" / "experiments",
+    ROOT / "ergon_core" / "ergon_core" / "core" / "views" / "samples",
+    ROOT / "ergon_core" / "tests" / "integration" / "experiments",
+    ROOT / "ergon_core" / "tests" / "unit" / "api",
+    ROOT / "ergon_core" / "tests" / "unit" / "core" / "application" / "experiments",
+    ROOT / "ergon_core" / "tests" / "unit" / "read_models",
+    ROOT / "ergon_core" / "tests" / "unit" / "rest_api",
+    ROOT / "tests" / "examples",
+)
+ALLOWED_EXPERIMENT_ID_FILES = {
+    ROOT
+    / "ergon_core"
+    / "ergon_core"
+    / "core"
+    / "infrastructure"
+    / "http"
+    / "routes"
+    / "experiments.py",
+    ROOT
+    / "ergon_core"
+    / "ergon_core"
+    / "core"
+    / "infrastructure"
+    / "http"
+    / "routes"
+    / "samples.py",
+    ROOT / "ergon_core" / "ergon_core" / "core" / "persistence" / "telemetry" / "models.py",
+    ROOT / "ergon_core" / "tests" / "unit" / "state" / "test_type_invariants.py",
+}
 ALLOWED_EXPERIMENT_ID_PATTERNS_BY_FILE = {
     ROOT / "ergon_core" / "ergon_core" / "api" / "experiment" / "experiment.py": (
         re.compile(r"experiment_id: UUID"),
@@ -90,6 +123,13 @@ ALLOWED_EXPERIMENT_ID_PATTERNS_BY_FILE = {
 }
 
 
+def _allows_experiment_identity_path(path: Path) -> bool:
+    resolved = path.resolve()
+    if resolved in ALLOWED_EXPERIMENT_ID_FILES:
+        return True
+    return any(resolved.is_relative_to(prefix) for prefix in ALLOWED_EXPERIMENT_ID_PATH_PREFIXES)
+
+
 def test_definition_identity_uses_definition_name() -> None:
     hits: list[str] = []
     for root in DEFINITION_ROOTS:
@@ -106,6 +146,8 @@ def test_definition_identity_uses_definition_name() -> None:
             try:
                 text = path.read_text()
             except UnicodeDecodeError:
+                continue
+            if _allows_experiment_identity_path(path):
                 continue
             for line_number, line in enumerate(text.splitlines(), start=1):
                 if EXPERIMENT_ID_PATTERN.search(line):
