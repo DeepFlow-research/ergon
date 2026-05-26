@@ -1,13 +1,16 @@
 from datetime import UTC, datetime, timedelta
+import json
 from uuid import uuid4
 
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
+from ergon_core.core.persistence.experiments.models import ExperimentEnvironmentRow, ExperimentRow
 from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.samples.models import SampleStatusEventRow, SampleTaskEventRow
 from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.core.views.samples import service as module
-from ergon_core.core.views.samples.service import SampleSnapshotReadService
+from ergon_core.core.views.samples.service import SampleReadService, SampleSnapshotReadService
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -15,7 +18,11 @@ from sqlmodel import Session, SQLModel, create_engine
 @pytest.fixture()
 def session_factory():
     _ = ExperimentDefinition
+    _ = ExperimentRow
+    _ = ExperimentEnvironmentRow
     _ = SampleGraphNode
+    _ = SampleStatusEventRow
+    _ = SampleTaskEventRow
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -193,3 +200,84 @@ def test_failed_run_snapshot_preserves_persisted_final_score(monkeypatch, sessio
     assert snapshot is not None
     assert snapshot.status == "failed"
     assert snapshot.final_score == 0.5
+
+
+def test_sample_state_uses_typed_wal_and_graph_projection(session_factory) -> None:
+    now = datetime(2026, 5, 26, 12, 0, tzinfo=UTC)
+    experiment_id = uuid4()
+    environment_id = uuid4()
+    sample_id = uuid4()
+    task_id = uuid4()
+
+    with session_factory() as session:
+        session.add(ExperimentRow(id=experiment_id, name="mixed-training", created_at=now))
+        session.add(
+            ExperimentEnvironmentRow(
+                id=environment_id,
+                experiment_id=experiment_id,
+                name="mini-validation",
+                source_mode="materialized",
+            )
+        )
+        session.add(
+            SampleRecord(
+                id=sample_id,
+                experiment_id=experiment_id,
+                environment_id=environment_id,
+                sample_key="problem-1",
+                sample_ref_json={"id": "problem-1"},
+                benchmark_type="experiment",
+                instance_key="problem-1",
+                status=SampleStatus.PENDING,
+                assignment_json={"source_metadata": {"provider": "records"}},
+                created_at=now,
+            )
+        )
+        session.add(
+            SampleGraphNode(
+                sample_id=sample_id,
+                task_id=task_id,
+                instance_key="problem-1",
+                task_slug="solve",
+                description="Solve problem 1",
+                status="pending",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.add(
+            SampleStatusEventRow(
+                sample_id=sample_id,
+                event_timestamp=now,
+                event_type="sample.status_changed",
+                status="pending",
+                actor="test",
+            )
+        )
+        session.add(
+            SampleTaskEventRow(
+                sample_id=sample_id,
+                task_id=task_id,
+                task_slug="solve",
+                event_timestamp=now + timedelta(seconds=1),
+                event_type="task.added",
+                status="pending",
+            )
+        )
+        session.commit()
+
+        state = SampleReadService(session).get_sample_state(sample_id)
+
+    assert state is not None
+    assert state.sample_id == sample_id
+    assert state.experiment_id == experiment_id
+    assert state.environment_id == environment_id
+    assert state.environment_name == "mini-validation"
+    assert state.graph.nodes[0].task_slug == "solve"
+    assert [event.event_type for event in state.events] == [
+        "sample.status_changed",
+        "task.added",
+    ]
+    dumped = state.model_dump(mode="json", by_alias=True)
+    assert "GraphMutation" not in json.dumps(dumped)
+    assert "runId" not in json.dumps(dumped)

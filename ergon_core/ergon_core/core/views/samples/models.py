@@ -250,3 +250,67 @@ class SampleSummaryDto(BaseModel):
     total_cost_usd: float | None = None
     error_message: str | None = None
     metrics: dict[str, Any] = Field(default_factory=dict)
+
+
+class SampleDetailView(CamelModel):
+    sample_id: UUID
+    experiment_id: UUID
+    environment_id: UUID
+    environment_name: str
+    sample_key: str
+    sample_ref: dict[str, Any] = Field(default_factory=dict)
+    source_metadata: dict[str, Any] = Field(default_factory=dict)
+    status: str
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class SampleEventView(CamelModel):
+    event_id: UUID
+    sample_id: UUID
+    event_type: str
+    target_type: str
+    target_id: UUID | None = None
+    timestamp: datetime
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class SampleGraphNodeView(CamelModel):
+    task_id: UUID
+    task_slug: str
+    description: str
+    status: str
+    parent_task_id: UUID | None = None
+    level: int = 0
+    assigned_worker_slug: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SampleGraphEdgeView(CamelModel):
+    edge_id: UUID
+    source_task_id: UUID
+    target_task_id: UUID
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class SampleGraphView(CamelModel):
+    nodes: list[SampleGraphNodeView] = Field(default_factory=list)
+    edges: list[SampleGraphEdgeView] = Field(default_factory=list)
+
+
+class SampleEventsView(CamelModel):
+    items: list[SampleEventView] = Field(default_factory=list)
+
+
+class SampleStateView(CamelModel):
+    sample_id: UUID
+    experiment_id: UUID
+    environment_id: UUID
+    environment_name: str
+    detail: SampleDetailView
+    events: list[SampleEventView] = Field(default_factory=list)
+    graph: SampleGraphView = Field(default_factory=SampleGraphView)

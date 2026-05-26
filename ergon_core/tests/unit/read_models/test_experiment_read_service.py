@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+import json
 from uuid import uuid4
 
 import pytest
@@ -6,6 +7,11 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
+)
+from ergon_core.core.persistence.experiments.models import (
+    ExperimentEnvironmentRow,
+    ExperimentRow,
+    ExperimentSamplerInvocationRow,
 )
 from ergon_core.core.persistence.context.models import SampleContextEvent
 from ergon_core.core.persistence.graph.models import SampleGraphNode
@@ -30,6 +36,9 @@ def session_factory():
     _ = ExperimentDefinitionTask
     _ = SampleContextEvent
     _ = SampleGraphNode
+    _ = ExperimentRow
+    _ = ExperimentEnvironmentRow
+    _ = ExperimentSamplerInvocationRow
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -240,6 +249,68 @@ def test_experiment_run_rows_project_nested_metrics(monkeypatch, session_factory
     assert row.metrics.model_target == "openai:gpt-4o"
     assert row.metrics.evaluator_slug == "metric-evaluator"
     assert row.metrics.error_summary is None
+
+
+def test_experiment_state_contains_environments_samples_and_invocations(session_factory) -> None:
+    now = datetime(2026, 5, 26, 12, 0, tzinfo=UTC)
+    experiment_id = uuid4()
+    environment_id = uuid4()
+    sample_id = uuid4()
+
+    with session_factory() as session:
+        session.add(
+            ExperimentRow(
+                id=experiment_id,
+                name="mixed-training",
+                metadata_json={"purpose": "test"},
+                created_at=now,
+            )
+        )
+        session.add(
+            ExperimentEnvironmentRow(
+                id=environment_id,
+                experiment_id=experiment_id,
+                name="mini-validation",
+                source_mode="materialized",
+                source_metadata_json={"provider": "records"},
+            )
+        )
+        session.add(
+            ExperimentSamplerInvocationRow(
+                experiment_id=experiment_id,
+                sampler_name="random",
+                requested_k=1,
+                candidate_pool_size=4,
+                selected_count=1,
+            )
+        )
+        session.add(
+            SampleRecord(
+                id=sample_id,
+                experiment_id=experiment_id,
+                environment_id=environment_id,
+                sample_key="problem-1",
+                sample_ref_json={"id": "problem-1"},
+                benchmark_type="experiment",
+                instance_key="problem-1",
+                status=SampleStatus.COMPLETED,
+                assignment_json={"source_metadata": {"split": "validation"}},
+            )
+        )
+        session.commit()
+
+        state = ExperimentReadService(session).get_experiment_state(experiment_id)
+
+    assert state is not None
+    assert state.experiment_id == experiment_id
+    assert state.environments[0].environment_name == "mini-validation"
+    assert state.environments[0].sample_count == 1
+    assert state.sample_count == 1
+    assert state.samples[0].sample_id == sample_id
+    assert state.sampler_invocations[0].sampler_name == "random"
+    dumped = state.model_dump(mode="json", by_alias=True)
+    assert "definitionId" not in json.dumps(dumped)
+    assert "runId" not in json.dumps(dumped)
 
 
 def test_experiment_detail_groups_runs_by_experiment_tag(monkeypatch, session_factory) -> None:

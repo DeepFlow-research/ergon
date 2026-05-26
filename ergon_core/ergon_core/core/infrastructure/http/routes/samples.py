@@ -3,12 +3,13 @@
 from uuid import UUID
 
 from ergon_core.core.views.samples.models import (
+    SampleDetailView,
+    SampleEventsView,
+    SampleGraphView,
     SampleSummaryDto,
-    SampleSnapshotDto,
 )
-from ergon_core.core.application.samples.events import SampleRuntimeEventView
 from ergon_core.core.views.errors import ResourceTooLargeError
-from ergon_core.core.views.samples.service import SampleSnapshotReadService
+from ergon_core.core.views.samples.service import SampleReadService, SampleSnapshotReadService
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
@@ -33,22 +34,31 @@ def list_samples(
     )
 
 
-@router.get("/{sample_id}", response_model=SampleSnapshotDto)
-def get_sample_snapshot(sample_id: UUID) -> SampleSnapshotDto:
-    """Get a persisted sample-detail snapshot suitable for frontend hydration."""
-    snapshot = SampleSnapshotReadService().build_snapshot(sample_id)
-    if snapshot is None:
+@router.get("/{sample_id}", response_model=SampleDetailView)
+def get_sample_detail(sample_id: UUID) -> SampleDetailView:
+    """Get persisted sample provenance and status details."""
+    detail = SampleReadService().get_sample_detail(sample_id)
+    if detail is None:
         raise HTTPException(status_code=404, detail=f"Sample {sample_id} not found")
-    return snapshot
+    return detail
 
 
-@router.get("/{sample_id}/events", response_model=list[SampleRuntimeEventView])
-def get_sample_runtime_events(sample_id: UUID) -> list[SampleRuntimeEventView]:
+@router.get("/{sample_id}/events", response_model=SampleEventsView)
+def get_sample_runtime_events(sample_id: UUID) -> SampleEventsView:
     """Return the typed append-only runtime event stream for a sample."""
-    events = SampleSnapshotReadService().list_events(sample_id)
+    events = SampleReadService().list_sample_events(sample_id)
     if events is None:
         raise HTTPException(status_code=404, detail=f"Sample {sample_id} not found")
     return events
+
+
+@router.get("/{sample_id}/graph", response_model=SampleGraphView)
+def get_sample_graph(sample_id: UUID) -> SampleGraphView:
+    """Return the sample graph projection."""
+    graph = SampleReadService().get_sample_graph(sample_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail=f"Sample {sample_id} not found")
+    return graph
 
 
 @router.get("/{sample_id}/resources/{resource_id}/content")

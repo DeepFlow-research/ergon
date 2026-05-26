@@ -1,11 +1,19 @@
 """Read service for dashboard/API run snapshots and related views."""
 
 import os
+from contextlib import AbstractContextManager
 from pathlib import Path
 from datetime import datetime
 from uuid import UUID
 
 from ergon_core.core.views.samples.models import (
+    SampleDetailView,
+    SampleEventView,
+    SampleEventsView,
+    SampleGraphEdgeView,
+    SampleGraphNodeView,
+    SampleGraphView,
+    SampleStateView,
     SampleSnapshotMetricsDto,
     SampleSummaryDto,
     SampleSnapshotDto,
@@ -15,6 +23,7 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionWorker,
 )
+from ergon_core.core.persistence.experiments.models import ExperimentEnvironmentRow
 from ergon_core.core.persistence.graph.models import (
     SampleGraphEdge,
     SampleGraphNode,
@@ -296,6 +305,158 @@ class SampleSnapshotReadService:
             media_type=resource.mime_type or "application/octet-stream",
             filename=resource.name,
         )
+
+
+class SampleReadService:
+    """Sample-centered read service backed by typed WAL and graph projections."""
+
+    def __init__(self, session: Session | None = None) -> None:
+        self._session = session
+
+    def get_sample_detail(self, sample_id: UUID) -> SampleDetailView | None:
+        with self._session_scope() as session:
+            sample = session.get(SampleRecord, sample_id)
+            if sample is None:
+                return None
+            environment = _sample_environment(session, sample)
+            return _sample_detail_view(sample, environment_name=environment.name)
+
+    def list_sample_events(self, sample_id: UUID) -> SampleEventsView | None:
+        with self._session_scope() as session:
+            if session.get(SampleRecord, sample_id) is None:
+                return None
+            events = SampleRuntimeEventReadService().list_events(session, sample_id)
+            return SampleEventsView(items=[_sample_event_view(event) for event in events])
+
+    def get_sample_graph(self, sample_id: UUID) -> SampleGraphView | None:
+        with self._session_scope() as session:
+            if session.get(SampleRecord, sample_id) is None:
+                return None
+            return _sample_graph_view(session, sample_id)
+
+    def get_sample_state(self, sample_id: UUID) -> SampleStateView | None:
+        with self._session_scope() as session:
+            sample = session.get(SampleRecord, sample_id)
+            if sample is None:
+                return None
+            environment = _sample_environment(session, sample)
+            detail = _sample_detail_view(sample, environment_name=environment.name)
+            events = SampleRuntimeEventReadService().list_events(session, sample_id)
+            graph = _sample_graph_view(session, sample_id)
+            return SampleStateView(
+                sample_id=sample.id,
+                experiment_id=detail.experiment_id,
+                environment_id=detail.environment_id,
+                environment_name=detail.environment_name,
+                detail=detail,
+                events=[_sample_event_view(event) for event in events],
+                graph=graph,
+            )
+
+    def _session_scope(self) -> AbstractContextManager[Session]:
+        if self._session is not None:
+            return _ExistingSessionScope(self._session)
+        return get_session()
+
+
+class _ExistingSessionScope:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def __enter__(self) -> Session:
+        return self._session
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+
+def _sample_environment(session: Session, sample: SampleRecord) -> ExperimentEnvironmentRow:
+    if sample.environment_id is None:
+        raise ValueError(f"Sample {sample.id} is missing environment provenance")
+    environment = session.get(ExperimentEnvironmentRow, sample.environment_id)
+    if environment is None:
+        raise ValueError(f"Sample {sample.id} points at missing environment {sample.environment_id}")
+    return environment
+
+
+def _sample_detail_view(
+    sample: SampleRecord,
+    *,
+    environment_name: str,
+) -> SampleDetailView:
+    if sample.experiment_id is None or sample.environment_id is None:
+        raise ValueError(f"Sample {sample.id} is missing experiment/environment provenance")
+    assignment = sample.parsed_assignment()
+    source_metadata = assignment.get("source_metadata", {})
+    return SampleDetailView(
+        sample_id=sample.id,
+        experiment_id=sample.experiment_id,
+        environment_id=sample.environment_id,
+        environment_name=environment_name,
+        sample_key=sample.sample_key or sample.instance_key,
+        sample_ref=sample.sample_ref_json,
+        source_metadata=source_metadata if isinstance(source_metadata, dict) else {},
+        status=str(sample.status),
+        created_at=sample.created_at,
+        started_at=sample.started_at,
+        completed_at=sample.completed_at,
+    )
+
+
+def _sample_event_view(event: SampleRuntimeEventView) -> SampleEventView:
+    return SampleEventView(
+        event_id=event.id,
+        sample_id=event.sample_id,
+        event_type=event.event_type,
+        target_type=event.target_type,
+        target_id=event.target_id,
+        timestamp=event.event_timestamp,
+        payload=event.payload,
+    )
+
+
+def _sample_graph_view(session: Session, sample_id: UUID) -> SampleGraphView:
+    nodes = list(
+        session.exec(
+            select(SampleGraphNode)
+            .where(SampleGraphNode.sample_id == sample_id)
+            .order_by(col(SampleGraphNode.created_at), col(SampleGraphNode.task_id))
+        ).all()
+    )
+    edges = list(
+        session.exec(
+            select(SampleGraphEdge)
+            .where(SampleGraphEdge.sample_id == sample_id)
+            .order_by(col(SampleGraphEdge.created_at), col(SampleGraphEdge.id))
+        ).all()
+    )
+    return SampleGraphView(
+        nodes=[
+            SampleGraphNodeView(
+                task_id=node.task_id,
+                task_slug=node.task_slug,
+                description=node.description,
+                status=str(node.status),
+                parent_task_id=node.parent_task_id,
+                level=node.level,
+                assigned_worker_slug=node.assigned_worker_slug,
+                created_at=node.created_at,
+                updated_at=node.updated_at,
+            )
+            for node in nodes
+        ],
+        edges=[
+            SampleGraphEdgeView(
+                edge_id=edge.id,
+                source_task_id=edge.source_task_id,
+                target_task_id=edge.target_task_id,
+                status=str(edge.status),
+                created_at=edge.created_at,
+                updated_at=edge.updated_at,
+            )
+            for edge in edges
+        ],
+    )
 
 
 def _display_run_score(
