@@ -10,9 +10,120 @@ const restSchemas = schemas as typeof schemas & {
   ExperimentDetailDto?: z.ZodTypeAny;
 };
 
-export const ExperimentDetailSchema = restSchemas.ExperimentDetailDto ?? schemas.ExperimentDetailView;
+const JsonRecordSchema = z.record(z.string(), z.unknown());
 
-export const SampleExecutionAttemptSchema = schemas.SampleExecutionAttemptDto;
+export const SamplerInvocationViewSchema = z.object({
+  samplerInvocationId: z.string(),
+  samplerName: z.string(),
+  requestedK: z.number(),
+  candidatePoolSize: z.number(),
+  selectedCount: z.number(),
+  samplerConfig: JsonRecordSchema.default({}),
+  createdAt: z.string(),
+});
+
+export const EnvironmentContributionViewSchema = z.object({
+  environmentId: z.string(),
+  environmentName: z.string(),
+  sourceMode: z.string(),
+  sampleCount: z.number(),
+  selectedCount: z.number(),
+  sourceMetadata: JsonRecordSchema.default({}),
+});
+
+export const ExperimentSampleSummaryViewSchema = z.object({
+  sampleId: z.string(),
+  experimentId: z.string(),
+  environmentId: z.string(),
+  environmentName: z.string(),
+  sampleKey: z.string(),
+  sampleRef: JsonRecordSchema.default({}),
+  sourceMetadata: JsonRecordSchema.default({}),
+  status: z.string(),
+  createdAt: z.string(),
+});
+
+export const ExperimentDetailViewSchema = z.object({
+  experimentId: z.string(),
+  name: z.string(),
+  description: z.string().nullable().optional(),
+  environments: z.array(EnvironmentContributionViewSchema).default([]),
+  sampleCount: z.number(),
+  samples: z.array(ExperimentSampleSummaryViewSchema).default([]),
+  samplerInvocations: z.array(SamplerInvocationViewSchema).default([]),
+  metadata: JsonRecordSchema.default({}),
+  createdAt: z.string(),
+});
+
+export const ExperimentListViewSchema = z.object({
+  items: z.array(ExperimentDetailViewSchema).default([]),
+});
+
+export const SampleDetailViewSchema = z.object({
+  sampleId: z.string(),
+  experimentId: z.string(),
+  environmentId: z.string(),
+  environmentName: z.string(),
+  sampleKey: z.string(),
+  sampleRef: JsonRecordSchema.default({}),
+  sourceMetadata: JsonRecordSchema.default({}),
+  status: z.string(),
+  createdAt: z.string(),
+  startedAt: z.string().nullable().optional(),
+  completedAt: z.string().nullable().optional(),
+});
+
+export const SampleEventViewSchema = z.object({
+  eventId: z.string(),
+  sampleId: z.string(),
+  eventType: z.string(),
+  targetType: z.string(),
+  targetId: z.string().nullable().optional(),
+  timestamp: z.string(),
+  payload: JsonRecordSchema.default({}),
+});
+
+export const SampleGraphNodeViewSchema = z.object({
+  taskId: z.string(),
+  taskSlug: z.string(),
+  description: z.string(),
+  status: z.string(),
+  parentTaskId: z.string().nullable().optional(),
+  level: z.number().default(0),
+  assignedWorkerSlug: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const SampleGraphEdgeViewSchema = z.object({
+  edgeId: z.string(),
+  sourceTaskId: z.string(),
+  targetTaskId: z.string(),
+  status: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const SampleGraphViewSchema = z.object({
+  nodes: z.array(SampleGraphNodeViewSchema).default([]),
+  edges: z.array(SampleGraphEdgeViewSchema).default([]),
+});
+
+export const SampleEventsViewSchema = z.object({
+  items: z.array(SampleEventViewSchema).default([]),
+});
+
+export const SampleStateViewSchema = z.object({
+  sampleId: z.string(),
+  experimentId: z.string(),
+  environmentId: z.string(),
+  environmentName: z.string(),
+  detail: SampleDetailViewSchema,
+  events: z.array(SampleEventViewSchema).default([]),
+  graph: SampleGraphViewSchema.default({ nodes: [], edges: [] }),
+});
+
+export const RunExecutionAttemptSchema = schemas.RunExecutionAttemptDto;
 export const SampleResourceSchema = schemas.SampleResourceDto;
 export const SampleSandboxCommandSchema = schemas.SampleSandboxCommandDto;
 export const SampleSandboxSchema = schemas.SampleSandboxDto;
@@ -53,6 +164,19 @@ export type RawSampleSandboxCommandType = RawSampleSandboxCommand;
 
 export type SampleSnapshotMetrics = RawSampleSnapshotMetrics;
 export type SampleRuntimeEventView = z.infer<typeof SampleRuntimeEventViewSchema>;
+
+export type SamplerInvocationView = z.infer<typeof SamplerInvocationViewSchema>;
+export type EnvironmentContributionView = z.infer<typeof EnvironmentContributionViewSchema>;
+export type ExperimentSampleSummaryView = z.infer<typeof ExperimentSampleSummaryViewSchema>;
+export type ExperimentDetailView = z.infer<typeof ExperimentDetailViewSchema>;
+export type ExperimentListView = z.infer<typeof ExperimentListViewSchema>;
+export type SampleDetailView = z.infer<typeof SampleDetailViewSchema>;
+export type SampleEventView = z.infer<typeof SampleEventViewSchema>;
+export type SampleGraphNodeView = z.infer<typeof SampleGraphNodeViewSchema>;
+export type SampleGraphEdgeView = z.infer<typeof SampleGraphEdgeViewSchema>;
+export type SampleGraphView = z.infer<typeof SampleGraphViewSchema>;
+export type SampleEventsView = z.infer<typeof SampleEventsViewSchema>;
+export type SampleStateView = z.infer<typeof SampleStateViewSchema>;
 
 export interface ExperimentStatusCounts {
   pending: number;
@@ -380,8 +504,32 @@ export function parseExperimentDetail(input: unknown): ExperimentDetail {
   };
 }
 
-export function parseSampleSandbox(input: unknown): SampleSandbox {
-  return normalizeSampleSandbox(SampleSandboxSchema.parse(input));
+export function parseExperimentState(input: unknown): ExperimentDetailView {
+  return ExperimentDetailViewSchema.parse(input);
+}
+
+export function parseExperimentListState(input: unknown): ExperimentListView {
+  return ExperimentListViewSchema.parse(input);
+}
+
+export function parseSampleDetail(input: unknown): SampleDetailView {
+  return SampleDetailViewSchema.parse(input);
+}
+
+export function parseSampleEvents(input: unknown): SampleEventsView {
+  return SampleEventsViewSchema.parse(input);
+}
+
+export function parseSampleGraph(input: unknown): SampleGraphView {
+  return SampleGraphViewSchema.parse(input);
+}
+
+export function parseSampleState(input: unknown): SampleStateView {
+  return SampleStateViewSchema.parse(input);
+}
+
+export function parseRunSandbox(input: unknown): RunSandbox {
+  return normalizeRunSandbox(RunSandboxSchema.parse(input));
 }
 
 export function parseSampleSandboxCommand(input: unknown): SampleSandboxCommand {

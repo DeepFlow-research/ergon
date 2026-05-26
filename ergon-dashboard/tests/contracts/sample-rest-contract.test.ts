@@ -1,64 +1,88 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
-import { schemas } from "../../src/generated/rest/contracts";
+import {
+  parseSampleDetail,
+  parseSampleEvents,
+  parseSampleGraph,
+  type SampleDetailView,
+  type SampleEventsView,
+  type SampleGraphView,
+} from "../../src/lib/contracts/rest";
 
-const sampleId = "00000000-0000-4000-8000-000000000001";
-const taskId = "00000000-0000-4000-8000-000000000002";
-const edgeId = "00000000-0000-4000-8000-000000000003";
+export const fixtureSampleDetail: SampleDetailView = {
+  sampleId: "sample-1",
+  experimentId: "exp-1",
+  environmentId: "env-1",
+  environmentName: "mini-validation",
+  sampleKey: "problem-1",
+  sampleRef: { id: "problem-1" },
+  sourceMetadata: { provider: "records" },
+  status: "completed",
+  createdAt: "2026-05-26T00:00:00Z",
+  startedAt: "2026-05-26T00:00:01Z",
+  completedAt: "2026-05-26T00:00:05Z",
+};
 
-test("sample detail no longer exposes generic mutation proxy route", () => {
-  assert.equal(existsSync("src/app/api/samples/[sampleId]/mutations/route.ts"), false);
+export const fixtureSampleEvents: SampleEventsView = {
+  items: [
+    {
+      eventId: "event-1",
+      sampleId: "sample-1",
+      eventType: "sample.status_changed",
+      targetType: "sample",
+      targetId: null,
+      timestamp: "2026-05-26T00:00:00Z",
+      payload: { status: "pending" },
+    },
+    {
+      eventId: "event-2",
+      sampleId: "sample-1",
+      eventType: "task.added",
+      targetType: "task",
+      targetId: "task-1",
+      timestamp: "2026-05-26T00:00:01Z",
+      payload: { task_slug: "prove" },
+    },
+  ],
+};
+
+export const fixtureSampleGraph: SampleGraphView = {
+  nodes: [
+    {
+      taskId: "task-1",
+      taskSlug: "prove",
+      description: "Prove the theorem",
+      status: "pending",
+      parentTaskId: null,
+      level: 0,
+      assignedWorkerSlug: "lean-worker",
+      createdAt: "2026-05-26T00:00:00Z",
+      updatedAt: "2026-05-26T00:00:01Z",
+    },
+  ],
+  edges: [],
+};
+
+test("sample detail contract exposes provenance", () => {
+  const parsed = parseSampleDetail(fixtureSampleDetail);
+
+  assert.equal(parsed.sampleId, "sample-1");
+  assert.equal(parsed.environmentName, "mini-validation");
+  assert.doesNotMatch(JSON.stringify(parsed), /runId|definitionId/i);
 });
 
-test("sample workspace loads typed runtime events instead of mutation DTOs", () => {
-  const source = readFileSync("src/components/sample/SampleWorkspacePage.tsx", "utf8");
+test("sample contract has events not mutations", () => {
+  const parsed = parseSampleEvents(fixtureSampleEvents);
 
-  assert.match(source, /fetch\(`\/api\/samples\/\$\{sampleId\}\/events`\)/);
-  assert.match(source, /parseSampleRuntimeEvents/);
-  assert.doesNotMatch(source, /\/api\/samples\/\$\{sampleId\}\/mutations/);
+  assert.equal(parsed.items[0].eventType, "sample.status_changed");
+  assert.equal(parsed.items[1].eventType, "task.added");
+  assert.doesNotMatch(JSON.stringify(parsed), /GraphMutation|mutation|runId/i);
 });
 
-test("generated REST contract does not expose sample mutations", () => {
-  const openapi = readFileSync("src/generated/rest/openapi.json", "utf8");
-  const contracts = readFileSync("src/generated/rest/contracts.ts", "utf8");
+test("sample graph contract exposes projected tasks", () => {
+  const parsed = parseSampleGraph(fixtureSampleGraph);
 
-  assert.doesNotMatch(openapi, /\/samples\/\{sample_id\}\/mutations/);
-  assert.doesNotMatch(openapi, /GraphMutationRecordDto/);
-  assert.doesNotMatch(contracts, /GraphMutationRecordDto/);
-});
-
-test("generated REST contract exposes sample runtime events as a discriminated union", () => {
-  const contracts = readFileSync("src/generated/rest/contracts.ts", "utf8");
-
-  assert.match(contracts, /const SampleRuntimeEventView = z\.discriminatedUnion\("eventType"/);
-  assert.match(contracts, /eventType: z\.literal\("task\.added"\)/);
-  assert.match(contracts, /eventType: z\.literal\("edge\.added"\)/);
-
-  const parsed = schemas.SampleRuntimeEventView.parse({
-    eventId: edgeId,
-    sampleId,
-    timestamp: "2026-05-27T12:00:00Z",
-    eventType: "edge.added",
-    targetType: "edge",
-    targetId: edgeId,
-    sourceTaskId: taskId,
-    targetTaskId: "00000000-0000-4000-8000-000000000004",
-    status: "pending",
-    payload: {},
-  });
-
-  assert.equal(parsed.eventType, "edge.added");
-  assert.throws(() =>
-    schemas.SampleRuntimeEventView.parse({
-      eventId: edgeId,
-      sampleId,
-      timestamp: "2026-05-27T12:00:00Z",
-      eventType: "not.real",
-      targetType: "edge",
-      targetId: edgeId,
-      payload: {},
-    }),
-  );
+  assert.equal(parsed.nodes[0].taskSlug, "prove");
+  assert.equal(parsed.edges.length, 0);
 });

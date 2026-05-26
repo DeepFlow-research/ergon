@@ -10,27 +10,31 @@ test("harness miss for experiment is represented as null, not notFound policy", 
   assert.equal(getHarnessExperiment("missing-experiment"), null);
 });
 
-test("experiment list server data keeps operational analytics fields", async () => {
+test("experiment list server data keeps sample-centered state fields", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>
     new Response(
       JSON.stringify([
         {
-          definition_id: "11111111-1111-1111-1111-111111111111",
+          experimentId: "11111111-1111-1111-1111-111111111111",
           name: "MiniWob comparison",
-          benchmark_type: "miniwob",
-          sample_count: 12,
-          status: "running",
-          default_model_target: "openai:gpt-4.1",
-          default_evaluator_slug: "judge-v1",
-          created_at: "2026-05-20T12:00:00Z",
-          run_count: 3,
-          failure_count: 1,
-          latest_activity_at: "2026-05-20T12:30:00Z",
-          average_score: 0.82,
-          average_duration_ms: 1234,
+          environments: [
+            {
+              environmentId: "env-1",
+              environmentName: "mini-validation",
+              sourceMode: "materialized",
+              sampleCount: 12,
+              selectedCount: 3,
+              sourceMetadata: {},
+            },
+          ],
+          sampleCount: 12,
+          samples: [],
+          samplerInvocations: [],
+          metadata: {},
+          createdAt: "2026-05-20T12:00:00Z",
         },
-      ]),
+      ]).replace(/^\[/, "{\"items\":[").replace(/\]$/, "]}"),
       { status: 200, headers: { "content-type": "application/json" } },
     );
 
@@ -38,10 +42,9 @@ test("experiment list server data keeps operational analytics fields", async () 
     const result = await loadExperimentList();
 
     assert.equal(result.ok, true);
-    assert.equal(result.ok && result.data[0].failure_count, 1);
-    assert.equal(result.ok && result.data[0].latest_activity_at, "2026-05-20T12:30:00Z");
-    assert.equal(result.ok && result.data[0].average_score, 0.82);
-    assert.equal(result.ok && result.data[0].average_duration_ms, 1234);
+    assert.equal(result.ok && result.data[0].experimentId, "11111111-1111-1111-1111-111111111111");
+    assert.equal(result.ok && result.data[0].environments[0].environmentName, "mini-validation");
+    assert.equal(result.ok && result.data[0].sampleCount, 12);
   } finally {
     globalThis.fetch = originalFetch;
   }

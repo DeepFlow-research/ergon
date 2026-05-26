@@ -1,6 +1,8 @@
 "use client";
 
-import { SampleLifecycleStatus, TaskStatus } from "@/lib/types";
+import React from "react";
+
+import { RunLifecycleStatus, TaskStatus } from "@/lib/types";
 
 type StatusType = TaskStatus | SampleLifecycleStatus | string;
 

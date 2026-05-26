@@ -11,6 +11,7 @@ import type {
   SampleSnapshotMetrics,
   SampleTaskEvaluation as RestSampleTaskEvaluation,
 } from "@/lib/contracts/rest";
+export type { SampleDashboardState } from "@/lib/sample-state/dashboard";
 import type {
   DashboardGraphMutationData as GeneratedDashboardGraphMutationData,
   DashboardResourcePublishedData as GeneratedDashboardResourcePublishedData,

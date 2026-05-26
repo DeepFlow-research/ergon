@@ -10,7 +10,7 @@ import { store } from "@/lib/state/store";
 import {
   CommunicationThreadState,
   ContextEventState,
-  ExperimentDetail,
+  SampleDashboardState,
   SerializedSampleWorkspaceState,
   TaskEvaluationState,
   TaskStatus,
@@ -21,15 +21,17 @@ declare global {
   // eslint-disable-next-line no-var
   var __dashboardHarness:
     | {
-        experimentDetails: Record<string, ExperimentDetail>;
-        mutationsBySample: Record<string, unknown[]>;
-        seededSampleIds: Set<string>;
+        experimentDetails: Record<string, unknown>;
+        sampleStates: Record<string, SampleDashboardState>;
+        mutationsByRun: Record<string, unknown[]>;
+        seededRunIds: Set<string>;
       }
     | undefined;
 }
 
 export interface DashboardHarnessSeedPayload {
-  experimentDetails?: Record<string, ExperimentDetail>;
+  experimentDetails?: Record<string, unknown>;
+  sampleStates?: Record<string, SampleDashboardState>;
   runs?: SerializedSampleWorkspaceState[];
   mutations?: Record<string, unknown[]>;
 }
@@ -38,8 +40,9 @@ function getHarnessState() {
   if (!global.__dashboardHarness) {
     global.__dashboardHarness = {
       experimentDetails: {},
-      mutationsBySample: {},
-      seededSampleIds: new Set(),
+      sampleStates: {},
+      mutationsByRun: {},
+      seededRunIds: new Set(),
     };
   }
   return global.__dashboardHarness;
@@ -56,8 +59,9 @@ export function resetDashboardHarness(): void {
   store.reset();
   const harness = getHarnessState();
   harness.experimentDetails = {};
-  harness.mutationsBySample = {};
-  harness.seededSampleIds.clear();
+  harness.sampleStates = {};
+  harness.mutationsByRun = {};
+  harness.seededRunIds.clear();
 }
 
 export function seedDashboardHarness(payload: DashboardHarnessSeedPayload): void {
@@ -66,7 +70,8 @@ export function seedDashboardHarness(payload: DashboardHarnessSeedPayload): void
 
   const harness = getHarnessState();
   harness.experimentDetails = payload.experimentDetails ?? {};
-  harness.mutationsBySample = payload.mutations ?? {};
+  harness.sampleStates = payload.sampleStates ?? {};
+  harness.mutationsByRun = payload.mutations ?? {};
 
   for (const run of payload.runs ?? []) {
     store.seedSample(deserializeSampleState(run));
@@ -74,12 +79,17 @@ export function seedDashboardHarness(payload: DashboardHarnessSeedPayload): void
   }
 }
 
-export function getHarnessExperiment(definitionId: string): ExperimentDetail | null {
+export function getHarnessExperiment(definitionId: string): unknown | null {
   requireHarnessEnabled();
   return getHarnessState().experimentDetails[definitionId] ?? null;
 }
 
-export function getHarnessSample(sampleId: string): SerializedSampleWorkspaceState | null {
+export function getHarnessSampleState(sampleId: string): SampleDashboardState | null {
+  requireHarnessEnabled();
+  return getHarnessState().sampleStates[sampleId] ?? null;
+}
+
+export function getHarnessRun(sampleId: string): SerializedSampleWorkspaceState | null {
   requireHarnessEnabled();
   if (!getHarnessState().seededSampleIds.has(sampleId)) {
     return null;

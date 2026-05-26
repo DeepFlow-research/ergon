@@ -18,7 +18,7 @@ export async function GET(_request: Request, context: RouteContext) {
   } catch (error) {
     return NextResponse.json(
       {
-        detail: `Ergon API is unavailable while loading runtime events for sample ${sampleId}.`,
+        detail: `Ergon API is unavailable while loading events for sample ${sampleId}.`,
         error: error instanceof Error ? error.message : "Unknown backend fetch failure",
       },
       { status: 503 },

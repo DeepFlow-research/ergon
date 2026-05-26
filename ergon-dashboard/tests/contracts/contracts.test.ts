@@ -151,7 +151,7 @@ test("generated dashboard event schemas cover graph and context live events", ()
 test("frontend routes expose experiment grouping and no cohort surface", () => {
   const root = process.cwd();
 
-  assert.equal(fs.existsSync(path.join(root, "src/app/experiments/[definitionId]/page.tsx")), true);
+  assert.equal(fs.existsSync(path.join(root, "src/app/experiments/[experimentId]/page.tsx")), true);
   assert.equal(fs.existsSync(path.join(root, "src/app/cohorts/page.tsx")), false);
   assert.equal(fs.existsSync(path.join(root, "src/app/api/cohorts/route.ts")), false);
 });

@@ -1,7 +1,14 @@
 import { config } from "@/lib/config";
-import { parseSampleSnapshot, type SampleSnapshot } from "@/lib/contracts/rest";
+import {
+  parseRunSnapshot,
+  parseSampleDetail,
+  parseSampleEvents,
+  parseSampleGraph,
+  type RunSnapshot,
+} from "@/lib/contracts/rest";
+import { buildSampleState, type SampleDashboardState } from "@/lib/sample-state/dashboard";
 import { fetchErgonApi } from "@/lib/serverApi";
-import { getHarnessSample } from "@/lib/testing/dashboardHarness";
+import { getHarnessRun, getHarnessSampleState } from "@/lib/testing/dashboardHarness";
 
 import { backendUnavailable, type ServerDataResult } from "./responses";
 
@@ -95,7 +102,53 @@ export async function loadSampleSnapshot(sampleId: string): Promise<ServerDataRe
   }
 }
 
-function parseSampleList(input: unknown): SampleSummary[] {
+export async function loadSampleState(sampleId: string): Promise<ServerDataResult<SampleDashboardState>> {
+  if (config.enableTestHarness) {
+    const sample = getHarnessSampleState(sampleId);
+    if (sample !== null) {
+      return { ok: true, data: sample, status: 200, source: "harness" };
+    }
+  }
+
+  try {
+    const [detailResponse, eventsResponse, graphResponse] = await Promise.all([
+      fetchErgonApi(`/samples/${sampleId}`),
+      fetchErgonApi(`/samples/${sampleId}/events`),
+      fetchErgonApi(`/samples/${sampleId}/graph`),
+    ]);
+
+    const [detailBody, eventsBody, graphBody] = await Promise.all([
+      detailResponse.json(),
+      eventsResponse.json(),
+      graphResponse.json(),
+    ]);
+
+    if (!detailResponse.ok) {
+      return { ok: false, body: detailBody, status: detailResponse.status, source: "backend" };
+    }
+    if (!eventsResponse.ok) {
+      return { ok: false, body: eventsBody, status: eventsResponse.status, source: "backend" };
+    }
+    if (!graphResponse.ok) {
+      return { ok: false, body: graphBody, status: graphResponse.status, source: "backend" };
+    }
+
+    return {
+      ok: true,
+      data: buildSampleState({
+        detail: parseSampleDetail(detailBody),
+        events: parseSampleEvents(eventsBody).items,
+        graph: parseSampleGraph(graphBody),
+      }),
+      status: 200,
+      source: "backend",
+    };
+  } catch (error) {
+    return backendUnavailable(`Ergon API is unavailable while loading sample ${sampleId}.`, error);
+  }
+}
+
+function parseRunList(input: unknown): RunSummary[] {
   if (!Array.isArray(input)) return [];
   return input.map((item) => {
     const record = typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {};
