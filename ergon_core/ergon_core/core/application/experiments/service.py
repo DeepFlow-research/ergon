@@ -40,7 +40,7 @@ class ExperimentSubmissionService(Protocol):
 
 
 @runtime_checkable
-class ExperimentPersistenceService(Protocol):
+class PersistExperimentPort(Protocol):
     # TODO(PR04): replace this protocol with the concrete core persistence
     # service once experiment/environment/candidate-pool rows exist.
     async def persist_experiment(self, experiment: "Experiment") -> "ExperimentRef": ...
@@ -49,7 +49,7 @@ class ExperimentPersistenceService(Protocol):
 async def persist_experiment(
     experiment: "Experiment",
     *,
-    service: ExperimentPersistenceService,
+    service: PersistExperimentPort,
 ) -> "ExperimentRef":
     # TODO(PR04): move callers to the concrete core persistence entry point
     # after experiment rows and environment rows are introduced.
