@@ -9,7 +9,7 @@ MINIF2F_LOCAL_LLAMACPP = ExampleDefinition(
     display_name="MiniF2F local llama.cpp",
     short_description=("Run three MiniF2F Lean proof tasks with a managed local llama.cpp server."),
     purpose=("Run three MiniF2F Lean proof tasks with local llama.cpp and an E2B Lean sandbox."),
-    script_path="examples/getting_started/01_minif2f_local_llamacpp/run.py",
+    script_path="examples/getting_started/01_minif2f_local_llamacpp/submit.py",
     prerequisites=(
         "E2B_API_KEY is configured in Ergon's .env file or process environment.",
         "A local GGUF model path or Hugging Face GGUF ref is available for llama.cpp.",

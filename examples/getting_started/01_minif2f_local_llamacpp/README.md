@@ -112,11 +112,11 @@ The script:
 1. Resolves `--base-model` from either a local path or Hugging Face GGUF ref.
 2. Starts `llama-server` for managed runs, then discovers the served model from `/v1/models`.
 3. Checks Ergon settings for `E2B_API_KEY` and verifies the llama.cpp endpoint.
-4. Builds `MiniF2FBenchmark(limit=3, worker_factory=make_worker)`.
-5. Binds `make_minif2f_worker(model="llamacpp:<base-url>", max_iterations=12)`.
-6. Persists the benchmark definition with `persist_benchmark`.
-7. Launches a sample with `launch_sample`.
-8. Prints the definition id, sample id, model target, and observation commands.
+4. Binds `make_minif2f_worker(model="llamacpp:<base-url>", max_iterations=12)`.
+5. Builds `MiniF2FEnvironment(name="mini-validation", limit=3, worker=...)`.
+6. Wraps that environment in `Experiment(name="minif2f-local-llamacpp", ...)`.
+7. Submits the experiment with `experiment.submit(...)`.
+8. Prints the experiment id, sample ids, model target, and observation commands.
 
 MiniF2F is a real theorem-proving benchmark. Local model quality, quantization,
 and context length strongly affect proof success. A terminal sample with failed

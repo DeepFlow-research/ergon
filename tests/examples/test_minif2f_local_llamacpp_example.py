@@ -9,7 +9,9 @@ from types import TracebackType
 from uuid import UUID
 
 import pytest
+from pydantic import ConfigDict
 
+from ergon_core.api import Environment, ExperimentSubmitResult
 from getting_started._shared import llamacpp
 from getting_started._shared import model_cache
 from getting_started._shared import env
@@ -19,12 +21,12 @@ _EXAMPLE_PATH = (
     / "examples"
     / "getting_started"
     / "01_minif2f_local_llamacpp"
-    / "run.py"
+    / "submit.py"
 )
 
 
 def _load_example_module():
-    spec = importlib.util.spec_from_file_location("minif2f_local_llamacpp_run", _EXAMPLE_PATH)
+    spec = importlib.util.spec_from_file_location("minif2f_local_llamacpp_submit", _EXAMPLE_PATH)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -37,7 +39,10 @@ def test_example_uses_packaged_imports_without_repo_root_sys_path_hack() -> None
 
     assert "sys.path.insert" not in source
     assert "Path(__file__).resolve().parents" not in source
-    assert "from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark" in source
+    assert "MiniF2FBenchmark" not in source
+    assert "persist_benchmark" not in source
+    assert "launch_run" not in source
+    assert "from ergon_builtins.environments import MiniF2FEnvironment" in source
     assert "from getting_started._shared.env import" in source
 
 
@@ -321,11 +326,11 @@ def test_llamacpp_server_manager_builds_argv_and_discovers_model(
 
 
 @pytest.mark.asyncio
-async def test_main_persists_and_launches_minif2f_with_local_worker(monkeypatch, capsys) -> None:
+async def test_main_submits_minif2f_with_local_worker(monkeypatch, capsys) -> None:
     module = _load_example_module()
     observed: dict[str, object] = {}
-    definition_id = UUID("11111111-1111-1111-1111-111111111111")
     sample_id = UUID("22222222-2222-2222-2222-222222222222")
+    experiment_id = UUID("11111111-1111-1111-1111-111111111111")
 
     def fake_preflight(*, base_url: str) -> object:
         observed["preflight_base_url"] = base_url
@@ -341,32 +346,42 @@ async def test_main_persists_and_launches_minif2f_with_local_worker(monkeypatch,
         observed["worker_max_iterations"] = max_iterations
         return FakeWorker(model=model, max_iterations=max_iterations)
 
-    class FakeBenchmark:
-        def __init__(self, *, limit: int, worker_factory) -> None:
-            observed["benchmark_limit"] = limit
-            self.worker = worker_factory()
+    class FakeEnvironment(Environment):
+        model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
 
-    class FakeHandle:
-        def __init__(self, persisted_definition_id: UUID) -> None:
-            self.definition_id = persisted_definition_id
+        def __init__(self, **kwargs) -> None:
+            observed["environment_kwargs"] = kwargs
+            super().__init__(**kwargs)
 
-    class FakeRunResult:
-        def __init__(self, launched_run_id: UUID) -> None:
-            self.run_ids = [launched_run_id]
-
-    def fake_persist_benchmark(benchmark: FakeBenchmark) -> FakeHandle:
-        observed["persisted_worker_model"] = benchmark.worker.model
-        return FakeHandle(definition_id)
-
-    async def fake_launch_run(persisted_definition_id: UUID) -> FakeRunResult:
-        observed["launched_definition_id"] = persisted_definition_id
-        return FakeRunResult(sample_id)
+    class FakeService:
+        async def submit(
+            self,
+            *,
+            experiment,
+            k: int,
+            sampler,
+            candidate_pool_size,
+            policy_version,
+        ):
+            observed["experiment_name"] = experiment.name
+            observed["k"] = k
+            observed["sampler_name"] = sampler.name
+            observed["candidate_pool_size"] = candidate_pool_size
+            observed["policy_version"] = policy_version
+            return ExperimentSubmitResult(
+                experiment_ref_id=experiment_id,
+                requested_k=k,
+                candidate_pool_size=k,
+                selected_count=1,
+                sample_ids=[sample_id],
+            )
 
     monkeypatch.setattr(module, "preflight_llamacpp_and_e2b", fake_preflight)
-    monkeypatch.setattr(module, "MiniF2FBenchmark", FakeBenchmark)
+    monkeypatch.setattr(module, "MiniF2FEnvironment", FakeEnvironment)
     monkeypatch.setattr(module, "make_minif2f_worker", fake_make_worker)
-    monkeypatch.setattr(module, "persist_benchmark", fake_persist_benchmark)
-    monkeypatch.setattr(module, "launch_run", fake_launch_run)
+    monkeypatch.setattr(module, "make_minif2f_rubric", lambda: object())
+    monkeypatch.setattr(module, "LeanSandbox", lambda: object())
+    monkeypatch.setattr(module, "experiment_submission_service", lambda: FakeService())
     monkeypatch.setenv("ERGON_DASHBOARD_URL", "http://localhost:3000")
 
     exit_code = await module.async_main(
@@ -383,19 +398,26 @@ async def test_main_persists_and_launches_minif2f_with_local_worker(monkeypatch,
     )
 
     assert exit_code == 0
-    assert observed == {
-        "preflight_base_url": "http://localhost:8080",
-        "benchmark_limit": 2,
-        "worker_model": "llamacpp:http://localhost:8080#local-proof-model",
-        "worker_max_iterations": 4,
-        "persisted_worker_model": "llamacpp:http://localhost:8080#local-proof-model",
-        "launched_definition_id": definition_id,
-    }
+    assert observed["preflight_base_url"] == "http://localhost:8080"
+    assert observed["worker_model"] == "llamacpp:http://localhost:8080#local-proof-model"
+    assert observed["worker_max_iterations"] == 4
+    environment_kwargs = observed["environment_kwargs"]
+    assert environment_kwargs["name"] == "mini-validation"
+    assert environment_kwargs["split"] == "validation"
+    assert environment_kwargs["limit"] == 2
+    assert isinstance(environment_kwargs["worker"], FakeWorker)
+    assert len(environment_kwargs["evaluators"]) == 1
+    assert observed["experiment_name"] == "minif2f-local-llamacpp"
+    assert observed["k"] == 2
+    assert observed["sampler_name"] == "random"
+    assert observed["candidate_pool_size"] is None
+    assert observed["policy_version"] is None
     output = capsys.readouterr().out
-    assert str(definition_id) in output
+    assert str(experiment_id) in output
     assert str(sample_id) in output
-    assert "uv run ergon run status 22222222-2222-2222-2222-222222222222" in output
-    assert "http://localhost:3000/run/22222222-2222-2222-2222-222222222222" in output
+    assert "Definition id" not in output
+    assert "uv run ergon sample status 22222222-2222-2222-2222-222222222222" in output
+    assert "http://localhost:3000/samples/22222222-2222-2222-2222-222222222222" in output
 
 
 @pytest.mark.asyncio
@@ -405,7 +427,7 @@ async def test_main_resolves_base_model_starts_llamacpp_and_cleans_up(
 ) -> None:
     module = _load_example_module()
     observed: dict[str, object] = {}
-    definition_id = UUID("33333333-3333-3333-3333-333333333333")
+    experiment_id = UUID("33333333-3333-3333-3333-333333333333")
     sample_id = UUID("44444444-4444-4444-4444-444444444444")
     resolved_model = tmp_path / "model.gguf"
     resolved_model.write_text("fake model")
@@ -428,30 +450,44 @@ async def test_main_resolves_base_model_starts_llamacpp_and_cleans_up(
         observed["worker_max_iterations"] = max_iterations
         return _ObservedWorker(model=model, max_iterations=max_iterations)
 
-    class FakeHandle:
-        def __init__(self, persisted_definition_id: UUID) -> None:
-            self.definition_id = persisted_definition_id
+    class FakeEnvironment(Environment):
+        model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
 
-    class FakeRunResult:
-        def __init__(self, launched_run_id: UUID) -> None:
-            self.run_ids = [launched_run_id]
+        def __init__(self, **kwargs) -> None:
+            observed["environment_kwargs"] = kwargs
+            super().__init__(**kwargs)
 
-    def fake_persist_benchmark(benchmark: _ObservedBenchmark) -> FakeHandle:
-        observed["persisted_worker_model"] = benchmark.worker.model
-        return FakeHandle(definition_id)
-
-    async def fake_launch_run(persisted_definition_id: UUID) -> FakeRunResult:
-        observed["launched_definition_id"] = persisted_definition_id
-        return FakeRunResult(sample_id)
+    class FakeService:
+        async def submit(
+            self,
+            *,
+            experiment,
+            k: int,
+            sampler,
+            candidate_pool_size,
+            policy_version,
+        ):
+            observed["experiment_name"] = experiment.name
+            observed["k"] = k
+            observed["sampler_name"] = sampler.name
+            observed["candidate_pool_size"] = candidate_pool_size
+            observed["policy_version"] = policy_version
+            return ExperimentSubmitResult(
+                experiment_ref_id=experiment_id,
+                requested_k=k,
+                candidate_pool_size=k,
+                selected_count=1,
+                sample_ids=[sample_id],
+            )
 
     monkeypatch.setattr(module, "resolve_base_model", fake_resolve)
     monkeypatch.setattr(module, "start_llama_server", fake_start)
     monkeypatch.setattr(module, "preflight_llamacpp_and_e2b", fake_preflight)
-    _ObservedBenchmark.observed = observed
-    monkeypatch.setattr(module, "MiniF2FBenchmark", _ObservedBenchmark)
+    monkeypatch.setattr(module, "MiniF2FEnvironment", FakeEnvironment)
     monkeypatch.setattr(module, "make_minif2f_worker", fake_make_worker)
-    monkeypatch.setattr(module, "persist_benchmark", fake_persist_benchmark)
-    monkeypatch.setattr(module, "launch_run", fake_launch_run)
+    monkeypatch.setattr(module, "make_minif2f_rubric", lambda: object())
+    monkeypatch.setattr(module, "LeanSandbox", lambda: object())
+    monkeypatch.setattr(module, "experiment_submission_service", lambda: FakeService())
 
     exit_code = await module.async_main(
         [
@@ -485,10 +521,20 @@ async def test_main_resolves_base_model_starts_llamacpp_and_cleans_up(
             "startup_timeout": 15,
         },
         "preflight_base_url": "http://127.0.0.1:8123",
-        "benchmark_limit": 3,
         "worker_model": "llamacpp:http://127.0.0.1:8123#mini-proof-local",
         "worker_max_iterations": 12,
-        "persisted_worker_model": "llamacpp:http://127.0.0.1:8123#mini-proof-local",
-        "launched_definition_id": definition_id,
+        "environment_kwargs": {
+            "name": "mini-validation",
+            "split": "validation",
+            "limit": 3,
+            "worker": observed["environment_kwargs"]["worker"],
+            "evaluators": observed["environment_kwargs"]["evaluators"],
+            "sandbox": observed["environment_kwargs"]["sandbox"],
+        },
+        "experiment_name": "minif2f-local-llamacpp",
+        "k": 3,
+        "sampler_name": "random",
+        "candidate_pool_size": None,
+        "policy_version": None,
         "server_closed_keep_running": True,
     }
