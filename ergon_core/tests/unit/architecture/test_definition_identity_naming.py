@@ -30,6 +30,9 @@ ALLOWED_EXPERIMENT_ID_PATH_PREFIXES = (
     ROOT / "ergon_core" / "tests" / "unit" / "core" / "application" / "experiments",
     ROOT / "ergon_core" / "tests" / "unit" / "read_models",
     ROOT / "ergon_core" / "tests" / "unit" / "rest_api",
+    ROOT / "ergon_cli" / "ergon_cli" / "domains" / "experiments",
+    ROOT / "ergon_cli" / "ergon_cli" / "domains" / "samples",
+    ROOT / "ergon_cli" / "tests" / "unit" / "cli",
     ROOT / "tests" / "examples",
 )
 ALLOWED_EXPERIMENT_ID_FILES = {

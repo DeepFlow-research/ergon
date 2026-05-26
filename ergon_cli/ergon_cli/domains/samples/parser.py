@@ -32,7 +32,9 @@ def register_sample_parser(subparsers: argparse._SubParsersAction) -> None:
     sample_status_parser.add_argument("sample_id", help="Sample ID (UUID)")
     sample_show_parser = sample_sub.add_parser("show", help="Show sample detail")
     sample_show_parser.add_argument("sample_id", help="Sample ID (UUID)")
-    sample_events_parser = sample_sub.add_parser("events", help="List typed WAL events for a sample")
+    sample_events_parser = sample_sub.add_parser(
+        "events", help="List typed WAL events for a sample"
+    )
     sample_events_parser.add_argument("sample_id", help="Sample ID (UUID)")
     sample_graph_parser = sample_sub.add_parser("graph", help="Show sample graph projection")
     sample_graph_parser.add_argument("sample_id", help="Sample ID (UUID)")
