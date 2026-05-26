@@ -1,21 +1,25 @@
-import { notFound } from "next/navigation";
+import { SampleWorkspacePage } from "@/components/sample/SampleWorkspacePage";
+import { loadRunSnapshot } from "@/lib/server-data/samples";
+import type { SerializedSampleWorkspaceState } from "@/lib/types";
 
-import { SampleDetail } from "@/components/samples/SampleDetail";
-import { loadSampleState } from "@/lib/server-data/samples";
-
-interface SamplePageProps {
+interface LegacySamplePageProps {
   params: Promise<{
     sampleId: string;
   }>;
 }
 
-export default async function SamplePage({ params }: SamplePageProps) {
+export default async function SamplePage({ params }: LegacySamplePageProps) {
   const { sampleId } = await params;
-  const result = await loadSampleState(sampleId);
-  if (!result.ok) {
-    if (result.status === 404) notFound();
-    throw new Error(`Failed to load sample ${sampleId}: ${result.status}`);
+  let initialRunState: SerializedSampleWorkspaceState | null = null;
+  let ssrError: string | null = null;
+
+  const result = await loadRunSnapshot(sampleId);
+  if (result.ok) {
+    initialRunState = result.data;
+  } else {
+    const detail = (result.body as { detail?: string })?.detail;
+    ssrError = detail ?? `Sample API returned ${result.status}`;
   }
 
-  return <SampleDetail state={result.data} />;
+  return <SampleWorkspacePage sampleId={sampleId} initialRunState={initialRunState} ssrError={ssrError} />;
 }

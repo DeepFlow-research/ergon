@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { loadSampleState } from "@/lib/server-data/samples";
+import { loadRunSnapshot } from "@/lib/server-data/samples";
 
 interface RouteContext {
   params: Promise<{
@@ -10,7 +10,7 @@ interface RouteContext {
 
 export async function GET(_request: Request, context: RouteContext) {
   const { sampleId } = await context.params;
-  const result = await loadSampleState(sampleId);
+  const result = await loadRunSnapshot(sampleId);
 
   if (result.ok) {
     return NextResponse.json(result.data, { status: result.status });
