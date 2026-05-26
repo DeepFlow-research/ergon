@@ -14,6 +14,10 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "BenchmarkRequirements",
         "Task",
         "EmptyTaskPayload",
+        "Environment",
+        "Experiment",
+        "ExperimentRef",
+        "ExperimentSubmitResult",
         "Worker",
         "WorkerContext",
         "WorkerOutput",
@@ -35,12 +39,18 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         # PR 5 — object-bound authoring surface.
         # PR 6.5 — Experiment wrapper deleted; persist_benchmark replaces it.
         "Evaluator",
+        "persist_experiment",
         "persist_benchmark",
+        "RandomSampler",
         "Rubric",
+        "Sample",
         "Sandbox",
         "SandboxKindMismatch",
         "SandboxRuntime",
         "SandboxNotLiveError",
+        "Sampler",
+        "SamplingContext",
+        "SamplingHistory",
         "TaskEvaluationResult",
         "CriterionCheckError",
     }
@@ -56,6 +66,11 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "WorkerSpec",
         "PersistedExperimentDefinition",
         "DefinitionHandle",
+        "Episode",
+        "EnvironmentSource",
+        "ExperimentHandle",
+        "ExperimentRunHandle",
+        "SourceDescriptor",
         # Toolkit is a ReAct/builtins implementation detail, not a core
         # authoring API concept.
         "Toolkit",
