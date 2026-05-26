@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from importlib import import_module
 import os
 from pathlib import Path
 import subprocess
@@ -10,15 +11,19 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 from sqlalchemy import inspect
 
-import ergon_core.core.persistence.definitions.models  # noqa: F401
-import ergon_core.core.persistence.samples.models  # noqa: F401
-import ergon_core.core.persistence.telemetry.models  # noqa: F401
 from ergon_core.api import Environment, Experiment, Sample
 from ergon_core.core.application.experiments.repositories import persist_experiment
 from ergon_core.core.persistence.experiments.models import ExperimentEnvironmentRow
 from ergon_core.test_support.task_factory import task_with_id
 
 ROOT = Path(__file__).resolve().parents[4]
+
+for module_name in (
+    "ergon_core.core.persistence.definitions.models",
+    "ergon_core.core.persistence.samples.models",
+    "ergon_core.core.persistence.telemetry.models",
+):
+    import_module(module_name)
 
 
 def make_sample(environment_name: str, key: str) -> Sample:

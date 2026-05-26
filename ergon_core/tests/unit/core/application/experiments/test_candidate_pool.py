@@ -1,13 +1,11 @@
 from collections.abc import Iterator
+from importlib import import_module
 from typing import Literal
 from uuid import uuid4
 
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-import ergon_core.core.persistence.definitions.models  # noqa: F401
-import ergon_core.core.persistence.samples.models  # noqa: F401
-import ergon_core.core.persistence.telemetry.models  # noqa: F401
 from ergon_core.api import Environment, Experiment, Sample
 from ergon_core.core.application.experiments.candidate_pool import (
     SampleCandidatePool,
@@ -19,6 +17,13 @@ from ergon_core.core.application.experiments.repositories import (
 )
 from ergon_core.core.persistence.experiments.models import ExperimentSamplePoolEntryRow
 from ergon_core.test_support.task_factory import task_with_id
+
+for module_name in (
+    "ergon_core.core.persistence.definitions.models",
+    "ergon_core.core.persistence.samples.models",
+    "ergon_core.core.persistence.telemetry.models",
+):
+    import_module(module_name)
 
 
 def make_sample(environment_name: str, key: str) -> Sample:
