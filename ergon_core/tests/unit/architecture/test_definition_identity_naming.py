@@ -34,6 +34,7 @@ ALLOWED_EXPERIMENT_ID_PATH_PREFIXES = (
     ROOT / "ergon_core" / "tests" / "unit" / "rl",
     ROOT / "ergon_cli" / "ergon_cli" / "domains" / "experiments",
     ROOT / "ergon_cli" / "ergon_cli" / "domains" / "samples",
+    ROOT / "ergon_cli" / "ergon_cli" / "domains" / "training",
     ROOT / "ergon_cli" / "tests" / "unit" / "cli",
     ROOT / "ergon_infra" / "ergon_infra" / "adapters",
     ROOT / "ergon_infra" / "ergon_infra" / "training",
