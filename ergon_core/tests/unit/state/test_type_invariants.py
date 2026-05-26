@@ -136,7 +136,7 @@ def test_run_record_uses_definition_identity():
     assert run.instance_key == "sample-1"
     assert run.parsed_worker_team() == {"primary": "test-worker"}
     assert not hasattr(run, "workflow" + "_definition_id")
-    assert not hasattr(run, "experiment" + "_id")
+    assert run.experiment_id is None
     assert not hasattr(run, "cohort_id")
 
 

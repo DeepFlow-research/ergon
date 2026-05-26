@@ -102,7 +102,7 @@ def test_run_record_uses_definition_id_as_single_runtime_definition_identity() -
     assert ("workflow" + "_definition_id") not in SampleRecord.model_fields
 
 
-def test_run_record_does_not_expose_legacy_definition_group_identity() -> None:
+def test_run_record_exposes_sample_experiment_provenance() -> None:
     from ergon_core.core.persistence.telemetry.models import SampleRecord
 
-    assert ("experiment" + "_id") not in SampleRecord.model_fields
+    assert ("experiment" + "_id") in SampleRecord.model_fields

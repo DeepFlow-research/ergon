@@ -87,6 +87,9 @@ ALLOWED_EXPERIMENT_ID_PATTERNS_BY_FILE = {
     / "application"
     / "experiments"
     / "test_experiment_submit.py": (re.compile(r"row\.experiment_id"),),
+    ROOT / "ergon_core" / "tests" / "unit" / "state" / "test_type_invariants.py": (
+        re.compile(r"run\.experiment_id is None"),
+    ),
 }
 
 

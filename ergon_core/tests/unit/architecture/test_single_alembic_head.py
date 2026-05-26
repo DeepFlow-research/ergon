@@ -12,6 +12,7 @@ def test_v2_has_one_initial_migration() -> None:
     assert migrations == [
         "00000000_initial_v2.py",
         "00000001_add_experiment_persistence.py",
+        "00000002_add_sample_experiment_provenance.py",
     ]
 
 
