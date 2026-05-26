@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime
-from typing import Protocol, runtime_checkable
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from ergon_core.api.experiment.environment import Environment
 from ergon_core.api.experiment.sampling import RandomSampler, Sampler
+from ergon_core.core.application.experiments.public_contracts import (
+    ExperimentSubmissionService,
+)
 
 
 class ExperimentRef(BaseModel):
@@ -31,19 +33,6 @@ class ExperimentSubmitResult(BaseModel):
     selected_count: int
     sample_ids: Sequence[UUID]
     dashboard_url: str | None = None
-
-
-@runtime_checkable
-class ExperimentSubmissionService(Protocol):
-    async def submit(
-        self,
-        *,
-        experiment: "Experiment",
-        k: int,
-        sampler: Sampler,
-        candidate_pool_size: int | None,
-        policy_version: int | None,
-    ) -> ExperimentSubmitResult: ...
 
 
 class Experiment(BaseModel):

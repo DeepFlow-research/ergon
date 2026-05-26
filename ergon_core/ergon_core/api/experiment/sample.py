@@ -9,14 +9,6 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 from ergon_core.api.benchmark import Task
 
 
-def _task_key(task: Task) -> str:
-    return task.task_slug
-
-
-def _task_dependencies(task: Task) -> tuple[str, ...]:
-    return tuple(task.dependency_task_slugs)
-
-
 class Sample(BaseModel):
     """A selected runnable unit containing concrete public ``Task`` objects."""
 
@@ -60,12 +52,12 @@ class Sample(BaseModel):
     def validate_runnable(self) -> None:
         if not self.tasks:
             raise ValueError("Sample requires at least one task")
-        keys = [_task_key(task) for task in self.tasks]
+        keys = [task.task_slug for task in self.tasks]
         if len(keys) != len(set(keys)):
             raise ValueError("Sample task keys must be unique")
         known = set(keys)
         for task in self.tasks:
-            for dependency in _task_dependencies(task):
+            for dependency in task.dependency_task_slugs:
                 if dependency not in known:
                     raise ValueError(f"Unknown dependency task key: {dependency}")
 
@@ -73,10 +65,10 @@ class Sample(BaseModel):
         return len(self.tasks)
 
     def root_tasks(self) -> Sequence[Task]:
-        return [task for task in self.tasks if not _task_dependencies(task)]
+        return [task for task in self.tasks if not task.dependency_task_slugs]
 
     def task_by_key(self, key: str) -> Task:
         for task in self.tasks:
-            if _task_key(task) == key:
+            if task.task_slug == key:
                 return task
         raise KeyError(key)

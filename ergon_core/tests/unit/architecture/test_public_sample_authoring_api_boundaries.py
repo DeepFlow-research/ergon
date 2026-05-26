@@ -9,7 +9,6 @@ def test_authoring_modules_do_not_import_persistence_or_sqlmodel() -> None:
         "ergon_core.api.experiment.environment",
         "ergon_core.api.experiment.sampling",
         "ergon_core.api.experiment.experiment",
-        "ergon_core.api.experiment.persistence",
     ):
         source = Path(importlib.import_module(module_name).__file__).read_text()
         for token in forbidden:

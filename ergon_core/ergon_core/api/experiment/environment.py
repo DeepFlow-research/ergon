@@ -26,6 +26,9 @@ class Environment(BaseModel):
         return list(self.iter_samples())
 
     def iter_samples(self) -> Iterator[Sample]:
+        # TODO(PR06): builtin environments implement this for MiniF2F,
+        # SWE-bench Verified, ResearchRubrics, and GDPEval. User-defined
+        # environments continue to override it directly.
         raise NotImplementedError
 
     def validate_authoring(self) -> None:
