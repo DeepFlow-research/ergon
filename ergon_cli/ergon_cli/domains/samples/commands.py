@@ -3,11 +3,16 @@ from argparse import Namespace
 from ergon_cli.domains.samples.models import (
     CancelSampleCommand,
     ListSamplesCommand,
+    SampleEventsCommand,
+    SampleGraphCommand,
     SampleStatusCommand,
 )
 from ergon_cli.domains.samples.service import (
     cancel_existing_sample,
+    get_sample_detail,
+    get_sample_graph,
     get_sample_status,
+    list_sample_events,
     list_samples,
 )
 from ergon_cli.shared import exit_codes
@@ -23,7 +28,13 @@ def handle_sample(args: Namespace) -> int:
         return cancel_sample_command(args)
     if args.sample_action == "status":
         return status_sample_command(args)
-    print("Usage: ergon sample {list|status|cancel}")
+    if args.sample_action == "show":
+        return show_sample_command(args)
+    if args.sample_action == "events":
+        return sample_events_command(args)
+    if args.sample_action == "graph":
+        return sample_graph_command(args)
+    print("Usage: ergon sample {list|status|show|events|graph|cancel}")
     return exit_codes.RUNTIME_ERROR
 
 
@@ -98,7 +109,6 @@ def status_sample_command(args: Namespace) -> int:
         f"sample_id:              {sample.id}",
         f"status:                 {sample.status}",
         f"benchmark_type:         {sample.benchmark_type}",
-        f"definition_id:          {sample.definition_id}",
         f"instance_key:           {sample.instance_key}",
     ]
     if sample.evaluator_slug is not None:
@@ -112,5 +122,58 @@ def status_sample_command(args: Namespace) -> int:
         lines.append(f"completed_at:           {sample.completed}")
     if sample.error_message:
         lines.append(f"error:                  {sample.error_message}")
+    print(render_text(lines))
+    return exit_codes.OK
+
+
+def show_sample_command(args: Namespace) -> int:
+    try:
+        sample = get_sample_detail(SampleStatusCommand(sample_id=parse_uuid(args.sample_id)))
+    except CliError as exc:
+        print(exc.message)
+        return exc.exit_code
+    print(
+        render_text(
+            [
+                f"sample_id:              {sample.sample_id}",
+                f"experiment_id:          {sample.experiment_id}",
+                f"environment_id:         {sample.environment_id}",
+                f"environment:            {sample.environment_name}",
+                f"sample_key:             {sample.sample_key}",
+                f"status:                 {sample.status}",
+            ]
+        )
+    )
+    return exit_codes.OK
+
+
+def sample_events_command(args: Namespace) -> int:
+    try:
+        events = list_sample_events(SampleEventsCommand(sample_id=parse_uuid(args.sample_id)))
+    except CliError as exc:
+        print(exc.message)
+        return exc.exit_code
+    if not events:
+        print("No events found.")
+        return exit_codes.OK
+    lines = ["EVENT\tTARGET\tTIMESTAMP"]
+    lines.extend("\t".join([event.event_type, event.target, event.timestamp]) for event in events)
+    print(render_text(lines))
+    return exit_codes.OK
+
+
+def sample_graph_command(args: Namespace) -> int:
+    try:
+        graph = get_sample_graph(SampleGraphCommand(sample_id=parse_uuid(args.sample_id)))
+    except CliError as exc:
+        print(exc.message)
+        return exc.exit_code
+    lines = [
+        f"nodes:                  {graph.node_count}",
+        f"edges:                  {graph.edge_count}",
+    ]
+    if graph.nodes:
+        lines.append("NODES")
+        lines.extend(graph.nodes)
     print(render_text(lines))
     return exit_codes.OK

@@ -25,10 +25,16 @@ def test_sample_subcommands_are_registered_in_main_parser() -> None:
     parser = build_parser()
 
     status_args = parser.parse_args(["sample", "status", str(uuid4())])
+    show_args = parser.parse_args(["sample", "show", str(uuid4())])
+    events_args = parser.parse_args(["sample", "events", str(uuid4())])
+    graph_args = parser.parse_args(["sample", "graph", str(uuid4())])
     definition_id = uuid4()
     list_args = parser.parse_args(["sample", "list", "--definition-id", str(definition_id)])
 
     assert status_args.sample_action == "status"
+    assert show_args.sample_action == "show"
+    assert events_args.sample_action == "events"
+    assert graph_args.sample_action == "graph"
     assert list_args.sample_action == "list"
     assert list_args.definition_id == str(definition_id)
 

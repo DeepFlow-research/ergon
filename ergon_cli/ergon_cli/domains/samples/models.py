@@ -18,6 +18,18 @@ class SampleStatusCommand(BaseModel):
     sample_id: UUID
 
 
+class SampleEventsCommand(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    sample_id: UUID
+
+
+class SampleGraphCommand(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    sample_id: UUID
+
+
 class CancelSampleCommand(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -39,6 +51,33 @@ class SampleSummaryView(BaseModel):
     evaluator_slug: str | None = None
     model_target: str | None = None
     error_message: str | None = None
+
+
+class SampleDetailCliState(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    sample_id: UUID
+    experiment_id: UUID
+    environment_id: UUID
+    environment_name: str
+    sample_key: str
+    status: str
+
+
+class SampleEventCliState(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    event_type: str
+    target: str
+    timestamp: str
+
+
+class SampleGraphCliState(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    node_count: int
+    edge_count: int
+    nodes: tuple[str, ...]
 
 
 class SampleListResult(BaseModel):

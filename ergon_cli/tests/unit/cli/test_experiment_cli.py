@@ -7,9 +7,12 @@ import ergon_cli.domains.experiments.service as experiment_domain_service
 from ergon_cli.domains.experiments.models import ExperimentTagDefinitionView
 from ergon_cli.main import build_parser
 from ergon_core.core.views.experiments.models import (
+    EnvironmentContributionView,
     ExperimentDetailDto,
+    ExperimentDetailView as CoreExperimentDetailView,
     ExperimentRunMetricsDto,
     ExperimentRunRowDto,
+    ExperimentSampleSummaryView,
     ExperimentSummaryDto,
 )
 
@@ -92,39 +95,49 @@ def test_experiment_list_prints_rows(monkeypatch, capsys):
 
 def test_experiment_show_prints_detail(monkeypatch, capsys):
     sample_id = uuid4()
+    experiment_id = uuid4()
+    environment_id = uuid4()
 
     class FakeReadService:
-        def get_experiment(self, definition_id):
-            return ExperimentDetailDto(
-                experiment=_summary(definition_id=definition_id),
-                runs=[
-                    ExperimentRunRowDto(
-                        sample_id=sample_id,
-                        definition_id=uuid4(),
-                        benchmark_type="ci-benchmark",
-                        instance_key="sample-a",
-                        status="completed",
-                        created_at="2026-04-27T12:00:00Z",
-                        metrics=ExperimentRunMetricsDto(
-                            sample_id=sample_id,
-                            status="completed",
-                            instance_key="sample-a",
-                        ),
+        def get_experiment_state(self, requested_experiment_id):
+            assert requested_experiment_id == experiment_id
+            return CoreExperimentDetailView(
+                experiment_id=experiment_id,
+                name="ci experiment",
+                environments=[
+                    EnvironmentContributionView(
+                        environment_id=environment_id,
+                        environment_name="mini-validation",
+                        source_mode="materialized",
+                        sample_count=1,
+                        selected_count=1,
                     )
                 ],
-                sample_selection={"instance_keys": ["sample-a"]},
+                sample_count=1,
+                samples=[
+                    ExperimentSampleSummaryView(
+                        sample_id=sample_id,
+                        experiment_id=experiment_id,
+                        environment_id=environment_id,
+                        environment_name="mini-validation",
+                        sample_key="sample-a",
+                        status="completed",
+                        created_at="2026-04-27T12:00:00Z",
+                    )
+                ],
+                created_at="2026-04-27T12:00:00Z",
             )
 
-    definition_id = uuid4()
     monkeypatch.setattr(experiment_domain_service, "ExperimentReadService", FakeReadService)
 
-    rc = experiment_cmd.handle_experiment_show(Namespace(definition_id=str(definition_id)))
+    rc = experiment_cmd.handle_experiment_show(Namespace(experiment_id=str(experiment_id)))
 
     assert rc == 0
     out = capsys.readouterr().out
-    assert str(definition_id) in out
+    assert str(experiment_id) in out
     assert str(sample_id) in out
     assert "sample-a" in out
+    assert "definition" not in out.lower()
 
 
 def test_experiment_tag_subcommands_are_registered() -> None:

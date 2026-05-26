@@ -10,7 +10,17 @@ class ListExperimentsCommand(BaseModel):
 
 class ShowExperimentCommand(BaseModel):
     model_config = ConfigDict(frozen=True)
-    definition_id: UUID
+    experiment_id: UUID
+
+
+class ExperimentSamplesCommand(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    experiment_id: UUID
+
+
+class ExperimentSamplerInvocationsCommand(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    experiment_id: UUID
 
 
 class ListTagsCommand(BaseModel):
@@ -59,3 +69,55 @@ class ExperimentTagDefinitionView(BaseModel):
     name: str
     benchmark_type: str
     latest_run_status: str | None = None
+
+
+class ExperimentEnvironmentCliState(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    environment_id: UUID
+    environment_name: str
+    source_mode: str
+    sample_count: int
+    selected_count: int
+
+
+class ExperimentSampleCliState(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    sample_id: UUID
+    environment_name: str
+    sample_key: str
+    status: str
+
+
+class SamplerInvocationCliState(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    sampler_invocation_id: UUID
+    sampler_name: str
+    requested_k: int
+    candidate_pool_size: int
+    selected_count: int
+
+
+class ExperimentCliState(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    experiment_id: UUID
+    name: str
+    environments: tuple[ExperimentEnvironmentCliState, ...]
+    sample_count: int
+    sampler_invocation_count: int
+    samples: tuple[ExperimentSampleCliState, ...] = ()
+
+
+class ExperimentSamplesCliResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    samples: tuple[ExperimentSampleCliState, ...]
+
+
+class ExperimentSamplerInvocationsCliResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    invocations: tuple[SamplerInvocationCliState, ...]

@@ -3,13 +3,18 @@ from ergon_cli.domains.samples.models import (
     CancelSampleResult,
     ListSamplesCommand,
     SampleListResult,
+    SampleDetailCliState,
+    SampleEventCliState,
+    SampleEventsCommand,
+    SampleGraphCliState,
+    SampleGraphCommand,
     SampleStatusCommand,
     SampleSummaryView,
 )
 from ergon_cli.shared.errors import CliNotFoundError
 from ergon_core.core.application.runtime.sample_records import cancel_sample
 from ergon_core.core.views.samples.models import SampleSummaryDto
-from ergon_core.core.views.samples.service import SampleSnapshotReadService
+from ergon_core.core.views.samples.service import SampleReadService, SampleSnapshotReadService
 
 
 def list_samples(
@@ -40,6 +45,60 @@ def get_sample_status(
     if row is None:
         raise CliNotFoundError(f"No sample found with id {command.sample_id}")
     return _view(row)
+
+
+def get_sample_detail(
+    command: SampleStatusCommand,
+    *,
+    read_service: SampleReadService | None = None,
+) -> SampleDetailCliState:
+    service = read_service or SampleReadService()
+    row = service.get_sample_detail(command.sample_id)
+    if row is None:
+        raise CliNotFoundError(f"No sample found with id {command.sample_id}")
+    return SampleDetailCliState(
+        sample_id=row.sample_id,
+        experiment_id=row.experiment_id,
+        environment_id=row.environment_id,
+        environment_name=row.environment_name,
+        sample_key=row.sample_key,
+        status=row.status,
+    )
+
+
+def list_sample_events(
+    command: SampleEventsCommand,
+    *,
+    read_service: SampleReadService | None = None,
+) -> tuple[SampleEventCliState, ...]:
+    service = read_service or SampleReadService()
+    events = service.list_sample_events(command.sample_id)
+    if events is None:
+        raise CliNotFoundError(f"No sample found with id {command.sample_id}")
+    return tuple(
+        SampleEventCliState(
+            event_type=event.event_type,
+            target=event.target_type,
+            timestamp=event.timestamp.isoformat(),
+        )
+        for event in events.items
+    )
+
+
+def get_sample_graph(
+    command: SampleGraphCommand,
+    *,
+    read_service: SampleReadService | None = None,
+) -> SampleGraphCliState:
+    service = read_service or SampleReadService()
+    graph = service.get_sample_graph(command.sample_id)
+    if graph is None:
+        raise CliNotFoundError(f"No sample found with id {command.sample_id}")
+    return SampleGraphCliState(
+        node_count=len(graph.nodes),
+        edge_count=len(graph.edges),
+        nodes=tuple(f"{node.task_slug}\t{node.status}" for node in graph.nodes),
+    )
 
 
 def cancel_existing_sample(command: CancelSampleCommand) -> CancelSampleResult:
