@@ -12,7 +12,7 @@ from ergon_core.core.application.experiments.candidate_pool import (
     SampleCandidatePool,
     sample_from_pool_entry,
 )
-from ergon_core.core.application.experiments.repositories import (
+from ergon_core.core.application.experiments.repository import (
     persist_experiment,
     record_sampler_invocation,
 )

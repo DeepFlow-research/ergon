@@ -45,10 +45,18 @@ class ExperimentRepository:
             )
         self._session.flush()
 
+        environment_ids = {
+            environment.name: environment.id
+            for environment in self._session.exec(
+                select(ExperimentEnvironmentRow).where(
+                    ExperimentEnvironmentRow.experiment_id == row.id
+                )
+            ).all()
+        }
         return ExperimentRef(
             experiment_id=row.id,
             name=row.name,
-            environment_ids=self.environment_ids_for_experiment(row.id),
+            environment_ids=environment_ids,
             created_at=row.created_at,
             metadata=row.metadata_json,
         )
@@ -145,14 +153,6 @@ class ExperimentRepository:
             self._session.add(entry)
         self._session.flush()
 
-    def environment_ids_for_experiment(self, experiment_id: UUID) -> dict[str, UUID]:
-        rows = self._session.exec(
-            select(ExperimentEnvironmentRow).where(
-                ExperimentEnvironmentRow.experiment_id == experiment_id
-            )
-        ).all()
-        return {row.name: row.id for row in rows}
-
 
 def persist_experiment(*, session: Session, experiment: Experiment) -> ExperimentRef:
     return ExperimentRepository(session).persist_experiment(experiment)
@@ -168,11 +168,14 @@ def record_sampler_invocation(
     selected_count: int = 0,
     sampler_config: dict[str, JsonValue] | None = None,
 ) -> ExperimentSamplerInvocationRow:
-    return ExperimentRepository(session).record_sampler_invocation(
-        experiment_ref=experiment_ref,
+    row = ExperimentSamplerInvocationRow(
+        experiment_id=experiment_ref.experiment_id,
         sampler_name=sampler_name,
         requested_k=requested_k,
         candidate_pool_size=candidate_pool_size,
         selected_count=selected_count,
-        sampler_config=sampler_config,
+        sampler_config_json=dict(sampler_config or {}),
     )
+    session.add(row)
+    session.flush()
+    return row

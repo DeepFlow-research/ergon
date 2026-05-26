@@ -8,7 +8,7 @@ from sqlmodel import Session
 from ergon_core.api.experiment.experiment import Experiment, ExperimentRef
 from ergon_core.api.experiment.sample import Sample
 from ergon_core.api.benchmark import Task
-from ergon_core.core.application.experiments.repositories import (
+from ergon_core.core.application.experiments.repository import (
     ExperimentRepository,
 )
 from ergon_core.core.persistence.experiments.models import ExperimentSamplePoolEntryRow

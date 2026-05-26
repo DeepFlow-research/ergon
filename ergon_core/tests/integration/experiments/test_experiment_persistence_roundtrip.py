@@ -12,7 +12,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 from sqlalchemy import inspect
 
 from ergon_core.api import Environment, Experiment, Sample
-from ergon_core.core.application.experiments.repositories import persist_experiment
+from ergon_core.core.application.experiments.repository import persist_experiment
 from ergon_core.core.persistence.experiments.models import ExperimentEnvironmentRow
 from ergon_core.test_support.task_factory import task_with_id
 

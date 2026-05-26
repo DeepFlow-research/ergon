@@ -37,14 +37,10 @@ ALLOWED_EXPERIMENT_ID_PATTERNS_BY_FILE = {
         re.compile(r"experiment_id: UUID"),
         re.compile(r"experiment_id == experiment_id"),
     ),
-    ROOT
-    / "ergon_core"
-    / "ergon_core"
-    / "core"
-    / "application"
-    / "experiments"
-    / "repositories.py": (
+    ROOT / "ergon_core" / "ergon_core" / "core" / "application" / "experiments" / "repository.py": (
         re.compile(r"experiment_id=row\.id"),
+        re.compile(r"experiment_id == row\.id"),
+        re.compile(r"experiment_id=handle\.id"),
         re.compile(r"experiment_ref\.experiment_id"),
         re.compile(r"experiment_id: UUID"),
         re.compile(r"experiment_id == experiment_id"),

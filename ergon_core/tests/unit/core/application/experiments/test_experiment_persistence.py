@@ -7,7 +7,7 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from ergon_core.api import Environment, Experiment, Sample
-from ergon_core.core.application.experiments.repositories import (
+from ergon_core.core.application.experiments.repository import (
     persist_experiment,
     record_sampler_invocation,
 )
