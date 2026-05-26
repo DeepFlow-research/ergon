@@ -5,7 +5,7 @@ cm2435-new/gdpval_preference_rubrics and exposes them via the
 :class:`Benchmark` interface.
 """
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any, ClassVar
 
 from ergon_core.api import Benchmark, BenchmarkRequirements, Task
@@ -92,22 +92,7 @@ class GDPEvalBenchmark(Benchmark):
         All tasks land in a single ``"default"`` instance since there is
         no multi-instance structure in the GDP dataset.
         """
-        tasks: list[Task[GDPTaskConfig]] = []
-        for payload in self._load_task_configs():
-            description = extract_task_description(payload.task_id, repo_id=self.dataset_repo)
-            tasks.append(
-                GDPEvalTask(
-                    task_slug=payload.task_id,
-                    instance_key="default",
-                    description=description,
-                    task_payload=payload,
-                    worker=self._worker_factory(),
-                    sandbox=self._sandbox_factory(),
-                    evaluators=(self._evaluator_factory(),),
-                )
-            )
-
-        return {"default": tasks}
+        return {"default": [sample.tasks[0] for sample in self._environment().all_samples()]}
 
     def evaluator_requirements(self) -> Sequence[str]:
         return ()
@@ -130,3 +115,29 @@ class GDPEvalBenchmark(Benchmark):
                 )
             )
         return configs
+
+    # Compatibility loader surface for GDPEvalEnvironment. PR11 deletes
+    # benchmark-centered authoring and these wrappers.
+    def iter_rows(self) -> Iterator[GDPTaskConfig]:
+        yield from self._load_task_configs()
+
+    def load_rows(self) -> Sequence[GDPTaskConfig]:
+        return self._load_task_configs()
+
+    def _environment(self) -> Any:
+        from ergon_builtins.environments.gdpeval import GDPEvalEnvironment
+
+        return GDPEvalEnvironment(
+            name=self.name,
+            dataset_repo=self.dataset_repo,
+            split=self.split,
+            limit=self.limit,
+            loader=self,
+            task_description=lambda row: extract_task_description(
+                row.task_id,
+                repo_id=self.dataset_repo,
+            ),
+            worker=lambda _row: self._worker_factory(),
+            sandbox=lambda _row: self._sandbox_factory(),
+            evaluators=lambda _row: (self._evaluator_factory(),),
+        )

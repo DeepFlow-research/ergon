@@ -7,7 +7,7 @@ statements aligned with mathlib4.
 
 import json
 import logging
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -76,33 +76,7 @@ class MiniF2FBenchmark(Benchmark):
     # ------------------------------------------------------------------
 
     def build_instances(self) -> Mapping[str, Sequence[Task[MiniF2FTaskPayload]]]:
-        problems = self._load_problems()
-        tasks: list[Task[MiniF2FTaskPayload]] = []
-        for problem in problems:
-            payload = MiniF2FTaskPayload(
-                name=problem.name,
-                informal_statement=problem.informal_statement,
-                formal_statement=problem.formal_statement,
-                header=problem.header,
-            )
-            description = (
-                f"{problem.informal_statement}\n\n"
-                f"Your task: prove the following theorem in Lean 4.\n\n"
-                f"{problem.header}\n"
-                f"{problem.formal_statement}"
-            )
-            tasks.append(
-                MiniF2FTask(
-                    task_slug=problem.name,
-                    instance_key="default",
-                    description=description,
-                    task_payload=payload,
-                    worker=self._worker_factory(),
-                    sandbox=self._sandbox_factory(),
-                    evaluators=(self._evaluator_factory(),),
-                )
-            )
-        return {"default": tasks}
+        return {"default": [sample.tasks[0] for sample in self._environment().all_samples()]}
 
     def evaluator_requirements(self) -> Sequence[str]:
         return ()
@@ -144,3 +118,24 @@ class MiniF2FBenchmark(Benchmark):
 
         logger.info("Loaded %d MiniF2F-v2c problems", len(problems))
         return problems
+
+    # Compatibility loader surface for MiniF2FEnvironment. PR11 deletes
+    # benchmark-centered authoring and these wrappers.
+    def iter_rows(self) -> Iterator[MiniF2FProblem]:
+        yield from self._load_problems()
+
+    def load_rows(self) -> Sequence[MiniF2FProblem]:
+        return self._load_problems()
+
+    def _environment(self) -> Any:
+        from ergon_builtins.environments.minif2f import MiniF2FEnvironment
+
+        return MiniF2FEnvironment(
+            name=self.name,
+            limit=self.limit,
+            data_dir=self.data_dir,
+            loader=self,
+            worker=lambda _row: self._worker_factory(),
+            sandbox=lambda _row: self._sandbox_factory(),
+            evaluators=lambda _row: (self._evaluator_factory(),),
+        )

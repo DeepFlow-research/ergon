@@ -6,7 +6,7 @@ evaluator receives ``test_patch`` via the task payload.
 """
 
 import logging
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any, ClassVar
 
 from datasets import load_dataset
@@ -77,26 +77,32 @@ class SweBenchVerifiedBenchmark(Benchmark):
         self._evaluator_factory = evaluator_factory
 
     def build_instances(self) -> Mapping[str, Sequence[Task[SWEBenchTaskPayload]]]:
-        instances = _load_rows(limit=self.limit)
-        tasks: list[Task[SWEBenchTaskPayload]] = []
-        for instance in instances:
-            payload = SWEBenchTaskPayload.from_instance(instance)
-            tasks.append(
-                SweBenchTask(
-                    task_slug=instance.instance_id,
-                    instance_key="default",
-                    description=payload.build_worker_description(),
-                    task_payload=payload,
-                    worker=self._worker_factory(),
-                    sandbox=self._sandbox_factory(),
-                    evaluators=(self._evaluator_factory(),),
-                )
-            )
-        logger.info("Loaded %d SWE-Bench Verified instances", len(tasks))
-        return {"default": tasks}
+        samples = self._environment().all_samples()
+        logger.info("Loaded %d SWE-Bench Verified instances", len(samples))
+        return {"default": [sample.tasks[0] for sample in samples]}
 
     def evaluator_requirements(self) -> Sequence[str]:
         return ()
+
+    # Compatibility loader surface for SweBenchVerifiedEnvironment. PR11
+    # deletes benchmark-centered authoring and these wrappers.
+    def iter_rows(self) -> Iterator[SWEBenchInstance]:
+        yield from _load_rows(limit=self.limit)
+
+    def load_rows(self) -> Sequence[SWEBenchInstance]:
+        return _load_rows(limit=self.limit)
+
+    def _environment(self) -> Any:
+        from ergon_builtins.environments.swebench_verified import SweBenchVerifiedEnvironment
+
+        return SweBenchVerifiedEnvironment(
+            name=self.name,
+            limit=self.limit,
+            loader=self,
+            worker=lambda _row: self._worker_factory(),
+            sandbox=lambda _row: self._sandbox_factory(),
+            evaluators=lambda _row: (self._evaluator_factory(),),
+        )
 
 
 def _load_rows(*, limit: int | None = None) -> list[SWEBenchInstance]:
