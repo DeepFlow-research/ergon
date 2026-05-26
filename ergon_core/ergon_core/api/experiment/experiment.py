@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from ergon_core.api.experiment.environment import Environment
 from ergon_core.api.experiment.sampling import RandomSampler, Sampler
-from ergon_core.core.application.experiments.public_contracts import (
+from ergon_core.core.application.experiments.service import (
     ExperimentSubmissionService,
 )
 
