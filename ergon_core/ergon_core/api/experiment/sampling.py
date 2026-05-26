@@ -17,7 +17,7 @@ class SamplingHistory(Protocol):
     def completed_sample_keys(
         self,
         *,
-        experiment_id: UUID,
+        experiment_ref_id: UUID,
         environment_name: str | None = None,
     ) -> set[str]: ...
 
@@ -25,7 +25,7 @@ class SamplingHistory(Protocol):
 class SamplingContext(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    experiment_id: UUID | None = None
+    experiment_ref_id: UUID | None = None
     candidate_pool_size: int | None = None
     history: SamplingHistory | None = None
 

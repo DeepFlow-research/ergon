@@ -10,16 +10,10 @@ from ergon_core.api.benchmark import Task
 
 
 def _task_key(task: Task) -> str:
-    key = getattr(task, "key", None)
-    if isinstance(key, str):
-        return key
     return task.task_slug
 
 
 def _task_dependencies(task: Task) -> tuple[str, ...]:
-    dependencies = getattr(task, "dependencies", None)
-    if dependencies is not None:
-        return tuple(dependencies)
     return tuple(task.dependency_task_slugs)
 
 

@@ -32,7 +32,7 @@ def test_public_api_root_stays_authoring_scoped() -> None:
 def test_object_first_experiment_run_api_is_retired() -> None:
     """v1 ``ExperimentRunHandle`` is gone; the PR 5 ``Experiment`` wrapper
     class is replaced by the PR03 public sample authoring ``Experiment``.
-    ``persist_benchmark`` remains available for legacy benchmark definitions."""
+    ``persist_benchmark`` remains available for existing benchmark definitions."""
     public_api = importlib.import_module("ergon_core.api")
 
     assert not hasattr(public_api, "ExperimentRunHandle")

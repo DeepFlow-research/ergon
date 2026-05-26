@@ -45,7 +45,7 @@ async def test_random_sampler_returns_all_candidates_in_seeded_order_without_tru
     selected = await RandomSampler(seed=7).select(
         samples=samples,
         k=2,
-        context=SamplingContext(experiment_id=uuid4()),
+        context=SamplingContext(experiment_ref_id=uuid4()),
     )
 
     assert sorted(sample.sample_key for sample in selected) == ["0", "1", "2", "3", "4"]
@@ -75,7 +75,7 @@ class FakeSubmissionService:
             }
         )
         return ExperimentSubmitResult(
-            experiment_id=uuid4(),
+            experiment_ref_id=uuid4(),
             requested_k=k,
             candidate_pool_size=candidate_pool_size or k,
             selected_count=0,
@@ -90,7 +90,7 @@ async def test_experiment_submit_validates_then_delegates_to_service() -> None:
 
     result = await experiment.submit(service=service, k=1, sampler=RandomSampler(seed=1))
 
-    assert isinstance(result.experiment_id, UUID)
+    assert isinstance(result.experiment_ref_id, UUID)
     assert service.calls[0]["k"] == 1
     assert service.calls[0]["experiment"] is experiment
 
@@ -102,7 +102,7 @@ def test_experiment_rejects_duplicate_environment_names() -> None:
     )
 
     with pytest.raises(ValueError, match="unique"):
-        experiment.validate()
+        experiment.validate_authoring()
 
 
 class FakePersistenceService:

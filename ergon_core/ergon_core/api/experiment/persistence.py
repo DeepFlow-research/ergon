@@ -17,5 +17,5 @@ async def persist_experiment(
     *,
     service: ExperimentPersistenceService,
 ) -> ExperimentRef:
-    experiment.validate()
+    experiment.validate_authoring()
     return await service.persist_experiment(experiment)

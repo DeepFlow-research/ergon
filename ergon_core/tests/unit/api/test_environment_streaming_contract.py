@@ -56,4 +56,4 @@ def test_materialized_environment_all_samples_uses_iterator() -> None:
 
 def test_environment_rejects_empty_name() -> None:
     with pytest.raises(ValueError, match="name"):
-        StreamOnlyEnvironment(name="").validate()
+        StreamOnlyEnvironment(name="").validate_authoring()

@@ -14,7 +14,7 @@ from ergon_core.api.experiment.sampling import RandomSampler, Sampler
 
 
 class ExperimentRef(BaseModel):
-    experiment_id: UUID
+    id: UUID
     name: str
     environment_ids: Mapping[str, UUID] = Field(default_factory=dict)
     created_at: datetime | None = None
@@ -23,7 +23,7 @@ class ExperimentRef(BaseModel):
 
 
 class ExperimentSubmitResult(BaseModel):
-    experiment_id: UUID
+    experiment_ref_id: UUID
     sampler_invocation_id: UUID | None = None
     batch_id: UUID | None = None
     requested_k: int
@@ -66,7 +66,7 @@ class Experiment(BaseModel):
                 return environment
         raise KeyError(name)
 
-    def validate(self) -> None:
+    def validate_authoring(self) -> None:
         if not self.name:
             raise ValueError("Experiment name is required")
         if not self.environments:
@@ -75,7 +75,7 @@ class Experiment(BaseModel):
         if len(names) != len(set(names)):
             raise ValueError("Environment names must be unique")
         for environment in self.environments:
-            environment.validate()
+            environment.validate_authoring()
 
     async def submit(
         self,
@@ -86,7 +86,7 @@ class Experiment(BaseModel):
         candidate_pool_size: int | None = None,
         policy_version: int | None = None,
     ) -> ExperimentSubmitResult:
-        self.validate()
+        self.validate_authoring()
         return await service.submit(
             experiment=self,
             k=k,

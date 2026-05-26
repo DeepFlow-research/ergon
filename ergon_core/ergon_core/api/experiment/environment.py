@@ -28,6 +28,6 @@ class Environment(BaseModel):
     def iter_samples(self) -> Iterator[Sample]:
         raise NotImplementedError
 
-    def validate(self) -> None:
+    def validate_authoring(self) -> None:
         if not self.name:
             raise ValueError("Environment name is required")
