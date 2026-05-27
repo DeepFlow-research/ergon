@@ -137,9 +137,54 @@ export type BenchmarkName = z.infer<typeof BenchmarkNameSchema>;
 export type SampleLifecycleStatus = z.infer<typeof SampleStatusSchema>;
 export type TaskStatusValue = z.infer<typeof TaskStatusSchema>;
 
-type RawExperimentDetail = Record<string, any>;
-type RawExperimentRunRow = Record<string, any>;
-type RawExperimentSummary = Record<string, any>;
+interface RawExperimentSummary {
+  [key: string]: unknown;
+  average_duration_ms?: number | null;
+  average_score?: number | null;
+  average_tasks?: number | null;
+  default_evaluator_slug?: string | null;
+  default_model_target?: string | null;
+  description?: string | null;
+  failure_count?: number;
+  latest_activity_at?: string | null;
+  status_counts?: Partial<ExperimentStatusCounts>;
+  total_cost_usd?: number | null;
+}
+
+interface RawExperimentRunRow {
+  [key: string]: unknown;
+  sample_id: string;
+  status: string;
+  instance_key: string;
+  completed_at?: string | null;
+  error_message?: string | null;
+  evaluator_slug?: string | null;
+  final_score?: number | null;
+  model_target?: string | null;
+  metrics?: ExperimentRunMetrics | null;
+  running_time_ms?: number | null;
+  seed?: number | null;
+  started_at?: string | null;
+  total_cost_usd?: number | null;
+  total_tasks?: number | null;
+  worker_team?: Record<string, unknown> | null;
+}
+
+interface RawExperimentDetail {
+  [key: string]: unknown;
+  experiment?: RawExperimentSummary;
+  runs?: RawExperimentRunRow[];
+  analytics?: {
+    total_runs?: number;
+    status_counts?: Partial<ExperimentStatusCounts>;
+    average_score?: number | null;
+    average_duration_ms?: number | null;
+    average_tasks?: number | null;
+    total_cost_usd?: number | null;
+    latest_activity_at?: string | null;
+    error_count?: number;
+  };
+}
 type RawSampleExecutionAttempt = KnownKeys<z.infer<typeof SampleExecutionAttemptSchema>>;
 type RawSampleResource = KnownKeys<z.infer<typeof SampleResourceSchema>>;
 type RawSampleSandboxCommand = KnownKeys<z.infer<typeof SampleSandboxCommandSchema>>;
@@ -227,22 +272,11 @@ export interface ExperimentSummaryDetail
   total_cost_usd?: number | null;
 }
 
-export interface ExperimentRunRow
-  extends Omit<
-    RawExperimentRunRow,
-    | "completed_at"
-    | "error_message"
-    | "evaluator_slug"
-    | "final_score"
-    | "model_target"
-    | "metrics"
-    | "running_time_ms"
-    | "seed"
-    | "started_at"
-    | "total_cost_usd"
-    | "total_tasks"
-    | "worker_team"
-  > {
+export interface ExperimentRunRow {
+  [key: string]: unknown;
+  sample_id: string;
+  status: string;
+  instance_key: string;
   completed_at: string | null;
   error_message: string | null;
   evaluator_slug: string | null;
@@ -486,7 +520,14 @@ export function parseExperimentDetail(input: unknown): ExperimentDetail {
       evaluator_slug: run.evaluator_slug ?? null,
       final_score: run.final_score ?? null,
       model_target: run.model_target ?? null,
-      metrics: run.metrics ?? {},
+      metrics: {
+        sample_id: run.sample_id,
+        status: run.status,
+        instance_key: run.instance_key,
+        tool_call_count: 0,
+        cost_observed: false,
+        ...(run.metrics ?? {}),
+      },
       running_time_ms: run.running_time_ms ?? null,
       seed: run.seed ?? null,
       started_at: run.started_at ?? null,
