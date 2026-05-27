@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import fixture from "../../../tests/fixtures/mas-samples/concurrent-mas-run.json";
-import { parseSampleGraphEventDtoArray } from "@/features/graph/contracts/graphMutations";
+import { sampleRuntimeEventsToGraphEvents } from "@/features/graph/sampleRuntimeEvents";
+import { parseSampleRuntimeEvents } from "@/lib/contracts/rest";
 import type { SampleEvent } from "@/lib/sampleEvents";
 import { buildSampleEvents } from "@/lib/sampleEvents";
 import { deserializeSampleState } from "@/lib/sampleState";
@@ -12,7 +13,7 @@ import { resolveActivitySnapshotSequence } from "./snapshotSequence";
 
 test("buildSampleActivities surfaces semantic activity kinds without creating actor lanes", () => {
   const runState = deserializeSampleState(fixture.runState);
-  const mutations = parseSampleGraphEventDtoArray(fixture.mutations);
+  const mutations = sampleRuntimeEventsToGraphEvents(parseSampleRuntimeEvents(fixture.events));
   const noisyTaskId = "10000000-0000-4000-8000-000000000002";
   runState.sandboxesByTask.set(noisyTaskId, {
     sandboxId: "sandbox-noisy",
@@ -247,7 +248,7 @@ test("buildSampleActivities surfaces semantic activity kinds without creating ac
 
 test("completed trace spans keep full duration when replaying an earlier sequence", () => {
   const runState = deserializeSampleState(fixture.runState);
-  const mutations = parseSampleGraphEventDtoArray(fixture.mutations);
+  const mutations = sampleRuntimeEventsToGraphEvents(parseSampleRuntimeEvents(fixture.events));
   const events = buildSampleEvents(runState);
 
   const activities = buildSampleActivities({
@@ -276,7 +277,7 @@ test("completed trace spans keep full duration when replaying an earlier sequenc
 
 test("context/tool event sequence does not masquerade as graph replay sequence", () => {
   const runState = deserializeSampleState(fixture.runState);
-  const mutations = parseSampleGraphEventDtoArray(fixture.mutations);
+  const mutations = sampleRuntimeEventsToGraphEvents(parseSampleRuntimeEvents(fixture.events));
   const activities = buildSampleActivities({
     runState,
     events: buildSampleEvents(runState),

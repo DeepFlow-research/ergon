@@ -555,7 +555,7 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
       ...(concurrent.experimentDetails ?? {}),
     },
     runs: [runState, ...(concurrent.runs ?? [])],
-    mutations: concurrent.mutations,
+    events: concurrent.events,
   };
 }
 
@@ -563,8 +563,8 @@ function createConcurrentMasSeedOnly(): DashboardHarnessSeedPayload {
   return {
     experimentDetails: {},
     runs: [concurrentMasFixture.runState as unknown as SerializedSampleWorkspaceState],
-    mutations: {
-      [CONCURRENT_MAS_FIXTURE_IDS.sampleId]: concurrentMasFixture.mutations,
+    events: {
+      [CONCURRENT_MAS_FIXTURE_IDS.sampleId]: concurrentMasFixture.events,
     },
   } as DashboardHarnessSeedPayload;
 }

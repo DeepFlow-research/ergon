@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { fetchErgonApi } from "@/lib/serverApi";
+import { loadSampleEvents } from "@/lib/server-data/samples";
 
 interface RouteContext {
   params: Promise<{
@@ -10,18 +10,10 @@ interface RouteContext {
 
 export async function GET(_request: Request, context: RouteContext) {
   const { sampleId } = await context.params;
+  const result = await loadSampleEvents(sampleId);
 
-  try {
-    const response = await fetchErgonApi(`/samples/${sampleId}/events`);
-    const body = await response.json();
-    return NextResponse.json(body, { status: response.status });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        detail: `Ergon API is unavailable while loading events for sample ${sampleId}.`,
-        error: error instanceof Error ? error.message : "Unknown backend fetch failure",
-      },
-      { status: 503 },
-    );
+  if (result.ok) {
+    return NextResponse.json(result.data, { status: result.status });
   }
+  return NextResponse.json(result.body, { status: result.status });
 }

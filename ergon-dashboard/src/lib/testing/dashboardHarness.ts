@@ -23,7 +23,7 @@ declare global {
     | {
         experimentDetails: Record<string, unknown>;
         sampleStates: Record<string, SampleDashboardState>;
-        mutationsBySample: Record<string, unknown[]>;
+        eventsBySample: Record<string, unknown[]>;
         seededSampleIds: Set<string>;
       }
     | undefined;
@@ -33,7 +33,7 @@ export interface DashboardHarnessSeedPayload {
   experimentDetails?: Record<string, unknown>;
   sampleStates?: Record<string, SampleDashboardState>;
   runs?: SerializedSampleWorkspaceState[];
-  mutations?: Record<string, unknown[]>;
+  events?: Record<string, unknown[]>;
 }
 
 function getHarnessState() {
@@ -41,7 +41,7 @@ function getHarnessState() {
     global.__dashboardHarness = {
       experimentDetails: {},
       sampleStates: {},
-      mutationsBySample: {},
+      eventsBySample: {},
       seededSampleIds: new Set(),
     };
   }
@@ -60,7 +60,7 @@ export function resetDashboardHarness(): void {
   const harness = getHarnessState();
   harness.experimentDetails = {};
   harness.sampleStates = {};
-  harness.mutationsBySample = {};
+  harness.eventsBySample = {};
   harness.seededSampleIds.clear();
 }
 
@@ -71,7 +71,7 @@ export function seedDashboardHarness(payload: DashboardHarnessSeedPayload): void
   const harness = getHarnessState();
   harness.experimentDetails = payload.experimentDetails ?? {};
   harness.sampleStates = payload.sampleStates ?? {};
-  harness.mutationsBySample = payload.mutations ?? {};
+  harness.eventsBySample = payload.events ?? {};
 
   for (const run of payload.runs ?? []) {
     store.seedSample(deserializeSampleState(run));
@@ -98,9 +98,9 @@ export function getHarnessSample(sampleId: string): SerializedSampleWorkspaceSta
   return run ? serializeSampleState(run) : null;
 }
 
-export function getHarnessSampleMutations(sampleId: string): unknown[] | null {
+export function getHarnessSampleEvents(sampleId: string): unknown[] | null {
   requireHarnessEnabled();
-  return getHarnessState().mutationsBySample[sampleId] ?? null;
+  return getHarnessState().eventsBySample[sampleId] ?? null;
 }
 
 export function emitHarnessSampleCompleted(data: {

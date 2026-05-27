@@ -5,10 +5,11 @@ import {
   parseSampleGraph,
   parseSampleSnapshot,
   type SampleSnapshot,
+  type SampleEventsView,
 } from "@/lib/contracts/rest";
 import { buildSampleState, type SampleDashboardState } from "@/lib/sample-state/dashboard";
 import { fetchErgonApi } from "@/lib/serverApi";
-import { getHarnessSample, getHarnessSampleState } from "@/lib/testing/dashboardHarness";
+import { getHarnessSample, getHarnessSampleEvents, getHarnessSampleState } from "@/lib/testing/dashboardHarness";
 
 import { backendUnavailable, type ServerDataResult } from "./responses";
 
@@ -98,6 +99,36 @@ export async function loadSampleSnapshot(sampleId: string): Promise<ServerDataRe
     return { ok: false, body, status: response.status, source: "backend" };
   } catch (error) {
     return backendUnavailable(`Ergon API is unavailable while loading sample ${sampleId}.`, error);
+  }
+}
+
+export async function loadSampleEvents(sampleId: string): Promise<ServerDataResult<SampleEventsView>> {
+  if (config.enableTestHarness) {
+    const events = getHarnessSampleEvents(sampleId);
+    if (events !== null) {
+      return {
+        ok: true,
+        data: parseSampleEvents({ items: events }),
+        status: 200,
+        source: "harness",
+      };
+    }
+  }
+
+  try {
+    const response = await fetchErgonApi(`/samples/${sampleId}/events`);
+    const body = await response.json();
+    if (response.ok) {
+      return {
+        ok: true,
+        data: parseSampleEvents(body),
+        status: response.status,
+        source: "backend",
+      };
+    }
+    return { ok: false, body, status: response.status, source: "backend" };
+  } catch (error) {
+    return backendUnavailable(`Ergon API is unavailable while loading events for sample ${sampleId}.`, error);
   }
 }
 
