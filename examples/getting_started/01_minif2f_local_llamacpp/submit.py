@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import sys
 from collections.abc import Sequence
 from uuid import UUID
@@ -32,6 +31,7 @@ from getting_started._shared.env import (
     preflight_llamacpp_and_e2b,
 )
 from getting_started._shared.llamacpp import ManagedLlamaServer, start_llama_server
+from getting_started._shared.launch import print_submission_summary
 from getting_started._shared.model_cache import resolve_base_model
 from getting_started._shared.observe import cli_status_command, dashboard_sample_url
 
@@ -203,7 +203,9 @@ async def async_main(argv: Sequence[str] | None = None) -> int:
             sampler=RandomSampler(seed=0),
         )
         _print_submission_summary(
-            experiment_id=result.experiment_ref_id,
+            experiment_id=result.experiment_id,
+            sampler_invocation_id=result.sampler_invocation_id,
+            batch_id=result.batch_id,
             sample_ids=result.sample_ids,
             model_target=model_target,
             limit=args.limit,
@@ -246,6 +248,8 @@ def _validate_model_routing(args: argparse.Namespace, parser: argparse.ArgumentP
 def _print_submission_summary(
     *,
     experiment_id: UUID,
+    sampler_invocation_id: UUID | None,
+    batch_id: UUID | None,
     sample_ids: Sequence[UUID],
     model_target: str,
     limit: int,
@@ -253,22 +257,23 @@ def _print_submission_summary(
     as_json: bool,
 ) -> None:
     if as_json:
-        print(
-            json.dumps(
-                {
-                    "experiment_id": str(experiment_id),
-                    "sample_ids": [str(sample_id) for sample_id in sample_ids],
-                },
-                indent=2,
-            )
+        print_submission_summary(
+            experiment_id=experiment_id,
+            sampler_invocation_id=sampler_invocation_id,
+            batch_id=batch_id,
+            sample_ids=sample_ids,
+            as_json=True,
         )
         return
 
     print("MiniF2F llama.cpp samples submitted")
-    print(f"Experiment id: {experiment_id}")
-    print("Sample ids:")
-    for sample_id in sample_ids:
-        print(f"  - {sample_id}")
+    print_submission_summary(
+        experiment_id=experiment_id,
+        sampler_invocation_id=sampler_invocation_id,
+        batch_id=batch_id,
+        sample_ids=sample_ids,
+        as_json=False,
+    )
     print(f"Model target: {model_target}")
     print(f"Limit: {limit}")
     print(f"Max iterations: {max_iterations}")

@@ -11,6 +11,7 @@ import pytest
 import ergon_cli.domains.examples.preflight as examples_preflight
 import ergon_cli.domains.examples.runner as examples_runner
 from ergon_cli.domains.examples.commands import handle_examples
+from ergon_cli.domains.examples.catalogue import EXAMPLES
 from ergon_cli.main import build_parser
 from ergon_cli.domains.examples.preflight import ExampleSetupError, PreflightResult
 
@@ -66,6 +67,36 @@ def test_examples_subcommands_are_registered_in_main_parser() -> None:
     assert run_args.limit == 3
     assert run_args.model == "local-proof-model"
     assert run_args.max_iterations == 4
+
+
+def test_experiment_api_examples_are_catalogued() -> None:
+    expected = {
+        "experiment-api-minif2f",
+        "experiment-api-swebench",
+        "experiment-api-mixed-environments",
+        "experiment-api-curriculum-sampler",
+        "experiment-api-streaming",
+    }
+
+    assert expected.issubset(EXAMPLES)
+
+
+def test_example_submission_summary_includes_sampler_invocation(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from examples.getting_started._shared.launch import print_submission_summary
+
+    print_submission_summary(
+        experiment_id="exp-1",
+        sampler_invocation_id="sampler-1",
+        batch_id=None,
+        sample_ids=["sample-1"],
+    )
+
+    out = capsys.readouterr().out
+    assert "experiment_id" in out
+    assert "sampler_invocation_id" in out
+    assert "sample_ids" in out
 
 
 def test_examples_run_accepts_base_model_for_single_command_launch() -> None:
