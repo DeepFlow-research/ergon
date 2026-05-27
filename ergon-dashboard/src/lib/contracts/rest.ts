@@ -17,6 +17,7 @@ export const SampleCommunicationMessageSchema = schemas.SampleCommunicationMessa
 export const SampleCommunicationThreadSchema = schemas.SampleCommunicationThreadDto;
 export const SampleTaskEvaluationSchema = schemas.SampleTaskEvaluationDto;
 export const SampleSnapshotSchema = schemas.SampleSnapshotDto;
+export const SampleRuntimeEventViewSchema = schemas.SampleRuntimeEventView;
 
 type KnownKeys<T> = {
   [K in keyof T as string extends K ? never : number extends K ? never : symbol extends K
@@ -47,6 +48,7 @@ export type RawSampleSandboxType = RawSampleSandbox;
 export type RawSampleSandboxCommandType = RawSampleSandboxCommand;
 
 export type SampleSnapshotMetrics = RawSampleSnapshotMetrics;
+export type SampleRuntimeEventView = z.infer<typeof SampleRuntimeEventViewSchema>;
 
 export interface ExperimentStatusCounts {
   pending: number;
@@ -387,6 +389,10 @@ export function parseSampleCommunicationMessage(input: unknown): SampleCommunica
 
 export function parseSampleCommunicationThread(input: unknown): SampleCommunicationThread {
   return normalizeSampleCommunicationThread(SampleCommunicationThreadSchema.parse(input));
+}
+
+export function parseSampleRuntimeEvents(input: unknown): SampleRuntimeEventView[] {
+  return z.array(SampleRuntimeEventViewSchema).parse(input);
 }
 
 export function parseSampleTaskEvaluation(input: unknown): SampleTaskEvaluation {

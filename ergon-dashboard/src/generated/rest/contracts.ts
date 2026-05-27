@@ -330,121 +330,24 @@ const SampleSnapshotDto = z.object({
   metrics: z.union([SampleSnapshotMetricsDto, z.null()]).optional(),
   error: z.union([z.string(), z.null()]).optional(),
 });
-const NodeAddedMutation = z
-  .object({
-    mutation_type: z.string().optional().default("node.added"),
-    task_slug: z.string(),
-    instance_key: z.string(),
-    description: z.string(),
-    status: z.string(),
-    assigned_worker_slug: z.union([z.string(), z.null()]),
-  })
-  .passthrough();
-const NodeRemovedMutation = z
-  .object({
-    mutation_type: z.string().optional().default("node.removed"),
-    task_slug: z.string(),
-    instance_key: z.string(),
-    description: z.string(),
-    status: z.string(),
-    assigned_worker_slug: z.union([z.string(), z.null()]),
-  })
-  .passthrough();
-const NodeStatusChangedMutation = z
-  .object({
-    mutation_type: z.string().optional().default("node.status_changed"),
-    status: z.string(),
-  })
-  .passthrough();
-const NodeFieldChangedMutation = z
-  .object({
-    mutation_type: z.string().optional().default("node.field_changed"),
-    field: z.enum(["description", "assigned_worker_slug"]),
-    value: z.union([z.string(), z.null()]),
-  })
-  .passthrough();
-const EdgeAddedMutation = z
-  .object({
-    mutation_type: z.string().optional().default("edge.added"),
-    source_task_id: z.string().uuid(),
-    target_task_id: z.string().uuid(),
-    status: z.string(),
-  })
-  .passthrough();
-const EdgeRemovedMutation = z
-  .object({
-    mutation_type: z.string().optional().default("edge.removed"),
-    source_task_id: z.string().uuid(),
-    target_task_id: z.string().uuid(),
-    status: z.string(),
-  })
-  .passthrough();
-const EdgeStatusChangedMutation = z
-  .object({
-    mutation_type: z.string().optional().default("edge.status_changed"),
-    status: z.string(),
-  })
-  .passthrough();
-const AnnotationSetMutation = z
-  .object({
-    mutation_type: z.string().optional().default("annotation.set"),
-    namespace: z.string(),
-    payload: JsonObject,
-  })
-  .passthrough();
-const AnnotationDeletedMutation = z
-  .object({
-    mutation_type: z.string().optional().default("annotation.deleted"),
-    namespace: z.string(),
-    payload: JsonObject,
-  })
-  .passthrough();
-const GraphMutationRecordDto = z
+const SampleRuntimeEventView = z
   .object({
     id: z.string().uuid(),
     sample_id: z.string().uuid(),
-    sequence: z.number().int(),
-    mutation_type: z.enum([
-      "node.added",
-      "node.removed",
-      "node.status_changed",
-      "node.field_changed",
-      "edge.added",
-      "edge.removed",
-      "edge.status_changed",
-      "annotation.set",
-      "annotation.deleted",
+    event_timestamp: z.string().datetime({ offset: true }),
+    table: z.enum([
+      "sample_status_events",
+      "sample_task_events",
+      "sample_edge_events",
+      "sample_worker_events",
+      "sample_evaluator_events",
+      "sample_sandbox_events",
+      "sample_annotation_events",
     ]),
-    target_type: z.enum(["node", "edge"]),
-    target_id: z.string().uuid(),
-    actor: z.string(),
-    old_value: z.union([
-      z.discriminatedUnion("mutation_type", [
-        NodeAddedMutation,
-        NodeRemovedMutation,
-        NodeStatusChangedMutation,
-        NodeFieldChangedMutation,
-        EdgeAddedMutation,
-        EdgeRemovedMutation,
-        EdgeStatusChangedMutation,
-        AnnotationSetMutation,
-        AnnotationDeletedMutation,
-      ]),
-      z.null(),
-    ]),
-    new_value: z.discriminatedUnion("mutation_type", [
-      NodeAddedMutation,
-      NodeRemovedMutation,
-      NodeStatusChangedMutation,
-      NodeFieldChangedMutation,
-      EdgeAddedMutation,
-      EdgeRemovedMutation,
-      EdgeStatusChangedMutation,
-      AnnotationSetMutation,
-      AnnotationDeletedMutation,
-    ]),
-    reason: z.union([z.string(), z.null()]),
-    created_at: z.string().datetime({ offset: true }),
+    event_type: z.string(),
+    target_type: z.string(),
+    target_id: z.union([z.string(), z.null()]),
+    payload: JsonObject.optional(),
   })
   .passthrough();
 const ExperimentStatusCountsDto = z
@@ -634,11 +537,12 @@ const TestGraphNodeDto = z
     parent_task_slug: z.union([z.string(), z.null()]),
   })
   .passthrough();
-const TestGraphMutationDto = z
+const TestSampleRuntimeEventDto = z
   .object({
-    sequence: z.number().int(),
-    mutation_type: z.string(),
-    target_task_slug: z.union([z.string(), z.null()]),
+    table: z.string(),
+    event_type: z.string(),
+    target_id: z.union([z.string(), z.null()]),
+    payload: z.object({}).partial().passthrough(),
   })
   .passthrough();
 const TestEvaluationDto = z
@@ -661,11 +565,11 @@ const TestRunStateDto = z
     sample_id: z.string().uuid(),
     status: z.string(),
     graph_nodes: z.array(TestGraphNodeDto),
-    mutations: z.array(TestGraphMutationDto),
+    events: z.array(TestSampleRuntimeEventDto),
     evaluations: z.array(TestEvaluationDto),
     executions: z.array(TestExecutionDto),
     execution_count: z.number().int(),
-    mutation_count: z.number().int(),
+    event_count: z.number().int(),
     resource_count: z.number().int(),
     thread_count: z.number().int(),
     context_event_count: z.number().int(),
@@ -733,16 +637,7 @@ export const schemas = {
   SampleCommunicationThreadDto,
   SampleSnapshotMetricsDto,
   SampleSnapshotDto,
-  NodeAddedMutation,
-  NodeRemovedMutation,
-  NodeStatusChangedMutation,
-  NodeFieldChangedMutation,
-  EdgeAddedMutation,
-  EdgeRemovedMutation,
-  EdgeStatusChangedMutation,
-  AnnotationSetMutation,
-  AnnotationDeletedMutation,
-  GraphMutationRecordDto,
+  SampleRuntimeEventView,
   ExperimentStatusCountsDto,
   ExperimentSummaryDto,
   ExperimentRunMetricsDto,
@@ -761,7 +656,7 @@ export const schemas = {
   WeightSyncRequest,
   WeightSyncResponse,
   TestGraphNodeDto,
-  TestGraphMutationDto,
+  TestSampleRuntimeEventDto,
   TestEvaluationDto,
   TestExecutionDto,
   TestRunStateDto,

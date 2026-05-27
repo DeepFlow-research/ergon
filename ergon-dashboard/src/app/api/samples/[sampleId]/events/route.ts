@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { config } from "@/lib/config";
 import { fetchErgonApi } from "@/lib/serverApi";
-import { getHarnessSampleMutations } from "@/lib/testing/dashboardHarness";
 
 interface RouteContext {
   params: Promise<{
@@ -14,22 +12,13 @@ export async function GET(_request: Request, context: RouteContext) {
   const { sampleId } = await context.params;
 
   try {
-    if (config.enableTestHarness) {
-      const harnessMutations = getHarnessSampleMutations(sampleId);
-      if (harnessMutations) {
-        return NextResponse.json(harnessMutations);
-      }
-    }
-    const response = await fetchErgonApi(`/samples/${sampleId}/mutations`);
+    const response = await fetchErgonApi(`/samples/${sampleId}/events`);
     const body = await response.json();
-    if (response.ok) {
-      return NextResponse.json(body, { status: response.status });
-    }
     return NextResponse.json(body, { status: response.status });
   } catch (error) {
     return NextResponse.json(
       {
-        detail: `Ergon API is unavailable while loading mutations for run ${sampleId}.`,
+        detail: `Ergon API is unavailable while loading runtime events for sample ${sampleId}.`,
         error: error instanceof Error ? error.message : "Unknown backend fetch failure",
       },
       { status: 503 },

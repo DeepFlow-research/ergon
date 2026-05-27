@@ -9,11 +9,11 @@
     "/samples": {
       "get": {
         "tags": [
-          "runs"
+          "samples"
         ],
-        "summary": "List Runs",
-        "description": "List persisted run summaries for dashboard indexes.",
-        "operationId": "list_runs_runs_get",
+        "summary": "List Samples",
+        "description": "List persisted sample summaries for dashboard indexes.",
+        "operationId": "list_samples_samples_get",
         "parameters": [
           {
             "name": "limit",
@@ -95,7 +95,7 @@
                   "items": {
                     "$ref": "#/components/schemas/SampleSummaryDto"
                   },
-                  "title": "Response List Runs Runs Get"
+                  "title": "Response List Samples Samples Get"
                 }
               }
             }
@@ -116,11 +116,11 @@
     "/samples/{sample_id}": {
       "get": {
         "tags": [
-          "runs"
+          "samples"
         ],
-        "summary": "Get Run",
-        "description": "Get a persisted run-detail snapshot suitable for frontend hydration.",
-        "operationId": "get_run_runs__sample_id__get",
+        "summary": "Get Sample Snapshot",
+        "description": "Get a persisted sample-detail snapshot suitable for frontend hydration.",
+        "operationId": "get_sample_snapshot_samples__sample_id__get",
         "parameters": [
           {
             "name": "sample_id",
@@ -129,7 +129,7 @@
             "schema": {
               "type": "string",
               "format": "uuid",
-              "title": "Run Id"
+              "title": "Sample Id"
             }
           }
         ],
@@ -157,14 +157,14 @@
         }
       }
     },
-    "/samples/{sample_id}/mutations": {
+    "/samples/{sample_id}/events": {
       "get": {
         "tags": [
-          "runs"
+          "samples"
         ],
-        "summary": "Get Mutations",
-        "description": "Return the append-only mutation log for a run, ordered by sequence.",
-        "operationId": "get_mutations_runs__sample_id__mutations_get",
+        "summary": "Get Sample Runtime Events",
+        "description": "Return the typed append-only runtime event stream for a sample.",
+        "operationId": "get_sample_runtime_events_samples__sample_id__events_get",
         "parameters": [
           {
             "name": "sample_id",
@@ -173,7 +173,7 @@
             "schema": {
               "type": "string",
               "format": "uuid",
-              "title": "Run Id"
+              "title": "Sample Id"
             }
           }
         ],
@@ -185,9 +185,9 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/GraphMutationRecordDto"
+                    "$ref": "#/components/schemas/SampleRuntimeEventView"
                   },
-                  "title": "Response Get Mutations Runs  Run Id  Mutations Get"
+                  "title": "Response Get Sample Runtime Events Samples  Sample Id  Events Get"
                 }
               }
             }
@@ -208,11 +208,11 @@
     "/samples/{sample_id}/resources/{resource_id}/content": {
       "get": {
         "tags": [
-          "runs"
+          "samples"
         ],
         "summary": "Get Resource Content",
         "description": "Stream the blob bytes for a SampleResource.",
-        "operationId": "get_resource_content_runs__sample_id__resources__resource_id__content_get",
+        "operationId": "get_resource_content_samples__sample_id__resources__resource_id__content_get",
         "parameters": [
           {
             "name": "sample_id",
@@ -221,7 +221,7 @@
             "schema": {
               "type": "string",
               "format": "uuid",
-              "title": "Run Id"
+              "title": "Sample Id"
             }
           },
           {
@@ -598,7 +598,7 @@
           "danger-test-harness"
         ],
         "summary": "Read Run State",
-        "operationId": "read_run_state_api___danger___test_harness_read_run__sample_id__state_get",
+        "operationId": "read_run_state_api___danger___test_harness_read_samples__sample_id__state_get",
         "parameters": [
           {
             "name": "sample_id",
@@ -607,7 +607,7 @@
             "schema": {
               "type": "string",
               "format": "uuid",
-              "title": "Run Id"
+              "title": "Sample Id"
             }
           }
         ],
@@ -642,7 +642,7 @@
         ],
         "summary": "Read Experiment Runs",
         "description": "List all runs attached to a v2 experiment grouping tag.",
-        "operationId": "read_experiment_runs_api___danger___test_harness_read_experiment__experiment__runs_get",
+        "operationId": "read_experiment_runs_api___danger___test_harness_read_experiment__experiment__samples_get",
         "parameters": [
           {
             "name": "experiment",
@@ -664,7 +664,7 @@
                   "items": {
                     "$ref": "#/components/schemas/TestExperimentRunDto"
                   },
-                  "title": "Response Read Experiment Runs Api   Danger   Test Harness Read Experiment  Experiment  Runs Get"
+                  "title": "Response Read Experiment Runs Api   Danger   Test Harness Read Experiment  Experiment  Samples Get"
                 }
               }
             }
@@ -688,7 +688,7 @@
           "danger-test-harness"
         ],
         "summary": "Seed Run",
-        "operationId": "seed_run_api___danger___test_harness_write_run_seed_post",
+        "operationId": "seed_run_api___danger___test_harness_write_samples_seed_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -707,7 +707,7 @@
                 "schema": {
                   "additionalProperties": true,
                   "type": "object",
-                  "title": "Response Seed Run Api   Danger   Test Harness Write Run Seed Post"
+                  "title": "Response Seed Run Api   Danger   Test Harness Write Samples Seed Post"
                 }
               }
             }
@@ -848,54 +848,6 @@
   },
   "components": {
     "schemas": {
-      "AnnotationDeletedMutation": {
-        "properties": {
-          "mutation_type": {
-            "type": "string",
-            "const": "annotation.deleted",
-            "title": "Mutation Type",
-            "default": "annotation.deleted"
-          },
-          "namespace": {
-            "type": "string",
-            "title": "Namespace"
-          },
-          "payload": {
-            "$ref": "#/components/schemas/JsonObject"
-          }
-        },
-        "type": "object",
-        "required": [
-          "namespace",
-          "payload"
-        ],
-        "title": "AnnotationDeletedMutation",
-        "description": "annotation.deleted \u2014 tombstone."
-      },
-      "AnnotationSetMutation": {
-        "properties": {
-          "mutation_type": {
-            "type": "string",
-            "const": "annotation.set",
-            "title": "Mutation Type",
-            "default": "annotation.set"
-          },
-          "namespace": {
-            "type": "string",
-            "title": "Namespace"
-          },
-          "payload": {
-            "$ref": "#/components/schemas/JsonObject"
-          }
-        },
-        "type": "object",
-        "required": [
-          "namespace",
-          "payload"
-        ],
-        "title": "AnnotationSetMutation",
-        "description": "annotation.set."
-      },
       "AssistantTextPart": {
         "properties": {
           "part_kind": {
@@ -1065,96 +1017,12 @@
         "title": "ContextPartChunkLog",
         "description": "Core-enriched context stream item suitable for API/dashboard projection."
       },
-      "EdgeAddedMutation": {
-        "properties": {
-          "mutation_type": {
-            "type": "string",
-            "const": "edge.added",
-            "title": "Mutation Type",
-            "default": "edge.added"
-          },
-          "source_task_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Source Task Id"
-          },
-          "target_task_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Target Task Id"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          }
-        },
-        "type": "object",
-        "required": [
-          "source_task_id",
-          "target_task_id",
-          "status"
-        ],
-        "title": "EdgeAddedMutation",
-        "description": "edge.added \u2014 full edge snapshot."
-      },
-      "EdgeRemovedMutation": {
-        "properties": {
-          "mutation_type": {
-            "type": "string",
-            "const": "edge.removed",
-            "title": "Mutation Type",
-            "default": "edge.removed"
-          },
-          "source_task_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Source Task Id"
-          },
-          "target_task_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Target Task Id"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          }
-        },
-        "type": "object",
-        "required": [
-          "source_task_id",
-          "target_task_id",
-          "status"
-        ],
-        "title": "EdgeRemovedMutation",
-        "description": "edge.removed."
-      },
-      "EdgeStatusChangedMutation": {
-        "properties": {
-          "mutation_type": {
-            "type": "string",
-            "const": "edge.status_changed",
-            "title": "Mutation Type",
-            "default": "edge.status_changed"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          }
-        },
-        "type": "object",
-        "required": [
-          "status"
-        ],
-        "title": "EdgeStatusChangedMutation",
-        "description": "edge.status_changed."
-      },
       "EpisodeFailure": {
         "properties": {
           "sample_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Run Id"
+            "title": "Sample Id"
           },
           "error": {
             "type": "string",
@@ -1331,7 +1199,7 @@
           "sample_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Run Id"
+            "title": "Sample Id"
           },
           "run_name": {
             "anyOf": [
@@ -1531,7 +1399,7 @@
               "format": "uuid"
             },
             "type": "array",
-            "title": "Run Ids"
+            "title": "Sample Ids"
           },
           "definition_ids": {
             "items": {
@@ -1554,7 +1422,7 @@
           "sample_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Run Id"
+            "title": "Sample Id"
           },
           "definition_id": {
             "type": "string",
@@ -1947,189 +1815,6 @@
         ],
         "title": "ExperimentSummaryDto"
       },
-      "GraphMutationRecordDto": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id",
-            "description": "Identifier of the mutation row itself, not a graph target id."
-          },
-          "sample_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Run Id"
-          },
-          "sequence": {
-            "type": "integer",
-            "title": "Sequence"
-          },
-          "mutation_type": {
-            "type": "string",
-            "enum": [
-              "node.added",
-              "node.removed",
-              "node.status_changed",
-              "node.field_changed",
-              "edge.added",
-              "edge.removed",
-              "edge.status_changed",
-              "annotation.set",
-              "annotation.deleted"
-            ],
-            "title": "Mutation Type"
-          },
-          "target_type": {
-            "type": "string",
-            "enum": [
-              "node",
-              "edge"
-            ],
-            "title": "Target Type"
-          },
-          "target_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Target Id",
-            "description": "Polymorphic mutation target identifier. Interpreted as a NodeId, EdgeId, or annotation id based on target_type and mutation_type."
-          },
-          "actor": {
-            "type": "string",
-            "title": "Actor"
-          },
-          "old_value": {
-            "anyOf": [
-              {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/NodeAddedMutation"
-                  },
-                  {
-                    "$ref": "#/components/schemas/NodeRemovedMutation"
-                  },
-                  {
-                    "$ref": "#/components/schemas/NodeStatusChangedMutation"
-                  },
-                  {
-                    "$ref": "#/components/schemas/NodeFieldChangedMutation"
-                  },
-                  {
-                    "$ref": "#/components/schemas/EdgeAddedMutation"
-                  },
-                  {
-                    "$ref": "#/components/schemas/EdgeRemovedMutation"
-                  },
-                  {
-                    "$ref": "#/components/schemas/EdgeStatusChangedMutation"
-                  },
-                  {
-                    "$ref": "#/components/schemas/AnnotationSetMutation"
-                  },
-                  {
-                    "$ref": "#/components/schemas/AnnotationDeletedMutation"
-                  }
-                ],
-                "discriminator": {
-                  "propertyName": "mutation_type",
-                  "mapping": {
-                    "annotation.deleted": "#/components/schemas/AnnotationDeletedMutation",
-                    "annotation.set": "#/components/schemas/AnnotationSetMutation",
-                    "edge.added": "#/components/schemas/EdgeAddedMutation",
-                    "edge.removed": "#/components/schemas/EdgeRemovedMutation",
-                    "edge.status_changed": "#/components/schemas/EdgeStatusChangedMutation",
-                    "node.added": "#/components/schemas/NodeAddedMutation",
-                    "node.field_changed": "#/components/schemas/NodeFieldChangedMutation",
-                    "node.removed": "#/components/schemas/NodeRemovedMutation",
-                    "node.status_changed": "#/components/schemas/NodeStatusChangedMutation"
-                  }
-                }
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Old Value"
-          },
-          "new_value": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/NodeAddedMutation"
-              },
-              {
-                "$ref": "#/components/schemas/NodeRemovedMutation"
-              },
-              {
-                "$ref": "#/components/schemas/NodeStatusChangedMutation"
-              },
-              {
-                "$ref": "#/components/schemas/NodeFieldChangedMutation"
-              },
-              {
-                "$ref": "#/components/schemas/EdgeAddedMutation"
-              },
-              {
-                "$ref": "#/components/schemas/EdgeRemovedMutation"
-              },
-              {
-                "$ref": "#/components/schemas/EdgeStatusChangedMutation"
-              },
-              {
-                "$ref": "#/components/schemas/AnnotationSetMutation"
-              },
-              {
-                "$ref": "#/components/schemas/AnnotationDeletedMutation"
-              }
-            ],
-            "title": "New Value",
-            "discriminator": {
-              "propertyName": "mutation_type",
-              "mapping": {
-                "annotation.deleted": "#/components/schemas/AnnotationDeletedMutation",
-                "annotation.set": "#/components/schemas/AnnotationSetMutation",
-                "edge.added": "#/components/schemas/EdgeAddedMutation",
-                "edge.removed": "#/components/schemas/EdgeRemovedMutation",
-                "edge.status_changed": "#/components/schemas/EdgeStatusChangedMutation",
-                "node.added": "#/components/schemas/NodeAddedMutation",
-                "node.field_changed": "#/components/schemas/NodeFieldChangedMutation",
-                "node.removed": "#/components/schemas/NodeRemovedMutation",
-                "node.status_changed": "#/components/schemas/NodeStatusChangedMutation"
-              }
-            }
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "sample_id",
-          "sequence",
-          "mutation_type",
-          "target_type",
-          "target_id",
-          "actor",
-          "old_value",
-          "new_value",
-          "reason",
-          "created_at"
-        ],
-        "title": "GraphMutationRecordDto",
-        "description": "Append-only graph mutation record with a typed mutation payload."
-      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -2186,156 +1871,6 @@
             "type": "object"
           }
         ]
-      },
-      "NodeAddedMutation": {
-        "properties": {
-          "mutation_type": {
-            "type": "string",
-            "const": "node.added",
-            "title": "Mutation Type",
-            "default": "node.added"
-          },
-          "task_slug": {
-            "type": "string",
-            "title": "Task Slug"
-          },
-          "instance_key": {
-            "type": "string",
-            "title": "Instance Key"
-          },
-          "description": {
-            "type": "string",
-            "title": "Description"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "assigned_worker_slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Assigned Worker Slug"
-          }
-        },
-        "type": "object",
-        "required": [
-          "task_slug",
-          "instance_key",
-          "description",
-          "status",
-          "assigned_worker_slug"
-        ],
-        "title": "NodeAddedMutation",
-        "description": "node.added \u2014 full node snapshot."
-      },
-      "NodeFieldChangedMutation": {
-        "properties": {
-          "mutation_type": {
-            "type": "string",
-            "const": "node.field_changed",
-            "title": "Mutation Type",
-            "default": "node.field_changed"
-          },
-          "field": {
-            "type": "string",
-            "enum": [
-              "description",
-              "assigned_worker_slug"
-            ],
-            "title": "Field"
-          },
-          "value": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Value"
-          }
-        },
-        "type": "object",
-        "required": [
-          "field",
-          "value"
-        ],
-        "title": "NodeFieldChangedMutation",
-        "description": "node.field_changed."
-      },
-      "NodeRemovedMutation": {
-        "properties": {
-          "mutation_type": {
-            "type": "string",
-            "const": "node.removed",
-            "title": "Mutation Type",
-            "default": "node.removed"
-          },
-          "task_slug": {
-            "type": "string",
-            "title": "Task Slug"
-          },
-          "instance_key": {
-            "type": "string",
-            "title": "Instance Key"
-          },
-          "description": {
-            "type": "string",
-            "title": "Description"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "assigned_worker_slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Assigned Worker Slug"
-          }
-        },
-        "type": "object",
-        "required": [
-          "task_slug",
-          "instance_key",
-          "description",
-          "status",
-          "assigned_worker_slug"
-        ],
-        "title": "NodeRemovedMutation",
-        "description": "node.removed \u2014 node snapshot at removal time."
-      },
-      "NodeStatusChangedMutation": {
-        "properties": {
-          "mutation_type": {
-            "type": "string",
-            "const": "node.status_changed",
-            "title": "Mutation Type",
-            "default": "node.status_changed"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          }
-        },
-        "type": "object",
-        "required": [
-          "status"
-        ],
-        "title": "NodeStatusChangedMutation",
-        "description": "node.status_changed."
       },
       "PollResponse": {
         "properties": {
@@ -2523,7 +2058,7 @@
           },
           "sampleId": {
             "type": "string",
-            "title": "Runid"
+            "title": "Sampleid"
           },
           "taskId": {
             "anyOf": [
@@ -2592,7 +2127,7 @@
           },
           "sampleId": {
             "type": "string",
-            "title": "Runid"
+            "title": "Sampleid"
           },
           "taskId": {
             "anyOf": [
@@ -2669,7 +2204,7 @@
           "sampleId": {
             "type": "string",
             "format": "uuid",
-            "title": "Runid"
+            "title": "Sampleid"
           },
           "taskExecutionId": {
             "type": "string",
@@ -3093,6 +2628,73 @@
         ],
         "title": "SampleResourceDto"
       },
+      "SampleRuntimeEventView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "sample_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sample Id"
+          },
+          "event_timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Event Timestamp"
+          },
+          "table": {
+            "type": "string",
+            "enum": [
+              "sample_status_events",
+              "sample_task_events",
+              "sample_edge_events",
+              "sample_worker_events",
+              "sample_evaluator_events",
+              "sample_sandbox_events",
+              "sample_annotation_events"
+            ],
+            "title": "Table"
+          },
+          "event_type": {
+            "type": "string",
+            "title": "Event Type"
+          },
+          "target_type": {
+            "type": "string",
+            "title": "Target Type"
+          },
+          "target_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Id"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonObject",
+            "description": "Typed event payload copied from the source sample runtime WAL row."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "sample_id",
+          "event_timestamp",
+          "table",
+          "event_type",
+          "target_type",
+          "target_id"
+        ],
+        "title": "SampleRuntimeEventView"
+      },
       "SampleSandboxCommandDto": {
         "properties": {
           "command": {
@@ -3426,7 +3028,7 @@
         "properties": {
           "sampleId": {
             "type": "string",
-            "title": "Runid"
+            "title": "Sampleid"
           },
           "status": {
             "type": "string",
@@ -3848,7 +3450,7 @@
           },
           "sampleId": {
             "type": "string",
-            "title": "Runid"
+            "title": "Sampleid"
           },
           "taskId": {
             "anyOf": [
@@ -4041,7 +3643,7 @@
               "format": "uuid"
             },
             "type": "array",
-            "title": "Run Ids"
+            "title": "Sample Ids"
           }
         },
         "type": "object",
@@ -4106,7 +3708,7 @@
               "format": "uuid"
             },
             "type": "array",
-            "title": "Run Ids"
+            "title": "Sample Ids"
           },
           "status": {
             "$ref": "#/components/schemas/RolloutStatus",
@@ -4220,7 +3822,7 @@
           "sample_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Run Id"
+            "title": "Sample Id"
           },
           "status": {
             "type": "string",
@@ -4233,36 +3835,6 @@
           "status"
         ],
         "title": "TestExperimentRunDto"
-      },
-      "TestGraphMutationDto": {
-        "properties": {
-          "sequence": {
-            "type": "integer",
-            "title": "Sequence"
-          },
-          "mutation_type": {
-            "type": "string",
-            "title": "Mutation Type"
-          },
-          "target_task_slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Target Task Slug"
-          }
-        },
-        "type": "object",
-        "required": [
-          "sequence",
-          "mutation_type",
-          "target_task_slug"
-        ],
-        "title": "TestGraphMutationDto"
       },
       "TestGraphNodeDto": {
         "properties": {
@@ -4323,7 +3895,7 @@
           "sample_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Run Id"
+            "title": "Sample Id"
           },
           "status": {
             "type": "string",
@@ -4336,12 +3908,12 @@
             "type": "array",
             "title": "Graph Nodes"
           },
-          "mutations": {
+          "events": {
             "items": {
-              "$ref": "#/components/schemas/TestGraphMutationDto"
+              "$ref": "#/components/schemas/TestSampleRuntimeEventDto"
             },
             "type": "array",
-            "title": "Mutations"
+            "title": "Events"
           },
           "evaluations": {
             "items": {
@@ -4361,9 +3933,9 @@
             "type": "integer",
             "title": "Execution Count"
           },
-          "mutation_count": {
+          "event_count": {
             "type": "integer",
-            "title": "Mutation Count"
+            "title": "Event Count"
           },
           "resource_count": {
             "type": "integer",
@@ -4383,16 +3955,53 @@
           "sample_id",
           "status",
           "graph_nodes",
-          "mutations",
+          "events",
           "evaluations",
           "executions",
           "execution_count",
-          "mutation_count",
+          "event_count",
           "resource_count",
           "thread_count",
           "context_event_count"
         ],
         "title": "TestRunStateDto"
+      },
+      "TestSampleRuntimeEventDto": {
+        "properties": {
+          "table": {
+            "type": "string",
+            "title": "Table"
+          },
+          "event_type": {
+            "type": "string",
+            "title": "Event Type"
+          },
+          "target_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Id"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          }
+        },
+        "type": "object",
+        "required": [
+          "table",
+          "event_type",
+          "target_id",
+          "payload"
+        ],
+        "title": "TestSampleRuntimeEventDto"
       },
       "ThinkingPart": {
         "properties": {
@@ -4522,7 +4131,7 @@
           "sample_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Run Id"
+            "title": "Sample Id"
           },
           "agent_id": {
             "type": "string",

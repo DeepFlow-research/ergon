@@ -14,12 +14,10 @@ import { ActivityStackTimeline } from "@/features/activity/components/ActivitySt
 import { buildSampleActivities } from "@/features/activity/buildSampleActivities";
 import { resolveActivitySnapshotSequence } from "@/features/activity/snapshotSequence";
 import type { SampleActivity } from "@/features/activity/types";
-import {
-  parseGraphMutationDtoArray,
-  type GraphMutationDto,
-} from "@/features/graph/contracts/graphMutations";
+import type { GraphMutationDto, MutationType } from "@/features/graph/contracts/graphMutations";
 import { useSampleWorkspaceState } from "@/hooks/useSampleWorkspaceState";
 import { buildSampleEvents } from "@/lib/sampleEvents";
+import { parseSampleRuntimeEvents, type SampleRuntimeEventView } from "@/lib/contracts/rest";
 import { SampleLifecycleStatus, SerializedSampleWorkspaceState, TaskStatus, type SampleWorkspaceState } from "@/lib/types";
 import {
   nearestMutationAtOrBefore,
@@ -52,6 +50,97 @@ function countObservedTokens(runState: SampleWorkspaceState | null): number | nu
   return tokenCount > 0 ? tokenCount : null;
 }
 
+function graphMutationType(eventType: string): MutationType | null {
+  switch (eventType) {
+    case "task.added":
+      return "node.added";
+    case "task.removed":
+      return "node.removed";
+    case "task.status_changed":
+      return "node.status_changed";
+    case "edge.added":
+    case "edge.removed":
+    case "edge.status_changed":
+    case "annotation.set":
+    case "annotation.deleted":
+      return eventType;
+    default:
+      return null;
+  }
+}
+
+function payloadRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function graphMutationValue(event: SampleRuntimeEventView, mutationType: MutationType): Record<string, unknown> {
+  const payload = payloadRecord(event.payload);
+  const task = payloadRecord(payload.task);
+  const edge = payloadRecord(payload.edge);
+
+  if (mutationType === "node.added") {
+    return {
+      task_slug: String(payload.task_slug ?? task.task_slug ?? task.name ?? event.target_id ?? "task"),
+      instance_key: String(task.instance_key ?? payload.instance_key ?? event.target_id ?? "task"),
+      description: String(task.description ?? payload.description ?? ""),
+      status: String(payload.status ?? task.status ?? "pending"),
+      assigned_worker_slug:
+        typeof task.assigned_worker_slug === "string"
+          ? task.assigned_worker_slug
+          : typeof payload.assigned_worker_slug === "string"
+            ? payload.assigned_worker_slug
+            : null,
+    };
+  }
+
+  if (mutationType === "node.status_changed" || mutationType === "edge.status_changed") {
+    return { status: String(payload.status ?? "pending") };
+  }
+
+  if (mutationType === "edge.added" || mutationType === "edge.removed") {
+    return {
+      source_task_id: String(payload.source_task_id ?? edge.source_task_id ?? event.target_id),
+      target_task_id: String(payload.target_task_id ?? edge.target_task_id ?? event.target_id),
+      status: String(payload.status ?? edge.status ?? "pending"),
+    };
+  }
+
+  if (mutationType === "annotation.set" || mutationType === "annotation.deleted") {
+    return {
+      namespace: String(payload.namespace ?? payload.key ?? "runtime"),
+      payload: payloadRecord(payload.value ?? payload.payload),
+    };
+  }
+
+  return payload;
+}
+
+function sampleRuntimeEventsToGraphMutations(events: SampleRuntimeEventView[]): GraphMutationDto[] {
+  return events.flatMap((event, index) => {
+    const mutationType = graphMutationType(event.event_type);
+    if (mutationType === null || event.target_id === null) return [];
+    const targetType = event.target_type === "edge" ? "edge" : "node";
+    const newValue = graphMutationValue(event, mutationType);
+    return [
+      {
+        id: event.id,
+        sample_id: event.sample_id,
+        sequence: index + 1,
+        mutation_type: mutationType,
+        target_type: targetType,
+        target_id: event.target_id,
+        actor: "runtime",
+        old_value: null,
+        new_value: newValue,
+        reason: null,
+        created_at: event.event_timestamp,
+      },
+    ];
+  });
+}
+
 export function SampleWorkspacePage({
   sampleId,
   initialRunState = null,
@@ -75,7 +164,11 @@ export function SampleWorkspacePage({
   } = useSamplePanelLayout();
   const { runState, isLoading, error, isSubscribed } = useSampleWorkspaceState(sampleId, initialRunState);
 
-  const [mutations, setMutations] = useState<GraphMutationDto[]>([]);
+  const [runtimeEvents, setRuntimeEvents] = useState<SampleRuntimeEventView[]>([]);
+  const mutations = useMemo(
+    () => sampleRuntimeEventsToGraphMutations(runtimeEvents),
+    [runtimeEvents],
+  );
   const requestedSequenceRef = useRef<number | null>(null);
   const pendingActivityResolutionRef = useRef<SampleActivity | null>(null);
   const selectedActivityIdRef = useRef<string | null>(null);
@@ -95,18 +188,19 @@ export function SampleWorkspacePage({
     selectedActivityIdRef.current = selectedActivityId;
   }, [selectedActivityId]);
 
-  // Fetch mutations once per run load so snapshot selection is always ready.
+  // Fetch typed sample runtime events once per sample load so snapshot selection is always ready.
   useEffect(() => {
     let cancelled = false;
     mutationsLoadedRef.current = false;
     pendingActivityResolutionRef.current = null;
-    fetch(`/api/samples/${sampleId}/mutations`)
+    fetch(`/api/samples/${sampleId}/events`)
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
-        const parsed = parseGraphMutationDtoArray(data);
+        const events = parseSampleRuntimeEvents(data);
+        const parsed = sampleRuntimeEventsToGraphMutations(events);
         mutationsLoadedRef.current = true;
-        setMutations(parsed);
+        setRuntimeEvents(events);
         const requestedSequence = requestedSequenceRef.current;
         requestedSequenceRef.current = null;
         if (requestedSequence !== null) {
@@ -129,7 +223,7 @@ export function SampleWorkspacePage({
         if (cancelled) return;
         mutationsLoadedRef.current = true;
         pendingActivityResolutionRef.current = null;
-        setMutations([]);
+        setRuntimeEvents([]);
       });
     return () => {
       cancelled = true;
