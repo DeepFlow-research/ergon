@@ -18,7 +18,7 @@ test("sample detail renders breadcrumb and typed events", () => {
     }),
   );
 
-  assert.match(html, /href="\/experiments\/exp-1"/);
+  assert.match(html, new RegExp(`href="/experiments/${fixtureSampleDetail.experimentId}"`));
   assert.match(html, /task.added/);
   assert.doesNotMatch(html, /mutation/i);
 });

@@ -4,7 +4,7 @@ import React from "react";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { SampleEvents } from "@/components/samples/SampleEvents";
 import type { SampleDashboardState } from "@/lib/sample-state/dashboard";
-import type { RunLifecycleStatus } from "@/lib/types";
+import type { SampleLifecycleStatus } from "@/lib/types";
 
 function JsonBlock({ value }: { value: Record<string, unknown> }) {
   const entries = Object.entries(value);
@@ -28,7 +28,7 @@ export function SampleDetail({ state }: { state: SampleDashboardState }) {
             {state.environmentName} · {state.sampleId}
           </p>
         </div>
-        <StatusBadge status={state.status as RunLifecycleStatus} />
+        <StatusBadge status={state.status as SampleLifecycleStatus} />
       </div>
 
       <section className="mb-6 grid gap-3 md:grid-cols-3">
@@ -74,7 +74,7 @@ export function SampleDetail({ state }: { state: SampleDashboardState }) {
               {state.graph.nodes.map((node) => (
                 <tr key={node.taskId} className="border-t border-[var(--line)]">
                   <td className="py-2 font-mono text-xs text-[var(--ink)]">{node.taskSlug}</td>
-                  <td className="py-2"><StatusBadge status={node.status as RunLifecycleStatus} size="sm" /></td>
+                  <td className="py-2"><StatusBadge status={node.status as SampleLifecycleStatus} size="sm" /></td>
                   <td className="py-2 text-xs text-[var(--muted)]">{node.assignedWorkerSlug ?? "-"}</td>
                 </tr>
               ))}

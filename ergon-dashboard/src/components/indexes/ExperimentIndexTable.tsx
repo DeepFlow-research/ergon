@@ -104,7 +104,7 @@ export function ExperimentIndexTable({ experiments }: { experiments: ExperimentS
                     {selectedCount}
                   </td>
                   <td className="px-3 py-2.5">
-                    <StatusBadge status={experimentStatus(experiment) as RunLifecycleStatus} size="sm" />
+                    <StatusBadge status={experimentStatus(experiment) as SampleLifecycleStatus} size="sm" />
                   </td>
                   <td className="px-3 py-2.5 font-mono text-xs text-[var(--muted)]">
                     {formatDateTime(experiment.createdAt)}

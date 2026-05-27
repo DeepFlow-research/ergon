@@ -3,7 +3,7 @@ import React from "react";
 
 import { StatusBadge } from "@/components/common/StatusBadge";
 import type { ExperimentSampleSummaryView } from "@/lib/contracts/rest";
-import type { RunLifecycleStatus } from "@/lib/types";
+import type { SampleLifecycleStatus } from "@/lib/types";
 
 export function SampleTable({ samples }: { samples: ExperimentSampleSummaryView[] }) {
   return (
@@ -35,7 +35,7 @@ export function SampleTable({ samples }: { samples: ExperimentSampleSummaryView[
               </td>
               <td className="px-3 py-2 text-[var(--muted)]">{sample.environmentName}</td>
               <td className="px-3 py-2">
-                <StatusBadge status={sample.status as RunLifecycleStatus} size="sm" />
+                <StatusBadge status={sample.status as SampleLifecycleStatus} size="sm" />
               </td>
               <td className="px-3 py-2 font-mono text-xs text-[var(--muted)]">
                 {new Date(sample.createdAt).toLocaleString()}

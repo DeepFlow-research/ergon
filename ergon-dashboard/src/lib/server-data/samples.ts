@@ -1,14 +1,14 @@
 import { config } from "@/lib/config";
 import {
-  parseRunSnapshot,
   parseSampleDetail,
   parseSampleEvents,
   parseSampleGraph,
-  type RunSnapshot,
+  parseSampleSnapshot,
+  type SampleSnapshot,
 } from "@/lib/contracts/rest";
 import { buildSampleState, type SampleDashboardState } from "@/lib/sample-state/dashboard";
 import { fetchErgonApi } from "@/lib/serverApi";
-import { getHarnessRun, getHarnessSampleState } from "@/lib/testing/dashboardHarness";
+import { getHarnessSample, getHarnessSampleState } from "@/lib/testing/dashboardHarness";
 
 import { backendUnavailable, type ServerDataResult } from "./responses";
 
@@ -73,20 +73,20 @@ export async function loadSampleList(
     }
     return { ok: false, body, status: response.status, source: "backend" };
   } catch (error) {
-    return backendUnavailable("Ergon API is unavailable while loading runs.", error);
+    return backendUnavailable("Ergon API is unavailable while loading samples.", error);
   }
 }
 
 export async function loadSampleSnapshot(sampleId: string): Promise<ServerDataResult<SampleSnapshot>> {
   if (config.enableTestHarness) {
-    const run = getHarnessSample(sampleId);
-    if (run !== null) {
-      return { ok: true, data: parseSampleSnapshot(run), status: 200, source: "harness" };
+    const sample = getHarnessSample(sampleId);
+    if (sample !== null) {
+      return { ok: true, data: parseSampleSnapshot(sample), status: 200, source: "harness" };
     }
   }
 
   try {
-    const response = await fetchErgonApi(`/samples/${sampleId}`);
+    const response = await fetchErgonApi(`/samples/${sampleId}/workspace`);
     const body = await response.json();
     if (response.ok) {
       return {
@@ -98,7 +98,7 @@ export async function loadSampleSnapshot(sampleId: string): Promise<ServerDataRe
     }
     return { ok: false, body, status: response.status, source: "backend" };
   } catch (error) {
-    return backendUnavailable(`Ergon API is unavailable while loading run ${sampleId}.`, error);
+    return backendUnavailable(`Ergon API is unavailable while loading sample ${sampleId}.`, error);
   }
 }
 
@@ -112,7 +112,7 @@ export async function loadSampleState(sampleId: string): Promise<ServerDataResul
 
   try {
     const [detailResponse, eventsResponse, graphResponse] = await Promise.all([
-      fetchErgonApi(`/samples/${sampleId}/detail`),
+      fetchErgonApi(`/samples/${sampleId}`),
       fetchErgonApi(`/samples/${sampleId}/events`),
       fetchErgonApi(`/samples/${sampleId}/graph`),
     ]);
@@ -148,7 +148,7 @@ export async function loadSampleState(sampleId: string): Promise<ServerDataResul
   }
 }
 
-function parseRunList(input: unknown): RunSummary[] {
+function parseSampleList(input: unknown): SampleSummary[] {
   if (!Array.isArray(input)) return [];
   return input.map((item) => {
     const record = typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {};

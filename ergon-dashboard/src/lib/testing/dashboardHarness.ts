@@ -23,8 +23,8 @@ declare global {
     | {
         experimentDetails: Record<string, unknown>;
         sampleStates: Record<string, SampleDashboardState>;
-        mutationsByRun: Record<string, unknown[]>;
-        seededRunIds: Set<string>;
+        mutationsBySample: Record<string, unknown[]>;
+        seededSampleIds: Set<string>;
       }
     | undefined;
 }
@@ -41,8 +41,8 @@ function getHarnessState() {
     global.__dashboardHarness = {
       experimentDetails: {},
       sampleStates: {},
-      mutationsByRun: {},
-      seededRunIds: new Set(),
+      mutationsBySample: {},
+      seededSampleIds: new Set(),
     };
   }
   return global.__dashboardHarness;
@@ -60,8 +60,8 @@ export function resetDashboardHarness(): void {
   const harness = getHarnessState();
   harness.experimentDetails = {};
   harness.sampleStates = {};
-  harness.mutationsByRun = {};
-  harness.seededRunIds.clear();
+  harness.mutationsBySample = {};
+  harness.seededSampleIds.clear();
 }
 
 export function seedDashboardHarness(payload: DashboardHarnessSeedPayload): void {
@@ -71,7 +71,7 @@ export function seedDashboardHarness(payload: DashboardHarnessSeedPayload): void
   const harness = getHarnessState();
   harness.experimentDetails = payload.experimentDetails ?? {};
   harness.sampleStates = payload.sampleStates ?? {};
-  harness.mutationsByRun = payload.mutations ?? {};
+  harness.mutationsBySample = payload.mutations ?? {};
 
   for (const run of payload.runs ?? []) {
     store.seedSample(deserializeSampleState(run));
@@ -89,7 +89,7 @@ export function getHarnessSampleState(sampleId: string): SampleDashboardState | 
   return getHarnessState().sampleStates[sampleId] ?? null;
 }
 
-export function getHarnessRun(sampleId: string): SerializedSampleWorkspaceState | null {
+export function getHarnessSample(sampleId: string): SerializedSampleWorkspaceState | null {
   requireHarnessEnabled();
   if (!getHarnessState().seededSampleIds.has(sampleId)) {
     return null;

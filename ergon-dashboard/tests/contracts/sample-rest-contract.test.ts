@@ -13,10 +13,17 @@ import {
 const retiredSamplePattern = new RegExp(["run" + "Id", "definitionId"].join("|"), "i");
 const retiredEventPattern = new RegExp(["GraphMutation", "mutation", "run" + "Id"].join("|"), "i");
 
+const sampleId = "00000000-0000-4000-8000-000000000001";
+const experimentId = "00000000-0000-4000-8000-000000000002";
+const environmentId = "00000000-0000-4000-8000-000000000003";
+const statusEventId = "00000000-0000-4000-8000-000000000004";
+const taskEventId = "00000000-0000-4000-8000-000000000005";
+const taskId = "00000000-0000-4000-8000-000000000006";
+
 export const fixtureSampleDetail: SampleDetailView = {
-  sampleId: "sample-1",
-  experimentId: "exp-1",
-  environmentId: "env-1",
+  sampleId,
+  experimentId,
+  environmentId,
   environmentName: "mini-validation",
   sampleKey: "problem-1",
   sampleRef: { id: "problem-1" },
@@ -30,20 +37,23 @@ export const fixtureSampleDetail: SampleDetailView = {
 export const fixtureSampleEvents: SampleEventsView = {
   items: [
     {
-      eventId: "event-1",
-      sampleId: "sample-1",
+      eventId: statusEventId,
+      sampleId,
       eventType: "sample.status_changed",
       targetType: "sample",
-      targetId: null,
+      targetId: sampleId,
+      status: "pending",
       timestamp: "2026-05-26T00:00:00Z",
       payload: { status: "pending" },
     },
     {
-      eventId: "event-2",
-      sampleId: "sample-1",
+      eventId: taskEventId,
+      sampleId,
       eventType: "task.added",
       targetType: "task",
-      targetId: "task-1",
+      targetId: taskId,
+      taskSlug: "prove",
+      status: "pending",
       timestamp: "2026-05-26T00:00:01Z",
       payload: { task_slug: "prove" },
     },
@@ -53,7 +63,7 @@ export const fixtureSampleEvents: SampleEventsView = {
 export const fixtureSampleGraph: SampleGraphView = {
   nodes: [
     {
-      taskId: "task-1",
+      taskId,
       taskSlug: "prove",
       description: "Prove the theorem",
       status: "pending",
@@ -70,7 +80,7 @@ export const fixtureSampleGraph: SampleGraphView = {
 test("sample detail contract exposes provenance", () => {
   const parsed = parseSampleDetail(fixtureSampleDetail);
 
-  assert.equal(parsed.sampleId, "sample-1");
+  assert.equal(parsed.sampleId, sampleId);
   assert.equal(parsed.environmentName, "mini-validation");
   assert.doesNotMatch(JSON.stringify(parsed), retiredSamplePattern);
 });

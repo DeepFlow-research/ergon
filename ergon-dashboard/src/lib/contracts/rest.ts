@@ -10,6 +10,8 @@ const restSchemas = schemas as typeof schemas & {
   ExperimentDetailDto?: z.ZodTypeAny;
 };
 
+export const ExperimentDetailSchema = restSchemas.ExperimentDetailDto ?? schemas.ExperimentDetailView;
+export const SampleRuntimeEventViewSchema = schemas.SampleRuntimeEventView;
 const JsonRecordSchema = z.record(z.string(), z.unknown());
 
 export const SamplerInvocationViewSchema = z.object({
@@ -73,15 +75,7 @@ export const SampleDetailViewSchema = z.object({
   completedAt: z.string().nullable().optional(),
 });
 
-export const SampleEventViewSchema = z.object({
-  eventId: z.string(),
-  sampleId: z.string(),
-  eventType: z.string(),
-  targetType: z.string(),
-  targetId: z.string().nullable().optional(),
-  timestamp: z.string(),
-  payload: JsonRecordSchema.default({}),
-});
+export const SampleEventViewSchema = SampleRuntimeEventViewSchema;
 
 export const SampleGraphNodeViewSchema = z.object({
   taskId: z.string(),
@@ -123,7 +117,7 @@ export const SampleStateViewSchema = z.object({
   graph: SampleGraphViewSchema.default({ nodes: [], edges: [] }),
 });
 
-export const RunExecutionAttemptSchema = schemas.RunExecutionAttemptDto;
+export const SampleExecutionAttemptSchema = schemas.SampleExecutionAttemptDto;
 export const SampleResourceSchema = schemas.SampleResourceDto;
 export const SampleSandboxCommandSchema = schemas.SampleSandboxCommandDto;
 export const SampleSandboxSchema = schemas.SampleSandboxDto;
@@ -132,7 +126,6 @@ export const SampleCommunicationMessageSchema = schemas.SampleCommunicationMessa
 export const SampleCommunicationThreadSchema = schemas.SampleCommunicationThreadDto;
 export const SampleTaskEvaluationSchema = schemas.SampleTaskEvaluationDto;
 export const SampleSnapshotSchema = schemas.SampleSnapshotDto;
-export const SampleRuntimeEventViewSchema = schemas.SampleRuntimeEventView;
 
 type KnownKeys<T> = {
   [K in keyof T as string extends K ? never : number extends K ? never : symbol extends K
@@ -528,8 +521,8 @@ export function parseSampleState(input: unknown): SampleStateView {
   return SampleStateViewSchema.parse(input);
 }
 
-export function parseRunSandbox(input: unknown): RunSandbox {
-  return normalizeRunSandbox(RunSandboxSchema.parse(input));
+export function parseSampleSandbox(input: unknown): SampleSandbox {
+  return normalizeSampleSandbox(SampleSandboxSchema.parse(input));
 }
 
 export function parseSampleSandboxCommand(input: unknown): SampleSandboxCommand {
