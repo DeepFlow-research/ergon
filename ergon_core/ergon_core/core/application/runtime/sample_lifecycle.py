@@ -48,7 +48,7 @@ from ergon_core.core.application.runtime.orchestration import (
     InitializeWorkflowCommand,
     PropagateTaskCompletionCommand,
     PropagationResult,
-    RunCompletionData,
+    SampleCompletionData,
     TaskDescriptor,
     WorkflowTerminalState,
 )
@@ -182,7 +182,7 @@ class WorkflowService:
                 ).all()
             )
             score_summary = EvaluationService.summarize_scores(evaluations)
-            completion = RunCompletionData(
+            completion = SampleCompletionData(
                 completed_at=utcnow(),
                 final_score=score_summary.final_score,
                 normalized_score=score_summary.normalized_score,

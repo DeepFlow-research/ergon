@@ -1,13 +1,13 @@
 "use client";
 
 /**
- * useSampleWorkspaceState - Hook for managing a single workflow run's state.
+ * useSampleWorkspaceState - Hook for managing a single sample's state.
  *
- * Subscribes to a specific run's updates and maintains the full
- * SampleWorkspaceState for that run, including tasks, actions, resources, etc.
+ * Subscribes to a specific sample's updates and maintains the full
+ * SampleWorkspaceState for that sample, including tasks, actions, resources, etc.
  * 
- * On subscription, requests the full run state from the server to hydrate
- * existing data (important for completed runs or page refreshes).
+ * On subscription, requests the full sample state from the server to hydrate
+ * existing data (important for completed samples or page refreshes).
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -16,14 +16,14 @@ import {
   parseDashboardTaskEvaluationUpdatedData,
   parseDashboardThreadMessageCreatedData,
   parseResourceSocketData,
-  parseRunCompletedSocketData,
+  parseSampleCompletedSocketData,
   parseSandboxClosedSocketData,
   parseSandboxCommandSocketData,
   parseSandboxCreatedSocketData,
   parseTaskStatusSocketData,
 } from "@/lib/contracts/events";
 import type { GraphMutationSocketData } from "@/lib/contracts/events";
-import type { RunSandbox, RunSandboxCommand } from "@/lib/contracts/rest";
+import type { SampleSandbox, SampleSandboxCommand } from "@/lib/contracts/rest";
 import {
   ContextEventState,
   TaskStatus,
@@ -32,7 +32,7 @@ import {
   SampleWorkspaceState,
   SerializedSampleWorkspaceState,
 } from "@/lib/types";
-import { compareContextEvents, deserializeRunState } from "@/lib/sampleState";
+import { compareContextEvents, deserializeSampleState } from "@/lib/sampleState";
 import {
   applySandboxClosed,
   applySandboxCommand,
@@ -41,14 +41,14 @@ import {
 } from "@/lib/sample-state/reducers";
 import { useGraphMutations } from "@/features/graph/hooks/useGraphMutations";
 
-interface UseRunStateResult {
+interface UseSampleWorkspaceStateResult {
   runState: SampleWorkspaceState | null;
   isLoading: boolean;
   error: string | null;
   isSubscribed: boolean;
 }
 
-function normalizeSandboxState(sandbox: RunSandbox): SandboxState {
+function normalizeSandboxState(sandbox: SampleSandbox): SandboxState {
   return {
     ...sandbox,
     status: sandbox.status as SandboxState["status"],
@@ -66,7 +66,7 @@ function normalizeSandboxState(sandbox: RunSandbox): SandboxState {
   };
 }
 
-function normalizeSandboxCommandState(command: RunSandboxCommand): SandboxCommandState {
+function normalizeSandboxCommandState(command: SampleSandboxCommand): SandboxCommandState {
   return {
     command: command.command,
     stdout: command.stdout ?? null,
@@ -84,10 +84,10 @@ export function shouldRequestSocketSnapshot(hasHydratedRunState: boolean): boole
 export function useSampleWorkspaceState(
   sampleId: string,
   initialRunState: SerializedSampleWorkspaceState | null = null,
-): UseRunStateResult {
+): UseSampleWorkspaceStateResult {
   const { socket, isConnected, subscribe, unsubscribe } = useSocket();
   const [runState, setRunState] = useState<SampleWorkspaceState | null>(
-    initialRunState ? deserializeRunState(initialRunState) : null,
+    initialRunState ? deserializeSampleState(initialRunState) : null,
   );
   const [isLoading, setIsLoading] = useState(initialRunState === null);
   const [error, setError] = useState<string | null>(null);
@@ -103,7 +103,7 @@ export function useSampleWorkspaceState(
         throw new Error(`Failed to load run (${response.status})`);
       }
       const data = (await response.json()) as unknown;
-      setRunState(deserializeRunState(data));
+      setRunState(deserializeSampleState(data));
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load run");
@@ -118,7 +118,7 @@ export function useSampleWorkspaceState(
 
   useEffect(() => {
     if (initialRunState) {
-      setRunState(deserializeRunState(initialRunState));
+      setRunState(deserializeSampleState(initialRunState));
       setIsLoading(false);
       setError(null);
       return;
@@ -234,10 +234,10 @@ export function useSampleWorkspaceState(
     [sampleId]
   );
 
-  // Handle run completed
-  const handleRunCompleted = useCallback(
+  // Handle sample completed
+  const handleSampleCompleted = useCallback(
     (payload: unknown) => {
-      const data = parseRunCompletedSocketData(payload);
+      const data = parseSampleCompletedSocketData(payload);
       if (data.sampleId !== sampleId) return;
 
       setRunState((prev) => {
@@ -335,11 +335,11 @@ export function useSampleWorkspaceState(
     [sampleId, handleGraphMutation],
   );
 
-  // Handle full run state sync (for initial load / completed runs)
+  // Handle full sample state sync (for initial load / completed samples)
   const handleSyncRun = useCallback(
     (data: SerializedSampleWorkspaceState | null) => {
       console.log(
-        "[useSampleWorkspaceState] Received sync:run",
+        "[useSampleWorkspaceState] Received sync:sample",
         data ? `(${Object.keys(data.tasks ?? {}).length} tasks)` : "(null)",
       );
       
@@ -353,7 +353,7 @@ export function useSampleWorkspaceState(
         return;
       }
 
-      setRunState(deserializeRunState(data));
+      setRunState(deserializeSampleState(data));
       setIsLoading(false);
       setError(null);
     },
@@ -384,15 +384,15 @@ export function useSampleWorkspaceState(
       setIsLoading((prev) => (hasRunStateRef.current ? false : prev));
 
       if (shouldRequestSocketSnapshot(hasRunStateRef.current)) {
-        // Request full run state only when REST/SSR did not hydrate us.
+        // Request full sample state only when REST/SSR did not hydrate us.
         console.log("[useSampleWorkspaceState] Requesting full state for run", sampleId, "socket.connected:", socket.connected);
-        socket.emit("request:run", sampleId);
+        socket.emit("request:sample", sampleId);
 
         // Set up a retry in case the first request is lost
         retryTimeout = setTimeout(() => {
           if (socket.connected && shouldRequestSocketSnapshot(hasRunStateRef.current)) {
-            console.log("[useSampleWorkspaceState] Retrying request:run for", sampleId);
-            socket.emit("request:run", sampleId);
+            console.log("[useSampleWorkspaceState] Retrying request:sample for", sampleId);
+            socket.emit("request:sample", sampleId);
           }
         }, 1000);
       } else {
@@ -401,13 +401,13 @@ export function useSampleWorkspaceState(
     }
 
     // Set up event listeners
-    socket.on("sync:run", handleSyncRun);
+    socket.on("sync:sample", handleSyncRun);
     socket.on("task:status", handleTaskStatus);
     socket.on("resource:new", handleResourceNew);
     socket.on("sandbox:created", handleSandboxCreated);
     socket.on("sandbox:command", handleSandboxCommand);
     socket.on("sandbox:closed", handleSandboxClosed);
-    socket.on("run:completed", handleRunCompleted);
+    socket.on("sample:completed", handleSampleCompleted);
     socket.on("thread:message", handleThreadMessage);
     socket.on("task:evaluation", handleTaskEvaluation);
     socket.on("context:event", handleContextEvent);
@@ -415,13 +415,13 @@ export function useSampleWorkspaceState(
 
     return () => {
       if (retryTimeout) clearTimeout(retryTimeout);
-      socket.off("sync:run", handleSyncRun);
+      socket.off("sync:sample", handleSyncRun);
       socket.off("task:status", handleTaskStatus);
       socket.off("resource:new", handleResourceNew);
       socket.off("sandbox:created", handleSandboxCreated);
       socket.off("sandbox:command", handleSandboxCommand);
       socket.off("sandbox:closed", handleSandboxClosed);
-      socket.off("run:completed", handleRunCompleted);
+      socket.off("sample:completed", handleSampleCompleted);
       socket.off("thread:message", handleThreadMessage);
       socket.off("task:evaluation", handleTaskEvaluation);
       socket.off("context:event", handleContextEvent);
@@ -439,7 +439,7 @@ export function useSampleWorkspaceState(
     handleSandboxCreated,
     handleSandboxCommand,
     handleSandboxClosed,
-    handleRunCompleted,
+    handleSampleCompleted,
     handleThreadMessage,
     handleTaskEvaluation,
     handleContextEvent,

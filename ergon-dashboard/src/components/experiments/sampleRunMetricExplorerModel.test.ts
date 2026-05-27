@@ -12,11 +12,11 @@ import {
 } from "./sampleRunMetricExplorerModel";
 
 const definitionId = "11111111-1111-4111-8111-111111111111";
-const defaultRunId = "22222222-2222-4222-8222-222222222222";
+const defaultSampleId = "22222222-2222-4222-8222-222222222222";
 
 function metrics(overrides: Partial<ExperimentRunRow["metrics"]> = {}): ExperimentRunRow["metrics"] {
   return {
-    sample_id: defaultRunId,
+    sample_id: defaultSampleId,
     status: "completed",
     instance_key: "sample-a",
     tool_call_count: 0,
@@ -27,7 +27,7 @@ function metrics(overrides: Partial<ExperimentRunRow["metrics"]> = {}): Experime
 
 function runRow(overrides: Partial<ExperimentRunRow> = {}): ExperimentRunRow {
   return {
-    sample_id: defaultRunId,
+    sample_id: defaultSampleId,
     definition_id: definitionId,
     benchmark_type: "minif2f",
     instance_key: "sample-a",

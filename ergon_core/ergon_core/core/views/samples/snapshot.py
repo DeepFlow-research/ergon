@@ -7,13 +7,13 @@ from uuid import UUID
 
 from ergon_core.core.views.samples.evaluation_mapping import evaluation_row_to_dto
 from ergon_core.core.views.samples.models import (
-    RunCommunicationMessageDto,
-    RunCommunicationThreadDto,
+    SampleCommunicationMessageDto,
+    SampleCommunicationThreadDto,
     SampleContextEventDto,
-    RunExecutionAttemptDto,
+    SampleExecutionAttemptDto,
     SampleResourceDto,
-    RunSandboxCommandDto,
-    RunSandboxDto,
+    SampleSandboxCommandDto,
+    SampleSandboxDto,
     SampleTaskDto,
     SampleTaskEvaluationDto,
 )
@@ -103,8 +103,8 @@ def _build_task_map(
 def _task_keyed_executions(
     executions: list[SampleTaskAttempt],
     worker_map: dict[UUID, ExperimentDefinitionWorker],
-) -> dict[str, list[RunExecutionAttemptDto]]:
-    by_task: dict[str, list[RunExecutionAttemptDto]] = defaultdict(list)
+) -> dict[str, list[SampleExecutionAttemptDto]]:
+    by_task: dict[str, list[SampleExecutionAttemptDto]] = defaultdict(list)
     for ex in sorted(
         executions,
         key=lambda e: (str(e.task_id), e.attempt_number),
@@ -126,7 +126,7 @@ def _task_keyed_executions(
             resource_ids = [str(r) for r in raw_resource_ids]
 
         by_task[tid].append(
-            RunExecutionAttemptDto(
+            SampleExecutionAttemptDto(
                 id=str(ex.id),
                 task_id=tid,
                 attempt_number=ex.attempt_number,
@@ -188,13 +188,13 @@ def _task_keyed_evaluations(
 
 def _task_keyed_sandboxes(
     run_summary: dict,
-) -> dict[str, RunSandboxDto]:
+) -> dict[str, SampleSandboxDto]:
     """Extract sandbox info from run summary_json if available."""
-    result: dict[str, RunSandboxDto] = {}
+    result: dict[str, SampleSandboxDto] = {}
     sandboxes = run_summary.get("sandboxes", {})
     for task_id, sandbox in sandboxes.items():
         commands = [
-            RunSandboxCommandDto(
+            SampleSandboxCommandDto(
                 command=cmd.get("command", ""),
                 stdout=cmd.get("stdout"),
                 stderr=cmd.get("stderr"),
@@ -204,7 +204,7 @@ def _task_keyed_sandboxes(
             )
             for cmd in sandbox.get("commands", [])
         ]
-        result[task_id] = RunSandboxDto(
+        result[task_id] = SampleSandboxDto(
             sandbox_id=sandbox.get("sandbox_id", ""),
             task_id=task_id,
             template=sandbox.get("template"),
@@ -222,12 +222,12 @@ def _build_communication_threads(
     threads: list[Thread],
     messages: list[ThreadMessage],
     execution_task_map: dict[UUID, UUID],
-) -> list[RunCommunicationThreadDto]:
+) -> list[SampleCommunicationThreadDto]:
     msgs_by_thread: dict[UUID, list[ThreadMessage]] = defaultdict(list)
     for message in sorted(messages, key=lambda m: m.sequence_num):
         msgs_by_thread[message.thread_id].append(message)
 
-    result: list[RunCommunicationThreadDto] = []
+    result: list[SampleCommunicationThreadDto] = []
     for thread in threads:
         thread_messages = msgs_by_thread.get(thread.id, [])
         task_ids = {
@@ -239,7 +239,7 @@ def _build_communication_threads(
         }
         thread_task_id = next(iter(task_ids)) if len(task_ids) == 1 else None
         result.append(
-            RunCommunicationThreadDto(
+            SampleCommunicationThreadDto(
                 id=str(thread.id),
                 sample_id=str(thread.sample_id),
                 task_id=str(thread_task_id) if thread_task_id else None,
@@ -250,7 +250,7 @@ def _build_communication_threads(
                 created_at=thread.created_at,
                 updated_at=thread.updated_at,
                 messages=[
-                    RunCommunicationMessageDto(
+                    SampleCommunicationMessageDto(
                         id=str(message.id),
                         thread_id=str(message.thread_id),
                         sample_id=str(message.sample_id),

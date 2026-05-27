@@ -1,6 +1,6 @@
 "use client";
 
-import type { ActivityStackItem, ActivityKind, RunActivity } from "@/features/activity/types";
+import type { ActivityStackItem, ActivityKind, SampleActivity } from "@/features/activity/types";
 
 const KIND_STYLES: Record<
   ActivityKind,
@@ -64,7 +64,7 @@ export function activityKindColor(kind: ActivityKind): string {
 
 export const ALL_ACTIVITY_KINDS = Object.keys(KIND_STYLES) as ActivityKind[];
 
-function testIdFor(activity: RunActivity): string {
+function testIdFor(activity: SampleActivity): string {
   return `activity-bar-${activity.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 }
 
@@ -83,8 +83,8 @@ export function ActivityBar({
   highlighted: boolean;
   current: boolean;
   relation: "focused" | "related" | "dimmed" | "none";
-  onClick: (activity: RunActivity) => void;
-  onHoverStart: (activity: RunActivity) => void;
+  onClick: (activity: SampleActivity) => void;
+  onHoverStart: (activity: SampleActivity) => void;
   onHoverEnd: () => void;
 }) {
   const { activity, leftPct, widthPct } = item;

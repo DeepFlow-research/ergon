@@ -78,7 +78,7 @@ const SampleResourceDto = z.object({
   sizeBytes: z.number().int(),
   createdAt: z.string().datetime({ offset: true }),
 });
-const RunExecutionAttemptDto = z.object({
+const SampleExecutionAttemptDto = z.object({
   id: z.string(),
   taskId: z.string(),
   attemptNumber: z.number().int(),
@@ -95,7 +95,7 @@ const RunExecutionAttemptDto = z.object({
     .optional(),
   outputResourceIds: z.array(z.string()).optional(),
 });
-const RunEvaluationCriterionDto = z.object({
+const SampleEvaluationCriterionDto = z.object({
   id: z.string(),
   stageNum: z.number().int(),
   stageName: z.string(),
@@ -134,9 +134,9 @@ const SampleTaskEvaluationDto = z.object({
   stagesPassed: z.number().int(),
   failedGate: z.union([z.string(), z.null()]).optional(),
   createdAt: z.string().datetime({ offset: true }),
-  criterionResults: z.array(RunEvaluationCriterionDto).optional(),
+  criterionResults: z.array(SampleEvaluationCriterionDto).optional(),
 });
-const RunSandboxCommandDto = z.object({
+const SampleSandboxCommandDto = z.object({
   command: z.string(),
   stdout: z.union([z.string(), z.null()]).optional(),
   stderr: z.union([z.string(), z.null()]).optional(),
@@ -144,7 +144,7 @@ const RunSandboxCommandDto = z.object({
   durationMs: z.union([z.number(), z.null()]).optional(),
   timestamp: z.string().datetime({ offset: true }),
 });
-const RunSandboxDto = z.object({
+const SampleSandboxDto = z.object({
   sandboxId: z.string(),
   taskId: z.string(),
   template: z.union([z.string(), z.null()]).optional(),
@@ -153,7 +153,7 @@ const RunSandboxDto = z.object({
   createdAt: z.string().datetime({ offset: true }),
   closedAt: z.union([z.string(), z.null()]).optional(),
   closeReason: z.union([z.string(), z.null()]).optional(),
-  commands: z.array(RunSandboxCommandDto).optional(),
+  commands: z.array(SampleSandboxCommandDto).optional(),
 });
 const SystemPromptPart = z
   .object({
@@ -268,7 +268,7 @@ const SampleContextEventDto = z.object({
   startedAt: z.union([z.string(), z.null()]).optional(),
   completedAt: z.union([z.string(), z.null()]).optional(),
 });
-const RunCommunicationMessageDto = z.object({
+const SampleCommunicationMessageDto = z.object({
   id: z.string(),
   threadId: z.string(),
   threadTopic: z.string(),
@@ -281,7 +281,7 @@ const RunCommunicationMessageDto = z.object({
   sequenceNum: z.number().int(),
   createdAt: z.string().datetime({ offset: true }),
 });
-const RunCommunicationThreadDto = z.object({
+const SampleCommunicationThreadDto = z.object({
   id: z.string(),
   sampleId: z.string(),
   taskId: z.union([z.string(), z.null()]).optional(),
@@ -291,7 +291,7 @@ const RunCommunicationThreadDto = z.object({
   agentBId: z.string(),
   createdAt: z.string().datetime({ offset: true }),
   updatedAt: z.string().datetime({ offset: true }),
-  messages: z.array(RunCommunicationMessageDto).optional(),
+  messages: z.array(SampleCommunicationMessageDto).optional(),
 });
 const SampleSnapshotMetricsDto = z.object({
   sampleId: z.string(),
@@ -312,11 +312,11 @@ const SampleSnapshotDto = z.object({
   tasks: z.record(z.string(), SampleTaskDto).optional(),
   rootTaskId: z.string().optional().default(""),
   resourcesByTask: z.record(z.string(), z.array(SampleResourceDto)).optional(),
-  executionsByTask: z.record(z.string(), z.array(RunExecutionAttemptDto)).optional(),
+  executionsByTask: z.record(z.string(), z.array(SampleExecutionAttemptDto)).optional(),
   evaluationsByTask: z.record(z.string(), SampleTaskEvaluationDto).optional(),
-  sandboxesByTask: z.record(z.string(), RunSandboxDto).optional(),
+  sandboxesByTask: z.record(z.string(), SampleSandboxDto).optional(),
   contextEventsByTask: z.record(z.string(), z.array(SampleContextEventDto)).optional(),
-  threads: z.array(RunCommunicationThreadDto).optional(),
+  threads: z.array(SampleCommunicationThreadDto).optional(),
   startedAt: z.union([z.string(), z.null()]).optional(),
   completedAt: z.union([z.string(), z.null()]).optional(),
   durationSeconds: z.union([z.number(), z.null()]).optional(),
@@ -711,11 +711,11 @@ export const schemas = {
   HTTPValidationError,
   SampleTaskDto,
   SampleResourceDto,
-  RunExecutionAttemptDto,
-  RunEvaluationCriterionDto,
+  SampleExecutionAttemptDto,
+  SampleEvaluationCriterionDto,
   SampleTaskEvaluationDto,
-  RunSandboxCommandDto,
-  RunSandboxDto,
+  SampleSandboxCommandDto,
+  SampleSandboxDto,
   SystemPromptPart,
   UserMessagePart,
   AssistantTextPart,
@@ -729,8 +729,8 @@ export const schemas = {
   ProviderTokenUsage,
   ContextPartChunkLog,
   SampleContextEventDto,
-  RunCommunicationMessageDto,
-  RunCommunicationThreadDto,
+  SampleCommunicationMessageDto,
+  SampleCommunicationThreadDto,
   SampleSnapshotMetricsDto,
   SampleSnapshotDto,
   NodeAddedMutation,

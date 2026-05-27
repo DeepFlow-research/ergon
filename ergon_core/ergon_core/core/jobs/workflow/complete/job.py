@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import SampleRecord
-from ergon_core.core.jobs.run.cleanup.contract import SampleCleanupEvent
+from ergon_core.core.jobs.sample.cleanup.contract import SampleCleanupEvent
 from .contract import WorkflowCompletedEvent, WorkflowCompleteResult
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.application.runtime.orchestration import FinalizeWorkflowCommand

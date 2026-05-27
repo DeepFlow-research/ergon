@@ -31,12 +31,12 @@ test.afterEach(async () => {
   releaseHarnessLock = null;
 });
 
-test("run header reacts to controlled completion delta", async ({ page }) => {
+test("sample header reacts to controlled completion delta", async ({ page }) => {
   await page.goto(`/samples/${FIXTURE_IDS.sampleId}`);
 
   await expect(page.getByTestId("sample-header")).toContainText("Executing");
 
-  const response = await page.request.post("/api/danger/test-harness/dashboard/events/run-complete", {
+  const response = await page.request.post("/api/danger/test-harness/dashboard/events/sample-complete", {
     data: {
       sampleId: FIXTURE_IDS.sampleId,
       status: "completed",

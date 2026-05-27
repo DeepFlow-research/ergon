@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { emitHarnessRunCompleted } from "@/lib/testing/dashboardHarness";
+import { emitHarnessSampleCompleted } from "@/lib/testing/dashboardHarness";
 
 export async function POST(request: Request) {
   const payload = (await request.json()) as {
@@ -10,6 +10,6 @@ export async function POST(request: Request) {
     finalScore: number | null;
     error: string | null;
   };
-  emitHarnessRunCompleted(payload);
+  emitHarnessSampleCompleted(payload);
   return NextResponse.json({ ok: true });
 }

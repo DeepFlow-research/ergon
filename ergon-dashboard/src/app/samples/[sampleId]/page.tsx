@@ -1,5 +1,5 @@
 import { SampleWorkspacePage } from "@/components/sample/SampleWorkspacePage";
-import { loadRunSnapshot } from "@/lib/server-data/samples";
+import { loadSampleSnapshot } from "@/lib/server-data/samples";
 import type { SerializedSampleWorkspaceState } from "@/lib/types";
 
 interface LegacyRunPageProps {
@@ -13,7 +13,7 @@ export default async function RunPage({ params }: LegacyRunPageProps) {
   let initialRunState: SerializedSampleWorkspaceState | null = null;
   let ssrError: string | null = null;
 
-  const result = await loadRunSnapshot(sampleId);
+  const result = await loadSampleSnapshot(sampleId);
   if (result.ok) {
     initialRunState = result.data;
   } else {

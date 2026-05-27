@@ -11,7 +11,7 @@ from ergon_core.api.errors import ContainmentViolation
 from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.application.resources.models import SampleResourceView
 from ergon_core.core.application.runtime.task_models import SubtaskInfo
-from ergon_core.core.persistence.shared.types import NodeId, RunId
+from ergon_core.core.persistence.shared.types import NodeId, SampleId
 
 if TYPE_CHECKING:
     from sqlmodel import Session
@@ -168,7 +168,7 @@ class WorkerContext(BaseModel):
         with self.session_factory() as session:
             await self.task_mgmt.cancel_task(
                 session,
-                CancelTaskCommand(sample_id=RunId(self.sample_id), task_id=NodeId(task_id)),
+                CancelTaskCommand(sample_id=SampleId(self.sample_id), task_id=NodeId(task_id)),
             )
 
     async def refine_task(self, task_id: UUID, *, description: str) -> None:
@@ -182,7 +182,7 @@ class WorkerContext(BaseModel):
             await self.task_mgmt.refine_task(
                 session,
                 RefineTaskCommand(
-                    sample_id=RunId(self.sample_id),
+                    sample_id=SampleId(self.sample_id),
                     task_id=NodeId(task_id),
                     new_description=description,
                 ),
@@ -198,7 +198,7 @@ class WorkerContext(BaseModel):
         with self.session_factory() as session:
             result = await self.task_mgmt.restart_task(
                 session,
-                RestartTaskCommand(sample_id=RunId(self.sample_id), task_id=NodeId(task_id)),
+                RestartTaskCommand(sample_id=SampleId(self.sample_id), task_id=NodeId(task_id)),
             )
         return SpawnedTaskHandle(task_id=result.task_id)
 

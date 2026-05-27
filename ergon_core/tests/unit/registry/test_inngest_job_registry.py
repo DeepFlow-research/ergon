@@ -23,7 +23,7 @@ EXPECTED_FUNCTION_TRIGGERS = {
     "block-descendants-on-failed": "task/failed",
     "cancel-orphans-on-cancelled": "task/cancelled",
     "cleanup-cancelled-task": "task/cancelled",
-    "run-cleanup": "sample/cleanup",
+    "sample-cleanup": "sample/cleanup",
     "sandbox-cleanup-on-completed": "task/completed",
     "sandbox-cleanup-on-failed": "task/failed",
 }
@@ -42,7 +42,7 @@ EXPECTED_FUNCTION_ORDER = [
     "block-descendants-on-failed",
     "cancel-orphans-on-cancelled",
     "cleanup-cancelled-task",
-    "run-cleanup",
+    "sample-cleanup",
     "sandbox-cleanup-on-completed",
     "sandbox-cleanup-on-failed",
 ]
@@ -129,7 +129,7 @@ EXPECTED_FUNCTION_METADATA = {
         "concurrency": (),
         "output": "EmptySentinel",
     },
-    "run-cleanup": {
+    "sample-cleanup": {
         "retries": 0,
         "cancel": (),
         "concurrency": (),

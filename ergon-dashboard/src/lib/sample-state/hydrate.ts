@@ -1,5 +1,5 @@
-import type { RunSnapshot } from "@/lib/contracts/rest";
-import { parseRunSnapshot } from "@/lib/contracts/rest";
+import type { SampleSnapshot } from "@/lib/contracts/rest";
+import { parseSampleSnapshot } from "@/lib/contracts/rest";
 import type {
   ContextEventState,
   ExecutionAttemptState,
@@ -17,7 +17,7 @@ function toTaskStatus(status: string): TaskStatus {
   return status as TaskStatus;
 }
 
-function deserializeTask(task: RunSnapshot["tasks"][string]): TaskState {
+function deserializeTask(task: SampleSnapshot["tasks"][string]): TaskState {
   return {
     ...task,
     assignedWorkerSlug: task.assignedWorkerSlug ?? null,
@@ -28,7 +28,7 @@ function deserializeTask(task: RunSnapshot["tasks"][string]): TaskState {
 }
 
 function deserializeExecution(
-  execution: RunSnapshot["executionsByTask"][string][number],
+  execution: SampleSnapshot["executionsByTask"][string][number],
 ): ExecutionAttemptState {
   return {
     ...execution,
@@ -37,11 +37,11 @@ function deserializeExecution(
   };
 }
 
-function deserializeResource(resource: RunSnapshot["resourcesByTask"][string][number]): ResourceState {
+function deserializeResource(resource: SampleSnapshot["resourcesByTask"][string][number]): ResourceState {
   return resource;
 }
 
-function deserializeSandbox(sandbox: RunSnapshot["sandboxesByTask"][string]): SandboxState {
+function deserializeSandbox(sandbox: SampleSnapshot["sandboxesByTask"][string]): SandboxState {
   return {
     ...sandbox,
     status: sandbox.status as SandboxState["status"],
@@ -59,7 +59,7 @@ function deserializeSandbox(sandbox: RunSnapshot["sandboxesByTask"][string]): Sa
   };
 }
 
-function deserializeEvaluation(evaluation: RunSnapshot["evaluationsByTask"][string]): TaskEvaluationState {
+function deserializeEvaluation(evaluation: SampleSnapshot["evaluationsByTask"][string]): TaskEvaluationState {
   return {
     ...evaluation,
     taskId: evaluation.taskId ?? null,
@@ -68,7 +68,7 @@ function deserializeEvaluation(evaluation: RunSnapshot["evaluationsByTask"][stri
   };
 }
 
-function deserializeContextEvents(data: RunSnapshot): Map<string, ContextEventState[]> {
+function deserializeContextEvents(data: SampleSnapshot): Map<string, ContextEventState[]> {
   const byTask = (data as unknown as Record<string, unknown>).contextEventsByTask as
     | Record<string, Array<Record<string, unknown>>>
     | undefined;
@@ -96,8 +96,8 @@ function deserializeContextEvents(data: RunSnapshot): Map<string, ContextEventSt
   );
 }
 
-export function hydrateRunSnapshot(input: unknown): SampleWorkspaceState {
-  const data = parseRunSnapshot(input);
+export function hydrateSampleSnapshot(input: unknown): SampleWorkspaceState {
+  const data = parseSampleSnapshot(input);
 
   return {
     id: data.id,
@@ -152,4 +152,4 @@ export function hydrateRunSnapshot(input: unknown): SampleWorkspaceState {
   };
 }
 
-export const deserializeRunState = hydrateRunSnapshot;
+export const deserializeSampleState = hydrateSampleSnapshot;

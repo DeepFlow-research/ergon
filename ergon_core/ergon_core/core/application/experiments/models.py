@@ -37,7 +37,7 @@ class ExperimentRunResult(BaseModel):
     definition_ids: list[UUID] = Field(default_factory=list)
 
 
-class RunAssignment(BaseModel):
+class SampleAssignment(BaseModel):
     instance_key: str
     sample_id: str | None = None
     worker_team: JsonObject

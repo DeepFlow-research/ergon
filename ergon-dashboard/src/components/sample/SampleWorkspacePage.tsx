@@ -7,20 +7,20 @@ import { Group, Panel, Separator } from "react-resizable-panels";
 import { DAGCanvas } from "@/components/dag/DAGCanvas";
 import { StatusBadge } from "@/components/common/StatusBadge";
 
-import { SampleRuntimeSummaryHeader, type RunHeaderMetricValues } from "@/components/sample/SampleRuntimeSummaryHeader";
+import { SampleRuntimeSummaryHeader, type SampleHeaderMetricValues } from "@/components/sample/SampleRuntimeSummaryHeader";
 import { UnifiedEventStream } from "@/components/sample/UnifiedEventStream";
 import { TaskWorkspace } from "@/components/workspace/TaskWorkspace";
 import { ActivityStackTimeline } from "@/features/activity/components/ActivityStackTimeline";
-import { buildRunActivities } from "@/features/activity/buildRunActivities";
+import { buildSampleActivities } from "@/features/activity/buildSampleActivities";
 import { resolveActivitySnapshotSequence } from "@/features/activity/snapshotSequence";
-import type { RunActivity } from "@/features/activity/types";
+import type { SampleActivity } from "@/features/activity/types";
 import {
   parseGraphMutationDtoArray,
   type GraphMutationDto,
 } from "@/features/graph/contracts/graphMutations";
 import { useSampleWorkspaceState } from "@/hooks/useSampleWorkspaceState";
-import { buildRunEvents } from "@/lib/sampleEvents";
-import { RunLifecycleStatus, SerializedSampleWorkspaceState, TaskStatus, type SampleWorkspaceState } from "@/lib/types";
+import { buildSampleEvents } from "@/lib/sampleEvents";
+import { SampleLifecycleStatus, SerializedSampleWorkspaceState, TaskStatus, type SampleWorkspaceState } from "@/lib/types";
 import {
   nearestMutationAtOrBefore,
   useSampleDisplayState,
@@ -77,7 +77,7 @@ export function SampleWorkspacePage({
 
   const [mutations, setMutations] = useState<GraphMutationDto[]>([]);
   const requestedSequenceRef = useRef<number | null>(null);
-  const pendingActivityResolutionRef = useRef<RunActivity | null>(null);
+  const pendingActivityResolutionRef = useRef<SampleActivity | null>(null);
   const selectedActivityIdRef = useRef<string | null>(null);
   const mutationsLoadedRef = useRef(false);
 
@@ -157,7 +157,7 @@ export function SampleWorkspacePage({
     return { leafStatusCounts: empty, leafTotal: total };
   }, [displayState]);
 
-  const runHeaderMetrics: RunHeaderMetricValues = useMemo(() => {
+  const runHeaderMetrics: SampleHeaderMetricValues = useMemo(() => {
     const optionalMetrics = runState as (SampleWorkspaceState & OptionalRunMetrics) | null;
     return {
       tasks: {
@@ -174,14 +174,14 @@ export function SampleWorkspacePage({
   }, [leafStatusCounts, leafTotal, runState]);
 
   // D4: Unified event log for the replayed inspector view.
-  const events = useMemo(() => buildRunEvents(displayState), [displayState]);
+  const events = useMemo(() => buildSampleEvents(displayState), [displayState]);
   // Trace spans are an immutable map of the full run. Replay moves the cursor
   // over this map; it should not relayout or clip completed spans.
-  const traceEvents = useMemo(() => buildRunEvents(runState), [runState]);
+  const traceEvents = useMemo(() => buildSampleEvents(runState), [runState]);
 
   const activities = useMemo(
     () =>
-      buildRunActivities({
+      buildSampleActivities({
         runState,
         events: traceEvents,
         mutations,
@@ -253,7 +253,7 @@ export function SampleWorkspacePage({
     setSnapshotSequence(mutation?.sequence ?? sequence);
   };
 
-  const handleActivityClick = (activity: RunActivity) => {
+  const handleActivityClick = (activity: SampleActivity) => {
     setSelectionNotice(null);
     requestedSequenceRef.current = null;
     selectedActivityIdRef.current = activity.id;
@@ -289,7 +289,7 @@ export function SampleWorkspacePage({
             <h1 className="max-w-[340px] truncate font-mono text-xl font-semibold tracking-[-0.02em]">
               {runState?.name ?? sampleId}
             </h1>
-            <StatusBadge status={status as RunLifecycleStatus} />
+            <StatusBadge status={status as SampleLifecycleStatus} />
             <span className="rounded bg-[var(--paper-2)] px-2 py-0.5 font-mono text-xs text-[var(--muted)]">
               {snapshotSequence === null ? "live" : `snapshot · seq ${snapshotSequence}`} · {formatDuration(runState?.durationSeconds ?? null).value}
             </span>

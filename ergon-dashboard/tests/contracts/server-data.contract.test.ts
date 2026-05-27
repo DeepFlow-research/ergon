@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { loadExperimentList } from "../../src/lib/server-data/experiments";
-import { loadRunList } from "../../src/lib/server-data/samples";
+import { loadSampleList } from "../../src/lib/server-data/samples";
 import { getHarnessExperiment, resetDashboardHarness } from "../../src/lib/testing/dashboardHarness";
 
 test("harness miss for experiment is represented as null, not notFound policy", () => {
@@ -85,7 +85,7 @@ test("run list server data applies list filters and parses index summary fields"
   };
 
   try {
-    const result = await loadRunList({
+    const result = await loadSampleList({
       limit: 25,
       offset: 50,
       status: "completed",

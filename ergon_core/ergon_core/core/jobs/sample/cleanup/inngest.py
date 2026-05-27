@@ -1,4 +1,4 @@
-"""Inngest adapter for run cleanup."""
+"""Inngest adapter for sample cleanup."""
 
 import inngest
 
@@ -8,7 +8,7 @@ from .contract import SampleCleanupEvent, SampleCleanupResult
 
 
 @inngest_client.create_function(
-    fn_id="run-cleanup",
+    fn_id="sample-cleanup",
     trigger=inngest.TriggerEvent(event="sample/cleanup"),
     retries=0,
     output_type=SampleCleanupResult,

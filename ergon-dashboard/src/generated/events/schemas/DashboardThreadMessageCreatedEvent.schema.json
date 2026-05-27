@@ -1,6 +1,6 @@
 {
   "$defs": {
-    "RunCommunicationMessageDto": {
+    "SampleCommunicationMessageDto": {
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -76,10 +76,10 @@
         "sequenceNum",
         "createdAt"
       ],
-      "title": "RunCommunicationMessageDto",
+      "title": "SampleCommunicationMessageDto",
       "type": "object"
     },
-    "RunCommunicationThreadDto": {
+    "SampleCommunicationThreadDto": {
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -138,7 +138,7 @@
         },
         "messages": {
           "items": {
-            "$ref": "#/$defs/RunCommunicationMessageDto"
+            "$ref": "#/$defs/SampleCommunicationMessageDto"
           },
           "title": "Messages",
           "type": "array"
@@ -153,12 +153,12 @@
         "createdAt",
         "updatedAt"
       ],
-      "title": "RunCommunicationThreadDto",
+      "title": "SampleCommunicationThreadDto",
       "type": "object"
     }
   },
   "additionalProperties": true,
-  "description": "Embeds full RunCommunicationThreadDto + RunCommunicationMessageDto.",
+  "description": "Embeds full SampleCommunicationThreadDto + SampleCommunicationMessageDto.",
   "properties": {
     "sample_id": {
       "format": "uuid",
@@ -166,10 +166,10 @@
       "type": "string"
     },
     "thread": {
-      "$ref": "#/$defs/RunCommunicationThreadDto"
+      "$ref": "#/$defs/SampleCommunicationThreadDto"
     },
     "message": {
-      "$ref": "#/$defs/RunCommunicationMessageDto"
+      "$ref": "#/$defs/SampleCommunicationMessageDto"
     }
   },
   "required": [

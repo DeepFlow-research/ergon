@@ -141,7 +141,7 @@ class FinalizedWorkflowResult(BaseModel):
     evaluators_count: int = 0
 
 
-class RunCompletionData(BaseModel):
+class SampleCompletionData(BaseModel):
     """Atomic bundle passed into run completion persistence."""
 
     model_config = {"frozen": True}

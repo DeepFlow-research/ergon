@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * UnifiedEventStream — a single chronological feed of every RunEvent the run
+ * UnifiedEventStream — a single chronological feed of every SampleEvent the run
  * produced, with per-kind filtering and click-to-focus interactions.
  *
  * Prior to this component, the dashboard rendered task transitions, generation
@@ -14,12 +14,12 @@
 import { useMemo, useState } from "react";
 
 import {
-  RUN_EVENT_KINDS,
-  RUN_EVENT_KIND_COLORS,
-  RUN_EVENT_KIND_LABELS,
+  SAMPLE_EVENT_KINDS,
+  SAMPLE_EVENT_KIND_COLORS,
+  SAMPLE_EVENT_KIND_LABELS,
   countEventsByKind,
-  type RunEvent,
-  type RunEventKind,
+  type SampleEvent,
+  type SampleEventKind,
 } from "@/lib/sampleEvents";
 import { formatClockTimeMs } from "@/lib/timeFormat";
 import { TransitionChip } from "@/components/common/TransitionChip";
@@ -46,7 +46,7 @@ function truncate(s: string, n: number): string {
 }
 
 interface EventRowProps {
-  event: RunEvent;
+  event: SampleEvent;
   anchorMs: number | null;
   isHighlighted: boolean;
   onTaskClick?: (taskId: string) => void;
@@ -60,8 +60,8 @@ function EventRow({
   onTaskClick,
   onSequenceClick,
 }: EventRowProps) {
-  const laneColor = RUN_EVENT_KIND_COLORS[event.kind];
-  const label = RUN_EVENT_KIND_LABELS[event.kind];
+  const laneColor = SAMPLE_EVENT_KIND_COLORS[event.kind];
+  const label = SAMPLE_EVENT_KIND_LABELS[event.kind];
   return (
     <li
       className={`group relative flex gap-3 rounded-lg border border-transparent px-2 py-1.5 transition-colors hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-700 dark:hover:bg-slate-800/60 ${isHighlighted ? "border-indigo-300 bg-indigo-50/60 dark:border-indigo-500 dark:bg-indigo-500/10" : ""}`}
@@ -111,12 +111,12 @@ function EventRow({
   );
 }
 
-function EventBody({ event }: { event: RunEvent }) {
+function EventBody({ event }: { event: SampleEvent }) {
   switch (event.kind) {
     case "workflow.started":
       return (
         <div className="text-xs text-slate-600 dark:text-slate-300">
-          Workflow <span className="font-semibold">{event.runName}</span> started.
+          Workflow <span className="font-semibold">{event.sampleName}</span> started.
         </div>
       );
     case "workflow.completed":
@@ -225,7 +225,7 @@ function EventBody({ event }: { event: RunEvent }) {
 }
 
 export interface UnifiedEventStreamProps {
-  events: RunEvent[];
+  events: SampleEvent[];
   /** Anchor used for relative offsets; defaults to first event's wall-clock. */
   anchor?: string | null;
   /** When set, rows for this task are highlighted. */
@@ -233,7 +233,7 @@ export interface UnifiedEventStreamProps {
   onTaskClick?: (taskId: string) => void;
   onSequenceClick?: (sequence: number) => void;
   /** Initial per-kind filter; absent kinds default to enabled. */
-  initialEnabledKinds?: Partial<Record<RunEventKind, boolean>>;
+  initialEnabledKinds?: Partial<Record<SampleEventKind, boolean>>;
   /** Cap rows rendered at once; oldest truncated with a "show more" toggle. */
   maxRows?: number;
 }
@@ -247,11 +247,11 @@ export function UnifiedEventStream({
   initialEnabledKinds,
   maxRows = 500,
 }: UnifiedEventStreamProps) {
-  const [enabledKinds, setEnabledKinds] = useState<Record<RunEventKind, boolean>>(
+  const [enabledKinds, setEnabledKinds] = useState<Record<SampleEventKind, boolean>>(
     () =>
       Object.fromEntries(
-        RUN_EVENT_KINDS.map((k) => [k, initialEnabledKinds?.[k] ?? true]),
-      ) as Record<RunEventKind, boolean>,
+        SAMPLE_EVENT_KINDS.map((k) => [k, initialEnabledKinds?.[k] ?? true]),
+      ) as Record<SampleEventKind, boolean>,
   );
   const [query, setQuery] = useState("");
   const [showAll, setShowAll] = useState(false);
@@ -269,7 +269,7 @@ export function UnifiedEventStream({
       if (!enabledKinds[e.kind]) return false;
       if (!q) return true;
       // cheap full-text: label + JSON of event fields
-      const hay = `${RUN_EVENT_KIND_LABELS[e.kind]} ${JSON.stringify(e)}`.toLowerCase();
+      const hay = `${SAMPLE_EVENT_KIND_LABELS[e.kind]} ${JSON.stringify(e)}`.toLowerCase();
       return hay.includes(q);
     });
   }, [events, enabledKinds, query]);
@@ -301,10 +301,10 @@ export function UnifiedEventStream({
       </div>
 
       <div className="flex flex-wrap gap-1.5" data-testid="event-stream-filters">
-        {RUN_EVENT_KINDS.map((kind) => {
+        {SAMPLE_EVENT_KINDS.map((kind) => {
           const on = enabledKinds[kind];
           const count = counts[kind];
-          const tone = RUN_EVENT_KIND_COLORS[kind];
+          const tone = SAMPLE_EVENT_KIND_COLORS[kind];
           return (
             <button
               key={kind}
@@ -318,7 +318,7 @@ export function UnifiedEventStream({
             >
               <span className={`h-1.5 w-1.5 rounded-full ${tone}`} aria-hidden />
               <span className="uppercase tracking-wide">
-                {RUN_EVENT_KIND_LABELS[kind]}
+                {SAMPLE_EVENT_KIND_LABELS[kind]}
               </span>
               <span className="font-mono tabular-nums text-slate-500">{count}</span>
             </button>

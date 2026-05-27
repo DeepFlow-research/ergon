@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { config } from "@/lib/config";
 import { fetchErgonApi } from "@/lib/serverApi";
-import { getHarnessRunMutations } from "@/lib/testing/dashboardHarness";
+import { getHarnessSampleMutations } from "@/lib/testing/dashboardHarness";
 
 interface RouteContext {
   params: Promise<{
@@ -15,7 +15,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
   try {
     if (config.enableTestHarness) {
-      const harnessMutations = getHarnessRunMutations(sampleId);
+      const harnessMutations = getHarnessSampleMutations(sampleId);
       if (harnessMutations) {
         return NextResponse.json(harnessMutations);
       }

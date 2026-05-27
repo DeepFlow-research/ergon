@@ -1,8 +1,8 @@
 "use client";
 
-import { RunLifecycleStatus, TaskStatus } from "@/lib/types";
+import { SampleLifecycleStatus, TaskStatus } from "@/lib/types";
 
-type StatusType = TaskStatus | RunLifecycleStatus | string;
+type StatusType = TaskStatus | SampleLifecycleStatus | string;
 
 interface StatusConfig {
   label: string;

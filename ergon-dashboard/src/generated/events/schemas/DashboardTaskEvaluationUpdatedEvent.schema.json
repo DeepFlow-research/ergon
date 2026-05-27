@@ -1,6 +1,6 @@
 {
   "$defs": {
-    "RunEvaluationCriterionDto": {
+    "SampleEvaluationCriterionDto": {
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -170,7 +170,7 @@
         "score",
         "maxScore"
       ],
-      "title": "RunEvaluationCriterionDto",
+      "title": "SampleEvaluationCriterionDto",
       "type": "object"
     },
     "SampleTaskEvaluationDto": {
@@ -243,7 +243,7 @@
         },
         "criterionResults": {
           "items": {
-            "$ref": "#/$defs/RunEvaluationCriterionDto"
+            "$ref": "#/$defs/SampleEvaluationCriterionDto"
           },
           "title": "Criterionresults",
           "type": "array"

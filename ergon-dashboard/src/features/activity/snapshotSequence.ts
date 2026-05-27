@@ -1,8 +1,8 @@
 import type { GraphMutationDto } from "@/features/graph/contracts/graphMutations";
-import type { RunActivity } from "./types";
+import type { SampleActivity } from "./types";
 
 export function resolveActivitySnapshotSequence(
-  activity: RunActivity,
+  activity: SampleActivity,
   mutations: GraphMutationDto[],
 ): number | null {
   if (activity.sequence !== null) return activity.sequence;

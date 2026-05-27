@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { hydrateRunSnapshot } from "@/lib/sample-state";
+import { hydrateSampleSnapshot } from "@/lib/sample-state";
 import { applySandboxCommand, applySandboxCreated, applyTaskStatusChanged } from "@/lib/sample-state/reducers";
 import { TaskStatus } from "@/lib/types";
 import { createDashboardSeed, FIXTURE_IDS } from "../../tests/helpers/dashboardFixtures";
@@ -19,7 +19,7 @@ test("task status reducer records transition history", () => {
   const run = createDashboardSeed().runs?.[0];
   assert.ok(run);
 
-  const state = hydrateRunSnapshot(run);
+  const state = hydrateSampleSnapshot(run);
   const next = applyTaskStatusChanged(state, {
     sampleId: FIXTURE_IDS.sampleId,
     taskId: FIXTURE_IDS.solveTaskId,
@@ -46,7 +46,7 @@ test("sandbox command before sandbox creation is preserved", () => {
     durationMs: 123,
     timestamp: "2026-03-18T12:00:05.000Z",
   };
-  const state = hydrateRunSnapshot({
+  const state = hydrateSampleSnapshot({
     ...run,
     sandboxesByTask: {},
   });
@@ -84,7 +84,7 @@ test("sandbox creation deduplicates commands already present in the created sand
     durationMs: 123,
     timestamp: "2026-03-18T12:00:05.000Z",
   };
-  const state = hydrateRunSnapshot({ ...run, sandboxesByTask: {} });
+  const state = hydrateSampleSnapshot({ ...run, sandboxesByTask: {} });
   const withSandbox = applySandboxCreated(
     state,
     {
@@ -108,7 +108,7 @@ test("cancelled task status records terminal task and execution timestamps", () 
   const run = createDashboardSeed().runs?.[0];
   assert.ok(run);
 
-  const running = applyTaskStatusChanged(hydrateRunSnapshot(run), {
+  const running = applyTaskStatusChanged(hydrateSampleSnapshot(run), {
     sampleId: FIXTURE_IDS.sampleId,
     taskId: FIXTURE_IDS.solveTaskId,
     status: TaskStatus.RUNNING,

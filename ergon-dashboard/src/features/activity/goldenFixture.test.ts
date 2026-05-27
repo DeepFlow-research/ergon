@@ -4,10 +4,10 @@ import test from "node:test";
 import fixture from "../../../tests/fixtures/mas-samples/concurrent-mas-run.json";
 import { parseGraphMutationDtoArray } from "@/features/graph/contracts/graphMutations";
 import { replayToSequence } from "@/features/graph/state/graphMutationReducer";
-import { buildRunEvents } from "@/lib/sampleEvents";
-import { deserializeRunState } from "@/lib/sampleState";
+import { buildSampleEvents } from "@/lib/sampleEvents";
+import { deserializeSampleState } from "@/lib/sampleState";
 import type { SampleWorkspaceState } from "@/lib/types";
-import { buildRunActivities } from "./buildRunActivities";
+import { buildSampleActivities } from "./buildSampleActivities";
 import { stackActivities } from "./stackLayout";
 
 function emptyRunStateFrom(runState: SampleWorkspaceState): SampleWorkspaceState {
@@ -33,7 +33,7 @@ function emptyRunStateFrom(runState: SampleWorkspaceState): SampleWorkspaceState
 }
 
 test("golden concurrent fixture replays the whole graph at selected sequence and stacks overlapping activity", () => {
-  const runState = deserializeRunState(fixture.runState);
+  const runState = deserializeSampleState(fixture.runState);
   const mutations = parseGraphMutationDtoArray(fixture.mutations);
   const checkpoint = fixture.checkpoints.find((entry) => entry.sequence === 14);
   assert.ok(checkpoint);
@@ -44,9 +44,9 @@ test("golden concurrent fixture replays the whole graph at selected sequence and
     emptyRunStateFrom(runState),
     new Map(),
   );
-  const activities = buildRunActivities({
+  const activities = buildSampleActivities({
     runState,
-    events: buildRunEvents(runState),
+    events: buildSampleEvents(runState),
     mutations,
     currentSequence: checkpoint.sequence,
   });

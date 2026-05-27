@@ -2507,7 +2507,7 @@
         ],
         "title": "RolloutStatus"
       },
-      "RunCommunicationMessageDto": {
+      "SampleCommunicationMessageDto": {
         "properties": {
           "id": {
             "type": "string",
@@ -2582,9 +2582,9 @@
           "sequenceNum",
           "createdAt"
         ],
-        "title": "RunCommunicationMessageDto"
+        "title": "SampleCommunicationMessageDto"
       },
-      "RunCommunicationThreadDto": {
+      "SampleCommunicationThreadDto": {
         "properties": {
           "id": {
             "type": "string",
@@ -2640,7 +2640,7 @@
           },
           "messages": {
             "items": {
-              "$ref": "#/components/schemas/RunCommunicationMessageDto"
+              "$ref": "#/components/schemas/SampleCommunicationMessageDto"
             },
             "type": "array",
             "title": "Messages"
@@ -2657,7 +2657,7 @@
           "createdAt",
           "updatedAt"
         ],
-        "title": "RunCommunicationThreadDto"
+        "title": "SampleCommunicationThreadDto"
       },
       "SampleContextEventDto": {
         "properties": {
@@ -2749,7 +2749,7 @@
         ],
         "title": "SampleContextEventDto"
       },
-      "RunEvaluationCriterionDto": {
+      "SampleEvaluationCriterionDto": {
         "properties": {
           "id": {
             "type": "string",
@@ -2914,9 +2914,9 @@
           "score",
           "maxScore"
         ],
-        "title": "RunEvaluationCriterionDto"
+        "title": "SampleEvaluationCriterionDto"
       },
-      "RunExecutionAttemptDto": {
+      "SampleExecutionAttemptDto": {
         "properties": {
           "id": {
             "type": "string",
@@ -3041,7 +3041,7 @@
           "attemptNumber",
           "status"
         ],
-        "title": "RunExecutionAttemptDto"
+        "title": "SampleExecutionAttemptDto"
       },
       "SampleResourceDto": {
         "properties": {
@@ -3093,7 +3093,7 @@
         ],
         "title": "SampleResourceDto"
       },
-      "RunSandboxCommandDto": {
+      "SampleSandboxCommandDto": {
         "properties": {
           "command": {
             "type": "string",
@@ -3155,9 +3155,9 @@
           "command",
           "timestamp"
         ],
-        "title": "RunSandboxCommandDto"
+        "title": "SampleSandboxCommandDto"
       },
-      "RunSandboxDto": {
+      "SampleSandboxDto": {
         "properties": {
           "sandboxId": {
             "type": "string",
@@ -3216,7 +3216,7 @@
           },
           "commands": {
             "items": {
-              "$ref": "#/components/schemas/RunSandboxCommandDto"
+              "$ref": "#/components/schemas/SampleSandboxCommandDto"
             },
             "type": "array",
             "title": "Commands"
@@ -3231,7 +3231,7 @@
           "status",
           "createdAt"
         ],
-        "title": "RunSandboxDto"
+        "title": "SampleSandboxDto"
       },
       "SampleSnapshotDto": {
         "properties": {
@@ -3276,7 +3276,7 @@
           "executionsByTask": {
             "additionalProperties": {
               "items": {
-                "$ref": "#/components/schemas/RunExecutionAttemptDto"
+                "$ref": "#/components/schemas/SampleExecutionAttemptDto"
               },
               "type": "array"
             },
@@ -3292,7 +3292,7 @@
           },
           "sandboxesByTask": {
             "additionalProperties": {
-              "$ref": "#/components/schemas/RunSandboxDto"
+              "$ref": "#/components/schemas/SampleSandboxDto"
             },
             "type": "object",
             "title": "Sandboxesbytask"
@@ -3309,7 +3309,7 @@
           },
           "threads": {
             "items": {
-              "$ref": "#/components/schemas/RunCommunicationThreadDto"
+              "$ref": "#/components/schemas/SampleCommunicationThreadDto"
             },
             "type": "array",
             "title": "Threads"
@@ -3907,7 +3907,7 @@
           },
           "criterionResults": {
             "items": {
-              "$ref": "#/components/schemas/RunEvaluationCriterionDto"
+              "$ref": "#/components/schemas/SampleEvaluationCriterionDto"
             },
             "type": "array",
             "title": "Criterionresults"

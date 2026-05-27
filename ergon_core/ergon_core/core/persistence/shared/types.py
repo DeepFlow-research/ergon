@@ -13,7 +13,7 @@ TaskSlug = NewType("TaskSlug", str)
 AssignedWorkerSlug = NewType("AssignedWorkerSlug", str)
 
 # ── UUID aliases ──────────────────────────────────────────────────
-RunId = NewType("RunId", UUID)
+SampleId = NewType("SampleId", UUID)
 NodeId = NewType("NodeId", UUID)
 DefinitionId = NewType("DefinitionId", UUID)
 EdgeId = NewType("EdgeId", UUID)

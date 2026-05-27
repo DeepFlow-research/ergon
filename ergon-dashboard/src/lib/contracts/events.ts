@@ -14,21 +14,21 @@ import {
   DashboardWorkflowStartedEventSchema as GeneratedDashboardWorkflowStartedEventSchema,
 } from "@/generated/events";
 import {
-  parseRunCommunicationMessage,
-  parseRunCommunicationThread,
-  parseRunSandbox,
-  parseRunSandboxCommand,
-  parseRunSnapshot,
+  parseSampleCommunicationMessage,
+  parseSampleCommunicationThread,
+  parseSampleSandbox,
+  parseSampleSandboxCommand,
+  parseSampleSnapshot,
   parseSampleTaskEvaluation,
-  RunCommunicationMessageSchema,
-  RunCommunicationThreadSchema,
+  SampleCommunicationMessageSchema,
+  SampleCommunicationThreadSchema,
   SampleResourceSchema,
   SampleResource,
-  RunSandbox,
-  RunSandboxCommand,
-  RunSandboxCommandSchema,
-  RunSandboxSchema,
-  RunSnapshot,
+  SampleSandbox,
+  SampleSandboxCommand,
+  SampleSandboxCommandSchema,
+  SampleSandboxSchema,
+  SampleSnapshot,
   SampleTaskEvaluation,
   SampleTaskEvaluationSchema,
   TaskStatusSchema,
@@ -71,8 +71,8 @@ export const DashboardWorkflowStartedDataSchema = z.object({
 
 export const DashboardThreadMessageCreatedDataSchema = z.object({
   sample_id: z.string().uuid(),
-  thread: RunCommunicationThreadSchema,
-  message: RunCommunicationMessageSchema,
+  thread: SampleCommunicationThreadSchema,
+  message: SampleCommunicationMessageSchema,
 });
 
 export const DashboardTaskEvaluationUpdatedDataSchema = z.object({
@@ -81,7 +81,7 @@ export const DashboardTaskEvaluationUpdatedDataSchema = z.object({
   evaluation: SampleTaskEvaluationSchema,
 });
 
-export const RunListEntrySchema = z.object({
+export const SampleListEntrySchema = z.object({
   sampleId: z.string(),
   name: z.string(),
   status: z.enum(["pending", "executing", "evaluating", "completed", "failed", "cancelled"]),
@@ -92,8 +92,8 @@ export const RunListEntrySchema = z.object({
   error: z.string().nullable(),
 });
 
-export const SyncRunsSchema = z.array(RunListEntrySchema);
-export const RunCompletedSocketDataSchema = z.object({
+export const SyncSamplesSchema = z.array(SampleListEntrySchema);
+export const SampleCompletedSocketDataSchema = z.object({
   sampleId: z.string(),
   status: z.enum(["completed", "failed"]),
   completedAt: z.string(),
@@ -115,12 +115,12 @@ export const ResourceSocketDataSchema = z.object({
 });
 export const SandboxCreatedSocketDataSchema = z.object({
   sampleId: z.string(),
-  sandbox: RunSandboxSchema,
+  sandbox: SampleSandboxSchema,
 });
 export const SandboxCommandSocketDataSchema = z.object({
   sampleId: z.string(),
   taskId: z.string(),
-  command: RunSandboxCommandSchema,
+  command: SampleSandboxCommandSchema,
 });
 export const SandboxClosedSocketDataSchema = z.object({
   sampleId: z.string(),
@@ -134,7 +134,7 @@ export interface DashboardWorkflowStartedData {
   sample_id: string;
   definition_id: string;
   workflow_name: string;
-  snapshot: RunSnapshot;
+  snapshot: SampleSnapshot;
   started_at: string;
   total_tasks: number;
   total_leaf_tasks: number;
@@ -148,16 +148,16 @@ export type DashboardSandboxCommandData = GeneratedDashboardSandboxCommandEvent;
 export type DashboardSandboxClosedData = GeneratedDashboardSandboxClosedEvent;
 export interface DashboardThreadMessageCreatedData {
   sample_id: string;
-  thread: ReturnType<typeof parseRunCommunicationThread>;
-  message: ReturnType<typeof parseRunCommunicationMessage>;
+  thread: ReturnType<typeof parseSampleCommunicationThread>;
+  message: ReturnType<typeof parseSampleCommunicationMessage>;
 }
 export interface DashboardTaskEvaluationUpdatedData {
   sample_id: string;
   task_id: string | null;
   evaluation: SampleTaskEvaluation;
 }
-export type RunListEntry = z.infer<typeof RunListEntrySchema>;
-export type RunCompletedSocketData = z.infer<typeof RunCompletedSocketDataSchema>;
+export type SampleListEntry = z.infer<typeof SampleListEntrySchema>;
+export type SampleCompletedSocketData = z.infer<typeof SampleCompletedSocketDataSchema>;
 export type TaskStatusSocketData = z.infer<typeof TaskStatusSocketDataSchema>;
 export interface ResourceSocketData {
   sampleId: string;
@@ -165,12 +165,12 @@ export interface ResourceSocketData {
 }
 export interface SandboxCreatedSocketData {
   sampleId: string;
-  sandbox: RunSandbox;
+  sandbox: SampleSandbox;
 }
 export interface SandboxCommandSocketData {
   sampleId: string;
   taskId: string;
-  command: RunSandboxCommand;
+  command: SampleSandboxCommand;
 }
 export type SandboxClosedSocketData = z.infer<typeof SandboxClosedSocketDataSchema>;
 
@@ -219,8 +219,8 @@ export function parseDashboardThreadMessageCreatedData(
   });
   return {
     sample_id: parsed.sample_id,
-    thread: parseRunCommunicationThread(parsed.thread),
-    message: parseRunCommunicationMessage(parsed.message),
+    thread: parseSampleCommunicationThread(parsed.thread),
+    message: parseSampleCommunicationMessage(parsed.message),
   };
 }
 
@@ -249,19 +249,19 @@ export function parseDashboardWorkflowStartedData(input: unknown): DashboardWork
     sample_id: parsed.sample_id,
     definition_id: parsed.definition_id,
     workflow_name: parsed.workflow_name,
-    snapshot: parseRunSnapshot(parsed.snapshot),
+    snapshot: parseSampleSnapshot(parsed.snapshot),
     started_at: parsed.started_at,
     total_tasks: parsed.total_tasks,
     total_leaf_tasks: parsed.total_leaf_tasks,
   };
 }
 
-export function parseSyncRuns(input: unknown): RunListEntry[] {
-  return SyncRunsSchema.parse(input);
+export function parseSyncSamples(input: unknown): SampleListEntry[] {
+  return SyncSamplesSchema.parse(input);
 }
 
-export function parseRunCompletedSocketData(input: unknown): RunCompletedSocketData {
-  return RunCompletedSocketDataSchema.parse(input);
+export function parseSampleCompletedSocketData(input: unknown): SampleCompletedSocketData {
+  return SampleCompletedSocketDataSchema.parse(input);
 }
 
 export function parseTaskStatusSocketData(input: unknown): TaskStatusSocketData {
@@ -280,7 +280,7 @@ export function parseSandboxCreatedSocketData(input: unknown): SandboxCreatedSoc
   const parsed = SandboxCreatedSocketDataSchema.parse(input);
   return {
     sampleId: parsed.sampleId,
-    sandbox: parseRunSandbox(parsed.sandbox),
+    sandbox: parseSampleSandbox(parsed.sandbox),
   };
 }
 
@@ -289,7 +289,7 @@ export function parseSandboxCommandSocketData(input: unknown): SandboxCommandSoc
   return {
     sampleId: parsed.sampleId,
     taskId: parsed.taskId,
-    command: parseRunSandboxCommand(parsed.command),
+    command: parseSampleSandboxCommand(parsed.command),
   };
 }
 

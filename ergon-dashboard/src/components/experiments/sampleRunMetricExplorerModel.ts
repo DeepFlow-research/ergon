@@ -1,4 +1,4 @@
-import type { ExperimentRunRow, RunLifecycleStatus } from "@/lib/contracts/rest";
+import type { ExperimentRunRow, SampleLifecycleStatus } from "@/lib/contracts/rest";
 import { formatDurationMs } from "@/lib/formatDuration";
 
 export type RunMetricKey =
@@ -27,7 +27,7 @@ export interface RunMetricValue {
 export interface RunMetricPoint {
   sampleId: string;
   runName: string;
-  status: RunLifecycleStatus | string;
+  status: SampleLifecycleStatus | string;
   sampleLabel: string;
   instanceKey: string;
   modelTarget: string | null;

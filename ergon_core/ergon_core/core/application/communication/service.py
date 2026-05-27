@@ -15,8 +15,8 @@ from ergon_core.core.application.communication.models import (
 from ergon_core.core.shared.utils import utcnow
 from ergon_core.core.views.dashboard_events.contracts import DashboardThreadMessageCreatedEvent
 from ergon_core.core.views.samples.models import (
-    RunCommunicationMessageDto,
-    RunCommunicationThreadDto,
+    SampleCommunicationMessageDto,
+    SampleCommunicationThreadDto,
 )
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, func, select
@@ -78,7 +78,7 @@ class CommunicationService:
                 created_at=message.created_at,
             )
 
-        thread_dto = RunCommunicationThreadDto(
+        thread_dto = SampleCommunicationThreadDto(
             id=str(thread.id),
             sample_id=str(thread.sample_id),
             topic=thread.topic,
@@ -89,7 +89,7 @@ class CommunicationService:
             updated_at=thread.updated_at,
             messages=[],
         )
-        message_dto = RunCommunicationMessageDto(
+        message_dto = SampleCommunicationMessageDto(
             id=str(message.id),
             thread_id=str(message.thread_id),
             thread_topic=thread.topic,

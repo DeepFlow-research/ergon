@@ -7,7 +7,7 @@ from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.core.infrastructure.inngest.errors import DataIntegrityError
-from ergon_core.core.jobs.run.cleanup.contract import SampleCleanupEvent
+from ergon_core.core.jobs.sample.cleanup.contract import SampleCleanupEvent
 from .contract import WorkflowFailedEvent, WorkflowFailedResult
 from ergon_core.core.jobs._events import send_job_event
 from ergon_core.core.infrastructure.tracing import (

@@ -19,16 +19,16 @@ interface HealthResult {
 }
 
 async function runHealthChecks(deps: {
-  importSSRModules: () => Promise<{ parseRunSnapshot: unknown; TaskStatus: unknown }>;
+  importSSRModules: () => Promise<{ parseSampleSnapshot: unknown; TaskStatus: unknown }>;
   fetchErgonApi: (path: string) => Promise<{ ok: boolean; status: number }>;
 }): Promise<HealthResult> {
   const checks: Record<string, "ok" | "fail"> = {};
   const errors: string[] = [];
 
   try {
-    const { parseRunSnapshot, TaskStatus } = await deps.importSSRModules();
+    const { parseSampleSnapshot, TaskStatus } = await deps.importSSRModules();
     checks.ssr_imports =
-      typeof parseRunSnapshot === "function" && typeof TaskStatus !== "undefined"
+      typeof parseSampleSnapshot === "function" && typeof TaskStatus !== "undefined"
         ? "ok"
         : "fail";
   } catch (e) {
@@ -51,7 +51,7 @@ async function runHealthChecks(deps: {
 
 describe("Health check logic", () => {
   const okImport = async () => ({
-    parseRunSnapshot: () => {},
+    parseSampleSnapshot: () => {},
     TaskStatus: { COMPLETED: "completed" },
   });
 
@@ -127,10 +127,10 @@ describe("Health check logic", () => {
     assert.equal(result.errors.length, 2);
   });
 
-  it("returns fail for ssr_imports when parseRunSnapshot is not a function", async () => {
+  it("returns fail for ssr_imports when parseSampleSnapshot is not a function", async () => {
     const result = await runHealthChecks({
       importSSRModules: async () => ({
-        parseRunSnapshot: "not-a-function",
+        parseSampleSnapshot: "not-a-function",
         TaskStatus: { COMPLETED: "completed" },
       }),
       fetchErgonApi: okApi,

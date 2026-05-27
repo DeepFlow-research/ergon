@@ -83,10 +83,10 @@ benchmark-run-start ─► workflow/started                               │  f
            ▼
    workflow-complete / workflow-failed
      • close RunRecord
-     • emit run/cleanup
+     • emit sample/cleanup
            │
            ▼
-   run-cleanup
+   sample-cleanup
      • terminate external sandbox if present
      • reconcile RunRecord.status
 ```
@@ -109,9 +109,9 @@ Dashboard delivery hangs off state mutation (see `05_dashboard.md`); it is not a
 
 6. **Cascade cancellation is one transaction, not an event chain.** `SubtaskCancellationService.cancel_orphans` walks the entire descendant subtree via BFS on `parent_node_id` in a single DB transaction (`subtask_cancellation_service.py:66-111`). A dropped or delayed Inngest event cannot leave a grandchild running under a cancelled parent. The subsequent `task/cancelled` events are for per-node cleanup, not recursion.
 
-7. **Sandbox lifecycle is per-task, teardown happens after evaluators.** `task-execute` invokes `sandbox-setup`, then keeps that sandbox id alive through worker execution, output persistence, evaluator fan-out, and every criterion run. Only after those steps finish does it emit `task/completed`; `sandbox-cleanup-on-completed` and `sandbox-cleanup-on-failed` own teardown from terminal task events. `run-cleanup` remains a run-level reconciliation leg for residual sandbox ids recorded on the `RunRecord.summary_json`. See `03_providers.md` §4 for the definitive treatment.
+7. **Sandbox lifecycle is per-task, teardown happens after evaluators.** `task-execute` invokes `sandbox-setup`, then keeps that sandbox id alive through worker execution, output persistence, evaluator fan-out, and every criterion run. Only after those steps finish does it emit `task/completed`; `sandbox-cleanup-on-completed` and `sandbox-cleanup-on-failed` own teardown from terminal task events. `sample-cleanup` remains a sample-level reconciliation leg for residual sandbox ids recorded on the `SampleRecord.summary_json`. See `03_providers.md` §4 for the definitive treatment.
 
-8. **Workflow finalization is replay-safe.** `workflow-complete` and `workflow-failed` re-read the current `RunRecord` and evaluation rows each invocation; repeated delivery writes the same terminal status with the same completion timestamp logic. `run-cleanup` checks the status before overwriting.
+8. **Workflow finalization is replay-safe.** `workflow-complete` and `workflow-failed` re-read the current `SampleRecord` and evaluation rows each invocation; repeated delivery writes the same terminal status with the same completion timestamp logic. `sample-cleanup` checks the status before overwriting.
 
 ### 4.1 Known limits
 
@@ -164,7 +164,7 @@ A brief index of where runtime functions live. The architectural claims above st
 | Propagation | `core/jobs/task/propagate/` |
 | Evaluator execution | `core/jobs/task/evaluate/` |
 | Cancellation cascade | `core/jobs/task/cancel_orphans/`, `core/jobs/task/cleanup_cancelled/` |
-| Finalization | `core/jobs/workflow/complete/`, `core/jobs/workflow/fail/`, `core/jobs/run/cleanup/` |
+| Finalization | `core/jobs/workflow/complete/`, `core/jobs/workflow/fail/`, `core/jobs/sample/cleanup/` |
 | Registry | `core/infrastructure/inngest/registry.py` |
 | Client + cancel matchers | `core/infrastructure/inngest/client.py` |
 | Runtime event contracts | `core/application/events/runtime.py` |

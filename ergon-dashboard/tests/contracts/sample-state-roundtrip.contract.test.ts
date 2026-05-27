@@ -1,17 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseRunSnapshot } from "../../src/lib/contracts/rest";
-import { hydrateRunSnapshot, serializeRunSnapshot } from "../../src/lib/sample-state";
+import { parseSampleSnapshot } from "../../src/lib/contracts/rest";
+import { hydrateSampleSnapshot, serializeSampleSnapshot } from "../../src/lib/sample-state";
 import { createDashboardSeed, FIXTURE_IDS } from "../helpers/dashboardFixtures";
 
 test("run state serializes back into a valid wire run snapshot", () => {
   const run = createDashboardSeed().runs?.[0];
   assert.ok(run);
 
-  const state = hydrateRunSnapshot(run);
-  const wire = serializeRunSnapshot(state);
-  const reparsed = parseRunSnapshot(wire);
+  const state = hydrateSampleSnapshot(run);
+  const wire = serializeSampleSnapshot(state);
+  const reparsed = parseSampleSnapshot(wire);
 
   assert.equal(reparsed.id, FIXTURE_IDS.sampleId);
   assert.equal(reparsed.tasks[FIXTURE_IDS.solveTaskId]?.id, FIXTURE_IDS.solveTaskId);
@@ -21,7 +21,7 @@ test("run snapshot hydration preserves nested run metrics for header display", (
   const run = createDashboardSeed().runs?.[0];
   assert.ok(run);
 
-  const state = hydrateRunSnapshot({
+  const state = hydrateSampleSnapshot({
     ...run,
     metrics: {
       sampleId: FIXTURE_IDS.sampleId,
@@ -34,7 +34,7 @@ test("run snapshot hydration preserves nested run metrics for header display", (
       totalCostUsd: 0.42,
       costObserved: true,
     },
-  }) as ReturnType<typeof hydrateRunSnapshot> & {
+  }) as ReturnType<typeof hydrateSampleSnapshot> & {
     metrics?: {
       totalTokens: number | null;
       totalCostUsd: number | null;

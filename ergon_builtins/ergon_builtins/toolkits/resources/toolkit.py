@@ -32,7 +32,7 @@ class ResearchGraphToolkit:
     """
 
     def __init__(self, *, sample_id: UUID, task_execution_id: UUID) -> None:
-        self._run_id = sample_id
+        self._sample_id = sample_id
         self._task_execution_id = task_execution_id
         self._resource_repo = SampleResourceRepository()
         self._task_repo = TaskExecutionRepository()
@@ -55,7 +55,7 @@ class ResearchGraphToolkit:
     # ------------------------------------------------------------------
 
     def _list_my_resources(self) -> Tool[AgentToolBudgetDeps]:
-        sample_id = self._run_id
+        sample_id = self._sample_id
         task_execution_id = self._task_execution_id
 
         async def list_my_resources(
@@ -85,7 +85,7 @@ class ResearchGraphToolkit:
     # ------------------------------------------------------------------
 
     def _list_child_resources(self) -> Tool[AgentToolBudgetDeps]:
-        sample_id = self._run_id
+        sample_id = self._sample_id
         task_execution_id = self._task_execution_id
 
         async def list_child_resources(
@@ -121,7 +121,7 @@ class ResearchGraphToolkit:
     # ------------------------------------------------------------------
 
     def _list_descendant_resources(self) -> Tool[AgentToolBudgetDeps]:
-        sample_id = self._run_id
+        sample_id = self._sample_id
         task_execution_id = self._task_execution_id
 
         async def list_descendant_resources(
@@ -176,7 +176,7 @@ class ResearchGraphToolkit:
     # ------------------------------------------------------------------
 
     def _list_run_resources(self) -> Tool[AgentToolBudgetDeps]:
-        sample_id = self._run_id
+        sample_id = self._sample_id
 
         async def list_run_resources(
             ctx: "RunContext[AgentToolBudgetDeps]",
@@ -203,7 +203,7 @@ class ResearchGraphToolkit:
     # ------------------------------------------------------------------
 
     def _get_resource_by_logical_path(self) -> Tool[AgentToolBudgetDeps]:
-        sample_id = self._run_id
+        sample_id = self._sample_id
 
         async def get_resource_by_logical_path(
             ctx: "RunContext[AgentToolBudgetDeps]",
@@ -238,7 +238,7 @@ class ResearchGraphToolkit:
     # ------------------------------------------------------------------
 
     def _get_resource_by_content_hash(self) -> Tool[AgentToolBudgetDeps]:
-        sample_id = self._run_id
+        sample_id = self._sample_id
 
         async def get_resource_by_content_hash(
             ctx: "RunContext[AgentToolBudgetDeps]",

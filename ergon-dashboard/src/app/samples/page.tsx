@@ -1,11 +1,11 @@
 import { SampleIndexTable } from "@/components/indexes/SampleIndexTable";
-import { loadRunList, type RunSummary } from "@/lib/server-data/samples";
+import { loadSampleList, type SampleSummary } from "@/lib/server-data/samples";
 
 export default async function RunsPage() {
-  let runs: RunSummary[] = [];
+  let runs: SampleSummary[] = [];
   let error: string | null = null;
 
-  const result = await loadRunList({ limit: 100 });
+  const result = await loadSampleList({ limit: 100 });
   if (result.ok) {
     runs = result.data;
   } else {

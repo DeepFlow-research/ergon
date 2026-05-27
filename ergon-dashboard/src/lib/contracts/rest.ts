@@ -8,15 +8,15 @@ export const TaskStatusSchema = z.string();
 
 export const ExperimentDetailSchema = schemas.ExperimentDetailDto;
 
-export const RunExecutionAttemptSchema = schemas.RunExecutionAttemptDto;
+export const SampleExecutionAttemptSchema = schemas.SampleExecutionAttemptDto;
 export const SampleResourceSchema = schemas.SampleResourceDto;
-export const RunSandboxCommandSchema = schemas.RunSandboxCommandDto;
-export const RunSandboxSchema = schemas.RunSandboxDto;
+export const SampleSandboxCommandSchema = schemas.SampleSandboxCommandDto;
+export const SampleSandboxSchema = schemas.SampleSandboxDto;
 export const SampleTaskSchema = schemas.SampleTaskDto;
-export const RunCommunicationMessageSchema = schemas.RunCommunicationMessageDto;
-export const RunCommunicationThreadSchema = schemas.RunCommunicationThreadDto;
+export const SampleCommunicationMessageSchema = schemas.SampleCommunicationMessageDto;
+export const SampleCommunicationThreadSchema = schemas.SampleCommunicationThreadDto;
 export const SampleTaskEvaluationSchema = schemas.SampleTaskEvaluationDto;
-export const RunSnapshotSchema = schemas.SampleSnapshotDto;
+export const SampleSnapshotSchema = schemas.SampleSnapshotDto;
 
 type KnownKeys<T> = {
   [K in keyof T as string extends K ? never : number extends K ? never : symbol extends K
@@ -25,28 +25,28 @@ type KnownKeys<T> = {
 };
 
 export type BenchmarkName = z.infer<typeof BenchmarkNameSchema>;
-export type RunLifecycleStatus = z.infer<typeof SampleStatusSchema>;
+export type SampleLifecycleStatus = z.infer<typeof SampleStatusSchema>;
 export type TaskStatusValue = z.infer<typeof TaskStatusSchema>;
 
 type RawExperimentDetail = KnownKeys<z.infer<typeof ExperimentDetailSchema>>;
 type RawExperimentRunRow = KnownKeys<NonNullable<RawExperimentDetail["runs"]>[number]>;
 type RawExperimentSummary = KnownKeys<RawExperimentDetail["experiment"]>;
-type RawRunExecutionAttempt = KnownKeys<z.infer<typeof RunExecutionAttemptSchema>>;
+type RawSampleExecutionAttempt = KnownKeys<z.infer<typeof SampleExecutionAttemptSchema>>;
 type RawSampleResource = KnownKeys<z.infer<typeof SampleResourceSchema>>;
-type RawRunSandboxCommand = KnownKeys<z.infer<typeof RunSandboxCommandSchema>>;
-type RawRunSandbox = KnownKeys<z.infer<typeof RunSandboxSchema>>;
+type RawSampleSandboxCommand = KnownKeys<z.infer<typeof SampleSandboxCommandSchema>>;
+type RawSampleSandbox = KnownKeys<z.infer<typeof SampleSandboxSchema>>;
 type RawSampleTask = KnownKeys<z.infer<typeof SampleTaskSchema>>;
-type RawRunCommunicationMessage = KnownKeys<z.infer<typeof RunCommunicationMessageSchema>>;
-type RawRunCommunicationThread = KnownKeys<z.infer<typeof RunCommunicationThreadSchema>>;
+type RawSampleCommunicationMessage = KnownKeys<z.infer<typeof SampleCommunicationMessageSchema>>;
+type RawSampleCommunicationThread = KnownKeys<z.infer<typeof SampleCommunicationThreadSchema>>;
 type RawSampleTaskEvaluation = KnownKeys<z.infer<typeof SampleTaskEvaluationSchema>>;
-type RawRunEvaluationCriterion = KnownKeys<NonNullable<RawSampleTaskEvaluation["criterionResults"]>[number]>;
-type RawRunSnapshot = KnownKeys<z.infer<typeof RunSnapshotSchema>>;
-type RawRunSnapshotMetrics = KnownKeys<NonNullable<RawRunSnapshot["metrics"]>>;
+type RawSampleEvaluationCriterion = KnownKeys<NonNullable<RawSampleTaskEvaluation["criterionResults"]>[number]>;
+type RawSampleSnapshot = KnownKeys<z.infer<typeof SampleSnapshotSchema>>;
+type RawSampleSnapshotMetrics = KnownKeys<NonNullable<RawSampleSnapshot["metrics"]>>;
 
-export type RawRunSandboxType = RawRunSandbox;
-export type RawRunSandboxCommandType = RawRunSandboxCommand;
+export type RawSampleSandboxType = RawSampleSandbox;
+export type RawSampleSandboxCommandType = RawSampleSandboxCommand;
 
-export type RunSnapshotMetrics = RawRunSnapshotMetrics;
+export type SampleSnapshotMetrics = RawSampleSnapshotMetrics;
 
 export interface ExperimentStatusCounts {
   pending: number;
@@ -149,9 +149,9 @@ export interface ExperimentDetail extends Omit<RawExperimentDetail, "analytics" 
   };
 }
 
-export interface RunExecutionAttempt
+export interface SampleExecutionAttempt
   extends Omit<
-    RawRunExecutionAttempt,
+    RawSampleExecutionAttempt,
     "agentId" | "agentName" | "completedAt" | "errorMessage" | "finalAssistantMessage" | "outputResourceIds" | "score" | "startedAt"
   > {
   agentId: string | null;
@@ -166,24 +166,24 @@ export interface RunExecutionAttempt
 
 export type SampleResource = RawSampleResource;
 
-export interface RunSandboxCommand
-  extends Omit<RawRunSandboxCommand, "durationMs" | "exitCode" | "stderr" | "stdout"> {
+export interface SampleSandboxCommand
+  extends Omit<RawSampleSandboxCommand, "durationMs" | "exitCode" | "stderr" | "stdout"> {
   durationMs: number | null;
   exitCode: number | null;
   stderr: string | null;
   stdout: string | null;
 }
 
-export interface RunSandbox
-  extends Omit<RawRunSandbox, "closeReason" | "closedAt" | "commands" | "template"> {
+export interface SampleSandbox
+  extends Omit<RawSampleSandbox, "closeReason" | "closedAt" | "commands" | "template"> {
   closeReason: string | null;
   closedAt: string | null;
-  commands: RunSandboxCommand[];
+  commands: SampleSandboxCommand[];
   template: string | null;
 }
 
 /**
- * Per-task row in {@link RunSnapshot.tasks} (camelCase on the wire).
+ * Per-task row in {@link SampleSnapshot.tasks} (camelCase on the wire).
  *
  * Semantics mirror the backend `SampleTaskDto` field descriptions:
  * - `startedAt`: null only while the task has not actually started yet (e.g. pending / ready).
@@ -205,18 +205,18 @@ export interface SampleTask
   startedAt: string | null;
 }
 
-export interface RunCommunicationMessage extends Omit<RawRunCommunicationMessage, "taskId"> {
+export interface SampleCommunicationMessage extends Omit<RawSampleCommunicationMessage, "taskId"> {
   taskId: string | null;
 }
 
-export interface RunCommunicationThread
-  extends Omit<RawRunCommunicationThread, "messages" | "taskId"> {
-  messages: RunCommunicationMessage[];
+export interface SampleCommunicationThread
+  extends Omit<RawSampleCommunicationThread, "messages" | "taskId"> {
+  messages: SampleCommunicationMessage[];
   taskId: string | null;
 }
 
-export interface RunEvaluationCriterion
-  extends Omit<RawRunEvaluationCriterion, "error" | "evaluatedActionIds" | "evaluatedResourceIds"> {
+export interface SampleEvaluationCriterion
+  extends Omit<RawSampleEvaluationCriterion, "error" | "evaluatedActionIds" | "evaluatedResourceIds"> {
   error: Record<string, unknown> | null;
   evaluatedActionIds: string[];
   evaluatedResourceIds: string[];
@@ -224,14 +224,14 @@ export interface RunEvaluationCriterion
 
 export interface SampleTaskEvaluation
   extends Omit<RawSampleTaskEvaluation, "criterionResults" | "failedGate" | "taskId"> {
-  criterionResults: RunEvaluationCriterion[];
+  criterionResults: SampleEvaluationCriterion[];
   failedGate: string | null;
   taskId: string | null;
 }
 
-export interface RunSnapshot
+export interface SampleSnapshot
   extends Omit<
-    RawRunSnapshot,
+    RawSampleSnapshot,
     | "completedAt"
     | "durationSeconds"
     | "error"
@@ -248,16 +248,16 @@ export interface RunSnapshot
   durationSeconds: number | null;
   error: string | null;
   evaluationsByTask: Record<string, SampleTaskEvaluation>;
-  executionsByTask: Record<string, RunExecutionAttempt[]>;
+  executionsByTask: Record<string, SampleExecutionAttempt[]>;
   finalScore: number | null;
   resourcesByTask: Record<string, SampleResource[]>;
-  sandboxesByTask: Record<string, RunSandbox>;
+  sandboxesByTask: Record<string, SampleSandbox>;
   startedAt: string;
   tasks: Record<string, SampleTask>;
-  threads: RunCommunicationThread[];
+  threads: SampleCommunicationThread[];
 }
 
-function normalizeRunExecutionAttempt(execution: RawRunExecutionAttempt): RunExecutionAttempt {
+function normalizeSampleExecutionAttempt(execution: RawSampleExecutionAttempt): SampleExecutionAttempt {
   return {
     ...execution,
     agentId: execution.agentId ?? null,
@@ -271,7 +271,7 @@ function normalizeRunExecutionAttempt(execution: RawRunExecutionAttempt): RunExe
   };
 }
 
-function normalizeRunSandboxCommand(command: RawRunSandboxCommand): RunSandboxCommand {
+function normalizeSampleSandboxCommand(command: RawSampleSandboxCommand): SampleSandboxCommand {
   return {
     ...command,
     durationMs: command.durationMs ?? null,
@@ -281,12 +281,12 @@ function normalizeRunSandboxCommand(command: RawRunSandboxCommand): RunSandboxCo
   };
 }
 
-function normalizeRunSandbox(sandbox: RawRunSandbox): RunSandbox {
+function normalizeSampleSandbox(sandbox: RawSampleSandbox): SampleSandbox {
   return {
     ...sandbox,
     closeReason: sandbox.closeReason ?? null,
     closedAt: sandbox.closedAt ?? null,
-    commands: (sandbox.commands ?? []).map(normalizeRunSandboxCommand),
+    commands: (sandbox.commands ?? []).map(normalizeSampleSandboxCommand),
     template: sandbox.template ?? null,
   };
 }
@@ -304,17 +304,17 @@ function normalizeSampleTask(task: RawSampleTask): SampleTask {
   };
 }
 
-function normalizeRunCommunicationMessage(message: RawRunCommunicationMessage): RunCommunicationMessage {
+function normalizeSampleCommunicationMessage(message: RawSampleCommunicationMessage): SampleCommunicationMessage {
   return {
     ...message,
     taskId: message.taskId ?? null,
   };
 }
 
-function normalizeRunCommunicationThread(thread: RawRunCommunicationThread): RunCommunicationThread {
+function normalizeSampleCommunicationThread(thread: RawSampleCommunicationThread): SampleCommunicationThread {
   return {
     ...thread,
-    messages: (thread.messages ?? []).map(normalizeRunCommunicationMessage),
+    messages: (thread.messages ?? []).map(normalizeSampleCommunicationMessage),
     taskId: thread.taskId ?? null,
     summary: thread.summary ?? null,
   };
@@ -373,28 +373,28 @@ export function parseExperimentDetail(input: unknown): ExperimentDetail {
   };
 }
 
-export function parseRunSandbox(input: unknown): RunSandbox {
-  return normalizeRunSandbox(RunSandboxSchema.parse(input));
+export function parseSampleSandbox(input: unknown): SampleSandbox {
+  return normalizeSampleSandbox(SampleSandboxSchema.parse(input));
 }
 
-export function parseRunSandboxCommand(input: unknown): RunSandboxCommand {
-  return normalizeRunSandboxCommand(RunSandboxCommandSchema.parse(input));
+export function parseSampleSandboxCommand(input: unknown): SampleSandboxCommand {
+  return normalizeSampleSandboxCommand(SampleSandboxCommandSchema.parse(input));
 }
 
-export function parseRunCommunicationMessage(input: unknown): RunCommunicationMessage {
-  return normalizeRunCommunicationMessage(RunCommunicationMessageSchema.parse(input));
+export function parseSampleCommunicationMessage(input: unknown): SampleCommunicationMessage {
+  return normalizeSampleCommunicationMessage(SampleCommunicationMessageSchema.parse(input));
 }
 
-export function parseRunCommunicationThread(input: unknown): RunCommunicationThread {
-  return normalizeRunCommunicationThread(RunCommunicationThreadSchema.parse(input));
+export function parseSampleCommunicationThread(input: unknown): SampleCommunicationThread {
+  return normalizeSampleCommunicationThread(SampleCommunicationThreadSchema.parse(input));
 }
 
 export function parseSampleTaskEvaluation(input: unknown): SampleTaskEvaluation {
   return normalizeSampleTaskEvaluation(SampleTaskEvaluationSchema.parse(input));
 }
 
-export function parseRunSnapshot(input: unknown): RunSnapshot {
-  const snapshot = RunSnapshotSchema.parse(input);
+export function parseSampleSnapshot(input: unknown): SampleSnapshot {
+  const snapshot = SampleSnapshotSchema.parse(input);
   return {
     ...snapshot,
     completedAt: snapshot.completedAt ?? null,
@@ -409,7 +409,7 @@ export function parseRunSnapshot(input: unknown): RunSnapshot {
     executionsByTask: Object.fromEntries(
       Object.entries(snapshot.executionsByTask ?? {}).map(([taskId, executions]) => [
         taskId,
-        executions.map(normalizeRunExecutionAttempt),
+        executions.map(normalizeSampleExecutionAttempt),
       ]),
     ),
     finalScore: snapshot.finalScore ?? null,
@@ -417,13 +417,13 @@ export function parseRunSnapshot(input: unknown): RunSnapshot {
     sandboxesByTask: Object.fromEntries(
       Object.entries(snapshot.sandboxesByTask ?? {}).map(([taskId, sandbox]) => [
         taskId,
-        normalizeRunSandbox(sandbox),
+        normalizeSampleSandbox(sandbox),
       ]),
     ),
     startedAt: snapshot.startedAt ?? new Date(0).toISOString(),
     tasks: Object.fromEntries(
       Object.entries(snapshot.tasks ?? {}).map(([taskId, task]) => [taskId, normalizeSampleTask(task)]),
     ),
-    threads: (snapshot.threads ?? []).map(normalizeRunCommunicationThread),
+    threads: (snapshot.threads ?? []).map(normalizeSampleCommunicationThread),
   };
 }

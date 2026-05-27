@@ -3,15 +3,15 @@ import test from "node:test";
 
 import fixture from "../../../tests/fixtures/mas-samples/concurrent-mas-run.json";
 import { parseGraphMutationDtoArray } from "@/features/graph/contracts/graphMutations";
-import type { RunEvent } from "@/lib/sampleEvents";
-import { buildRunEvents } from "@/lib/sampleEvents";
-import { deserializeRunState } from "@/lib/sampleState";
+import type { SampleEvent } from "@/lib/sampleEvents";
+import { buildSampleEvents } from "@/lib/sampleEvents";
+import { deserializeSampleState } from "@/lib/sampleState";
 import { TaskStatus, TaskTrigger } from "@/lib/types";
-import { buildRunActivities } from "./buildRunActivities";
+import { buildSampleActivities } from "./buildSampleActivities";
 import { resolveActivitySnapshotSequence } from "./snapshotSequence";
 
-test("buildRunActivities surfaces semantic activity kinds without creating actor lanes", () => {
-  const runState = deserializeRunState(fixture.runState);
+test("buildSampleActivities surfaces semantic activity kinds without creating actor lanes", () => {
+  const runState = deserializeSampleState(fixture.runState);
   const mutations = parseGraphMutationDtoArray(fixture.mutations);
   const noisyTaskId = "10000000-0000-4000-8000-000000000002";
   runState.sandboxesByTask.set(noisyTaskId, {
@@ -102,12 +102,12 @@ test("buildRunActivities surfaces semantic activity kinds without creating actor
       ],
     },
   ];
-  const markerEvents: RunEvent[] = [
+  const markerEvents: SampleEvent[] = [
     {
       id: "marker-workflow-started",
       kind: "workflow.started",
       at: "2025-01-01T00:00:06.000Z",
-      runName: "Marker workflow",
+      sampleName: "Marker workflow",
     },
     {
       id: "marker-workflow-completed",
@@ -165,9 +165,9 @@ test("buildRunActivities surfaces semantic activity kinds without creating actor
       note: "Unhandled marker mutation",
     },
   ];
-  const events = [...buildRunEvents(runState), ...markerEvents];
+  const events = [...buildSampleEvents(runState), ...markerEvents];
 
-  const activities = buildRunActivities({
+  const activities = buildSampleActivities({
     runState,
     events,
     mutations,
@@ -246,11 +246,11 @@ test("buildRunActivities surfaces semantic activity kinds without creating actor
 });
 
 test("completed trace spans keep full duration when replaying an earlier sequence", () => {
-  const runState = deserializeRunState(fixture.runState);
+  const runState = deserializeSampleState(fixture.runState);
   const mutations = parseGraphMutationDtoArray(fixture.mutations);
-  const events = buildRunEvents(runState);
+  const events = buildSampleEvents(runState);
 
-  const activities = buildRunActivities({
+  const activities = buildSampleActivities({
     runState,
     events,
     mutations,
@@ -275,11 +275,11 @@ test("completed trace spans keep full duration when replaying an earlier sequenc
 });
 
 test("context/tool event sequence does not masquerade as graph replay sequence", () => {
-  const runState = deserializeRunState(fixture.runState);
+  const runState = deserializeSampleState(fixture.runState);
   const mutations = parseGraphMutationDtoArray(fixture.mutations);
-  const activities = buildRunActivities({
+  const activities = buildSampleActivities({
     runState,
-    events: buildRunEvents(runState),
+    events: buildSampleEvents(runState),
     mutations,
     currentSequence: null,
   });

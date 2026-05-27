@@ -1,4 +1,4 @@
-import type { RunEventKind } from "@/lib/sampleEvents";
+import type { SampleEventKind } from "@/lib/sampleEvents";
 
 export type ActivityKind =
   | "execution"
@@ -25,7 +25,7 @@ export interface ActivityLineage {
   threadId?: string | null;
 }
 
-export interface RunActivity {
+export interface SampleActivity {
   id: string;
   kind: ActivityKind;
   band: ActivityBand;
@@ -37,7 +37,7 @@ export interface RunActivity {
   isInstant: boolean;
   actor: string | null;
   sourceKind:
-    | RunEventKind
+    | SampleEventKind
     | "execution.span"
     | "sandbox.span"
     | "sandbox.command"
@@ -52,7 +52,7 @@ export interface RunActivity {
 }
 
 export interface ActivityStackItem {
-  activity: RunActivity;
+  activity: SampleActivity;
   row: number;
   leftPct: number;
   widthPct: number;

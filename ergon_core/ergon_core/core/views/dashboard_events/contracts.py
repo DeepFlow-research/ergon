@@ -12,8 +12,8 @@ from typing import ClassVar
 from uuid import UUID
 
 from ergon_core.core.views.samples.models import (
-    RunCommunicationMessageDto,
-    RunCommunicationThreadDto,
+    SampleCommunicationMessageDto,
+    SampleCommunicationThreadDto,
     SampleSnapshotDto,
     SampleTaskEvaluationDto,
 )
@@ -145,13 +145,13 @@ class DashboardSandboxClosedEvent(InngestEventContract):
 
 
 class DashboardThreadMessageCreatedEvent(InngestEventContract):
-    """Embeds full RunCommunicationThreadDto + RunCommunicationMessageDto."""
+    """Embeds full SampleCommunicationThreadDto + SampleCommunicationMessageDto."""
 
     name: ClassVar[str] = "dashboard/thread.message_created"
 
     sample_id: UUID
-    thread: RunCommunicationThreadDto
-    message: RunCommunicationMessageDto
+    thread: SampleCommunicationThreadDto
+    message: SampleCommunicationMessageDto
 
 
 # ---------------------------------------------------------------------------

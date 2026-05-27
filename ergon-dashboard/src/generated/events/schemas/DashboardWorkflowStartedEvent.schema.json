@@ -331,7 +331,7 @@
       "title": "ProviderTokenUsage",
       "type": "object"
     },
-    "RunCommunicationMessageDto": {
+    "SampleCommunicationMessageDto": {
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -407,10 +407,10 @@
         "sequenceNum",
         "createdAt"
       ],
-      "title": "RunCommunicationMessageDto",
+      "title": "SampleCommunicationMessageDto",
       "type": "object"
     },
-    "RunCommunicationThreadDto": {
+    "SampleCommunicationThreadDto": {
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -469,7 +469,7 @@
         },
         "messages": {
           "items": {
-            "$ref": "#/$defs/RunCommunicationMessageDto"
+            "$ref": "#/$defs/SampleCommunicationMessageDto"
           },
           "title": "Messages",
           "type": "array"
@@ -484,10 +484,10 @@
         "createdAt",
         "updatedAt"
       ],
-      "title": "RunCommunicationThreadDto",
+      "title": "SampleCommunicationThreadDto",
       "type": "object"
     },
-    "RunEvaluationCriterionDto": {
+    "SampleEvaluationCriterionDto": {
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -657,10 +657,10 @@
         "score",
         "maxScore"
       ],
-      "title": "RunEvaluationCriterionDto",
+      "title": "SampleEvaluationCriterionDto",
       "type": "object"
     },
-    "RunExecutionAttemptDto": {
+    "SampleExecutionAttemptDto": {
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -792,10 +792,10 @@
         "attemptNumber",
         "status"
       ],
-      "title": "RunExecutionAttemptDto",
+      "title": "SampleExecutionAttemptDto",
       "type": "object"
     },
-    "RunSandboxCommandDto": {
+    "SampleSandboxCommandDto": {
       "additionalProperties": false,
       "properties": {
         "command": {
@@ -860,10 +860,10 @@
         "command",
         "timestamp"
       ],
-      "title": "RunSandboxCommandDto",
+      "title": "SampleSandboxCommandDto",
       "type": "object"
     },
-    "RunSandboxDto": {
+    "SampleSandboxDto": {
       "additionalProperties": false,
       "properties": {
         "sandboxId": {
@@ -926,7 +926,7 @@
         },
         "commands": {
           "items": {
-            "$ref": "#/$defs/RunSandboxCommandDto"
+            "$ref": "#/$defs/SampleSandboxCommandDto"
           },
           "title": "Commands",
           "type": "array"
@@ -939,7 +939,7 @@
         "status",
         "createdAt"
       ],
-      "title": "RunSandboxDto",
+      "title": "SampleSandboxDto",
       "type": "object"
     },
     "SampleContextEventDto": {
@@ -1128,7 +1128,7 @@
         "executionsByTask": {
           "additionalProperties": {
             "items": {
-              "$ref": "#/$defs/RunExecutionAttemptDto"
+              "$ref": "#/$defs/SampleExecutionAttemptDto"
             },
             "type": "array"
           },
@@ -1144,7 +1144,7 @@
         },
         "sandboxesByTask": {
           "additionalProperties": {
-            "$ref": "#/$defs/RunSandboxDto"
+            "$ref": "#/$defs/SampleSandboxDto"
           },
           "title": "Sandboxesbytask",
           "type": "object"
@@ -1161,7 +1161,7 @@
         },
         "threads": {
           "items": {
-            "$ref": "#/$defs/RunCommunicationThreadDto"
+            "$ref": "#/$defs/SampleCommunicationThreadDto"
           },
           "title": "Threads",
           "type": "array"
@@ -1542,7 +1542,7 @@
         },
         "criterionResults": {
           "items": {
-            "$ref": "#/$defs/RunEvaluationCriterionDto"
+            "$ref": "#/$defs/SampleEvaluationCriterionDto"
           },
           "title": "Criterionresults",
           "type": "array"

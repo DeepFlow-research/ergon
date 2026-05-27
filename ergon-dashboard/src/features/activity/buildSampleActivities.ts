@@ -5,12 +5,12 @@ import type {
   SandboxCommandState,
   SampleWorkspaceState,
 } from "@/lib/types";
-import type { RunEvent } from "@/lib/sampleEvents";
-import type { RunActivity } from "./types";
+import type { SampleEvent } from "@/lib/sampleEvents";
+import type { SampleActivity } from "./types";
 
-export interface BuildRunActivitiesInput {
+export interface BuildSampleActivitiesInput {
   runState: SampleWorkspaceState | null;
-  events: RunEvent[];
+  events: SampleEvent[];
   mutations: GraphMutationDto[];
   currentSequence: number | null;
 }
@@ -19,7 +19,7 @@ function isFiniteTime(value: string | null | undefined): value is string {
   return typeof value === "string" && Number.isFinite(Date.parse(value));
 }
 
-function compareActivity(a: RunActivity, b: RunActivity): number {
+function compareActivity(a: SampleActivity, b: SampleActivity): number {
   if (a.startAt !== b.startAt) return a.startAt.localeCompare(b.startAt);
   const aSeq = a.sequence ?? -1;
   const bSeq = b.sequence ?? -1;
@@ -45,8 +45,8 @@ function addMs(timestamp: string, durationMs: number | null): string | null {
 
 function executionActivities(
   run: SampleWorkspaceState,
-): RunActivity[] {
-  const activities: RunActivity[] = [];
+): SampleActivity[] {
+  const activities: SampleActivity[] = [];
   for (const executions of run.executionsByTask.values()) {
     for (const execution of executions) {
       if (!isFiniteTime(execution.startedAt)) continue;
@@ -90,8 +90,8 @@ function sandboxCommandLabel(command: SandboxCommandState): string {
 
 function sandboxActivities(
   run: SampleWorkspaceState,
-): RunActivity[] {
-  const activities: RunActivity[] = [];
+): SampleActivity[] {
+  const activities: SampleActivity[] = [];
   for (const sandbox of run.sandboxesByTask.values()) {
     if (isFiniteTime(sandbox.createdAt)) {
       const endAt = sandbox.closedAt;
@@ -172,8 +172,8 @@ function contextLabel(event: ContextEventState): string {
   return payloadType ?? event.eventType;
 }
 
-function contextActivities(run: SampleWorkspaceState): RunActivity[] {
-  const activities: RunActivity[] = [];
+function contextActivities(run: SampleWorkspaceState): SampleActivity[] {
+  const activities: SampleActivity[] = [];
   for (const [taskId, events] of run.contextEventsByTask.entries()) {
     for (const event of events) {
       const startAt = event.startedAt ?? event.createdAt;
@@ -212,8 +212,8 @@ function contextActivities(run: SampleWorkspaceState): RunActivity[] {
   return activities;
 }
 
-function eventMarkerActivities(events: RunEvent[]): RunActivity[] {
-  return events.flatMap((event): RunActivity[] => {
+function eventMarkerActivities(events: SampleEvent[]): SampleActivity[] {
+  return events.flatMap((event): SampleActivity[] => {
     switch (event.kind) {
       case "thread.message":
         return [
@@ -302,7 +302,7 @@ function eventMarkerActivities(events: RunEvent[]): RunActivity[] {
   });
 }
 
-function graphMutationActivities(mutations: GraphMutationDto[]): RunActivity[] {
+function graphMutationActivities(mutations: GraphMutationDto[]): SampleActivity[] {
   return mutations.map((mutation) => ({
     id: `graph:${mutation.id}`,
     kind: "graph",
@@ -330,7 +330,7 @@ function graphMutationActivities(mutations: GraphMutationDto[]): RunActivity[] {
   }));
 }
 
-export function buildRunActivities(input: BuildRunActivitiesInput): RunActivity[] {
+export function buildSampleActivities(input: BuildSampleActivitiesInput): SampleActivity[] {
   if (!input.runState) return [];
   return [
     ...executionActivities(input.runState),

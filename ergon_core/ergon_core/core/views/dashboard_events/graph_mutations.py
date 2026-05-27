@@ -11,14 +11,14 @@ from ergon_core.core.persistence.graph.models import (
     MutationType,
     SampleGraphMutation,
 )
-from ergon_core.core.persistence.shared.types import RunId
+from ergon_core.core.persistence.shared.types import SampleId
 from ergon_core.core.views.dashboard_events.contracts import DashboardGraphMutationEvent
 
 
 def graph_mutation_record_from_row(row: SampleGraphMutation) -> GraphMutationRecordDto:
     return GraphMutationRecordDto(
         id=row.id,
-        sample_id=cast(RunId, row.sample_id),
+        sample_id=cast(SampleId, row.sample_id),
         sequence=row.sequence,
         mutation_type=cast(MutationType, row.mutation_type),
         target_type=cast(GraphTargetType, row.target_type),

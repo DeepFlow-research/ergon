@@ -23,7 +23,7 @@ ALLOWLIST = {
     # Workflow lifecycle jobs still own small transactional updates.
     # New jobs should use repositories/services instead.
     Path("ergon_core/ergon_core/core/jobs/workflow/start/job.py"),
-    Path("ergon_core/ergon_core/core/jobs/run/cleanup/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/sample/cleanup/job.py"),
     Path("ergon_core/ergon_core/core/jobs/task/cleanup_cancelled/job.py"),
     Path("ergon_core/ergon_core/core/jobs/task/cancel_orphans/job.py"),
     Path("ergon_core/ergon_core/core/jobs/workflow/complete/job.py"),

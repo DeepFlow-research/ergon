@@ -2,7 +2,7 @@ import type { SerializedSampleWorkspaceState, SampleWorkspaceState } from "@/lib
 
 import { serializeContextEvent } from "./contextEvents";
 
-export function serializeRunSnapshot(run: SampleWorkspaceState): SerializedSampleWorkspaceState {
+export function serializeSampleSnapshot(run: SampleWorkspaceState): SerializedSampleWorkspaceState {
   return {
     ...run,
     tasks: Object.fromEntries(run.tasks.entries()),
@@ -19,4 +19,4 @@ export function serializeRunSnapshot(run: SampleWorkspaceState): SerializedSampl
   } as unknown as SerializedSampleWorkspaceState;
 }
 
-export const serializeRunState = serializeRunSnapshot;
+export const serializeSampleState = serializeSampleSnapshot;

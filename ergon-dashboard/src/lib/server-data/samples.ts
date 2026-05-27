@@ -1,11 +1,11 @@
 import { config } from "@/lib/config";
-import { parseRunSnapshot, type RunSnapshot } from "@/lib/contracts/rest";
+import { parseSampleSnapshot, type SampleSnapshot } from "@/lib/contracts/rest";
 import { fetchErgonApi } from "@/lib/serverApi";
-import { getHarnessRun } from "@/lib/testing/dashboardHarness";
+import { getHarnessSample } from "@/lib/testing/dashboardHarness";
 
 import { backendUnavailable, type ServerDataResult } from "./responses";
 
-export interface RunListFilters {
+export interface SampleListFilters {
   limit?: number;
   offset?: number;
   status?: string;
@@ -13,7 +13,7 @@ export interface RunListFilters {
   experiment?: string;
 }
 
-export interface RunSummary {
+export interface SampleSummary {
   id: string;
   name: string;
   status: string;
@@ -43,9 +43,9 @@ export interface RunSummary {
   metrics: Record<string, unknown>;
 }
 
-export async function loadRunList(
-  filters: RunListFilters = {},
-): Promise<ServerDataResult<RunSummary[]>> {
+export async function loadSampleList(
+  filters: SampleListFilters = {},
+): Promise<ServerDataResult<SampleSummary[]>> {
   const searchParams = new URLSearchParams();
   searchParams.set("limit", String(filters.limit ?? 100));
   if (filters.offset) searchParams.set("offset", String(filters.offset));
@@ -59,7 +59,7 @@ export async function loadRunList(
     if (response.ok) {
       return {
         ok: true,
-        data: parseRunList(body),
+        data: parseSampleList(body),
         status: response.status,
         source: "backend",
       };
@@ -70,11 +70,11 @@ export async function loadRunList(
   }
 }
 
-export async function loadRunSnapshot(sampleId: string): Promise<ServerDataResult<RunSnapshot>> {
+export async function loadSampleSnapshot(sampleId: string): Promise<ServerDataResult<SampleSnapshot>> {
   if (config.enableTestHarness) {
-    const run = getHarnessRun(sampleId);
+    const run = getHarnessSample(sampleId);
     if (run !== null) {
-      return { ok: true, data: parseRunSnapshot(run), status: 200, source: "harness" };
+      return { ok: true, data: parseSampleSnapshot(run), status: 200, source: "harness" };
     }
   }
 
@@ -84,7 +84,7 @@ export async function loadRunSnapshot(sampleId: string): Promise<ServerDataResul
     if (response.ok) {
       return {
         ok: true,
-        data: parseRunSnapshot(body),
+        data: parseSampleSnapshot(body),
         status: response.status,
         source: "backend",
       };
@@ -95,7 +95,7 @@ export async function loadRunSnapshot(sampleId: string): Promise<ServerDataResul
   }
 }
 
-function parseRunList(input: unknown): RunSummary[] {
+function parseSampleList(input: unknown): SampleSummary[] {
   if (!Array.isArray(input)) return [];
   return input.map((item) => {
     const record = typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {};

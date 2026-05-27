@@ -5,8 +5,8 @@
  * `thread.message_created`, `task.evaluation_updated`, `resource.published`,
  * `graph.mutation`, `context.event`, workflow lifecycle)
  * collectively describe what happened during a run, but each one is rendered in a
- * different panel. The `RunEvent` union gives us one chronologically sortable
- * shape that the UnifiedEventStream and the RunTimeline can both consume.
+ * different panel. The `SampleEvent` union gives us one chronologically sortable
+ * shape that the UnifiedEventStream and the SampleTimeline can both consume.
  *
  * Construction is **derived** on the client from the `SampleWorkspaceState` we already
  * assemble — no new backend contract is introduced.
@@ -28,7 +28,7 @@ import type {
   CommunicationMessageState,
 } from "@/lib/types";
 
-export type RunEventKind =
+export type SampleEventKind =
   | "workflow.started"
   | "workflow.completed"
   | "task.transition"
@@ -41,7 +41,7 @@ export type RunEventKind =
   | "context.event"
   | "unhandled.mutation";
 
-export const RUN_EVENT_KINDS: readonly RunEventKind[] = [
+export const SAMPLE_EVENT_KINDS: readonly SampleEventKind[] = [
   "workflow.started",
   "workflow.completed",
   "task.transition",
@@ -55,29 +55,29 @@ export const RUN_EVENT_KINDS: readonly RunEventKind[] = [
   "unhandled.mutation",
 ] as const;
 
-export interface RunEventBase {
+export interface SampleEventBase {
   id: string;
   at: string;
-  kind: RunEventKind;
+  kind: SampleEventKind;
   /** Related task id when applicable — powers the "jump to node" affordance. */
   taskId?: string | null;
   /** Related graph-mutation sequence when applicable — powers timeline jump. */
   sequence?: number | null;
 }
 
-export interface WorkflowStartedEvent extends RunEventBase {
+export interface WorkflowStartedEvent extends SampleEventBase {
   kind: "workflow.started";
-  runName: string;
+  sampleName: string;
 }
 
-export interface WorkflowCompletedEvent extends RunEventBase {
+export interface WorkflowCompletedEvent extends SampleEventBase {
   kind: "workflow.completed";
   status: string;
   finalScore: number | null;
   error: string | null;
 }
 
-export interface TaskTransitionEvent extends RunEventBase {
+export interface TaskTransitionEvent extends SampleEventBase {
   kind: "task.transition";
   taskId: string;
   taskName: string;
@@ -88,58 +88,58 @@ export interface TaskTransitionEvent extends RunEventBase {
   actor: string | null;
 }
 
-export interface SandboxCreatedEvent extends RunEventBase {
+export interface SandboxCreatedEvent extends SampleEventBase {
   kind: "sandbox.created";
   sandboxId: string;
   template: string | null;
 }
 
-export interface SandboxCommandEvent extends RunEventBase {
+export interface SandboxCommandEvent extends SampleEventBase {
   kind: "sandbox.command";
   command: string;
   exitCode: number | null;
   durationMs: number | null;
 }
 
-export interface SandboxClosedEvent extends RunEventBase {
+export interface SandboxClosedEvent extends SampleEventBase {
   kind: "sandbox.closed";
   sandboxId: string;
   closeReason: string | null;
 }
 
-export interface ThreadMessageEvent extends RunEventBase {
+export interface ThreadMessageEvent extends SampleEventBase {
   kind: "thread.message";
   threadId: string;
   authorRole: string;
   preview: string;
 }
 
-export interface TaskEvaluationEvent extends RunEventBase {
+export interface TaskEvaluationEvent extends SampleEventBase {
   kind: "task.evaluation";
   score: number | null;
   passed: boolean | null;
 }
 
-export interface ResourcePublishedEvent extends RunEventBase {
+export interface ResourcePublishedEvent extends SampleEventBase {
   kind: "resource.published";
   name: string;
   mimeType: string;
   sizeBytes: number;
 }
 
-export interface ContextEvent extends RunEventBase {
+export interface ContextEvent extends SampleEventBase {
   kind: "context.event";
   eventId: string;
   summary: string;
 }
 
-export interface UnhandledMutationEvent extends RunEventBase {
+export interface UnhandledMutationEvent extends SampleEventBase {
   kind: "unhandled.mutation";
   mutationType: string;
   note: string;
 }
 
-export type RunEvent =
+export type SampleEvent =
   | WorkflowStartedEvent
   | WorkflowCompletedEvent
   | TaskTransitionEvent
@@ -155,7 +155,7 @@ export type RunEvent =
 /**
  * Human-readable label for an event kind (used in filter UI + row prefixes).
  */
-export const RUN_EVENT_KIND_LABELS: Record<RunEventKind, string> = {
+export const SAMPLE_EVENT_KIND_LABELS: Record<SampleEventKind, string> = {
   "workflow.started": "Workflow started",
   "workflow.completed": "Workflow completed",
   "task.transition": "Task transition",
@@ -173,7 +173,7 @@ export const RUN_EVENT_KIND_LABELS: Record<RunEventKind, string> = {
  * Tailwind color token per event kind — used for the lane indicator in the
  * timeline, the left border of a row in the stream, and the filter chip.
  */
-export const RUN_EVENT_KIND_COLORS: Record<RunEventKind, string> = {
+export const SAMPLE_EVENT_KIND_COLORS: Record<SampleEventKind, string> = {
   "workflow.started": "bg-sky-500",
   "workflow.completed": "bg-emerald-500",
   "task.transition": "bg-indigo-500",
@@ -220,21 +220,21 @@ function messagePreview(msg: CommunicationMessageState): string {
 }
 
 /**
- * Build the flat, chronologically-sorted RunEvent log from a SampleWorkspaceState.
+ * Build the flat, chronologically-sorted SampleEvent log from a SampleWorkspaceState.
  *
  * Consumers should treat this as a *pure derivation* of state — it is cheap
  * enough to recompute on every render of the stream, but the SampleWorkspacePage
  * memoizes it on `runState` identity.
  */
-export function buildRunEvents(run: SampleWorkspaceState | null): RunEvent[] {
+export function buildSampleEvents(run: SampleWorkspaceState | null): SampleEvent[] {
   if (!run) return [];
-  const events: RunEvent[] = [];
+  const events: SampleEvent[] = [];
 
   events.push({
     id: `workflow.started:${run.id}`,
     kind: "workflow.started",
     at: run.startedAt,
-    runName: run.name,
+    sampleName: run.name,
   });
 
   if (run.completedAt) {
@@ -458,11 +458,11 @@ function threadMessages(
  * Convenience: count how many of each kind we have — used by filter toolbars.
  */
 export function countEventsByKind(
-  events: RunEvent[],
-): Record<RunEventKind, number> {
+  events: SampleEvent[],
+): Record<SampleEventKind, number> {
   const counts = Object.fromEntries(
-    RUN_EVENT_KINDS.map((k) => [k, 0]),
-  ) as Record<RunEventKind, number>;
+    SAMPLE_EVENT_KINDS.map((k) => [k, 0]),
+  ) as Record<SampleEventKind, number>;
   for (const e of events) counts[e.kind] += 1;
   return counts;
 }
@@ -472,11 +472,11 @@ export function countEventsByKind(
  * when jumping from a DAG selection to the event stream.
  */
 export function findNearestEventForTask(
-  events: RunEvent[],
+  events: SampleEvent[],
   taskId: string,
   at: string | null,
-): RunEvent | null {
-  let best: RunEvent | null = null;
+): SampleEvent | null {
+  let best: SampleEvent | null = null;
   let bestDelta = Number.POSITIVE_INFINITY;
   const target = at ? new Date(at).getTime() : null;
   for (const e of events) {

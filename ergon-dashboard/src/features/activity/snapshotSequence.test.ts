@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { GraphMutationDto } from "@/features/graph/contracts/graphMutations";
-import type { RunActivity } from "./types";
+import type { SampleActivity } from "./types";
 import { resolveActivitySnapshotSequence } from "./snapshotSequence";
 
-function activity(overrides: Partial<RunActivity> = {}): RunActivity {
+function activity(overrides: Partial<SampleActivity> = {}): SampleActivity {
   return {
     id: "activity-1",
     kind: "execution",

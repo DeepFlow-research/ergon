@@ -29,7 +29,7 @@ class CamelModel(BaseModel):
     )
 
 
-class RunCommunicationMessageDto(CamelModel):
+class SampleCommunicationMessageDto(CamelModel):
     id: str
     thread_id: str
     thread_topic: str
@@ -43,7 +43,7 @@ class RunCommunicationMessageDto(CamelModel):
     created_at: datetime
 
 
-class RunCommunicationThreadDto(CamelModel):
+class SampleCommunicationThreadDto(CamelModel):
     id: str
     sample_id: str
     task_id: str | None = None
@@ -53,7 +53,7 @@ class RunCommunicationThreadDto(CamelModel):
     agent_b_id: str
     created_at: datetime
     updated_at: datetime
-    messages: list[RunCommunicationMessageDto] = Field(default_factory=list)
+    messages: list[SampleCommunicationMessageDto] = Field(default_factory=list)
 
 
 class SampleTaskDto(CamelModel):
@@ -89,7 +89,7 @@ class SampleResourceDto(CamelModel):
     created_at: datetime
 
 
-class RunExecutionAttemptDto(CamelModel):
+class SampleExecutionAttemptDto(CamelModel):
     id: str
     task_id: str
     attempt_number: int
@@ -105,7 +105,7 @@ class RunExecutionAttemptDto(CamelModel):
     output_resource_ids: list[str] = Field(default_factory=list)
 
 
-class RunEvaluationCriterionDto(CamelModel):
+class SampleEvaluationCriterionDto(CamelModel):
     id: str
     stage_num: int
     stage_name: str
@@ -143,10 +143,10 @@ class SampleTaskEvaluationDto(CamelModel):
     stages_passed: int
     failed_gate: str | None = None
     created_at: datetime
-    criterion_results: list[RunEvaluationCriterionDto] = Field(default_factory=list)
+    criterion_results: list[SampleEvaluationCriterionDto] = Field(default_factory=list)
 
 
-class RunSandboxCommandDto(CamelModel):
+class SampleSandboxCommandDto(CamelModel):
     command: str
     stdout: str | None = None
     stderr: str | None = None
@@ -155,7 +155,7 @@ class RunSandboxCommandDto(CamelModel):
     timestamp: datetime
 
 
-class RunSandboxDto(CamelModel):
+class SampleSandboxDto(CamelModel):
     sandbox_id: str
     task_id: str
     template: str | None = None
@@ -164,7 +164,7 @@ class RunSandboxDto(CamelModel):
     created_at: datetime
     closed_at: datetime | None = None
     close_reason: str | None = None
-    commands: list[RunSandboxCommandDto] = Field(default_factory=list)
+    commands: list[SampleSandboxCommandDto] = Field(default_factory=list)
 
 
 class SampleContextEventDto(CamelModel):
@@ -201,11 +201,11 @@ class SampleSnapshotDto(CamelModel):
     tasks: dict[str, SampleTaskDto] = Field(default_factory=dict)
     root_task_id: str = ""  # slopcop: ignore[no-str-empty-default]
     resources_by_task: dict[str, list[SampleResourceDto]] = Field(default_factory=dict)
-    executions_by_task: dict[str, list[RunExecutionAttemptDto]] = Field(default_factory=dict)
+    executions_by_task: dict[str, list[SampleExecutionAttemptDto]] = Field(default_factory=dict)
     evaluations_by_task: dict[str, SampleTaskEvaluationDto] = Field(default_factory=dict)
-    sandboxes_by_task: dict[str, RunSandboxDto] = Field(default_factory=dict)
+    sandboxes_by_task: dict[str, SampleSandboxDto] = Field(default_factory=dict)
     context_events_by_task: dict[str, list[SampleContextEventDto]] = Field(default_factory=dict)
-    threads: list[RunCommunicationThreadDto] = Field(default_factory=list)
+    threads: list[SampleCommunicationThreadDto] = Field(default_factory=list)
     started_at: datetime | None = None
     completed_at: datetime | None = None
     duration_seconds: float | None = None

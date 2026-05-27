@@ -19,7 +19,7 @@ export async function GET() {
     const rest = await import("@/lib/contracts/rest");
     const types = await import("@/lib/types");
     checks.ssr_imports =
-      typeof rest.parseRunSnapshot === "function" && typeof types.TaskStatus !== "undefined"
+      typeof rest.parseSampleSnapshot === "function" && typeof types.TaskStatus !== "undefined"
         ? "ok"
         : "fail";
   } catch (e) {

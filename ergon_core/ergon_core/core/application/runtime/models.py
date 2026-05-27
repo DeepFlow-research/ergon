@@ -2,7 +2,7 @@
 
 Frozen Pydantic models. Callers never receive raw SQLModel rows.
 
-UUID fields use NewType aliases (RunId, NodeId, etc.) so that type
+UUID fields use NewType aliases (SampleId, NodeId, etc.) so that type
 checkers catch cross-field swaps — e.g. passing a task id where a
 sample_id is expected. The aliases are erased at runtime (zero
 serialization cost).
@@ -20,7 +20,7 @@ from ergon_core.core.persistence.shared.types import (
     DefinitionId,
     EdgeId,
     NodeId,
-    RunId,
+    SampleId,
 )
 from pydantic import BaseModel, Field
 
@@ -45,7 +45,7 @@ class GraphNodeDto(BaseModel):
     model_config = {"frozen": True}
 
     task_id: NodeId
-    sample_id: RunId
+    sample_id: SampleId
     instance_key: str
     task_slug: str
     description: str
@@ -78,7 +78,7 @@ class GraphEdgeDto(BaseModel):
     model_config = {"frozen": True}
 
     id: EdgeId
-    sample_id: RunId
+    sample_id: SampleId
     definition_dependency_id: DefinitionId | None
     source_task_id: NodeId
     target_task_id: NodeId
@@ -94,7 +94,7 @@ class GraphAnnotationDto(BaseModel):
     model_config = {"frozen": True}
 
     id: UUID = Field(description="Identifier of the annotation row itself.")
-    sample_id: RunId
+    sample_id: SampleId
     target_type: GraphTargetType
     target_id: UUID = Field(
         description=(
@@ -113,7 +113,7 @@ class GraphMutationRecordDto(BaseModel):
     model_config = {"frozen": True}
 
     id: UUID = Field(description="Identifier of the mutation row itself, not a graph target id.")
-    sample_id: RunId
+    sample_id: SampleId
     sequence: int
     mutation_type: MutationType
     target_type: GraphTargetType
@@ -135,7 +135,7 @@ class WorkflowGraphDto(BaseModel):
 
     model_config = {"frozen": True}
 
-    sample_id: RunId
+    sample_id: SampleId
     nodes: list[GraphNodeDto] = Field(default_factory=list)
     edges: list[GraphEdgeDto] = Field(default_factory=list)
 
@@ -269,7 +269,7 @@ class SampleGraphNodeView(BaseModel):
 
     model_config = {"frozen": True, "arbitrary_types_allowed": True}
 
-    sample_id: RunId
+    sample_id: SampleId
     task_id: UUID
     parent_task_id: NodeId | None
     status: str

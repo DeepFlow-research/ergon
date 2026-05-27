@@ -1,6 +1,6 @@
-"""Inngest function: run cleanup (sandbox teardown).
+"""Inngest function: sample cleanup (sandbox teardown).
 
-Terminates sandbox after run completion/failure and ensures run status is correct.
+Terminates sandbox after sample completion/failure and ensures sample status is correct.
 """
 
 import logging
@@ -25,24 +25,24 @@ _STATUS_MAP: dict[str, SampleStatus] = {
 
 
 async def run_sample_cleanup_job(ctx: Any, payload: SampleCleanupEvent) -> SampleCleanupResult:
-    """Cleanup: terminate sandbox, ensure run status is correct."""
+    """Cleanup: terminate sandbox, ensure sample status is correct."""
     sample_id = payload.sample_id
     status = payload.status
     error_message = payload.error_message
 
-    logger.info("run-cleanup sample_id=%s status=%s", sample_id, status)
+    logger.info("sample-cleanup sample_id=%s status=%s", sample_id, status)
 
     return await ctx.step.run(
-        "cleanup-run",
-        partial(_cleanup_run, sample_id, status, error_message),
+        "cleanup-sample",
+        partial(_cleanup_sample, sample_id, status, error_message),
         output_type=SampleCleanupResult,
     )
 
 
-async def _cleanup_run(
+async def _cleanup_sample(
     sample_id: UUID, status: str, error_message: str | None
 ) -> SampleCleanupResult:
-    """Terminate sandbox and update run status."""
+    """Terminate sandbox and update sample status."""
     expected = _STATUS_MAP.get(status)
     if expected is None:
         raise ConfigurationError(
@@ -64,7 +64,7 @@ async def _cleanup_run(
 
         if sandbox_id is not None and not isinstance(sandbox_id, str):
             logger.warning(
-                "run-cleanup sample_id=%s: sandbox_id has unexpected type %s, skipping termination",
+                "sample-cleanup sample_id=%s: sandbox_id has unexpected type %s, skipping termination",
                 sample_id,
                 type(sandbox_id).__name__,
             )

@@ -10,7 +10,7 @@ import { ResourcePanel } from "@/components/panels/ResourcePanel";
 import { SandboxPanel } from "@/components/panels/SandboxPanel";
 import { TaskTransitionLog } from "@/components/workspace/TaskTransitionLog";
 import { ContextEventLog } from "@/features/graph/components/ContextEventLog";
-import type { RunActivity } from "@/features/activity/types";
+import type { SampleActivity } from "@/features/activity/types";
 import type { SampleWorkspaceState } from "@/lib/types";
 import { formatClockTime } from "@/lib/timeFormat";
 import { formatTaskWallTimestamp } from "@/features/graph/utils/taskTiming";
@@ -20,7 +20,7 @@ function EmptySection({ message }: { message: string }) {
   return <div className="text-sm text-[var(--muted)]">{message}</div>;
 }
 
-const ACTIVITY_KIND_TITLE: Record<RunActivity["kind"], string> = {
+const ACTIVITY_KIND_TITLE: Record<SampleActivity["kind"], string> = {
   execution: "Execution",
   graph: "Graph mutation",
   message: "Message",
@@ -30,7 +30,7 @@ const ACTIVITY_KIND_TITLE: Record<RunActivity["kind"], string> = {
   sandbox: "Sandbox",
 };
 
-function ActivityDetail({ activity }: { activity: RunActivity }) {
+function ActivityDetail({ activity }: { activity: SampleActivity }) {
   const metadata = Object.entries(activity.metadata)
     .filter(([, value]) => value !== null && value !== "")
     .slice(0, 4);
@@ -156,7 +156,7 @@ export function TaskWorkspace({
   onJumpToSequence?: (sequence: number) => void;
   selectedTime?: string | null;
   selectedSequence?: number | null;
-  selectedActivity?: RunActivity | null;
+  selectedActivity?: SampleActivity | null;
 }) {
   const { task, resources, executions, sandbox, threads, evaluation, dependencies, isLoading } =
     useTaskDetails(runState, taskId);

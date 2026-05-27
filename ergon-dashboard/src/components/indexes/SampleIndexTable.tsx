@@ -10,10 +10,10 @@ import {
   formatNumber,
   formatPercent,
 } from "@/components/indexes/format";
-import type { RunSummary } from "@/lib/server-data/samples";
-import type { RunLifecycleStatus } from "@/lib/types";
+import type { SampleSummary } from "@/lib/server-data/samples";
+import type { SampleLifecycleStatus } from "@/lib/types";
 
-export function SampleIndexTable({ runs }: { runs: RunSummary[] }) {
+export function SampleIndexTable({ runs }: { runs: SampleSummary[] }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
 
@@ -110,7 +110,7 @@ export function SampleIndexTable({ runs }: { runs: RunSummary[] }) {
                   <div className="mt-0.5 text-[var(--faint)]">{run.sample_label}</div>
                 </td>
                 <td className="px-3 py-2.5">
-                  <StatusBadge status={run.status as RunLifecycleStatus} size="sm" />
+                  <StatusBadge status={run.status as SampleLifecycleStatus} size="sm" />
                   {run.error_message ? (
                     <div className="mt-1 max-w-[160px] truncate text-xs text-[var(--status-failed)]">
                       {run.error_message}

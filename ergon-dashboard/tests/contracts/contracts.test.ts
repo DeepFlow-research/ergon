@@ -12,11 +12,11 @@ import {
   parseDashboardWorkflowStartedData,
   parseTaskStatusSocketData,
 } from "../../src/lib/contracts/events";
-import { parseRunSnapshot } from "../../src/lib/contracts/rest";
-import { deserializeRunState } from "../../src/lib/sampleState";
+import { parseSampleSnapshot } from "../../src/lib/contracts/rest";
+import { deserializeSampleState } from "../../src/lib/sampleState";
 import { store } from "../../src/lib/state/store";
 import {
-  getHarnessRun,
+  getHarnessSample,
   resetDashboardHarness,
   seedDashboardHarness,
 } from "../../src/lib/testing/dashboardHarness";
@@ -27,7 +27,7 @@ test("run snapshot parser accepts object-map transport", () => {
   const run = seed.runs?.[0];
 
   assert.ok(run);
-  const parsed = parseRunSnapshot(run);
+  const parsed = parseSampleSnapshot(run);
 
   assert.equal(parsed.id, FIXTURE_IDS.sampleId);
   assert.deepEqual(Object.keys(parsed.tasks ?? {}).sort(), [
@@ -42,7 +42,7 @@ test("run snapshot hydration converts context part chunks into UI action payload
   const run = seed.runs?.[0];
 
   assert.ok(run);
-  const state = deserializeRunState(run);
+  const state = deserializeSampleState(run);
   const events = state.contextEventsByTask.get(FIXTURE_IDS.solveTaskId) ?? [];
 
   assert.equal(events.length, 2);
@@ -81,7 +81,7 @@ test("run snapshot hydration orders context events across retried executions", (
     },
   };
 
-  const state = deserializeRunState({
+  const state = deserializeSampleState({
     ...run,
     contextEventsByTask: {
       [FIXTURE_IDS.solveTaskId]: [retryEvent, first],
@@ -103,7 +103,7 @@ test("run snapshot parser rejects tuple-map transport", () => {
     tasks: Object.entries(run.tasks ?? {}),
   };
 
-  assert.throws(() => parseRunSnapshot(legacyPayload));
+  assert.throws(() => parseSampleSnapshot(legacyPayload));
 });
 
 test("dashboard harness only serves explicitly seeded runs", () => {
@@ -112,15 +112,15 @@ test("dashboard harness only serves explicitly seeded runs", () => {
   assert.ok(run);
 
   resetDashboardHarness();
-  store.seedRun(deserializeRunState({ ...run, id: "live-event-run" }));
+  store.seedSample(deserializeSampleState({ ...run, id: "live-event-run" }));
 
-  assert.equal(getHarnessRun("live-event-run"), null);
+  assert.equal(getHarnessSample("live-event-run"), null);
 
   seedDashboardHarness({ runs: [run] });
 
-  const seededRun = getHarnessRun(FIXTURE_IDS.sampleId);
+  const seededRun = getHarnessSample(FIXTURE_IDS.sampleId);
   assert.equal(seededRun?.id, FIXTURE_IDS.sampleId);
-  assert.equal(deserializeRunState(seededRun).id, FIXTURE_IDS.sampleId);
+  assert.equal(deserializeSampleState(seededRun).id, FIXTURE_IDS.sampleId);
 });
 
 test("workflow started event parser validates run snapshots", () => {

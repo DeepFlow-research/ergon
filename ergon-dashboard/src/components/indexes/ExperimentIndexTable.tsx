@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { formatDateTime, formatDurationSeconds, formatPercent } from "@/components/indexes/format";
 import type { ExperimentSummary } from "@/lib/server-data/experiments";
-import type { RunLifecycleStatus } from "@/lib/types";
+import type { SampleLifecycleStatus } from "@/lib/types";
 
 export function ExperimentIndexTable({ experiments }: { experiments: ExperimentSummary[] }) {
   const [query, setQuery] = useState("");
@@ -97,7 +97,7 @@ export function ExperimentIndexTable({ experiments }: { experiments: ExperimentS
                   {experiment.failure_count}
                 </td>
                 <td className="px-3 py-2.5">
-                  <StatusBadge status={experiment.status as RunLifecycleStatus} size="sm" />
+                  <StatusBadge status={experiment.status as SampleLifecycleStatus} size="sm" />
                 </td>
                 <td className="px-3 py-2.5 text-right font-mono text-[var(--ink)]">
                   {formatPercent(experiment.average_score)}
