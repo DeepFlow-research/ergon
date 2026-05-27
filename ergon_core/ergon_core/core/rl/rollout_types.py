@@ -15,23 +15,6 @@ def _to_camel(value: str) -> str:
     return parts[0] + "".join(part.capitalize() for part in parts[1:])
 
 
-class SubmitRequest(BaseModel):
-    """Trainer → Ergon: start a batch of episodes."""
-
-    definition_id: UUID
-    num_episodes: int = Field(ge=1)
-    policy_version: int | None = None
-    model_target_override: str | None = None
-
-
-class SubmitResponse(BaseModel):
-    """Ergon → Trainer: batch accepted."""
-
-    batch_id: UUID
-    sample_ids: list[UUID]
-    status: BatchStatus = BatchStatus.PENDING
-
-
 class TrainingRolloutRequest(BaseModel):
     """Trainer → Ergon: select and launch samples from a persisted experiment."""
 

@@ -44,6 +44,7 @@ ALLOWED_EXPERIMENT_ID_PATH_PREFIXES = (
     ROOT / "ergon-dashboard" / "src" / "components" / "experiments",
     ROOT / "ergon-dashboard" / "src" / "components" / "indexes",
     ROOT / "ergon-dashboard" / "src" / "components" / "samples",
+    ROOT / "ergon-dashboard" / "src" / "generated" / "rest",
     ROOT / "ergon-dashboard" / "src" / "lib" / "sample-state",
     ROOT / "ergon-dashboard" / "tests" / "components",
     ROOT / "ergon-dashboard" / "tests" / "contracts",

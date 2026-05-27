@@ -13,8 +13,6 @@ from ergon_core.core.rl.rollout_service import RolloutService
 from ergon_core.core.rl.rollout_types import (
     PollResponse,
     RolloutBatchSummary,
-    SubmitRequest,
-    SubmitResponse,
     TrainingRolloutRequest,
     WeightSyncRequest,
     WeightSyncResponse,
@@ -41,15 +39,6 @@ def get_vllm_manager(request: Request) -> VLLMManager | None:
     except AttributeError:
         return None
     return cast(VLLMManager, manager)
-
-
-@router.post("/submit", response_model=SubmitResponse, status_code=202)
-def submit_rollout(
-    request: SubmitRequest,
-    service: Annotated[RolloutService, Depends(get_rollout_service)],
-) -> SubmitResponse:
-    """Start a batch of episodes. Returns immediately with batch_id."""
-    return service.submit(request)
 
 
 @router.post(

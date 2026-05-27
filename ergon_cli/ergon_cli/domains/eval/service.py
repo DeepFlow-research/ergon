@@ -20,11 +20,10 @@ async def run_eval(command: EvalCommand) -> int:
 
     if command.checkpoint is None:
         raise CliUsageError("Usage: ergon eval checkpoint --checkpoint <path>")
-    await evaluate_checkpoint(
+    return await evaluate_checkpoint(
         checkpoint_path=command.checkpoint,
         benchmark_type=command.benchmark,
         evaluator_type=command.evaluator,
         model_base=command.model_base,
         eval_limit=command.eval_limit,
     )
-    return 0

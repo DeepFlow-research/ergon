@@ -7,7 +7,7 @@
 # Weight sync between training and vLLM happens via NCCL automatically.
 #
 #   sky launch ergon_infra/ergon_infra/templates/train-trl-multinode.yaml -y \
-#     --env DEFINITION_ID=<uuid> \
+#     --env EXPERIMENT_ID=<uuid> \
 #     --env MODEL=Qwen/Qwen2.5-1.5B
 
 name: ergon-training-multinode
@@ -23,7 +23,7 @@ file_mounts:
     mode: MOUNT_CACHED
 
 envs:
-  DEFINITION_ID:
+  EXPERIMENT_ID:
   MODEL:
   BENCHMARK: ${BENCHMARK:-smoke-test}
   VLLM_TP_SIZE: ${VLLM_TP_SIZE:-1}
@@ -60,7 +60,7 @@ run: |
 
     ergon train local \
       --benchmark "$BENCHMARK" \
-      --definition-id "$DEFINITION_ID" \
+      --experiment-id "$EXPERIMENT_ID" \
       --model "$MODEL" \
       --vllm-mode server \
       --vllm-server-url "http://$HEAD_IP:8000" \

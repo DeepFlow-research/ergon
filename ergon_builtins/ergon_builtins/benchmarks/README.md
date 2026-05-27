@@ -1,8 +1,7 @@
 # Builtin Benchmarks
 
 Each subdirectory is one benchmark.  Import from Python; **there is no
-CLI authoring path** (PR 6.5 deleted `ergon experiment define` /
-`ergon run <benchmark>`).  Authoring is Python-only; the CLI is for
+CLI authoring path**.  Authoring is Python-only; the CLI is for
 observation (`ergon experiment show`, `ergon sample status`, and related read
 commands).
 
@@ -95,6 +94,6 @@ Or just `ls ergon_builtins/ergon_builtins/benchmarks/`.
 After persisting and launching a benchmark from Python, use the CLI to observe its state:
 
 - `ergon run status <run-id>` — current state of one run
-- `ergon run list [--status=S] [--definition-id=<UUID>]` — list runs, optionally filtered
+- `ergon sample list [--status=S] [--experiment-id=<UUID>]` — list samples, optionally filtered
 - `ergon experiment show <UUID>` — full experiment detail (UUID-based)
 - `ergon experiment list` — list recent experiments

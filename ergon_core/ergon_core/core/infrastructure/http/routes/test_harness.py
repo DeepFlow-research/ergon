@@ -33,7 +33,11 @@ from tests.fixtures.smoke_components.benchmarks import (
     SweBenchSmokeBenchmark,
 )
 
-router = APIRouter(prefix="/api/__danger__/test-harness", tags=["danger-test-harness"])
+router = APIRouter(
+    prefix="/api/__danger__/test-harness",
+    tags=["danger-test-harness"],
+    include_in_schema=False,
+)
 
 _SMOKE_BENCHMARKS = {
     benchmark.type_slug: benchmark

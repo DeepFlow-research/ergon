@@ -1,7 +1,7 @@
 """Rollout-as-a-Service: orchestrate episode batches for RL trainers.
 
 Encapsulates all logic previously inline in trl_adapter.py. Both the
-HTTP endpoint (/rollouts/) and any in-process callers delegate here.
+HTTP endpoints (/rollouts/) and any in-process callers delegate here.
 
 Batch state is durable in PG — survives API restarts.
 """
@@ -9,7 +9,7 @@ Batch state is durable in PG — survives API restarts.
 import logging
 from collections import defaultdict
 from collections.abc import Callable, Sequence
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import inngest
 from ergon_core.core.application.experiments.candidate_pool import (
@@ -18,7 +18,6 @@ from ergon_core.core.application.experiments.candidate_pool import (
 )
 from ergon_core.core.application.samples.materialization import materialize_sample
 from ergon_core.core.persistence.context.models import SampleContextEvent
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.experiments.models import (
     ExperimentSamplerInvocationRow,
     ExperimentSamplePoolEntryRow,
@@ -27,7 +26,6 @@ from ergon_core.core.persistence.shared.enums import (
     TERMINAL_SAMPLE_STATUSES,
     SampleStatus,
 )
-from ergon_core.core.persistence.shared.ids import new_id
 from ergon_core.core.persistence.telemetry.models import (
     RolloutBatch,
     RolloutBatchSampleMembership,
@@ -45,8 +43,6 @@ from ergon_core.core.rl.rollout_types import (
     EpisodeFailure,
     PollResponse,
     RolloutBatchSummary,
-    SubmitRequest,
-    SubmitResponse,
     Trajectory,
     TrainingRolloutRequest,
 )
@@ -60,7 +56,7 @@ class RolloutService:
     """Orchestrate rollout batches: create runs, fire events, poll, extract.
 
     Lifecycle:
-      1. Trainer calls ``submit()`` → SampleRecords + RolloutBatch created, Inngest events fired
+      1. Trainer calls ``submit_experiment_batch()`` → SampleRecords + RolloutBatch created, Inngest events fired
       2. Trainer polls ``poll()`` → returns RUNNING until all episodes finish
       3. When all terminal → ``poll()`` extracts trajectories and returns COMPLETE
 
@@ -88,70 +84,6 @@ class RolloutService:
             logger.info("Loading tokenizer: %s", self._tokenizer_name)
             self._tokenizer = AutoTokenizer.from_pretrained(self._tokenizer_name)
         return self._tokenizer
-
-    def submit(self, request: SubmitRequest) -> SubmitResponse:
-        """Create SampleRecords, RolloutBatch, and fire Inngest workflow/started events."""
-        batch_id = uuid4()
-        sample_ids: list[UUID] = []
-
-        with self._session_factory() as session:
-            definition = session.get(ExperimentDefinition, request.definition_id)
-            if definition is None:
-                raise ValueError(f"Definition {request.definition_id} not found")
-            benchmark_type = definition.benchmark_type
-            session.add(
-                RolloutBatch(
-                    id=batch_id,
-                    status=BatchStatus.PENDING,
-                )
-            )
-
-            for index in range(request.num_episodes):
-                sample_id = new_id()
-                session.add(
-                    SampleRecord(
-                        id=sample_id,
-                        definition_id=request.definition_id,
-                        benchmark_type=benchmark_type,
-                        instance_key=f"episode-{index}",
-                        worker_team_json={"primary": "rl-rollout"},
-                        model_target=request.model_target_override,
-                        status=SampleStatus.PENDING,
-                    )
-                )
-                session.add(
-                    RolloutBatchSampleMembership(
-                        batch_id=batch_id,
-                        sample_id=sample_id,
-                        ordinal=index,
-                    )
-                )
-                sample_ids.append(sample_id)
-
-            session.commit()
-
-        for sample_id in sample_ids:
-            self._inngest_send(
-                inngest.Event(
-                    name=WorkflowStartedEvent.name,
-                    data=WorkflowStartedEvent(
-                        sample_id=sample_id,
-                        definition_id=request.definition_id,
-                    ).model_dump(mode="json"),
-                )
-            )
-
-        logger.info(
-            "Submitted batch %s: %d episodes for definition %s",
-            batch_id,
-            request.num_episodes,
-            request.definition_id,
-        )
-        return SubmitResponse(
-            batch_id=batch_id,
-            sample_ids=sample_ids,
-            status=BatchStatus.PENDING,
-        )
 
     def create_rollout_batch(
         self,

@@ -14,13 +14,13 @@ update this doc in the same PR.
 
 | Goal | Command |
 |---|---|
-| Populate **SANDBOX** panel (stdin/stdout events) with no LLM | `ergon experiment define researchrubrics-smoke --worker canonical-smoke --model stub:constant --limit 1 && ergon experiment run <experiment-id>` |
-| Populate **GENERATIONS** without calling a model | `ergon experiment define smoke-test --worker training-stub --model stub:constant --limit 1 && ergon experiment run <experiment-id>` |
-| Populate **EVALUATION** with a passing gate, no LLM | any benchmark + `--evaluator stub-rubric` |
-| Populate **EVALUATION** with varied scores (RL reward-shape test) | any benchmark + `--evaluator varied-stub-rubric` |
-| Test a real ReAct agent end-to-end | `ergon experiment define swebench-verified --worker swebench-react --model openai:gpt-4o --limit 1 && ergon experiment run <experiment-id>` |
-| Test manager → researcher delegation with a real LLM | `ergon experiment define researchrubrics-smoke --worker researchrubrics-researcher --model openai:gpt-4o --limit 1 && ergon experiment run <experiment-id>` |
-| Test Lean 4 proof verification | `ergon experiment define minif2f --worker minif2f-react --model openai:gpt-4o --limit 1 && ergon experiment run <experiment-id>` (needs Lean sandbox) |
+| Populate **SANDBOX** panel (stdin/stdout events) with no LLM | Use a Python submit script that builds a `ResearchRubricsEnvironment` with the canonical smoke worker and calls `Experiment.submit(...)`. |
+| Populate **GENERATIONS** without calling a model | Use a Python submit script with an environment bound to `TrainingStubWorker`; inspect with `ergon sample show <sample-id>`. |
+| Populate **EVALUATION** with a passing gate, no LLM | Bind `stub-rubric` in the environment's evaluator list. |
+| Populate **EVALUATION** with varied scores (RL reward-shape test) | Bind `varied-stub-rubric` in the environment's evaluator list. |
+| Test a real ReAct agent end-to-end | Build the relevant builtin environment in Python with the ReAct worker and submit it through `Experiment.submit(...)`. |
+| Test manager -> researcher delegation with a real LLM | Build `ResearchRubricsEnvironment` in Python with `researchrubrics-researcher` and submit it through `Experiment.submit(...)`. |
+| Test Lean 4 proof verification | Build `MiniF2FEnvironment` in Python with the MiniF2F worker/rubric and submit it through `Experiment.submit(...)` (needs Lean sandbox). |
 
 ---
 
@@ -36,8 +36,8 @@ Which worker emits what.  `—` = not applicable, `✗` = nothing emitted.
 | `minif2f-react` | ✓ | ✓ (proof artifact) | ✓ (Lean files) | ✓ |
 | `researchrubrics-researcher` | ✓ | ✓ (SampleResource kind=REPORT) | ✓ (writes `final_output/report.md`) | ✗ |
 
-EVALUATION is populated by whichever **evaluator** you pass with
-`--evaluator`; see table below.
+EVALUATION is populated by the **evaluators** bound to the submitted
+environment; see table below.
 
 ---
 

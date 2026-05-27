@@ -9,12 +9,15 @@ class _FakeRolloutService:
     def __init__(self) -> None:
         self.batch_id = uuid4()
         self.sample_id = uuid4()
+        self.submitted_request = None
 
-    def submit(self, _request: object) -> dict[str, object]:
+    async def submit_experiment_batch(self, request: object) -> dict[str, object]:
+        self.submitted_request = request
         return {
             "batch_id": self.batch_id,
             "sample_ids": [self.sample_id],
             "status": "pending",
+            "sampler_invocation_id": str(uuid4()),
         }
 
     def get_rollout_batch_by_id(self, _batch_id: object) -> dict[str, object]:
@@ -33,21 +36,23 @@ class _FakeVLLMManager:
         self.restarted_with = checkpoint_path
 
 
-def test_rollout_router_gets_service_from_app_state() -> None:
+def test_rollout_router_gets_experiment_service_from_app_state() -> None:
+    experiment_id = uuid4()
     app = FastAPI()
     app.state.rollout_service = _FakeRolloutService()
     app.include_router(router)
     client = TestClient(app)
 
     resp = client.post(
-        "/rollouts/submit",
+        f"/rollouts/experiments/{experiment_id}/rollout-batches",
         json={
-            "definition_id": str(uuid4()),
-            "num_episodes": 1,
+            "experimentId": str(experiment_id),
+            "k": 1,
         },
     )
 
     assert resp.status_code == 202
+    assert app.state.rollout_service.submitted_request.experiment_id == experiment_id
 
 
 def test_rollout_batch_route_exposes_sample_ids() -> None:

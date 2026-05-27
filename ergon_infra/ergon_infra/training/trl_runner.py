@@ -8,7 +8,7 @@ Architecture::
 
     GPU Node (this process)              Ergon API (MacBook / cloud)
     ───────────────────────              ──────────────────────────
-    TRL GRPOTrainer                      POST /rollouts/submit
+    TRL GRPOTrainer                      POST /rollouts/experiments/{id}/rollout-batches
       → rollout_func() ────HTTP────────►   → Inngest pipeline
       ← trajectories   ◄──HTTP────────    → workers call vLLM
       → forward/backward (GPU)            → eval + score
