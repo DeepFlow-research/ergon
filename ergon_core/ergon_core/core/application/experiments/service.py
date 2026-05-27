@@ -37,6 +37,7 @@ class ExperimentSubmissionService(Protocol):
         policy_version: int | None,
     ) -> "ExperimentSubmitResult": ...
 
+
 def persist_benchmark(benchmark: "Benchmark") -> DefinitionHandle:
     """Persist a configured object-bound Benchmark as an experiment definition."""
 

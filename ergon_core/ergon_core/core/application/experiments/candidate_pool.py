@@ -105,7 +105,9 @@ async def sample_from_pool_entry(entry: ExperimentSamplePoolEntryRow) -> Sample:
         sample_key=str(payload["sample_key"]),
         environment_name=str(payload["environment_name"]),
         tasks=tasks,
-        sample_ref=payload.get("sample_ref") if isinstance(payload.get("sample_ref"), dict) else None,
+        sample_ref=payload.get("sample_ref")
+        if isinstance(payload.get("sample_ref"), dict)
+        else None,
         source_metadata=(
             payload.get("source_metadata")
             if isinstance(payload.get("source_metadata"), dict)
@@ -117,7 +119,9 @@ async def sample_from_pool_entry(entry: ExperimentSamplePoolEntryRow) -> Sample:
 
 async def _task_from_candidate_snapshot(task_json: object) -> Task:
     if not isinstance(task_json, dict):
-        raise ValueError(f"Candidate task snapshot must be an object, got {type(task_json).__name__}")
+        raise ValueError(
+            f"Candidate task snapshot must be an object, got {type(task_json).__name__}"
+        )
     task = await Task.from_definition(task_json, task_id=uuid4())
     # Candidate-pool rows are not runtime materializations. We use the existing
     # `_type` dispatch path to rebuild object-bound config, then clear the
