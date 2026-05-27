@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Protocol, runtime_checkable
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, PrivateAttr
 
 from ergon_core.api.experiment.environment import Environment
 from ergon_core.api.experiment.sampling import RandomSampler, Sampler
@@ -56,6 +56,7 @@ class Experiment(BaseModel):
     description: str | None = None
     created_by: str | None = None
     metadata: dict[str, JsonValue] = Field(default_factory=dict)
+    _persisted_ref: ExperimentRef | None = PrivateAttr(default=None)
 
     def environment_names(self) -> Sequence[str]:
         return [environment.name for environment in self.environments]
@@ -76,6 +77,12 @@ class Experiment(BaseModel):
             raise ValueError("Environment names must be unique")
         for environment in self.environments:
             environment.validate_authoring()
+
+    def persisted_ref(self) -> ExperimentRef | None:
+        return self._persisted_ref
+
+    def mark_persisted(self, ref: ExperimentRef) -> None:
+        self._persisted_ref = ref
 
     async def submit(
         self,

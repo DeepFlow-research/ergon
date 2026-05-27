@@ -41,6 +41,17 @@ class MaterializedEnvironment(Environment):
         yield make_sample("a")
 
 
+class StreamingEnvironment(Environment):
+    source_mode: Literal["streaming"] = "streaming"
+    next_index: int = 0
+
+    def iter_samples(self) -> Iterator[Sample]:
+        while True:
+            key = str(self.next_index)
+            self.next_index += 1
+            yield make_sample(key)
+
+
 @pytest.mark.asyncio
 async def test_random_sampler_returns_all_candidates_in_seeded_order_without_truncating() -> None:
     samples = [make_sample(str(index)) for index in range(5)]
@@ -105,6 +116,27 @@ def test_experiment_rejects_duplicate_environment_names() -> None:
 
     with pytest.raises(ValueError, match="unique"):
         experiment.validate_authoring()
+
+
+def test_streaming_environment_candidate_cursor_does_not_replay() -> None:
+    environment = StreamingEnvironment(name="stream")
+
+    first = [sample.sample_key for _, sample in zip(range(3), environment.iter_candidate_samples())]
+    second = [
+        sample.sample_key for _, sample in zip(range(2), environment.iter_candidate_samples())
+    ]
+
+    assert first == ["0", "1", "2"]
+    assert second == ["3", "4"]
+
+
+def test_experiment_can_remember_persisted_ref_between_submissions() -> None:
+    experiment = Experiment(name="x", environments=[MaterializedEnvironment(name="m")])
+    ref = ExperimentRef(experiment_id=uuid4(), name="x")
+
+    experiment.mark_persisted(ref)
+
+    assert experiment.persisted_ref() == ref
 
 
 class FakePersistenceService:
