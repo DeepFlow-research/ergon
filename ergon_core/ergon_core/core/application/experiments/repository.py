@@ -69,6 +69,7 @@ class ExperimentRepository:
         requested_k: int,
         candidate_pool_size: int,
         selected_count: int = 0,
+        policy_version: int | None = None,
         sampler_config: dict[str, JsonValue] | None = None,
     ) -> ExperimentSamplerInvocationRow:
         row = ExperimentSamplerInvocationRow(
@@ -77,6 +78,7 @@ class ExperimentRepository:
             requested_k=requested_k,
             candidate_pool_size=candidate_pool_size,
             selected_count=selected_count,
+            policy_version=policy_version,
             sampler_config_json=dict(sampler_config or {}),
         )
         self._session.add(row)
@@ -133,6 +135,7 @@ class ExperimentRepository:
             experiment_id=handle.experiment_id,
             environment_id=environment_id,
             sample_key=sample.sample_key,
+            sample_ref_json=sample.sample_ref,
             sample_json=sample.model_dump(mode="json"),
         )
         self._session.add(row)
@@ -166,16 +169,15 @@ def record_sampler_invocation(
     requested_k: int,
     candidate_pool_size: int,
     selected_count: int = 0,
+    policy_version: int | None = None,
     sampler_config: dict[str, JsonValue] | None = None,
 ) -> ExperimentSamplerInvocationRow:
-    row = ExperimentSamplerInvocationRow(
-        experiment_id=experiment_ref.experiment_id,
+    return ExperimentRepository(session).record_sampler_invocation(
+        experiment_ref=experiment_ref,
         sampler_name=sampler_name,
         requested_k=requested_k,
         candidate_pool_size=candidate_pool_size,
         selected_count=selected_count,
-        sampler_config_json=dict(sampler_config or {}),
+        policy_version=policy_version,
+        sampler_config=sampler_config,
     )
-    session.add(row)
-    session.flush()
-    return row

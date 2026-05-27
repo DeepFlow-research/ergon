@@ -6,12 +6,22 @@ from uuid import uuid4
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from ergon_core.api import Environment, Experiment, Sample
+from ergon_core.api import (
+    Environment,
+    Experiment,
+    Sample,
+    persist_experiment as persist_public_experiment,
+)
+from ergon_core.core.application.experiments.persistence import CoreExperimentPersistencePort
 from ergon_core.core.application.experiments.repository import (
     persist_experiment,
     record_sampler_invocation,
 )
-from ergon_core.core.persistence.experiments.models import ExperimentEnvironmentRow
+from ergon_core.core.persistence.experiments.models import (
+    ExperimentEnvironmentRow,
+    ExperimentRow,
+    ExperimentSamplePoolEntryRow,
+)
 from ergon_core.core.persistence.samples.models import SampleStatusEventRow, SampleTaskEventRow
 from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.test_support.task_factory import task_with_id
@@ -112,9 +122,33 @@ def test_record_sampler_invocation_writes_no_runtime_state(
         requested_k=4,
         candidate_pool_size=16,
         selected_count=0,
+        policy_version=3,
         sampler_config={"seed": 1},
     )
 
     assert invocation.experiment_id == handle.experiment_id
+    assert invocation.policy_version == 3
     assert session.exec(select(SampleRecord)).all() == []
     assert session.exec(select(SampleTaskEventRow)).all() == []
+
+
+@pytest.mark.asyncio
+async def test_public_persistence_facade_wires_to_core_port(
+    session: Session,
+    two_env_experiment: Experiment,
+) -> None:
+    ref = await persist_public_experiment(
+        two_env_experiment,
+        service=CoreExperimentPersistencePort(session),
+    )
+
+    assert ref.experiment_id
+    assert session.get(ExperimentRow, ref.experiment_id) is not None
+
+
+def test_experiment_persistence_uses_sample_ref_json_without_source_alias() -> None:
+    tables = SQLModel.metadata.tables
+
+    assert "sample_ref_json" in ExperimentSamplePoolEntryRow.model_fields
+    assert "source_sample_ref_json" not in ExperimentSamplePoolEntryRow.model_fields
+    assert all("source_sample_ref_json" not in table.columns for table in tables.values())

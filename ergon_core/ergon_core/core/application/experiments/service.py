@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from ergon_core.api.benchmark import Benchmark
     from ergon_core.api.experiment.experiment import (
         Experiment,
-        ExperimentRef,
         ExperimentSubmitResult,
     )
     from ergon_core.api.experiment.sampling import Sampler
@@ -37,25 +36,6 @@ class ExperimentSubmissionService(Protocol):
         candidate_pool_size: int | None,
         policy_version: int | None,
     ) -> "ExperimentSubmitResult": ...
-
-
-@runtime_checkable
-class PersistExperimentPort(Protocol):
-    # TODO(PR04): replace this protocol with the concrete core persistence
-    # service once experiment/environment/candidate-pool rows exist.
-    async def persist_experiment(self, experiment: "Experiment") -> "ExperimentRef": ...
-
-
-async def persist_experiment(
-    experiment: "Experiment",
-    *,
-    service: PersistExperimentPort,
-) -> "ExperimentRef":
-    # TODO(PR04): move callers to the concrete core persistence entry point
-    # after experiment rows and environment rows are introduced.
-    experiment.validate_authoring()
-    return await service.persist_experiment(experiment)
-
 
 def persist_benchmark(benchmark: "Benchmark") -> DefinitionHandle:
     """Persist a configured object-bound Benchmark as an experiment definition."""

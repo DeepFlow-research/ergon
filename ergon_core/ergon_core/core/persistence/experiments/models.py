@@ -46,6 +46,7 @@ class ExperimentSamplerInvocationRow(SQLModel, table=True):
     requested_k: int
     candidate_pool_size: int
     selected_count: int = 0
+    policy_version: int | None = Field(default=None, index=True)
     sampler_config_json: dict[str, JsonValue] = Field(
         default_factory=dict,
         sa_column=Column(JSON),
@@ -66,6 +67,7 @@ class ExperimentSamplePoolEntryRow(SQLModel, table=True):
         index=True,
     )
     sample_key: str = Field(index=True)
+    sample_ref_json: dict[str, JsonValue] = Field(default_factory=dict, sa_column=Column(JSON))
     sample_json: dict[str, JsonValue] = Field(default_factory=dict, sa_column=Column(JSON))
     selected: bool = Field(
         default=False,

@@ -66,6 +66,7 @@ def upgrade() -> None:
         sa.Column("requested_k", sa.Integer(), nullable=False),
         sa.Column("candidate_pool_size", sa.Integer(), nullable=False),
         sa.Column("selected_count", sa.Integer(), nullable=False),
+        sa.Column("policy_version", sa.Integer(), nullable=True),
         sa.Column("sampler_config_json", sa.JSON(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["experiment_id"], ["experiments.id"]),
@@ -75,6 +76,11 @@ def upgrade() -> None:
         op.f("ix_experiment_sampler_invocations_experiment_id"),
         "experiment_sampler_invocations",
         ["experiment_id"],
+    )
+    op.create_index(
+        op.f("ix_experiment_sampler_invocations_policy_version"),
+        "experiment_sampler_invocations",
+        ["policy_version"],
     )
     op.create_index(
         op.f("ix_experiment_sampler_invocations_sampler_name"),
@@ -89,6 +95,7 @@ def upgrade() -> None:
         sa.Column("environment_id", sa.Uuid(), nullable=False),
         sa.Column("sampler_invocation_id", sa.Uuid(), nullable=True),
         sa.Column("sample_key", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("sample_ref_json", sa.JSON(), nullable=True),
         sa.Column("sample_json", sa.JSON(), nullable=True),
         sa.Column("selected", sa.Boolean(), nullable=False),
         sa.Column("discarded", sa.Boolean(), nullable=False),
@@ -168,6 +175,10 @@ def downgrade() -> None:
     )
     op.drop_index(
         op.f("ix_experiment_sampler_invocations_experiment_id"),
+        table_name="experiment_sampler_invocations",
+    )
+    op.drop_index(
+        op.f("ix_experiment_sampler_invocations_policy_version"),
         table_name="experiment_sampler_invocations",
     )
     op.drop_table("experiment_sampler_invocations")

@@ -136,6 +136,8 @@ def test_candidate_pool_retains_unselected_streamed_candidates(
     assert len(rows) == 8
     assert sum(row.selected for row in rows) == 3
     assert sum(row.discarded for row in rows) == 0
+    assert rows[0].sample_ref_json == {"key": "0"}
+    assert rows[0].sample_json["sample_ref"] == rows[0].sample_ref_json
 
 
 def test_candidate_pool_reuses_unselected_entries_before_advancing_stream(
@@ -159,9 +161,7 @@ def test_candidate_pool_reuses_unselected_entries_before_advancing_stream(
         candidate_pool_size=8,
     )
 
-    assert [entry.sample_key for entry in second[:6]] == [
-        entry.sample_key for entry in first[2:]
-    ]
+    assert [entry.sample_key for entry in second[:6]] == [entry.sample_key for entry in first[2:]]
     assert counted_streaming_experiment.environments[0].pull_count == 10
 
 
@@ -187,6 +187,7 @@ def test_candidate_pool_round_robins_new_entries_across_environments(
         "swe-validation",
     ]
     assert entries[0].sample_json["sample_key"] == "a"
+    assert entries[0].sample_ref_json == {"key": "a"}
     assert entries[0].sample_json["tasks"][0]["task_slug"] == "solve-mini-validation-a"
 
 
