@@ -61,30 +61,6 @@ class ExperimentRepository:
             metadata=row.metadata_json,
         )
 
-    def record_sampler_invocation(
-        self,
-        *,
-        experiment_ref: ExperimentRef,
-        sampler_name: str,
-        requested_k: int,
-        candidate_pool_size: int,
-        selected_count: int = 0,
-        policy_version: int | None = None,
-        sampler_config: dict[str, JsonValue] | None = None,
-    ) -> ExperimentSamplerInvocationRow:
-        row = ExperimentSamplerInvocationRow(
-            experiment_id=experiment_ref.experiment_id,
-            sampler_name=sampler_name,
-            requested_k=requested_k,
-            candidate_pool_size=candidate_pool_size,
-            selected_count=selected_count,
-            policy_version=policy_version,
-            sampler_config_json=dict(sampler_config or {}),
-        )
-        self._session.add(row)
-        self._session.flush()
-        return row
-
     def pending_unselected_pool_entries(
         self,
         experiment_id: UUID,
@@ -172,12 +148,15 @@ def record_sampler_invocation(
     policy_version: int | None = None,
     sampler_config: dict[str, JsonValue] | None = None,
 ) -> ExperimentSamplerInvocationRow:
-    return ExperimentRepository(session).record_sampler_invocation(
-        experiment_ref=experiment_ref,
+    row = ExperimentSamplerInvocationRow(
+        experiment_id=experiment_ref.experiment_id,
         sampler_name=sampler_name,
         requested_k=requested_k,
         candidate_pool_size=candidate_pool_size,
         selected_count=selected_count,
         policy_version=policy_version,
-        sampler_config=sampler_config,
+        sampler_config_json=dict(sampler_config or {}),
     )
+    session.add(row)
+    session.flush()
+    return row

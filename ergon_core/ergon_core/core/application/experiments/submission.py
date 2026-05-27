@@ -15,8 +15,8 @@ from ergon_core.core.application.experiments.candidate_pool import (
     SampleCandidatePool,
     sample_from_pool_entry,
 )
+from ergon_core.core.application.experiments.persistence import CoreExperimentPersistencePort
 from ergon_core.core.application.experiments.repository import (
-    persist_experiment,
     record_sampler_invocation,
 )
 from ergon_core.core.application.samples.materialization import materialize_sample
@@ -66,8 +66,7 @@ class ExperimentSubmissionService:
         candidate_pool_size: int | None,
         policy_version: int | None = None,
     ) -> ExperimentSubmitResult:
-        del policy_version
-        handle = persist_experiment(session=self._session, experiment=experiment)
+        handle = await CoreExperimentPersistencePort(self._session).persist_experiment(experiment)
         pool_size = candidate_pool_size or k
         pool = SampleCandidatePool(self._session)
         entries = pool.fill(
@@ -81,7 +80,7 @@ class ExperimentSubmissionService:
                 samples=candidates,
                 k=k,
                 context=SamplingContext(
-                    experiment_ref_id=handle.id,
+                    experiment_id=handle.experiment_id,
                     candidate_pool_size=pool_size,
                 ),
             )
@@ -95,6 +94,7 @@ class ExperimentSubmissionService:
             requested_k=k,
             candidate_pool_size=pool_size,
             selected_count=len(selected_entries),
+            policy_version=policy_version,
             sampler_config=sampler.config(),
         )
         pool.mark_selected(selected_entries, sampler_invocation_id=invocation.id)
@@ -106,7 +106,7 @@ class ExperimentSubmissionService:
         self._session.commit()
         await self._start_samples(sample_ids)
         return ExperimentSubmitResult(
-            experiment_ref_id=handle.id,
+            experiment_id=handle.experiment_id,
             sampler_invocation_id=invocation.id,
             requested_k=k,
             candidate_pool_size=pool_size,

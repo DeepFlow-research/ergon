@@ -40,7 +40,7 @@ ALLOWED_EXPERIMENT_ID_PATTERNS_BY_FILE = {
     ROOT / "ergon_core" / "ergon_core" / "core" / "application" / "experiments" / "repository.py": (
         re.compile(r"experiment_id=row\.id"),
         re.compile(r"experiment_id == row\.id"),
-        re.compile(r"experiment_id=handle\.id"),
+        re.compile(r"experiment_id=handle\.experiment_id"),
         re.compile(r"experiment_ref\.experiment_id"),
         re.compile(r"experiment_id: UUID"),
         re.compile(r"experiment_id == experiment_id"),
@@ -53,7 +53,6 @@ ALLOWED_EXPERIMENT_ID_PATTERNS_BY_FILE = {
     / "tests"
     / "integration"
     / "experiments"
-<<<<<<< HEAD
     / "test_experiment_persistence_roundtrip.py": (
         re.compile(r"experiment_id == handle\.experiment_id"),
     ),
@@ -67,12 +66,10 @@ ALLOWED_EXPERIMENT_ID_PATTERNS_BY_FILE = {
     / "test_experiment_persistence.py": (
         re.compile(r"experiment_id == handle\.experiment_id"),
         re.compile(r"handle\.experiment_id"),
-    ),
-    ROOT / "ergon_core" / "tests" / "unit" / "api" / "test_sampler_contract.py": (
-        re.compile(r"experiment_ref_id=uuid4"),
-        re.compile(r"result\.experiment_ref_id"),
+        re.compile(r"ref\.experiment_id"),
     ),
     ROOT / "ergon_core" / "ergon_core" / "core" / "application" / "experiments" / "submission.py": (
+        re.compile(r"experiment_id=handle\.experiment_id"),
         re.compile(r"experiment_id=entry\.experiment_id"),
         re.compile(r"experiment=str\(entry\.experiment_id\)"),
     ),

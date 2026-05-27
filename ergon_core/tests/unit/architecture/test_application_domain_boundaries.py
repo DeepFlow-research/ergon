@@ -53,6 +53,7 @@ LAYOUT_FILE_EXCEPTIONS = {
         "definition_writer.py",
         "handles.py",
         "launch.py",
+        "persistence.py",
         "repositories.py",
         "submission.py",
     },

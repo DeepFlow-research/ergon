@@ -4,6 +4,8 @@ from uuid import UUID, uuid4
 
 from sqlmodel import Session
 
+from pydantic import JsonValue
+
 from ergon_core.api._serialization import component_type_path
 from ergon_core.api.experiment.sample import Sample
 from ergon_core.core.application.runtime import status as graph_status
@@ -46,7 +48,10 @@ def materialize_sample(
         worker_snapshot = task.worker.model_dump(mode="json")
         sandbox_snapshot = task.sandbox.model_dump(mode="json")
         worker_slug = task.worker.type_slug
-        sandbox_type = component_type_path(task.sandbox)
+        sandbox_type = _snapshot_type(
+            sandbox_snapshot,
+            fallback=component_type_path(task.sandbox),
+        )
         sandbox_slug = _component_display_slug(sandbox_type)
 
         session.add(
@@ -85,7 +90,7 @@ def materialize_sample(
                 task_id=task_id,
                 event_type="worker.added",
                 worker_slug=worker_slug,
-                worker_type=task.worker.type_slug,
+                worker_type=_snapshot_type(worker_snapshot, fallback=task.worker.type_slug),
                 model_target=task.worker.model,
                 worker_snapshot_json=worker_snapshot,
                 payload_json={"task_id": str(task_id), "worker": worker_snapshot},
@@ -112,7 +117,10 @@ def materialize_sample(
                     task_id=task_id,
                     event_type="evaluator.added",
                     evaluator_slug=evaluator.type_slug,
-                    evaluator_type=evaluator.type_slug,
+                    evaluator_type=_snapshot_type(
+                        evaluator_snapshot,
+                        fallback=evaluator.type_slug,
+                    ),
                     evaluator_snapshot_json=evaluator_snapshot,
                     payload_json={"task_id": str(task_id), "evaluator": evaluator_snapshot},
                     actor="system:materialization",
@@ -158,3 +166,8 @@ def materialize_sample(
 
 def _component_display_slug(type_path: str) -> str:
     return type_path.rsplit(":", 1)[-1].rsplit(".", 1)[-1]
+
+
+def _snapshot_type(snapshot: dict[str, JsonValue], *, fallback: str) -> str:
+    value = snapshot.get("_type")
+    return str(value) if value else fallback

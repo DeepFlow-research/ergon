@@ -15,7 +15,10 @@ from ergon_core.core.application.experiments.submission import (
     ExperimentSubmissionService,
     InngestWorkflowEventBus,
 )
-from ergon_core.core.persistence.experiments.models import ExperimentSamplePoolEntryRow
+from ergon_core.core.persistence.experiments.models import (
+    ExperimentSamplePoolEntryRow,
+    ExperimentSamplerInvocationRow,
+)
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.samples.models import SampleEdgeEventRow, SampleTaskEventRow
 from ergon_core.core.persistence.telemetry.models import SampleRecord
@@ -226,13 +229,36 @@ async def test_submit_records_selected_sample_provenance(
     result = await two_env_experiment.submit(service=service, k=2, sampler=SequentialSampler())
 
     sample_rows = session.exec(select(SampleRecord).order_by(SampleRecord.created_at)).all()
+    pool_rows = session.exec(select(ExperimentSamplePoolEntryRow)).all()
     assert [row.id for row in sample_rows] == list(result.sample_ids)
-    assert {row.experiment_id for row in sample_rows} == {result.experiment_ref_id}
+    assert {row.experiment_id for row in sample_rows} == {result.experiment_id}
     assert all(row.environment_id for row in sample_rows)
     assert all(row.pool_entry_id for row in sample_rows)
     assert all(row.sampler_invocation_id == result.sampler_invocation_id for row in sample_rows)
     assert all(row.sample_key for row in sample_rows)
     assert all(isinstance(row.sample_ref_json, dict) for row in sample_rows)
+    assert {(row.sample_key, row.sample_ref_json["key"]) for row in sample_rows} == {
+        (row.sample_key, row.sample_ref_json["key"]) for row in pool_rows if row.selected
+    }
+
+
+@pytest.mark.asyncio
+async def test_submit_records_sampler_policy_version(
+    session: Session,
+    experiment: Experiment,
+) -> None:
+    service = ExperimentSubmissionService(session=session, event_bus=FakeEventBus())
+
+    result = await experiment.submit(
+        service=service,
+        k=1,
+        sampler=SequentialSampler(),
+        policy_version=7,
+    )
+
+    invocation = session.get(ExperimentSamplerInvocationRow, result.sampler_invocation_id)
+    assert invocation is not None
+    assert invocation.policy_version == 7
 
 
 @pytest.mark.asyncio

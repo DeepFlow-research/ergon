@@ -131,14 +131,14 @@ def test_materialization_persists_task_json_not_environment_or_experiment(
     assert node.task_json["evaluators"][0]["_type"]
     assert task_event.task_snapshot_json == node.task_json
     assert worker_event.worker_slug == "test-worker"
-    assert worker_event.worker_type == "test-worker"
+    assert worker_event.worker_type == node.task_json["worker"]["_type"]
     assert worker_event.model_target == "test:none"
     assert worker_event.worker_snapshot_json == node.task_json["worker"]
     assert evaluator_event.evaluator_slug == "test-evaluator"
-    assert evaluator_event.evaluator_type == "test-evaluator"
+    assert evaluator_event.evaluator_type == node.task_json["evaluators"][0]["_type"]
     assert evaluator_event.evaluator_snapshot_json == node.task_json["evaluators"][0]
     assert sandbox_event.sandbox_slug == "TestSandbox"
-    assert sandbox_event.sandbox_type.endswith(":TestSandbox")
+    assert sandbox_event.sandbox_type == node.task_json["sandbox"]["_type"]
     assert sandbox_event.sandbox_snapshot_json == node.task_json["sandbox"]
     assert "environment" not in node.task_json
     assert "experiment" not in node.task_json
