@@ -5,10 +5,6 @@ from uuid import UUID
 
 from ergon_core.api.benchmark import Task
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
-from ergon_core.core.persistence.definitions.models import (
-    ExperimentDefinition,
-    ExperimentDefinitionWorker,
-)
 from ergon_core.core.application.runtime import status as graph_status
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.db import get_session
@@ -33,7 +29,7 @@ from ergon_core.core.application.runtime.task_execution_repository import (
 )
 from ergon_core.core.shared.utils import require_not_none, utcnow
 from ergon_core.core.views.dashboard_events.contracts import DashboardTaskStatusChangedEvent
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 logger = logging.getLogger(__name__)
 
@@ -161,34 +157,16 @@ class TaskExecutionService:
                 session.get(SampleRecord, command.sample_id),
                 f"SampleRecord {command.sample_id} not found",
             )
-            if command.definition_id is None:
-                (
-                    worker_type,
-                    model_target,
-                    definition_worker_id,
-                ) = await _resolve_sample_worker_config(
-                    node.task_json,
-                    task_id=view.task_id,
-                    assigned_worker_slug=assigned_worker_slug,
-                )
-                benchmark_type = run_record.benchmark_type
-            else:
-                definition = require_not_none(
-                    session.get(ExperimentDefinition, command.definition_id),
-                    f"Definition {command.definition_id} not found",
-                )
-                worker_type, model_target, definition_worker_id = self._resolve_worker_config(
-                    session,
-                    definition_id=command.definition_id,
-                    sample_id=command.sample_id,
-                    assigned_worker_slug=assigned_worker_slug,
-                )
-                benchmark_type = definition.benchmark_type
+            worker_type, model_target = await _resolve_sample_worker_config(
+                node.task_json,
+                task_id=view.task_id,
+                assigned_worker_slug=assigned_worker_slug,
+            )
+            benchmark_type = run_record.benchmark_type
 
             execution = SampleTaskAttempt(
                 sample_id=command.sample_id,
                 task_id=view.task_id,
-                definition_worker_id=definition_worker_id,
                 attempt_number=self._task_execution_repo.next_attempt_for_node(
                     session, command.sample_id, view.task_id
                 ),
@@ -220,12 +198,10 @@ class TaskExecutionService:
             task_slug=view.task.task_slug,
             new_status=graph_status.RUNNING,
             old_status=None,
-            worker_id=definition_worker_id,
             worker_slug=assigned_worker_slug,
         )
         return PreparedTaskExecution(
             sample_id=command.sample_id,
-            definition_id=command.definition_id,
             task_id=view.task_id,
             task_slug=view.task.task_slug,
             task_description=view.task.description,
@@ -235,38 +211,6 @@ class TaskExecutionService:
             model_target=model_target,
             execution_id=execution_id,
         )
-
-    def _resolve_worker_config(
-        self,
-        session: Session,
-        *,
-        definition_id: UUID,
-        sample_id: UUID,
-        assigned_worker_slug: str | None,
-    ) -> tuple[str | None, str | None, UUID | None]:
-        """Resolve (worker_type, model_target, definition_worker_id) for a
-        given assigned_worker_slug.
-
-        Falls back to the run's default model_target when no
-        ExperimentDefinitionWorker row matches the binding key. The object-bound
-        worker instance is authoritative at runtime; these values populate
-        execution metadata and read-model fields.
-        """
-
-        if assigned_worker_slug is None:
-            return None, None, None
-        worker_row = session.exec(
-            select(ExperimentDefinitionWorker).where(
-                ExperimentDefinitionWorker.experiment_definition_id == definition_id,
-                ExperimentDefinitionWorker.binding_key == assigned_worker_slug,
-            )
-        ).first()
-        if worker_row is not None:
-            return worker_row.worker_type, worker_row.model_target, worker_row.id
-        # No matching binding — use the run-level default model_target.
-        run = session.get(SampleRecord, sample_id)
-        model_target = run.model_target if run is not None else None
-        return assigned_worker_slug, model_target, None
 
     async def finalize_success(self, command: FinalizeTaskExecutionCommand) -> None:
         with get_session() as session:
@@ -329,6 +273,6 @@ async def _resolve_sample_worker_config(
     *,
     task_id: UUID,
     assigned_worker_slug: str | None,
-) -> tuple[str, str, None]:
+) -> tuple[str, str]:
     task = await Task.from_definition(task_json, task_id=task_id)
-    return assigned_worker_slug or task.worker.type_slug, task.worker.model, None
+    return assigned_worker_slug or task.worker.type_slug, task.worker.model

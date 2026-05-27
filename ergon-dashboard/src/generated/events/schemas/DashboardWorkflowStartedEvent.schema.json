@@ -1091,18 +1091,6 @@
           "title": "Id",
           "type": "string"
         },
-        "definitionId": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Definitionid"
-        },
         "name": {
           "title": "Name",
           "type": "string"
@@ -1743,11 +1731,6 @@
       "title": "Sample Id",
       "type": "string"
     },
-    "definition_id": {
-      "format": "uuid",
-      "title": "Definition Id",
-      "type": "string"
-    },
     "workflow_name": {
       "title": "Workflow Name",
       "type": "string"
@@ -1771,7 +1754,6 @@
   },
   "required": [
     "sample_id",
-    "definition_id",
     "workflow_name",
     "snapshot",
     "started_at",

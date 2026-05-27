@@ -24,7 +24,7 @@ import {
   SampleWorkspaceState,
 } from "../types";
 import { applyGraphMutation as reduceGraphMutation } from "@/features/graph/state/graphMutationReducer";
-import type { DashboardGraphMutationData } from "@/lib/contracts/events";
+import type { DashboardSampleRuntimeEventData } from "@/lib/contracts/events";
 import type { SampleSnapshot } from "@/lib/contracts/rest";
 import { hydrateSampleSnapshot } from "@/lib/sample-state/hydrate";
 import {
@@ -105,7 +105,6 @@ class DashboardStore {
    */
   initializeSample(
     sampleId: string,
-    definitionId: string,
     name: string,
     snapshot: SampleSnapshot,
     startedAt: string,
@@ -115,7 +114,6 @@ class DashboardStore {
     const hydrated = hydrateSampleSnapshot({
       ...snapshot,
       id: sampleId,
-      definitionId,
       name,
       status: "executing",
       startedAt,
@@ -305,7 +303,7 @@ class DashboardStore {
     this.runs.set(sampleId, applySandboxClosed(run, taskId, reason, timestamp));
   }
 
-  applyGraphMutation(sampleId: string, mutation: DashboardGraphMutationData): void {
+  applyGraphMutation(sampleId: string, mutation: DashboardSampleRuntimeEventData): void {
     const run = this.runs.get(sampleId);
     if (!run) return;
     const updated = reduceGraphMutation(run, mutation);

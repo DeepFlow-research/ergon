@@ -15,21 +15,14 @@ from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
+from ergon_core.api import Sample
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker.context import WorkerContext
-from ergon_core.core.application.runtime.models import MutationMeta
-from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from ergon_core.core.application.runtime import inspection as inspection_module
 from ergon_core.core.application.runtime import management as management_module
 from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
 from ergon_core.core.application.runtime.task_management import TaskManagementService
-from ergon_core.core.persistence.definitions.models import (
-    ExperimentDefinition,
-    ExperimentDefinitionInstance,
-    ExperimentDefinitionTask,
-    ExperimentDefinitionTaskAssignment,
-    ExperimentDefinitionWorker,
-)
+from ergon_core.core.application.samples.materialization import materialize_sample
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord
@@ -57,79 +50,54 @@ def _session() -> Session:
     return Session(engine)
 
 
-def _seed_run(session: Session) -> tuple[UUID, UUID]:
-    """Insert a minimal experiment/definition/run with one task; return
-    (sample_id, definition_id)."""
+def _seed_run(session: Session) -> UUID:
+    """Materialize a minimal sample with one task; return sample_id."""
 
-    definition_id = uuid4()
-    instance_id = uuid4()
-    task_id = uuid4()
     sample_id = uuid4()
-    task_json = _SmokeTask(
+    task = _SmokeTask(
         task_slug="root",
         instance_key="sample-1",
         description="root task",
         task_payload=_EmptyPayload.model_validate({"problem": "p"}),
         worker=EchoWorker(name="echo", model="test:none"),
         sandbox=EchoSandbox(),
-    ).model_dump(mode="json")
-    session.add_all(
-        [
-            ExperimentDefinition(
-                id=definition_id, benchmark_type="test", name="test", metadata_json={}
-            ),
-            ExperimentDefinitionInstance(
-                id=instance_id,
-                experiment_definition_id=definition_id,
-                instance_key="sample-1",
-            ),
-            ExperimentDefinitionTask(
-                id=task_id,
-                experiment_definition_id=definition_id,
-                instance_id=instance_id,
-                task_slug="root",
-                description="root task",
-                task_payload_json={"problem": "p"},
-                task_json=task_json,
-            ),
-            SampleRecord(
-                id=sample_id,
-                definition_id=definition_id,
-                benchmark_type="test",
-                instance_key="sample-1",
-                worker_team_json={},
-                status=SampleStatus.EXECUTING,
-            ),
-        ]
+    )
+    sample_row = SampleRecord(
+        id=sample_id,
+        benchmark_type="test",
+        instance_key="sample-1",
+        worker_team_json={},
+        status=SampleStatus.EXECUTING,
+    )
+    session.add(sample_row)
+    session.flush()
+    materialize_sample(
+        session=session,
+        sample=Sample.from_tasks(
+            name="smoke-sample",
+            sample_key="sample-1",
+            environment_name="test",
+            tasks=[task],
+        ),
+        sample_row=sample_row,
     )
     session.commit()
-    return sample_id, definition_id
+    return sample_id
 
 
 # ── PR 1 invariant — GREEN today ─────────────────────────────────────
 
 
-def test_prepare_run_populates_task_json_for_every_node() -> None:
+def test_materialize_sample_populates_task_json_for_every_node() -> None:
     """PR 1 invariant: every sample_graph_nodes row produced by
-    initialize_from_definition carries a non-empty task_json
-    snapshot."""
+    sample materialization carries a non-empty task_json snapshot."""
 
     session = _session()
-    sample_id, definition_id = _seed_run(session)
-
-    repo = RuntimeGraphRepository()
-    repo.initialize_from_definition(
-        session,
-        sample_id=sample_id,
-        definition_id=definition_id,
-        initial_node_status="pending",
-        initial_edge_status="pending",
-        meta=MutationMeta(actor="test", reason="smoke"),
-    )
+    sample_id = _seed_run(session)
 
     rows = session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all()
 
-    assert rows, "prepare_run produced no nodes"
+    assert rows, "materialize_sample produced no nodes"
     assert all(row.task_json for row in rows), (
         "every node must carry a self-contained task snapshot"
     )
@@ -137,76 +105,6 @@ def test_prepare_run_populates_task_json_for_every_node() -> None:
 
 
 # ── Runtime invariants ───────────────────────────────────────────────
-
-
-def test_persist_definition_writes_only_intended_tables(monkeypatch) -> None:
-    """PR 7 invariant: persist_benchmark writes experiment_definitions
-    plus experiment_definition_tasks (and related instance / task-
-    evaluator rows). Identity comes from ``ExperimentDefinition`` only."""
-
-    from collections.abc import Mapping, Sequence
-    from typing import ClassVar
-
-    from ergon_core.api import Benchmark
-    from ergon_core.core.application.experiments import (
-        definition_writer as definition_writer_module,
-    )
-    from ergon_core.core.application.experiments.definition_writer import persist_benchmark
-
-    class _OneTaskBenchmark(Benchmark):
-        type_slug: ClassVar[str] = "smoketest-one-task"
-
-        def build_instances(self) -> Mapping[str, Sequence[Task]]:
-            return {
-                "sample-1": (
-                    Task(
-                        task_slug="root",
-                        instance_key="sample-1",
-                        description="root task",
-                        worker=EchoWorker(name="echo", model="echo-model"),
-                        sandbox=EchoSandbox(),
-                    ),
-                )
-            }
-
-    session = _session()
-    monkeypatch.setattr(definition_writer_module, "get_session", lambda: session)
-    # persist_benchmark calls session.close() at the end of its
-    # transaction; swap close to a no-op so we can still query the
-    # in-memory engine afterwards.
-    monkeypatch.setattr(session, "close", lambda: None)
-
-    benchmark = _OneTaskBenchmark(name="smoke benchmark", description="one task")
-    handle = persist_benchmark(benchmark)
-
-    # experiment_definitions has exactly one row with the benchmark's
-    # identity fields.
-    definitions = session.exec(select(ExperimentDefinition)).all()
-    assert len(definitions) == 1
-    persisted = definitions[0]
-    assert persisted.id == handle.definition_id
-    assert persisted.name == "smoke benchmark"
-    assert persisted.description == "one task"
-
-    # experiment_definition_tasks has exactly one row, parented to the
-    # new definition.
-    tasks = session.exec(select(ExperimentDefinitionTask)).all()
-    assert len(tasks) == 1
-    assert tasks[0].experiment_definition_id == handle.definition_id
-    assert tasks[0].task_slug == "root"
-
-    # experiment_definition_instances has exactly one row, parented to
-    # the new definition.
-    instances = session.exec(select(ExperimentDefinitionInstance)).all()
-    assert len(instances) == 1
-    assert instances[0].experiment_definition_id == handle.definition_id
-
-    workers = session.exec(select(ExperimentDefinitionWorker)).all()
-    assert [(row.binding_key, row.worker_type, row.model_target) for row in workers] == [
-        ("echo", "echo", "echo-model")
-    ]
-    assignments = session.exec(select(ExperimentDefinitionTaskAssignment)).all()
-    assert [row.worker_binding_key for row in assignments] == ["echo"]
 
 
 def test_worker_execute_reads_task_from_run_tier_only() -> None:
@@ -366,7 +264,6 @@ def _seed_parent_node(session: Session, *, sample_id: UUID) -> SampleGraphNode:
     session.add(
         SampleRecord(
             id=sample_id,
-            definition_id=uuid4(),
             benchmark_type="test",
             instance_key="sample-1",
             worker_team_json={},
@@ -409,10 +306,6 @@ async def test_dynamic_spawn_writes_only_to_sample_graph_nodes(
 
     # 3. Patch get_session so service writes stay in the test session.
     _patch_get_session_smoke(monkeypatch, session)
-    monkeypatch.setattr(
-        management_module, "definition_id_for_run", lambda _session, _run_id: uuid4()
-    )
-
     task_mgmt = TaskManagementService(
         dashboard_emitter=SimpleNamespace(graph_mutation=AsyncMock()),
         task_ready_dispatcher=AsyncMock(),
@@ -422,7 +315,6 @@ async def test_dynamic_spawn_writes_only_to_sample_graph_nodes(
         sample_id=sample_id,
         task_id=parent.task_id,
         execution_id=uuid4(),
-        definition_id=None,
         sandbox_id="sandbox-smoke",
         task_mgmt=task_mgmt,
         task_inspect=task_inspect,
@@ -431,8 +323,8 @@ async def test_dynamic_spawn_writes_only_to_sample_graph_nodes(
     )
 
     nodes_before = session.exec(select(SampleGraphNode)).all()
-    defs_before = session.exec(select(ExperimentDefinitionTask)).all()
     assert len(nodes_before) == 1  # only the parent
+    assert "experiment_definition_tasks" not in SQLModel.metadata.tables
 
     # 4. Spawn a dynamic child task.
     await context.spawn_task(
@@ -449,10 +341,8 @@ async def test_dynamic_spawn_writes_only_to_sample_graph_nodes(
     # 5. Exactly one new sample_graph_nodes row (is_dynamic=True); zero new
     #    experiment_definition_tasks rows.
     nodes_after = session.exec(select(SampleGraphNode)).all()
-    defs_after = session.exec(select(ExperimentDefinitionTask)).all()
 
     assert len(nodes_after) == len(nodes_before) + 1
-    assert len(defs_after) == len(defs_before) == 0
 
     new_node = session.exec(
         select(SampleGraphNode).where(

@@ -12,13 +12,13 @@ import { EdgeAddedValueSchema, MutationTypeSchema } from "./graphMutations";
 import { applyGraphMutation, createReplayInitialState, replayToSequence } from "../state/graphMutationReducer";
 import type { SampleWorkspaceState } from "@/lib/types";
 import { TaskStatus } from "@/lib/types";
-import type { DashboardGraphMutationData } from "@/lib/contracts/events";
-import type { GraphMutationDto } from "./graphMutations";
+import type { DashboardSampleRuntimeEventData } from "@/lib/contracts/events";
+import type { SampleGraphEventDto } from "./graphMutations";
 
 function emptyState(): SampleWorkspaceState {
   return {
     id: "run-test",
-    definitionId: "00000000-0000-0000-0000-000000000000",
+    experimentId: "00000000-0000-0000-0000-000000000000",
     name: "test",
     status: "executing",
     tasks: new Map(),
@@ -52,7 +52,7 @@ function emptyState(): SampleWorkspaceState {
  */
 function syntheticMutation(
   mutationType: string,
-): DashboardGraphMutationData {
+): DashboardSampleRuntimeEventData {
   const nodeId = "11111111-1111-4111-8111-111111111111";
   const newValueByType: Record<string, Record<string, unknown>> = {
     "node.added": {
@@ -100,7 +100,7 @@ function syntheticMutation(
     id: "77777777-7777-4777-8777-777777777777",
     sample_id: "00000000-0000-0000-0000-000000000000",
     sequence: 1,
-    mutation_type: mutationType as DashboardGraphMutationData["mutation_type"],
+    mutation_type: mutationType as DashboardSampleRuntimeEventData["mutation_type"],
     target_type: "node",
     target_id: nodeId,
     actor: "test",
@@ -247,7 +247,7 @@ test("replay base preserves snapshot hierarchy while dependency edges remain dep
     ],
   ]);
 
-  const mutations: GraphMutationDto[] = [
+  const mutations: SampleGraphEventDto[] = [
     graphNodeAdded(0, "11111111-1111-4111-8111-111111111111", "root"),
     graphNodeAdded(1, "22222222-2222-4222-8222-222222222222", "dependency"),
     graphNodeAdded(2, "33333333-3333-4333-8333-333333333333", "dependent"),
@@ -344,7 +344,7 @@ test("replay base does not leak future dependency edges or node field changes", 
     ],
   ]);
 
-  const mutations: GraphMutationDto[] = [
+  const mutations: SampleGraphEventDto[] = [
     graphNodeAdded(0, "11111111-1111-4111-8111-111111111111", "root"),
     graphNodeAdded(1, "22222222-2222-4222-8222-222222222222", "source"),
     graphNodeAdded(2, "33333333-3333-4333-8333-333333333333", "target"),
@@ -434,7 +434,7 @@ test("dependency edges between root-level tasks do not become containment", () =
       },
     ],
   ]);
-  const mutations: GraphMutationDto[] = [
+  const mutations: SampleGraphEventDto[] = [
     graphNodeAdded(0, "22222222-2222-4222-8222-222222222222", "source"),
     graphNodeAdded(1, "33333333-3333-4333-8333-333333333333", "target"),
     {
@@ -471,7 +471,7 @@ function graphNodeAdded(
   sequence: number,
   targetId: string,
   slug: string,
-): GraphMutationDto {
+): SampleGraphEventDto {
   return {
     id: `55555555-5555-4555-8555-55555555555${sequence}`,
     sample_id: "00000000-0000-0000-0000-000000000000",

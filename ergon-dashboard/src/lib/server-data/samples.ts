@@ -16,7 +16,7 @@ export interface SampleListFilters {
   limit?: number;
   offset?: number;
   status?: string;
-  definitionId?: string;
+  experimentId?: string;
   experiment?: string;
 }
 
@@ -29,8 +29,7 @@ export interface SampleSummary {
   completed_at: string | null;
   latest_activity_at: string | null;
   duration_seconds: number | null;
-  definition_id: string;
-  definition_name: string | null;
+  experiment_id: string | null;
   experiment: string | null;
   benchmark_type: string;
   instance_key: string;
@@ -57,7 +56,7 @@ export async function loadSampleList(
   searchParams.set("limit", String(filters.limit ?? 100));
   if (filters.offset) searchParams.set("offset", String(filters.offset));
   if (filters.status) searchParams.set("status", filters.status);
-  if (filters.definitionId) searchParams.set("definition_id", filters.definitionId);
+  if (filters.experimentId) searchParams.set("experiment_id", filters.experimentId);
   if (filters.experiment) searchParams.set("experiment", filters.experiment);
 
   try {
@@ -162,8 +161,7 @@ function parseSampleList(input: unknown): SampleSummary[] {
       completed_at: optionalString(record.completed_at),
       latest_activity_at: optionalString(record.latest_activity_at),
       duration_seconds: optionalNumber(record.duration_seconds),
-      definition_id: String(record.definition_id ?? ""),
-      definition_name: optionalString(record.definition_name),
+      experiment_id: optionalString(record.experiment_id),
       experiment: optionalString(record.experiment),
       benchmark_type: String(record.benchmark_type ?? ""),
       instance_key: String(record.instance_key ?? ""),

@@ -5,8 +5,9 @@ import test from "node:test";
 
 import {
   dashboardEventSchemas,
+  isDashboardSampleRuntimeGraphEvent,
   parseDashboardContextEventData,
-  parseDashboardGraphMutationData,
+  parseDashboardSampleRuntimeEventData,
   parseDashboardTaskEvaluationUpdatedData,
   parseDashboardThreadMessageCreatedData,
   parseDashboardWorkflowStartedData,
@@ -130,7 +131,6 @@ test("workflow started event parser validates run snapshots", () => {
 
   const payload = {
     sample_id: FIXTURE_IDS.sampleId,
-    definition_id: FIXTURE_IDS.definitionId,
     workflow_name: "parallel",
     started_at: "2026-03-18T12:00:00.000Z",
     total_tasks: run.totalTasks,
@@ -224,8 +224,8 @@ test("dashboard nested DTO event parser accepts backend snake-case payloads", ()
   assert.equal(parsedEvaluation.evaluation.totalScore, evaluation.totalScore);
 });
 
-test("dashboard graph mutation parser accepts backend wrapped mutation event", () => {
-  const parsed = parseDashboardGraphMutationData({
+test("dashboard sample runtime event parser accepts backend wrapped event", () => {
+  const parsed = parseDashboardSampleRuntimeEventData({
     mutation: {
       id: "77777777-7777-4777-8777-777777777777",
       sample_id: FIXTURE_IDS.sampleId,
@@ -250,8 +250,8 @@ test("dashboard graph mutation parser accepts backend wrapped mutation event", (
   assert.equal(parsed.created_at, "2026-03-18T12:00:14.000000Z");
 });
 
-test("dashboard graph mutation parser preserves canonical edge task ids", () => {
-  const parsed = parseDashboardGraphMutationData({
+test("dashboard sample runtime event parser preserves canonical edge task ids", () => {
+  const parsed = parseDashboardSampleRuntimeEventData({
     mutation: {
       id: "77777777-7777-4777-8777-777777777777",
       sample_id: FIXTURE_IDS.sampleId,
@@ -276,6 +276,127 @@ test("dashboard graph mutation parser preserves canonical edge task ids", () => 
   assert.equal(parsed.new_value.target_task_id, FIXTURE_IDS.solveTaskId);
   assert.equal("source_node_id" in parsed.new_value, false);
   assert.equal("target_node_id" in parsed.new_value, false);
+});
+
+test("dashboard sample runtime graph guard ignores component-only WAL events", () => {
+  assert.equal(
+    isDashboardSampleRuntimeGraphEvent({
+      event: {
+        eventId: "77777777-7777-4777-8777-777777777777",
+        sampleId: FIXTURE_IDS.sampleId,
+        timestamp: "2026-03-18T12:00:14.000000Z",
+        eventType: "worker.added",
+        targetType: "task",
+        targetId: FIXTURE_IDS.solveTaskNodeUuid,
+        workerSlug: "minif2f-smoke-worker",
+        workerType: "tests.fixtures.smoke_components.workers:Worker",
+        modelTarget: "openai:gpt-4o",
+        worker: {},
+        payload: {},
+      },
+    }),
+    false,
+  );
+});
+
+test("dashboard sample runtime graph guard ignores sample lifecycle WAL events", () => {
+  assert.equal(
+    isDashboardSampleRuntimeGraphEvent({
+      event: {
+        eventId: "77777777-7777-4777-8777-777777777777",
+        sampleId: FIXTURE_IDS.sampleId,
+        timestamp: "2026-03-18T12:00:14.000000Z",
+        eventType: "sample.status_changed",
+        targetType: "sample",
+        targetId: FIXTURE_IDS.sampleId,
+        status: "completed",
+        payload: { reason: "workflow completed" },
+      },
+    }),
+    false,
+  );
+});
+
+test("dashboard sample runtime event parser projects typed task events into graph mutations", () => {
+  const parsed = parseDashboardSampleRuntimeEventData({
+    event: {
+      eventId: "77777777-7777-4777-8777-777777777777",
+      sampleId: FIXTURE_IDS.sampleId,
+      timestamp: "2026-03-18T12:00:14.000000Z",
+      eventType: "task.added",
+      targetType: "task",
+      targetId: FIXTURE_IDS.solveTaskNodeUuid,
+      taskSlug: "solve",
+      status: "pending",
+      task: {
+        instance_key: "proof-1",
+        description: "Write the proof.",
+      },
+      payload: {
+        worker_slug: "minif2f-smoke-worker",
+      },
+    },
+  });
+
+  assert.equal(parsed.mutation_type, "node.added");
+  assert.equal(parsed.target_type, "node");
+  assert.deepEqual(parsed.new_value, {
+    task_slug: "solve",
+    instance_key: "proof-1",
+    description: "Write the proof.",
+    status: "pending",
+    assigned_worker_slug: "minif2f-smoke-worker",
+  });
+});
+
+test("dashboard sample runtime event parser projects typed edge events into graph mutations", () => {
+  const parsed = parseDashboardSampleRuntimeEventData({
+    event: {
+      eventId: "77777777-7777-4777-8777-777777777777",
+      sampleId: FIXTURE_IDS.sampleId,
+      timestamp: "2026-03-18T12:00:14.000000Z",
+      eventType: "edge.added",
+      targetType: "edge",
+      targetId: "99999999-9999-4999-8999-999999999999",
+      sourceTaskId: FIXTURE_IDS.actionId,
+      targetTaskId: FIXTURE_IDS.solveTaskNodeUuid,
+      status: "pending",
+      payload: {},
+    },
+  });
+
+  assert.equal(parsed.mutation_type, "edge.added");
+  assert.deepEqual(parsed.new_value, {
+    mutation_type: "edge.added",
+    source_task_id: FIXTURE_IDS.actionId,
+    target_task_id: FIXTURE_IDS.solveTaskNodeUuid,
+    status: "pending",
+  });
+});
+
+test("dashboard sample runtime event parser treats annotation updates as sets", () => {
+  const parsed = parseDashboardSampleRuntimeEventData({
+    event: {
+      eventId: "77777777-7777-4777-8777-777777777777",
+      sampleId: FIXTURE_IDS.sampleId,
+      timestamp: "2026-03-18T12:00:14.000000Z",
+      eventType: "annotation.updated",
+      targetType: "task",
+      targetId: FIXTURE_IDS.solveTaskNodeUuid,
+      key: "review",
+      value: {
+        namespace: "review",
+        payload: { label: "important" },
+      },
+      payload: {},
+    },
+  });
+
+  assert.equal(parsed.mutation_type, "annotation.set");
+  assert.deepEqual(parsed.new_value, {
+    namespace: "review",
+    payload: { label: "important" },
+  });
 });
 
 test("dashboard context event parser accepts backend context part payloads", () => {

@@ -11,7 +11,6 @@ from ergon_core.core.persistence.samples.models import SampleTaskEventRow
 from ergon_core.test_support.task_factory import task_with_id
 
 for module_name in (
-    "ergon_core.core.persistence.definitions.models",
     "ergon_core.core.persistence.experiments.models",
     "ergon_core.core.persistence.graph.models",
     "ergon_core.core.persistence.samples.models",

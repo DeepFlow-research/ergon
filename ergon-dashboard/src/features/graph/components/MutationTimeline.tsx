@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { GraphMutationDto } from "@/features/graph/contracts/graphMutations";
+import type { SampleGraphEventDto } from "@/features/graph/contracts/graphMutations";
 import { formatClockTimeMs } from "@/lib/timeFormat";
 
 interface MutationTimelineProps {
-  mutations: GraphMutationDto[];
+  mutations: SampleGraphEventDto[];
   currentSequence: number;
   onSequenceChange: (sequence: number) => void;
   isPlaying: boolean;

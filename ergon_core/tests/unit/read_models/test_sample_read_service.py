@@ -11,7 +11,6 @@ from ergon_core.core.application.samples.event_views import (
     VIEW_EVENT_TYPES,
     SampleRuntimeEventView,
 )
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.experiments.models import ExperimentEnvironmentRow, ExperimentRow
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.samples.models import SampleStatusEventRow, SampleTaskEventRow
@@ -36,7 +35,6 @@ def _literal_values(annotation: object) -> set[str]:
 
 @pytest.fixture()
 def session_factory():
-    _ = ExperimentDefinition
     _ = ExperimentRow
     _ = ExperimentEnvironmentRow
     _ = SampleGraphNode
@@ -57,33 +55,27 @@ def session_factory():
 
 def test_list_runs_filters_offsets_and_projects_index_summary(monkeypatch, session_factory) -> None:
     now = datetime(2026, 5, 20, 12, 0, tzinfo=UTC)
-    definition_id = uuid4()
-    skipped_definition_id = uuid4()
+    experiment_id = uuid4()
+    environment_id = uuid4()
     older_run_id = uuid4()
     matching_run_id = uuid4()
     skipped_run_id = uuid4()
 
     with session_factory() as session:
+        session.add(ExperimentRow(id=experiment_id, name="MiniWob comparison", created_at=now))
         session.add(
-            ExperimentDefinition(
-                id=definition_id,
-                name="MiniWob comparison",
-                benchmark_type="miniwob",
-                metadata_json={"experiment": "alpha"},
-            )
-        )
-        session.add(
-            ExperimentDefinition(
-                id=skipped_definition_id,
-                name="Other experiment",
-                benchmark_type="math",
-                metadata_json={},
+            ExperimentEnvironmentRow(
+                id=environment_id,
+                experiment_id=experiment_id,
+                name="mini-validation",
+                source_mode="materialized",
             )
         )
         session.add(
             SampleRecord(
                 id=older_run_id,
-                definition_id=definition_id,
+                experiment_id=experiment_id,
+                environment_id=environment_id,
                 benchmark_type="miniwob",
                 instance_key="task-old",
                 sample_id="sample-old",
@@ -95,7 +87,8 @@ def test_list_runs_filters_offsets_and_projects_index_summary(monkeypatch, sessi
         session.add(
             SampleRecord(
                 id=matching_run_id,
-                definition_id=definition_id,
+                experiment_id=experiment_id,
+                environment_id=environment_id,
                 benchmark_type="miniwob",
                 instance_key="task-1",
                 sample_id="sample-1",
@@ -118,7 +111,8 @@ def test_list_runs_filters_offsets_and_projects_index_summary(monkeypatch, sessi
         session.add(
             SampleRecord(
                 id=skipped_run_id,
-                definition_id=skipped_definition_id,
+                experiment_id=uuid4(),
+                environment_id=uuid4(),
                 benchmark_type="math",
                 instance_key="math-1",
                 experiment="beta",
@@ -146,7 +140,6 @@ def test_list_runs_filters_offsets_and_projects_index_summary(monkeypatch, sessi
         limit=1,
         offset=0,
         status="completed",
-        definition_id=definition_id,
         experiment="alpha",
     )
 
@@ -154,8 +147,7 @@ def test_list_runs_filters_offsets_and_projects_index_summary(monkeypatch, sessi
     summary = summaries[0]
     assert summary.id == matching_run_id
     assert summary.name == "alpha task 1"
-    assert summary.definition_id == definition_id
-    assert summary.definition_name == "MiniWob comparison"
+    assert summary.experiment_id == experiment_id
     assert summary.experiment == "alpha"
     assert summary.benchmark_type == "miniwob"
     assert summary.sample_id == "sample-1"
@@ -176,22 +168,12 @@ def test_list_runs_filters_offsets_and_projects_index_summary(monkeypatch, sessi
 
 def test_failed_run_snapshot_preserves_persisted_final_score(monkeypatch, session_factory) -> None:
     now = datetime(2026, 5, 20, 12, 0, tzinfo=UTC)
-    definition_id = uuid4()
     sample_id = uuid4()
 
     with session_factory() as session:
         session.add(
-            ExperimentDefinition(
-                id=definition_id,
-                name="Failed score experiment",
-                benchmark_type="smoke",
-                metadata_json={},
-            )
-        )
-        session.add(
             SampleRecord(
                 id=sample_id,
-                definition_id=definition_id,
                 benchmark_type="smoke",
                 instance_key="sad-path",
                 status=SampleStatus.FAILED,

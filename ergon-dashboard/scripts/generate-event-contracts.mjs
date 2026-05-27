@@ -41,15 +41,6 @@ function patchZod4Compat(source) {
 }
 
 function customEventContractSource(entry) {
-  if (entry.modelName === "DashboardGraphMutationEvent") {
-    return `import { z } from "zod";
-import { GraphMutationDtoSchema } from "@/features/graph/contracts/graphMutations";
-
-export const DashboardGraphMutationEventSchema = z.object({
-  mutation: GraphMutationDtoSchema,
-}).catchall(z.any());
-`;
-  }
   if (entry.modelName === "DashboardSampleRuntimeEvent") {
     return `import { z } from "zod";
 import { SampleRuntimeEventViewSchema } from "@/lib/contracts/rest";

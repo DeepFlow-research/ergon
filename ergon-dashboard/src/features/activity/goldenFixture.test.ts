@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import fixture from "../../../tests/fixtures/mas-samples/concurrent-mas-run.json";
-import { parseGraphMutationDtoArray } from "@/features/graph/contracts/graphMutations";
+import { parseSampleGraphEventDtoArray } from "@/features/graph/contracts/graphMutations";
 import { replayToSequence } from "@/features/graph/state/graphMutationReducer";
 import { buildSampleEvents } from "@/lib/sampleEvents";
 import { deserializeSampleState } from "@/lib/sampleState";
@@ -34,7 +34,7 @@ function emptyRunStateFrom(runState: SampleWorkspaceState): SampleWorkspaceState
 
 test("golden concurrent fixture replays the whole graph at selected sequence and stacks overlapping activity", () => {
   const runState = deserializeSampleState(fixture.runState);
-  const mutations = parseGraphMutationDtoArray(fixture.mutations);
+  const mutations = parseSampleGraphEventDtoArray(fixture.mutations);
   const checkpoint = fixture.checkpoints.find((entry) => entry.sequence === 14);
   assert.ok(checkpoint);
 

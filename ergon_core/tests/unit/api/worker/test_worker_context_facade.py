@@ -22,7 +22,6 @@ from ergon_core.core.application.runtime.task_models import (
 )
 from ergon_core.core.persistence.shared.enums import SampleResourceKind
 from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.telemetry.models import (
     SampleRecord,
@@ -153,7 +152,6 @@ def _context(*, sample_id, task_id, inspect=None, resource_service=None) -> Work
         sample_id=sample_id,
         task_id=task_id,
         execution_id=uuid4(),
-        definition_id=uuid4(),
         sandbox_id="sbx",
         task_mgmt=_FakeTaskManagement(),
         task_inspect=inspect or _FakeInspection(),
@@ -173,7 +171,6 @@ async def test_facade_mutations_call_current_service_command_signatures() -> Non
         sample_id=sample_id,
         task_id=root_id,
         execution_id=uuid4(),
-        definition_id=uuid4(),
         sandbox_id="sbx",
         task_mgmt=mgmt,
         task_inspect=inspect,
@@ -202,7 +199,6 @@ async def test_spawn_task_uses_empty_tuple_dependency_default() -> None:
         sample_id=sample_id,
         task_id=root_id,
         execution_id=uuid4(),
-        definition_id=uuid4(),
         sandbox_id="sbx",
         task_mgmt=mgmt,
         task_inspect=_FakeInspection(),
@@ -302,7 +298,6 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
     session = _sql_session()
     sample_id = uuid4()
     other_run_id = uuid4()
-    definition_id = uuid4()
     root_id = uuid4()
     sibling_id = uuid4()
     sibling_execution_id = uuid4()
@@ -311,15 +306,8 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
     blob.write_bytes(b"report")
     session.add_all(
         [
-            ExperimentDefinition(
-                id=definition_id,
-                benchmark_type="bench",
-                name="bench",
-                metadata_json={},
-            ),
             SampleRecord(
                 id=sample_id,
-                definition_id=definition_id,
                 benchmark_type="bench",
                 instance_key="sample-1",
                 worker_team_json={},
@@ -327,7 +315,6 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
             ),
             SampleRecord(
                 id=other_run_id,
-                definition_id=definition_id,
                 benchmark_type="bench",
                 instance_key="sample-2",
                 worker_team_json={},
@@ -382,7 +369,6 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
         sample_id=sample_id,
         task_id=root_id,
         execution_id=uuid4(),
-        definition_id=definition_id,
         sandbox_id="sbx",
         task_mgmt=_FakeTaskManagement(),
         task_inspect=_FakeInspection(),

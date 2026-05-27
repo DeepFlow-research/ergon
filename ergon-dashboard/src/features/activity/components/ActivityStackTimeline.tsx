@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import type { GraphMutationDto } from "@/features/graph/contracts/graphMutations";
+import type { SampleGraphEventDto } from "@/features/graph/contracts/graphMutations";
 import { ACTIVITY_BAND_ORDER, stackActivities } from "@/features/activity/stackLayout";
 import type { ActivityBand, SampleActivity } from "@/features/activity/types";
 import { resolveCurrentActivityId } from "@/features/activity/currentActivity";
@@ -11,7 +11,7 @@ import { ActivityBar, activityKindLegendLabel, activityKindColor } from "./Activ
 
 interface ActivityStackTimelineProps {
   activities: SampleActivity[];
-  mutations: GraphMutationDto[];
+  mutations: SampleGraphEventDto[];
   currentSequence: number | null;
   selectedTaskId: string | null;
   selectedActivityId: string | null;

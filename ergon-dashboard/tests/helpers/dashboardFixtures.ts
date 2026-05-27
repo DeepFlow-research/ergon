@@ -11,7 +11,7 @@ import { TaskStatus } from "../../src/lib/types";
 
 export const FIXTURE_IDS = {
   sampleId: "22222222-2222-4222-8222-222222222222",
-  definitionId: "33333333-3333-4333-8333-333333333333",
+  experimentId: "33333333-3333-4333-8333-333333333333",
   rootTaskId: "task-root",
   exploreTaskId: "task-explore",
   solveTaskId: "task-solve",
@@ -30,7 +30,7 @@ export const FIXTURE_IDS = {
 } as const;
 
 export const CONCURRENT_MAS_FIXTURE_IDS = {
-  definitionId: "33333333-3333-4333-8333-333333333333",
+  experimentId: "33333333-3333-4333-8333-333333333333",
   sampleId: "99999999-9999-4999-8999-999999999999",
   searchTaskId: "10000000-0000-4000-8000-000000000002",
   checkTaskId: "10000000-0000-4000-8000-000000000003",
@@ -142,7 +142,7 @@ function serializedRunState(): SerializedSampleWorkspaceState {
 
   return {
     id: FIXTURE_IDS.sampleId,
-    definitionId: FIXTURE_IDS.definitionId,
+    experimentId: FIXTURE_IDS.experimentId,
     name: "parallel",
     status: "executing",
     tasks: {
@@ -458,7 +458,7 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
   const runState = serializedRunState();
   const experimentDetail = {
     experiment: {
-      definition_id: FIXTURE_IDS.definitionId,
+      experiment_id: FIXTURE_IDS.experimentId,
       name: "minif2f smoke n=3",
       description: null,
       benchmark_type: "minif2f",
@@ -489,7 +489,7 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
     runs: [
       {
         sample_id: FIXTURE_IDS.sampleId,
-        definition_id: FIXTURE_IDS.definitionId,
+        experiment_id: FIXTURE_IDS.experimentId,
         benchmark_type: "minif2f",
         instance_key: "algebra_sample",
         status: "completed",
@@ -551,7 +551,7 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
   const concurrent = createConcurrentMasSeedOnly();
   return {
     experimentDetails: {
-      [FIXTURE_IDS.definitionId]: experimentDetail,
+      [FIXTURE_IDS.experimentId]: experimentDetail,
       ...(concurrent.experimentDetails ?? {}),
     },
     runs: [runState, ...(concurrent.runs ?? [])],

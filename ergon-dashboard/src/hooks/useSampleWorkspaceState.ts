@@ -22,7 +22,7 @@ import {
   parseSandboxCreatedSocketData,
   parseTaskStatusSocketData,
 } from "@/lib/contracts/events";
-import type { GraphMutationSocketData } from "@/lib/contracts/events";
+import type { SampleRuntimeEventSocketData } from "@/lib/contracts/events";
 import type { SampleSandbox, SampleSandboxCommand } from "@/lib/contracts/rest";
 import {
   ContextEventState,
@@ -328,7 +328,7 @@ export function useSampleWorkspaceState(
   const { handleGraphMutation } = useGraphMutations(setRunState);
 
   const handleGraphMutationSocket = useCallback(
-    (data: GraphMutationSocketData) => {
+    (data: SampleRuntimeEventSocketData) => {
       if (data.sampleId !== sampleId) return;
       handleGraphMutation(data.mutation);
     },
@@ -411,7 +411,7 @@ export function useSampleWorkspaceState(
     socket.on("thread:message", handleThreadMessage);
     socket.on("task:evaluation", handleTaskEvaluation);
     socket.on("context:event", handleContextEvent);
-    socket.on("graph:mutation", handleGraphMutationSocket);
+    socket.on("sample:runtime-event", handleGraphMutationSocket);
 
     return () => {
       if (retryTimeout) clearTimeout(retryTimeout);
@@ -425,7 +425,7 @@ export function useSampleWorkspaceState(
       socket.off("thread:message", handleThreadMessage);
       socket.off("task:evaluation", handleTaskEvaluation);
       socket.off("context:event", handleContextEvent);
-      socket.off("graph:mutation", handleGraphMutationSocket);
+      socket.off("sample:runtime-event", handleGraphMutationSocket);
     };
   }, [
     socket,

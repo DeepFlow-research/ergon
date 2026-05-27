@@ -61,7 +61,7 @@ async def test_workflow_command_spawns_dynamic_object_bound_child(
     assert child.task_json["_type"].endswith(":Task")
     assert child.task_json["worker"]["_type"].endswith(":ToyWorker")
     assert child.task_json["sandbox"]["_type"].endswith(":ToySandbox")
-    assert toy_workflow_harness.definition_tasks() == []
+    assert toy_workflow_harness.dynamic_nodes() == [child]
 
 
 @pytest.mark.asyncio
@@ -85,7 +85,7 @@ async def test_agent_workflow_tool_spawns_dynamic_object_bound_child(
     assert child.is_dynamic is True
     assert child.task_slug == "tool-child"
     assert child.task_json["worker"]["_type"].endswith(":ToyWorker")
-    assert toy_workflow_harness.definition_tasks() == []
+    assert toy_workflow_harness.dynamic_nodes() == [child]
 
 
 @pytest.mark.asyncio

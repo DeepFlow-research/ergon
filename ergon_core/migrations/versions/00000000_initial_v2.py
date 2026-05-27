@@ -13,7 +13,6 @@ from sqlmodel import SQLModel
 
 for module_name in (
     "ergon_core.core.persistence.context.models",
-    "ergon_core.core.persistence.definitions.models",
     "ergon_core.core.persistence.graph.models",
     "ergon_core.core.persistence.samples.models",
     "ergon_core.core.persistence.telemetry.models",
@@ -27,14 +26,6 @@ branch_labels = None
 depends_on = None
 
 INITIAL_TABLES = (
-    "experiment_definitions",
-    "experiment_definition_workers",
-    "experiment_definition_evaluators",
-    "experiment_definition_instances",
-    "experiment_definition_tasks",
-    "experiment_definition_task_dependencies",
-    "experiment_definition_task_assignments",
-    "experiment_definition_task_evaluators",
     "samples",
     "sample_graph_nodes",
     "sample_graph_edges",

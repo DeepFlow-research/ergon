@@ -19,8 +19,8 @@ const SampleSummaryDto = z
     completed_at: z.union([z.string(), z.null()]).optional(),
     latest_activity_at: z.union([z.string(), z.null()]).optional(),
     duration_seconds: z.union([z.number(), z.null()]).optional(),
-    definition_id: z.union([z.string(), z.null()]).optional(),
-    definition_name: z.union([z.string(), z.null()]).optional(),
+    experiment_id: z.union([z.string(), z.null()]).optional(),
+    experiment_name: z.union([z.string(), z.null()]).optional(),
     experiment: z.union([z.string(), z.null()]).optional(),
     benchmark_type: z.string(),
     instance_key: z.string(),
@@ -306,7 +306,7 @@ const SampleSnapshotMetricsDto = z.object({
 });
 const SampleSnapshotDto = z.object({
   id: z.string(),
-  definitionId: z.union([z.string(), z.null()]).optional(),
+  experimentId: z.union([z.string(), z.null()]).optional(),
   name: z.string(),
   status: z.string(),
   tasks: z.record(z.string(), SampleTaskDto).optional(),
@@ -694,25 +694,25 @@ const SamplerInvocationsView = z
   .passthrough();
 const ExperimentRunRequest = z
   .object({
-    definition_id: z.string().uuid(),
+    experiment_id: z.string().uuid(),
     timeout_seconds: z.union([z.number(), z.null()]).optional(),
     wait: z.boolean().optional().default(true),
   })
   .passthrough();
-const run_experiment_experiments__definition_id__run_post_Body = z.union([
+const submit_experiment_experiments__experiment_id__run_post_Body = z.union([
   ExperimentRunRequest,
   z.null(),
 ]);
 const ExperimentRunResult = z
   .object({
-    definition_id: z.string().uuid(),
+    experiment_id: z.string().uuid(),
     sample_ids: z.array(z.string().uuid()),
-    definition_ids: z.array(z.string().uuid()).optional(),
+    experiment_ids: z.array(z.string().uuid()).optional(),
   })
   .passthrough();
 const SubmitRequest = z
   .object({
-    definition_id: z.string().uuid(),
+    experiment_id: z.string().uuid(),
     num_episodes: z.number().int().gte(1),
     policy_version: z.union([z.number(), z.null()]).optional(),
     model_target_override: z.union([z.string(), z.null()]).optional(),
@@ -805,7 +805,7 @@ const TestExecutionDto = z
     error: z.union([z.string(), z.null()]),
   })
   .passthrough();
-const TestRunStateDto = z
+const TestSampleStateDto = z
   .object({
     sample_id: z.string().uuid(),
     status: z.string(),
@@ -820,12 +820,12 @@ const TestRunStateDto = z
     context_event_count: z.number().int(),
   })
   .passthrough();
-const TestExperimentRunDto = z
+const TestExperimentSampleDto = z
   .object({ sample_id: z.string().uuid(), status: z.string() })
   .passthrough();
-const SeedRunRequest = z
+const SeedSampleRequest = z
   .object({
-    definition_id: z.string().uuid(),
+    experiment_id: z.string().uuid(),
     benchmark_type: z.string().optional().default("test-harness"),
     instance_key: z.string().optional().default("seeded"),
     worker_team: z.object({}).partial().passthrough().optional(),
@@ -835,13 +835,13 @@ const SeedRunRequest = z
   })
   .passthrough();
 const ResetRequest = z.object({ experiment_prefix: z.string() }).passthrough();
-const ExperimentRunSlotRequest = z
+const ExperimentSampleSlotRequest = z
   .object({ worker_slug: z.string(), evaluator_slug: z.string() })
   .passthrough();
-const SubmitExperimentRunsRequest = z
+const SubmitExperimentSamplesRequest = z
   .object({
     benchmark_slug: z.string(),
-    slots: z.array(ExperimentRunSlotRequest),
+    slots: z.array(ExperimentSampleSlotRequest),
     experiment: z.string(),
     sandbox_slug: z.union([z.string(), z.null()]).optional(),
     dependency_extras: z.array(z.string()).optional().default(["none"]),
@@ -849,7 +849,7 @@ const SubmitExperimentRunsRequest = z
     limit: z.number().int().optional().default(1),
   })
   .passthrough();
-const SubmitExperimentRunsResponse = z
+const SubmitExperimentSamplesResponse = z
   .object({ sample_ids: z.array(z.string().uuid()) })
   .passthrough();
 
@@ -912,7 +912,7 @@ export const schemas = {
   ExperimentSamplesView,
   SamplerInvocationsView,
   ExperimentRunRequest,
-  run_experiment_experiments__definition_id__run_post_Body,
+  submit_experiment_experiments__experiment_id__run_post_Body,
   ExperimentRunResult,
   SubmitRequest,
   RolloutStatus,
@@ -927,11 +927,11 @@ export const schemas = {
   TestSampleRuntimeEventDto,
   TestEvaluationDto,
   TestExecutionDto,
-  TestRunStateDto,
-  TestExperimentRunDto,
-  SeedRunRequest,
+  TestSampleStateDto,
+  TestExperimentSampleDto,
+  SeedSampleRequest,
   ResetRequest,
-  ExperimentRunSlotRequest,
-  SubmitExperimentRunsRequest,
-  SubmitExperimentRunsResponse,
+  ExperimentSampleSlotRequest,
+  SubmitExperimentSamplesRequest,
+  SubmitExperimentSamplesResponse,
 };

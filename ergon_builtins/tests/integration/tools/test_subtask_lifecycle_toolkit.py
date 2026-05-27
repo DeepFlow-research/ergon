@@ -13,18 +13,18 @@ async def test_subtask_lifecycle_toolkit_spawns_dynamic_object_bound_child(
     toy_workflow_harness,
 ) -> None:
     toolkit = SubtaskLifecycleToolkit(context=toy_workflow_harness.context)
-    spawn_task = next(tool for tool in toolkit.get_tools() if tool.__name__ == "spawn_task")
+    add_subtask = next(tool for tool in toolkit.get_tools() if tool.__name__ == "add_subtask")
     task = toy_workflow_harness.child_task(task_slug="typed-child", description="Typed child")
 
-    result = await spawn_task(task)
+    result = await add_subtask(task)
     child = next(node for node in toy_workflow_harness.nodes() if node.task_slug == "typed-child")
 
     assert result.kind == "success"
-    assert result.task_id == child.task_id
+    assert result.node_id == child.task_id
     assert child.is_dynamic is True
     assert child.task_json["task_slug"] == "typed-child"
     assert child.task_json["worker"]["_type"].endswith(":ToyWorker")
-    assert toy_workflow_harness.definition_tasks() == []
+    assert toy_workflow_harness.dynamic_nodes() == [child]
 
 
 @pytest.mark.asyncio

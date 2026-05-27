@@ -42,7 +42,7 @@
             }
           },
           {
-            "name": "definition_id",
+            "name": "experiment_id",
             "in": "query",
             "required": false,
             "schema": {
@@ -513,16 +513,16 @@
         }
       }
     },
-    "/experiments/{definition_id}/run": {
+    "/experiments/{experiment_id}/run": {
       "post": {
         "tags": [
           "experiments"
         ],
         "summary": "Run Experiment",
-        "operationId": "run_experiment_experiments__definition_id__run_post",
+        "operationId": "submit_experiment_experiments__experiment_id__run_post",
         "parameters": [
           {
-            "name": "definition_id",
+            "name": "experiment_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -827,7 +827,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TestRunStateDto"
+                  "$ref": "#/components/schemas/TestSampleStateDto"
                 }
               }
             }
@@ -850,9 +850,9 @@
         "tags": [
           "danger-test-harness"
         ],
-        "summary": "Read Experiment Runs",
+        "summary": "Read Experiment Samples",
         "description": "List all runs attached to a v2 experiment grouping tag.",
-        "operationId": "read_experiment_runs_api___danger___test_harness_read_experiment__experiment__samples_get",
+        "operationId": "read_experiment_samples_api___danger___test_harness_read_experiment__experiment__samples_get",
         "parameters": [
           {
             "name": "experiment",
@@ -872,9 +872,9 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/TestExperimentRunDto"
+                    "$ref": "#/components/schemas/TestExperimentSampleDto"
                   },
-                  "title": "Response Read Experiment Runs Api   Danger   Test Harness Read Experiment  Experiment  Samples Get"
+                  "title": "Response Read Experiment Samples Api   Danger   Test Harness Read Experiment  Experiment  Samples Get"
                 }
               }
             }
@@ -903,7 +903,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SeedRunRequest"
+                "$ref": "#/components/schemas/SeedSampleRequest"
               }
             }
           },
@@ -969,19 +969,19 @@
         }
       }
     },
-    "/api/__danger__/test-harness/write/experiment-runs": {
+    "/api/__danger__/test-harness/write/experiment-samples": {
       "post": {
         "tags": [
           "danger-test-harness"
         ],
-        "summary": "Submit Experiment Runs",
-        "description": "Build + persist + dispatch N runs under one experiment tag.\n\nPer-slot flow persists the object-bound smoke ``Benchmark`` into the\nimmutable ``ExperimentDefinition`` tables. The v2 experiment grouping tag\nis written into definition metadata and copied to ``SampleRecord.experiment``\nby launch. Slots submit sequentially \u2014 typical N \u2264 3, so the\nparallel-gather savings are negligible.",
-        "operationId": "submit_experiment_runs_api___danger___test_harness_write_experiment_runs_post",
+        "summary": "Submit Experiment Samples",
+        "description": "Build + persist + dispatch N samples under one experiment tag.\n\nPer-slot flow builds sample DAGs through the experiment/environment authoring path and submits them sequentially for deterministic smoke coverage.",
+        "operationId": "submit_experiment_samples_api___danger___test_harness_write_experiment_samples_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SubmitExperimentRunsRequest"
+                "$ref": "#/components/schemas/SubmitExperimentSamplesRequest"
               }
             }
           },
@@ -993,7 +993,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SubmitExperimentRunsResponse"
+                  "$ref": "#/components/schemas/SubmitExperimentSamplesResponse"
                 }
               }
             }
@@ -1368,7 +1368,7 @@
       },
       "ExperimentRunRequest": {
         "properties": {
-          "definition_id": {
+          "experiment_id": {
             "type": "string",
             "format": "uuid",
             "title": "Definition Id"
@@ -1392,13 +1392,13 @@
         },
         "type": "object",
         "required": [
-          "definition_id"
+          "experiment_id"
         ],
         "title": "ExperimentRunRequest"
       },
       "ExperimentRunResult": {
         "properties": {
-          "definition_id": {
+          "experiment_id": {
             "type": "string",
             "format": "uuid",
             "title": "Definition Id"
@@ -1411,7 +1411,7 @@
             "type": "array",
             "title": "Sample Ids"
           },
-          "definition_ids": {
+          "experiment_ids": {
             "items": {
               "type": "string",
               "format": "uuid"
@@ -1422,12 +1422,12 @@
         },
         "type": "object",
         "required": [
-          "definition_id",
+          "experiment_id",
           "sample_ids"
         ],
         "title": "ExperimentRunResult"
       },
-      "ExperimentRunSlotRequest": {
+      "ExperimentSampleSlotRequest": {
         "properties": {
           "worker_slug": {
             "type": "string",
@@ -1443,7 +1443,7 @@
           "worker_slug",
           "evaluator_slug"
         ],
-        "title": "ExperimentRunSlotRequest"
+        "title": "ExperimentSampleSlotRequest"
       },
       "ExperimentSampleSummaryView": {
         "properties": {
@@ -3529,7 +3529,7 @@
             "type": "string",
             "title": "Id"
           },
-          "definitionId": {
+          "experimentId": {
             "anyOf": [
               {
                 "type": "string"
@@ -3930,7 +3930,7 @@
             ],
             "title": "Duration Seconds"
           },
-          "definition_id": {
+          "experiment_id": {
             "anyOf": [
               {
                 "type": "string",
@@ -3942,7 +3942,7 @@
             ],
             "title": "Definition Id"
           },
-          "definition_name": {
+          "experiment_name": {
             "anyOf": [
               {
                 "type": "string"
@@ -4747,9 +4747,9 @@
         "type": "object",
         "title": "SamplerInvocationsView"
       },
-      "SeedRunRequest": {
+      "SeedSampleRequest": {
         "properties": {
-          "definition_id": {
+          "experiment_id": {
             "type": "string",
             "format": "uuid",
             "title": "Definition Id"
@@ -4790,11 +4790,11 @@
         },
         "type": "object",
         "required": [
-          "definition_id"
+          "experiment_id"
         ],
-        "title": "SeedRunRequest"
+        "title": "SeedSampleRequest"
       },
-      "SubmitExperimentRunsRequest": {
+      "SubmitExperimentSamplesRequest": {
         "properties": {
           "benchmark_slug": {
             "type": "string",
@@ -4802,7 +4802,7 @@
           },
           "slots": {
             "items": {
-              "$ref": "#/components/schemas/ExperimentRunSlotRequest"
+              "$ref": "#/components/schemas/ExperimentSampleSlotRequest"
             },
             "type": "array",
             "title": "Slots"
@@ -4849,9 +4849,9 @@
           "slots",
           "experiment"
         ],
-        "title": "SubmitExperimentRunsRequest"
+        "title": "SubmitExperimentSamplesRequest"
       },
-      "SubmitExperimentRunsResponse": {
+      "SubmitExperimentSamplesResponse": {
         "properties": {
           "sample_ids": {
             "items": {
@@ -4866,11 +4866,11 @@
         "required": [
           "sample_ids"
         ],
-        "title": "SubmitExperimentRunsResponse"
+        "title": "SubmitExperimentSamplesResponse"
       },
       "SubmitRequest": {
         "properties": {
-          "definition_id": {
+          "experiment_id": {
             "type": "string",
             "format": "uuid",
             "title": "Definition Id"
@@ -4905,7 +4905,7 @@
         },
         "type": "object",
         "required": [
-          "definition_id",
+          "experiment_id",
           "num_episodes"
         ],
         "title": "SubmitRequest",
@@ -5033,7 +5033,7 @@
         ],
         "title": "TestExecutionDto"
       },
-      "TestExperimentRunDto": {
+      "TestExperimentSampleDto": {
         "properties": {
           "sample_id": {
             "type": "string",
@@ -5050,7 +5050,7 @@
           "sample_id",
           "status"
         ],
-        "title": "TestExperimentRunDto"
+        "title": "TestExperimentSampleDto"
       },
       "TestGraphNodeDto": {
         "properties": {
@@ -5106,7 +5106,7 @@
         ],
         "title": "TestGraphNodeDto"
       },
-      "TestRunStateDto": {
+      "TestSampleStateDto": {
         "properties": {
           "sample_id": {
             "type": "string",
@@ -5180,7 +5180,7 @@
           "thread_count",
           "context_event_count"
         ],
-        "title": "TestRunStateDto"
+        "title": "TestSampleStateDto"
       },
       "TestSampleRuntimeEventDto": {
         "properties": {

@@ -484,7 +484,7 @@ def _event_index(
 # =============================================================================
 
 
-def _assert_experiment_membership(experiment: str, run_ids: list[UUID]) -> None:
+def _assert_experiment_membership(experiment: str, sample_ids: list[UUID]) -> None:
     """Runs are visible via the experiment-group test-harness endpoint."""
     api_base = os.environ["ERGON_API_BASE_URL"]
     r = httpx.get(
@@ -494,7 +494,7 @@ def _assert_experiment_membership(experiment: str, run_ids: list[UUID]) -> None:
     r.raise_for_status()
     rows = r.json()
     returned = {UUID(row["sample_id"]) for row in rows}
-    expected = set(run_ids)
+    expected = set(sample_ids)
     assert expected <= returned, f"experiment group missing expected run ids: {expected - returned}"
 
 

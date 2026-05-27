@@ -1,8 +1,4 @@
-"""Run-scoped telemetry tables.
-
-Telemetry rows reference bound definition rows — they never become the source
-of truth for the definition itself.
-"""
+"""Sample-scoped telemetry tables."""
 
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -34,17 +30,23 @@ class SampleRecord(SQLModel, table=True):
     __tablename__ = "samples"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    definition_id: UUID | None = Field(
+    experiment_id: UUID | None = Field(
         default=None,
-        foreign_key="experiment_definitions.id",
         index=True,
-        description="Canonical runtime ExperimentDefinition id for this run.",
+        description="Owning persisted experiment for this selected sample.",
     )
-    experiment_id: UUID | None = Field(default=None, index=True)
-    environment_id: UUID | None = Field(default=None, index=True)
+    environment_id: UUID | None = Field(
+        default=None,
+        index=True,
+        description="Owning persisted environment that produced this sample.",
+    )
     sampler_invocation_id: UUID | None = Field(default=None, index=True)
     pool_entry_id: UUID | None = Field(default=None, index=True)
-    sample_key: str | None = Field(default=None, index=True)
+    sample_key: str | None = Field(
+        default=None,
+        index=True,
+        description="Stable sample key within the owning environment.",
+    )
     sample_ref_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     benchmark_type: str = Field(index=True)
     instance_key: str = Field(index=True)
@@ -60,10 +62,7 @@ class SampleRecord(SQLModel, table=True):
     evaluator_slug: str | None = Field(
         default=None,
         index=True,
-        description=(
-            "Compatibility/display-only evaluator slug; runtime evaluation "
-            "uses object-bound task snapshots and definition evaluator rows."
-        ),
+        description="Display-only evaluator slug; runtime evaluation uses task snapshots.",
     )
     model_target: str | None = None
     sandbox_slug: str | None = Field(
@@ -145,11 +144,6 @@ class SampleTaskAttempt(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     sample_id: UUID = Field(foreign_key="samples.id", index=True)
     task_id: UUID = Field(index=True)
-    definition_worker_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_definition_workers.id",
-        index=True,
-    )
     attempt_number: int = 1
     status: TaskExecutionStatus = Field(index=True)
     started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
@@ -286,10 +280,7 @@ class SampleTaskEvaluation(SQLModel, table=True):
         index=True,
     )
     task_id: UUID = Field(index=True)
-    definition_evaluator_id: UUID = Field(
-        foreign_key="experiment_definition_evaluators.id",
-        index=True,
-    )
+    evaluator_slug: str = Field(index=True)
     score: float | None = None
     passed: bool | None = None
     feedback: str | None = None

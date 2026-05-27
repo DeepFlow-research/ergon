@@ -16,7 +16,6 @@ from ergon_core.core.application.runtime.orchestration import (
 async def test_failed_task_propagation_does_not_terminate_sandbox_directly() -> None:
     payload = TaskFailedEvent(
         sample_id=uuid4(),
-        definition_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
         error="boom",
@@ -24,7 +23,6 @@ async def test_failed_task_propagation_does_not_terminate_sandbox_directly() -> 
     )
     propagation = PropagationResult(
         sample_id=payload.sample_id,
-        definition_id=payload.definition_id,
         completed_task_id=payload.task_id,
         ready_tasks=[],
         workflow_terminal_state=WorkflowTerminalState.NONE,

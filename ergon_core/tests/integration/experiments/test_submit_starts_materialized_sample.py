@@ -29,7 +29,6 @@ from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.test_support.task_factory import task_with_id
 
 for module_name in (
-    "ergon_core.core.persistence.definitions.models",
     "ergon_core.core.persistence.experiments.models",
     "ergon_core.core.persistence.graph.models",
     "ergon_core.core.persistence.samples.models",
@@ -114,7 +113,6 @@ async def test_workflow_start_uses_materialized_sample_graph_without_definition(
     ready = await get_initial_ready_tasks(
         session=session,
         sample_id=materialized_sample.id,
-        definition_id=None,
     )
 
     nodes_by_id = {
@@ -127,21 +125,18 @@ async def test_workflow_start_uses_materialized_sample_graph_without_definition(
     assert [node.task_slug for node in nodes_by_id.values() if node.status == "ready"] == ["root"]
 
 
-def test_sample_only_task_execution_contracts_allow_missing_definition_id() -> None:
+def test_sample_only_task_execution_contracts_do_not_expose_definition_id() -> None:
     sample_id = uuid4()
     task_id = uuid4()
     execution_id = uuid4()
 
-    assert PrepareTaskExecutionCommand(sample_id=sample_id, task_id=task_id).definition_id is None
-    assert (
+    payloads = [
+        PrepareTaskExecutionCommand(sample_id=sample_id, task_id=task_id),
         SandboxSetupRequest(
             sample_id=sample_id,
             task_id=task_id,
             benchmark_type="experiment",
-        ).definition_id
-        is None
-    )
-    assert (
+        ),
         WorkerExecuteRequest(
             sample_id=sample_id,
             task_id=task_id,
@@ -152,27 +147,26 @@ def test_sample_only_task_execution_contracts_allow_missing_definition_id() -> N
             assigned_worker_slug="worker",
             worker_type="worker.Type",
             benchmark_type="experiment",
-        ).definition_id
-        is None
-    )
-    assert (
+        ),
         PersistOutputsRequest(
             sample_id=sample_id,
             task_id=task_id,
             execution_id=execution_id,
             benchmark_type="experiment",
-        ).definition_id
-        is None
-    )
-    assert (
+        ),
         TaskCancelledEvent(
             sample_id=sample_id,
             task_id=task_id,
             execution_id=None,
             cause="manager_decision",
-        ).definition_id
-        is None
-    )
+        ),
+    ]
+
+    for payload in payloads:
+        fields = type(payload).model_fields
+        assert "sample_id" in fields
+        assert "task_id" in fields
+        assert "definition_id" not in fields
 
 
 @pytest.mark.asyncio

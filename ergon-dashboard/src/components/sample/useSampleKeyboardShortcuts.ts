@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-import type { GraphMutationDto } from "@/features/graph/contracts/graphMutations";
+import type { SampleGraphEventDto } from "@/features/graph/contracts/graphMutations";
 import { TaskStatus } from "@/lib/types";
 import { resolveReplayStep } from "./replayNavigation";
 
@@ -14,7 +14,7 @@ export function useSampleKeyboardShortcuts(options: {
   statusFilter: TaskStatus | null;
   setStatusFilter: (status: TaskStatus | null | ((previous: TaskStatus | null) => TaskStatus | null)) => void;
   toggleEventStream: () => void;
-  mutations: GraphMutationDto[];
+  mutations: SampleGraphEventDto[];
 }) {
   useEffect(() => {
     const statusOrder: TaskStatus[] = [

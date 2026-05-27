@@ -9,7 +9,6 @@ it would need xfail; but the simple node-level cancel works today.
 """
 
 import pytest
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.application.runtime.status import CANCELLED
 from ergon_core.core.persistence.shared.db import get_session
@@ -24,7 +23,6 @@ from tests.integration.propagation._helpers import (
     delete_typed_sample_wal,
     assert_wal_has_status,
     get_node_status,
-    make_experiment_definition,
     make_node,
     make_run,
 )
@@ -36,7 +34,7 @@ pytestmark = pytest.mark.integration
 # ---------------------------------------------------------------------------
 
 
-def _cleanup_run(sample_id, defn_id) -> None:  # type: ignore[no-untyped-def]
+def _cleanup_run(sample_id) -> None:  # type: ignore[no-untyped-def]
     with get_session() as session:
         delete_typed_sample_wal(session, sample_id)
         for edge in session.exec(
@@ -50,9 +48,6 @@ def _cleanup_run(sample_id, defn_id) -> None:  # type: ignore[no-untyped-def]
         run_row = session.get(SampleRecord, sample_id)
         if run_row is not None:
             session.delete(run_row)
-        defn_row = session.get(ExperimentDefinition, defn_id)
-        if defn_row is not None:
-            session.delete(defn_row)
         session.commit()
 
 
@@ -70,11 +65,9 @@ async def test_6_manager_decision_cancel_pending_node() -> None:
     Expected to pass with current code (cancellation is implemented).
     """
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="cancel-target", status="pending")
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         session.commit()
 
@@ -122,7 +115,7 @@ async def test_6_manager_decision_cancel_pending_node() -> None:
             assert_cross_cutting_invariants(session, sample_id)
 
     finally:
-        _cleanup_run(sample_id, defn_id)
+        _cleanup_run(sample_id)
 
 
 @pytest.mark.asyncio
@@ -134,11 +127,9 @@ async def test_6b_cancel_does_not_affect_already_terminal_node() -> None:
     Expected to pass with current code.
     """
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="already-completed", status="completed")
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         session.commit()
 
@@ -180,4 +171,4 @@ async def test_6b_cancel_does_not_affect_already_terminal_node() -> None:
             assert_cross_cutting_invariants(session, sample_id)
 
     finally:
-        _cleanup_run(sample_id, defn_id)
+        _cleanup_run(sample_id)

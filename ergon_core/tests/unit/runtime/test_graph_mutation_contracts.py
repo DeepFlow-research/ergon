@@ -28,5 +28,6 @@ def test_rest_and_dashboard_events_share_typed_sample_wal_payloads() -> None:
     assert event.event.source_task_id == source_id
     assert event.event.target_task_id == target_id
     data = event.model_dump(mode="json")
-    assert data["event"]["source_task_id"] == str(source_id)
-    assert data["event"]["target_task_id"] == str(target_id)
+    assert data["event"]["eventType"] == "edge.added"
+    assert data["event"]["sourceTaskId"] == str(source_id)
+    assert data["event"]["targetTaskId"] == str(target_id)

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { GraphMutationDto } from "@/features/graph/contracts/graphMutations";
+import type { SampleGraphEventDto } from "@/features/graph/contracts/graphMutations";
 import type { SampleActivity } from "./types";
 import { resolveActivitySnapshotSequence } from "./snapshotSequence";
 
@@ -25,7 +25,7 @@ function activity(overrides: Partial<SampleActivity> = {}): SampleActivity {
   };
 }
 
-function mutation(sequence: number, createdAt: string): GraphMutationDto {
+function mutation(sequence: number, createdAt: string): SampleGraphEventDto {
   return {
     id: "00000000-0000-4000-8000-000000000001",
     sample_id: "00000000-0000-4000-8000-000000000002",

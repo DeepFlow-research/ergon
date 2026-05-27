@@ -2,7 +2,6 @@ from uuid import UUID, uuid4
 
 import inngest
 import pytest
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import (
     RolloutBatch,
@@ -24,7 +23,6 @@ def session_factory():
     SQLModel.metadata.create_all(
         engine,
         tables=[
-            ExperimentDefinition.__table__,
             SampleRecord.__table__,
             RolloutBatch.__table__,
             RolloutBatchSampleMembership.__table__,
@@ -47,16 +45,8 @@ def _service(session_factory) -> RolloutService:
 
 
 def _sample(session: Session, *, status: SampleStatus = SampleStatus.PENDING) -> SampleRecord:
-    definition = ExperimentDefinition(
-        benchmark_type="ci-rollout-membership",
-        name="ci-rollout-membership",
-        metadata_json={},
-    )
-    session.add(definition)
-    session.flush()
     sample = SampleRecord(
-        definition_id=definition.id,
-        benchmark_type=definition.benchmark_type,
+        benchmark_type="ci-rollout-membership",
         instance_key="sample-1",
         status=status,
     )
@@ -92,19 +82,11 @@ def test_rollout_batch_sample_membership_preserves_sample_order_after_reload(
         UUID("00000000-0000-0000-0000-000000000002"),
     ]
     with session_factory() as session:
-        definition = ExperimentDefinition(
-            benchmark_type="ci-rollout-membership",
-            name="ci-rollout-membership-ordered",
-            metadata_json={},
-        )
-        session.add(definition)
-        session.flush()
         for sample_id in sample_ids:
             session.add(
                 SampleRecord(
                     id=sample_id,
-                    definition_id=definition.id,
-                    benchmark_type=definition.benchmark_type,
+                    benchmark_type="ci-rollout-membership",
                     instance_key=str(sample_id),
                     status=SampleStatus.PENDING,
                 )

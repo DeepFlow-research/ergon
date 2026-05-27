@@ -70,7 +70,7 @@ def test_telemetry_models_do_not_define_application_command_dtos() -> None:
 def test_persistence_foreign_keys_reference_existing_columns() -> None:
     for module_name in (
         "ergon_core.core.persistence.context.models",
-        "ergon_core.core.persistence.definitions.models",
+        "ergon_core.core.persistence.experiments.models",
         "ergon_core.core.persistence.graph.models",
         "ergon_core.core.persistence.telemetry.models",
     ):
@@ -95,10 +95,10 @@ def test_persistence_import_reducer_models_are_absent() -> None:
     assert not imports_dir.exists()
 
 
-def test_run_record_uses_definition_id_as_single_runtime_definition_identity() -> None:
+def test_sample_record_does_not_use_definition_identity() -> None:
     from ergon_core.core.persistence.telemetry.models import SampleRecord
 
-    assert "definition_id" in SampleRecord.model_fields
+    assert "definition_id" not in SampleRecord.model_fields
     assert ("workflow" + "_definition_id") not in SampleRecord.model_fields
 
 

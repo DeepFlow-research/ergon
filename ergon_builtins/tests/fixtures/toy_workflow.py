@@ -11,7 +11,6 @@ from ergon_core.api import Sandbox, Task, Worker, WorkerContext, WorkerOutput, W
 from ergon_core.core.application.runtime import management as management_module
 from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
 from ergon_core.core.application.runtime.task_management import TaskManagementService
-from ergon_core.core.persistence.definitions.models import ExperimentDefinitionTask
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord
@@ -61,7 +60,7 @@ class _DashboardEmitter:
         return None
 
 
-async def _dispatch_task_ready(sample_id: UUID, definition_id: UUID, task_id: UUID) -> None:
+async def _dispatch_task_ready(sample_id: UUID, task_id: UUID) -> None:
     return None
 
 
@@ -101,8 +100,8 @@ class ToyWorkflowHarness(BaseModel):
             ).all()
         )
 
-    def definition_tasks(self) -> list[ExperimentDefinitionTask]:
-        return list(self.session.exec(select(ExperimentDefinitionTask)).all())
+    def dynamic_nodes(self) -> list[SampleGraphNode]:
+        return [node for node in self.nodes() if node.is_dynamic]
 
 
 def make_toy_workflow_harness(monkeypatch: pytest.MonkeyPatch) -> ToyWorkflowHarness:
@@ -120,7 +119,6 @@ def make_toy_workflow_harness(monkeypatch: pytest.MonkeyPatch) -> ToyWorkflowHar
     )
 
     sample_id = uuid4()
-    definition_id = uuid4()
     parent_task = Task(
         task_slug="parent",
         instance_key="sample-1",
@@ -132,7 +130,6 @@ def make_toy_workflow_harness(monkeypatch: pytest.MonkeyPatch) -> ToyWorkflowHar
     session.add(
         SampleRecord(
             id=sample_id,
-            definition_id=definition_id,
             benchmark_type="toy",
             instance_key="sample-1",
             worker_team_json={},
@@ -174,7 +171,6 @@ def make_toy_workflow_harness(monkeypatch: pytest.MonkeyPatch) -> ToyWorkflowHar
         sample_id=sample_id,
         task_id=parent.task_id,
         execution_id=uuid4(),
-        definition_id=definition_id,
         sandbox_id="toy-sandbox-id",
         task_mgmt=TaskManagementService(
             dashboard_emitter=_DashboardEmitter(),

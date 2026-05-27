@@ -33,7 +33,9 @@ from pydantic import ValidationError
     [
         (
             lambda: SampleRecord(
-                definition_id=uuid4(),
+                experiment_id=uuid4(),
+                environment_id=uuid4(),
+                sample_key="sample-1",
                 benchmark_type="ci-test",
                 instance_key="sample-1",
                 worker_team_json={"primary": "test-worker"},
@@ -118,12 +120,15 @@ def test_task_execution_rejects_missing_static_or_dynamic_identity():
         )
 
 
-def test_run_record_uses_definition_identity():
-    definition_id = uuid4()
+def test_sample_record_uses_experiment_environment_identity():
+    experiment_id = uuid4()
+    environment_id = uuid4()
 
     run = SampleRecord.model_validate(
         {
-            "definition_id": str(definition_id),
+            "experiment_id": str(experiment_id),
+            "environment_id": str(environment_id),
+            "sample_key": "sample-1",
             "benchmark_type": "ci-benchmark",
             "instance_key": "sample-1",
             "worker_team_json": {"primary": "test-worker"},
@@ -131,12 +136,14 @@ def test_run_record_uses_definition_identity():
         }
     )
 
-    assert run.definition_id == definition_id
+    assert not hasattr(run, "definition_id")
+    assert run.experiment_id == experiment_id
+    assert run.environment_id == environment_id
+    assert run.sample_key == "sample-1"
     assert run.benchmark_type == "ci-benchmark"
     assert run.instance_key == "sample-1"
     assert run.parsed_worker_team() == {"primary": "test-worker"}
     assert not hasattr(run, "workflow" + "_definition_id")
-    assert run.experiment_id is None
     assert not hasattr(run, "cohort_id")
 
 
@@ -160,7 +167,9 @@ def test_enum_value_matches_string():
         (
             SampleRecord,
             {
-                "definition_id": str(uuid4()),
+                "experiment_id": str(uuid4()),
+                "environment_id": str(uuid4()),
+                "sample_key": "sample-1",
                 "benchmark_type": "ci-test",
                 "instance_key": "sample-1",
                 "worker_team_json": {"primary": "test-worker"},
@@ -189,7 +198,7 @@ def test_enum_value_matches_string():
         ),
         (
             RolloutBatch,
-            {"definition_id": str(uuid4())},
+            {"experiment_id": str(uuid4())},
             "status",
             "garbage",
         ),

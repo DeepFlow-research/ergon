@@ -1,4 +1,4 @@
-import type { GraphMutationDto } from "@/features/graph/contracts/graphMutations";
+import type { SampleGraphEventDto } from "@/features/graph/contracts/graphMutations";
 import type {
   ContextEventState,
   ExecutionAttemptState,
@@ -11,7 +11,7 @@ import type { SampleActivity } from "./types";
 export interface BuildSampleActivitiesInput {
   runState: SampleWorkspaceState | null;
   events: SampleEvent[];
-  mutations: GraphMutationDto[];
+  mutations: SampleGraphEventDto[];
   currentSequence: number | null;
 }
 
@@ -302,7 +302,7 @@ function eventMarkerActivities(events: SampleEvent[]): SampleActivity[] {
   });
 }
 
-function graphMutationActivities(mutations: GraphMutationDto[]): SampleActivity[] {
+function graphMutationActivities(mutations: SampleGraphEventDto[]): SampleActivity[] {
   return mutations.map((mutation) => ({
     id: `graph:${mutation.id}`,
     kind: "graph",

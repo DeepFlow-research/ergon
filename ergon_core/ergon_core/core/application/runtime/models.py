@@ -13,7 +13,6 @@ from uuid import UUID
 from ergon_core.api.benchmark import Task
 from ergon_core.core.application.runtime.status import NodeStatus
 from ergon_core.core.persistence.shared.types import (
-    DefinitionId,
     EdgeId,
     NodeId,
     SampleId,
@@ -75,7 +74,6 @@ class GraphEdgeDto(BaseModel):
 
     id: EdgeId
     sample_id: SampleId
-    definition_dependency_id: DefinitionId | None
     source_task_id: NodeId
     target_task_id: NodeId
     status: str = Field(

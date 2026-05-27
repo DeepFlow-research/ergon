@@ -198,7 +198,6 @@ def _minimal_task() -> Task:
 def _minimal_context() -> WorkerContext:
     return WorkerContext(
         sample_id=UUID(int=3),
-        definition_id=UUID(int=4),
         execution_id=UUID(int=5),
         sandbox_id="test-sandbox",
         task_id=UUID(int=6),

@@ -4,7 +4,6 @@ from pathlib import Path
 import numpy as np
 from sqlmodel import SQLModel, Session, create_engine, select
 
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.samples.models import SampleAnnotationEventRow
 from ergon_core.core.persistence.telemetry.models import (
@@ -76,10 +75,10 @@ def test_external_run_writer_persists_import_spine_without_reducer_tables(tmp_pa
         session.commit()
 
         assert result.sample_id is not None
-        definition = session.exec(select(ExperimentDefinition)).one()
-        assert definition.benchmark_type == "imported:gap"
-        assert definition.metadata_json["import_batch_id"] == "paper-rq1-v1"
-        assert session.exec(select(SampleRecord)).one().instance_key == "gap-row-1"
+        run = session.exec(select(SampleRecord)).one()
+        assert run.benchmark_type == "imported:gap"
+        assert run.sample_key == "gap-row-1"
+        assert run.summary_json["import_batch_id"] == "paper-rq1-v1"
         assert session.exec(select(SampleGraphNode)).one().task_slug == "imported-root"
         assert (
             session.exec(select(SampleTaskAttempt)).one().output_json["source_run_id"]

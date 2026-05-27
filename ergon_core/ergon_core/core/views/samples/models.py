@@ -1,7 +1,7 @@
-"""Pydantic DTOs for the run detail API surface.
+"""Pydantic DTOs for the sample detail API surface.
 
 Task structure comes from SampleGraphNode + SampleGraphEdge rows (the live graph),
-not from ExperimentDefinitionTask. All task keys are SampleGraphNode.task_id.
+and all task keys are SampleGraphNode.task_id.
 
 """
 
@@ -198,7 +198,6 @@ class SampleSnapshotMetricsDto(CamelModel):
 
 class SampleSnapshotDto(CamelModel):
     id: str
-    definition_id: str | None = None
     name: str
     status: str
     tasks: dict[str, SampleTaskDto] = Field(default_factory=dict)
@@ -234,8 +233,7 @@ class SampleSummaryDto(BaseModel):
     completed_at: datetime | None = None
     latest_activity_at: datetime | None = None
     duration_seconds: float | None = None
-    definition_id: UUID | None = None
-    definition_name: str | None = None
+    experiment_id: UUID | None = None
     experiment: str | None = None
     benchmark_type: str
     instance_key: str

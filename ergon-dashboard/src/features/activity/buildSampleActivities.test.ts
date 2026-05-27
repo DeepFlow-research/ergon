@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import fixture from "../../../tests/fixtures/mas-samples/concurrent-mas-run.json";
-import { parseGraphMutationDtoArray } from "@/features/graph/contracts/graphMutations";
+import { parseSampleGraphEventDtoArray } from "@/features/graph/contracts/graphMutations";
 import type { SampleEvent } from "@/lib/sampleEvents";
 import { buildSampleEvents } from "@/lib/sampleEvents";
 import { deserializeSampleState } from "@/lib/sampleState";
@@ -12,7 +12,7 @@ import { resolveActivitySnapshotSequence } from "./snapshotSequence";
 
 test("buildSampleActivities surfaces semantic activity kinds without creating actor lanes", () => {
   const runState = deserializeSampleState(fixture.runState);
-  const mutations = parseGraphMutationDtoArray(fixture.mutations);
+  const mutations = parseSampleGraphEventDtoArray(fixture.mutations);
   const noisyTaskId = "10000000-0000-4000-8000-000000000002";
   runState.sandboxesByTask.set(noisyTaskId, {
     sandboxId: "sandbox-noisy",
@@ -247,7 +247,7 @@ test("buildSampleActivities surfaces semantic activity kinds without creating ac
 
 test("completed trace spans keep full duration when replaying an earlier sequence", () => {
   const runState = deserializeSampleState(fixture.runState);
-  const mutations = parseGraphMutationDtoArray(fixture.mutations);
+  const mutations = parseSampleGraphEventDtoArray(fixture.mutations);
   const events = buildSampleEvents(runState);
 
   const activities = buildSampleActivities({
@@ -276,7 +276,7 @@ test("completed trace spans keep full duration when replaying an earlier sequenc
 
 test("context/tool event sequence does not masquerade as graph replay sequence", () => {
   const runState = deserializeSampleState(fixture.runState);
-  const mutations = parseGraphMutationDtoArray(fixture.mutations);
+  const mutations = parseSampleGraphEventDtoArray(fixture.mutations);
   const activities = buildSampleActivities({
     runState,
     events: buildSampleEvents(runState),

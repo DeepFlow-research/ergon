@@ -79,9 +79,9 @@ export function seedDashboardHarness(payload: DashboardHarnessSeedPayload): void
   }
 }
 
-export function getHarnessExperiment(definitionId: string): unknown | null {
+export function getHarnessExperiment(experimentId: string): unknown | null {
   requireHarnessEnabled();
-  return getHarnessState().experimentDetails[definitionId] ?? null;
+  return getHarnessState().experimentDetails[experimentId] ?? null;
 }
 
 export function getHarnessSampleState(sampleId: string): SampleDashboardState | null {

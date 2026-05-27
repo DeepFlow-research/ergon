@@ -1,4 +1,7 @@
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+
+import { SampleWorkspacePage } from "@/components/sample/SampleWorkspacePage";
+import { loadSampleSnapshot } from "@/lib/server-data/samples";
 
 interface SamplePageProps {
   params: Promise<{
@@ -8,5 +11,11 @@ interface SamplePageProps {
 
 export default async function SamplePage({ params }: SamplePageProps) {
   const { sampleId } = await params;
-  redirect(`/samples/${sampleId}/detail`);
+  const result = await loadSampleSnapshot(sampleId);
+  if (!result.ok) {
+    if (result.status === 404) notFound();
+    return <SampleWorkspacePage sampleId={sampleId} ssrError={`API returned ${result.status}`} />;
+  }
+
+  return <SampleWorkspacePage sampleId={sampleId} initialRunState={result.data} />;
 }

@@ -71,15 +71,6 @@ class WorkerContext(BaseModel):
     task_id: UUID = Field(
         description="SampleGraphNode.task_id — canonical runtime task identity.",
     )
-    definition_id: UUID | None = Field(
-        default=None,
-        description=(
-            "ExperimentDefinition.id — the experiment template that governs "
-            "this run's worker bindings, evaluator bindings, and benchmark "
-            "config. Used by delegation tools to resolve assigned_worker_slug "
-            "to worker_type."
-        ),
-    )
     execution_id: UUID
     sandbox_id: str
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -109,7 +100,6 @@ class WorkerContext(BaseModel):
         sample_id: UUID,
         task_id: UUID,
         execution_id: UUID,
-        definition_id: UUID | None,
         sandbox_id: str,
         task_mgmt: TaskManagementServiceAlias,
         task_inspect: TaskInspectionServiceAlias,
@@ -127,7 +117,6 @@ class WorkerContext(BaseModel):
             sample_id=sample_id,
             task_id=task_id,
             execution_id=execution_id,
-            definition_id=definition_id,
             sandbox_id=sandbox_id,
             task_mgmt=task_mgmt,
             task_inspect=task_inspect,

@@ -14,8 +14,6 @@ from ergon_core.core.application.evaluation.scoring import (
     aggregate_evaluation_scores,
 )
 from ergon_core.core.application.evaluation.summary import EvaluationSummary
-from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
-from ergon_core.core.persistence.definitions.models import ExperimentDefinitionEvaluator
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.ids import new_id
 from ergon_core.core.persistence.telemetry.models import (
@@ -114,13 +112,12 @@ class EvaluationService:
         result = service_result.result
         session = get_session()
         try:
-            evaluator_id = self.lookup_evaluator_id(session, sample_id, binding_key)
             evaluation = await _create_task_evaluation(
                 session,
                 sample_id=sample_id,
                 task_execution_id=task_execution_id,
                 task_id=task_id,
-                definition_evaluator_id=evaluator_id,
+                evaluator_slug=binding_key,
                 score=result.score,
                 passed=result.passed,
                 feedback=result.feedback,
@@ -160,13 +157,12 @@ class EvaluationService:
         )
         session = get_session()
         try:
-            evaluator_id = self.lookup_evaluator_id(session, sample_id, binding_key)
             await _create_task_evaluation(
                 session,
                 sample_id=sample_id,
                 task_execution_id=task_execution_id,
                 task_id=task_id,
-                definition_evaluator_id=evaluator_id,
+                evaluator_slug=binding_key,
                 score=0.0,
                 passed=False,
                 feedback=f"{error_type}: {exc}",
@@ -176,51 +172,6 @@ class EvaluationService:
             session.commit()
         finally:
             session.close()
-
-    def lookup_evaluator_id(
-        self,
-        session: Session,
-        sample_id: UUID,
-        binding_key: str,
-        *,
-        evaluator_type: str | None = None,
-        snapshot_json: dict | None = None,
-    ) -> UUID:
-        """Resolve the ``ExperimentDefinitionEvaluator.id`` for a binding key.
-
-        The eval body receives an id-only payload, so it executes the
-        inline ``task.evaluators[i]`` object and passes only its
-        ``evaluator.name``. The persistence layer needs the normalized
-        evaluator id for the FK on
-        ``sample_task_evaluations.definition_evaluator_id``.
-
-        The normalized evaluator row remains the persistence/read-model
-        target for evaluation summaries, even though runtime dispatch
-        executes the inline evaluator from ``task.evaluators``.
-        """
-
-        run = session.get(SampleRecord, sample_id)
-        if run is None:
-            raise ContractViolationError(
-                f"SampleRecord {sample_id} not found while resolving evaluator id"
-            )
-        evaluator_def = session.exec(
-            select(ExperimentDefinitionEvaluator).where(
-                ExperimentDefinitionEvaluator.experiment_definition_id == run.definition_id,
-                ExperimentDefinitionEvaluator.binding_key == binding_key,
-            )
-        ).first()
-        if evaluator_def is None:
-            evaluator_def = ExperimentDefinitionEvaluator(
-                id=new_id(),
-                experiment_definition_id=run.definition_id,
-                binding_key=binding_key,
-                evaluator_type=evaluator_type or binding_key,
-                snapshot_json=snapshot_json or {},
-            )
-            session.add(evaluator_def)
-            session.flush()
-        return evaluator_def.id
 
     def _refresh_run_evaluation_summary(self, session: Session, sample_id: UUID) -> None:
         run = session.get(SampleRecord, sample_id)
@@ -252,7 +203,7 @@ async def _create_task_evaluation(
     sample_id: UUID,
     task_execution_id: UUID,
     task_id: UUID,
-    definition_evaluator_id: UUID,
+    evaluator_slug: str,
     score: float | None = None,
     passed: bool | None = None,
     feedback: str | None = None,
@@ -263,7 +214,7 @@ async def _create_task_evaluation(
         sample_id=sample_id,
         task_execution_id=task_execution_id,
         task_id=task_id,
-        definition_evaluator_id=definition_evaluator_id,
+        evaluator_slug=evaluator_slug,
         score=score,
         passed=passed,
         feedback=feedback,

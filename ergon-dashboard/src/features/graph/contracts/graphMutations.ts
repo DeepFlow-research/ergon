@@ -69,7 +69,7 @@ export const AnnotationValueSchema = z.object({
 });
 export type AnnotationValue = z.infer<typeof AnnotationValueSchema>;
 
-export const GraphMutationDtoSchema = z.object({
+export const SampleGraphEventDtoSchema = z.object({
   id: z.string().uuid(),
   sample_id: z.string().uuid(),
   sequence: z.number().int().nonnegative(),
@@ -82,12 +82,12 @@ export const GraphMutationDtoSchema = z.object({
   reason: z.string().nullable(),
   created_at: z.string().datetime({ offset: true }),
 });
-export type GraphMutationDto = z.infer<typeof GraphMutationDtoSchema>;
+export type SampleGraphEventDto = z.infer<typeof SampleGraphEventDtoSchema>;
 
-export function parseGraphMutationDto(input: unknown): GraphMutationDto {
-  return GraphMutationDtoSchema.parse(input);
+export function parseSampleGraphEventDto(input: unknown): SampleGraphEventDto {
+  return SampleGraphEventDtoSchema.parse(input);
 }
 
-export function parseGraphMutationDtoArray(input: unknown): GraphMutationDto[] {
-  return z.array(GraphMutationDtoSchema).parse(input);
+export function parseSampleGraphEventDtoArray(input: unknown): SampleGraphEventDto[] {
+  return z.array(SampleGraphEventDtoSchema).parse(input);
 }

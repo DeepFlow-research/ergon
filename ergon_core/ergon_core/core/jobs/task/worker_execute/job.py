@@ -85,7 +85,6 @@ async def run_worker_execute_job(
         sample_id=payload.sample_id,
         task_id=payload.task_id,
         execution_id=payload.execution_id,
-        definition_id=payload.definition_id,
         sandbox_id=payload.sandbox_id,
         task_mgmt=_task_management_service_for_context(ctx),
         task_inspect=TaskInspectionService(),
@@ -208,7 +207,6 @@ class _ReadyDispatch(BaseModel):
     model_config = {"frozen": True}
 
     sample_id: UUID
-    definition_id: UUID | None = None
     task_id: UUID
 
 
@@ -272,7 +270,6 @@ class _StepAwareTaskManagementService(TaskManagementService):
     async def _collect_ready_dispatch(
         self,
         sample_id: UUID,
-        definition_id: UUID | None,
         task_id: UUID,
     ) -> None:
         if self._active_ready_dispatches is None:
@@ -281,9 +278,7 @@ class _StepAwareTaskManagementService(TaskManagementService):
                 sample_id=sample_id,
                 task_id=task_id,
             )
-        self._active_ready_dispatches.append(
-            _ReadyDispatch(sample_id=sample_id, definition_id=definition_id, task_id=task_id)
-        )
+        self._active_ready_dispatches.append(_ReadyDispatch(sample_id=sample_id, task_id=task_id))
 
     async def _dispatch_collected_ready_events(
         self,
@@ -293,7 +288,6 @@ class _StepAwareTaskManagementService(TaskManagementService):
         for dispatch in ready:
             event = TaskReadyEvent(
                 sample_id=dispatch.sample_id,
-                definition_id=dispatch.definition_id,
                 task_id=dispatch.task_id,
             )
             await send_job_step_event(

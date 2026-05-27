@@ -7,7 +7,6 @@ Expected to PASS with current production code (no xfail).
 """
 
 import pytest
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.persistence.shared.db import get_engine, get_session
 from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
@@ -25,7 +24,6 @@ from tests.integration.propagation._helpers import (
     delete_typed_sample_wal,
     assert_wal_has_status,
     get_node_status,
-    make_experiment_definition,
     make_node,
     make_run,
 )
@@ -59,7 +57,7 @@ def _skip_if_db_unreachable() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _cleanup_run(sample_id, defn_id) -> None:  # type: ignore[no-untyped-def]
+def _cleanup_run(sample_id) -> None:  # type: ignore[no-untyped-def]
     """Remove all rows created by a test, in FK-safe order."""
     with get_session() as session:
         delete_typed_sample_wal(session, sample_id)
@@ -74,9 +72,6 @@ def _cleanup_run(sample_id, defn_id) -> None:  # type: ignore[no-untyped-def]
         run_row = session.get(SampleRecord, sample_id)
         if run_row is not None:
             session.delete(run_row)
-        defn_row = session.get(ExperimentDefinition, defn_id)
-        if defn_row is not None:
-            session.delete(defn_row)
         session.commit()
 
 
@@ -93,11 +88,9 @@ async def test_1_single_task_happy_path() -> None:
     WorkflowService.propagate(). Expected to pass with current code.
     """
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="task-a", status="running")
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         session.commit()
 
@@ -119,7 +112,6 @@ async def test_1_single_task_happy_path() -> None:
         await svc.propagate(
             PropagateTaskCompletionCommand(
                 sample_id=sample_id,
-                definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
             )
@@ -144,4 +136,4 @@ async def test_1_single_task_happy_path() -> None:
         with get_session() as session:
             assert_cross_cutting_invariants(session, sample_id)
     finally:
-        _cleanup_run(sample_id, defn_id)
+        _cleanup_run(sample_id)

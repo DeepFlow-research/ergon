@@ -18,7 +18,7 @@ test("experiment detail sample table exposes each row as sample navigation", () 
   const source = readFileSync("src/components/experiments/SampleTable.tsx", "utf8");
 
   assert.match(source, /data-testid=\{`experiment-sample-row-\$\{sample\.sampleId\}`\}/);
-  assert.match(source, /href=\{`\/samples\/\$\{sample\.sampleId\}\/detail`\}/);
+  assert.match(source, /href=\{`\/samples\/\$\{sample\.sampleId\}`\}/);
 });
 
 test("run workspace can collapse the bottom activity timeline", () => {
@@ -46,9 +46,9 @@ test("run workspace does not render the task inspection placeholder", () => {
   assert.doesNotMatch(source, /data-testid="workspace-launcher"/);
 });
 
-test("run workspace links back to the owning experiment detail", () => {
+test("sample workspace links back to the owning experiment detail", () => {
   const source = readFileSync("src/components/sample/SampleWorkspacePage.tsx", "utf8");
 
-  assert.match(source, /const experimentHref = runState\?\.definitionId \? `\/experiments\/\$\{runState\.definitionId\}` : "\/experiments"/);
+  assert.match(source, /const experimentHref = runState\?\.experimentId \? `\/experiments\/\$\{runState\.experimentId\}` : "\/experiments"/);
   assert.match(source, /href=\{experimentHref\}/);
 });

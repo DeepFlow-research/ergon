@@ -55,7 +55,6 @@ async def test_sandbox_setup_provisions_public_sandbox(monkeypatch) -> None:
         _FakeCtx(),
         SandboxSetupRequest(
             sample_id=uuid4(),
-            definition_id=uuid4(),
             task_id=uuid4(),
             benchmark_type="benchmark",
         ),

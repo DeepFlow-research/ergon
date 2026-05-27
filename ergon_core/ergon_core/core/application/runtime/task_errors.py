@@ -57,9 +57,9 @@ class TaskAlreadyTerminalError(DelegationError):
 class SampleRecordMissingError(DelegationError):
     """Raised when a service is asked to mutate a run that has no SampleRecord.
 
-    Every run must have a SampleRecord (with ``experiment_definition_id``)
-    before any task/graph service is invoked on it. This is enforced as a
-    hard invariant so missing fixtures in tests surface as a loud failure.
+    Every task/graph service mutation must have a SampleRecord. This is
+    enforced as a hard invariant so missing fixtures in tests surface as a
+    loud failure.
     """
 
     def __init__(self, sample_id: UUID) -> None:

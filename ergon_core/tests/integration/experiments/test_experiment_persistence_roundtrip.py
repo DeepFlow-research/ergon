@@ -19,7 +19,7 @@ from ergon_core.test_support.task_factory import task_with_id
 ROOT = Path(__file__).resolve().parents[4]
 
 for module_name in (
-    "ergon_core.core.persistence.definitions.models",
+    "ergon_core.core.persistence.experiments.models",
     "ergon_core.core.persistence.samples.models",
     "ergon_core.core.persistence.telemetry.models",
 ):

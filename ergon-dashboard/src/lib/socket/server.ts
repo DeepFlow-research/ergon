@@ -21,7 +21,7 @@ import {
   SandboxCommandState,
   TaskStatus,
 } from "../types";
-import type { DashboardGraphMutationData } from "@/lib/contracts/events";
+import type { DashboardSampleRuntimeEventData } from "@/lib/contracts/events";
 
 // Typed Socket.io server
 type TypedServer = SocketServer<ClientToServerEvents, ServerToClientEvents>;
@@ -266,10 +266,10 @@ export function broadcastTaskEvaluation(
 
 export function broadcastGraphMutation(
   sampleId: string,
-  mutation: DashboardGraphMutationData,
+  mutation: DashboardSampleRuntimeEventData,
 ): void {
   const io = getIO();
-  io?.to(`sample:${sampleId}`).emit("graph:mutation", { sampleId, mutation });
+  io?.to(`sample:${sampleId}`).emit("sample:runtime-event", { sampleId, mutation });
 }
 
 export function broadcastContextEvent(

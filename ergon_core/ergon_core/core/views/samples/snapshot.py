@@ -1,4 +1,4 @@
-"""Pure read-model helpers for persisted run snapshots."""
+"""Pure read-model helpers for persisted sample snapshots."""
 
 from collections import defaultdict
 from datetime import datetime
@@ -18,7 +18,6 @@ from ergon_core.core.views.samples.models import (
     SampleTaskEvaluationDto,
 )
 from ergon_core.core.persistence.context.models import SampleContextEvent
-from ergon_core.core.persistence.definitions.models import ExperimentDefinitionWorker
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.persistence.telemetry.models import (
     SampleResource,
@@ -30,11 +29,9 @@ from ergon_core.core.persistence.telemetry.models import (
 from ergon_core.core.shared.context_parts import ContextEventType
 
 
-# TODO: this file / logic almost certainly duplicates the run benchmarks logic? if not it needs to be moved, renamed and laid out cleaner.
 def _build_task_map(
     nodes: list[SampleGraphNode],
     edges: list[SampleGraphEdge],
-    worker_by_binding: dict[str, ExperimentDefinitionWorker],
     task_timestamps: dict[UUID, tuple[datetime | None, datetime | None]],
 ) -> tuple[dict[str, SampleTaskDto], str, int, int, int, int, int, int]:
     """Three clean passes using stored containment columns.
@@ -50,11 +47,6 @@ def _build_task_map(
 
     for node in nodes:
         nid = str(node.task_id)
-        worker = (
-            worker_by_binding.get(node.assigned_worker_slug)
-            if node.assigned_worker_slug is not None
-            else None
-        )
         started_at, completed_at = task_timestamps.get(node.task_id, (None, None))
         task_map[nid] = SampleTaskDto(
             id=nid,
@@ -66,7 +58,6 @@ def _build_task_map(
             depends_on_ids=[],
             is_leaf=True,
             level=node.level,
-            assigned_worker_id=str(worker.id) if worker else None,
             assigned_worker_slug=node.assigned_worker_slug,
             started_at=started_at,
             completed_at=completed_at,
@@ -102,7 +93,6 @@ def _build_task_map(
 
 def _task_keyed_executions(
     executions: list[SampleTaskAttempt],
-    worker_map: dict[UUID, ExperimentDefinitionWorker],
 ) -> dict[str, list[SampleExecutionAttemptDto]]:
     by_task: dict[str, list[SampleExecutionAttemptDto]] = defaultdict(list)
     for ex in sorted(
@@ -114,10 +104,6 @@ def _task_keyed_executions(
         if ex.error_json:
             message = ex.error_json.get("message")
             error_msg = message if isinstance(message, str) else str(ex.error_json)
-
-        worker = worker_map.get(ex.definition_worker_id) if ex.definition_worker_id else None
-        agent_id = str(worker.id) if worker else None
-        agent_name = worker.binding_key if worker else None
 
         resource_ids: list[str] = []
         output = ex.parsed_output()
@@ -136,8 +122,6 @@ def _task_keyed_executions(
                 final_assistant_message=ex.final_assistant_message,
                 error_message=error_msg,
                 score=None,
-                agent_id=agent_id,
-                agent_name=agent_name,
                 output_resource_ids=resource_ids,
             )
         )

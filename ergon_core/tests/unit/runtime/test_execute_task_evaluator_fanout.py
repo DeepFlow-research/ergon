@@ -76,7 +76,6 @@ class _OrderedFakeCtx:
 def _prepared(execution_id, task_id) -> PreparedTaskExecution:
     return PreparedTaskExecution(
         sample_id=uuid4(),
-        definition_id=uuid4(),
         task_id=task_id,
         execution_id=execution_id,
         task_slug="t",
@@ -89,10 +88,9 @@ def _prepared(execution_id, task_id) -> PreparedTaskExecution:
     )
 
 
-def _ready_event(sample_id, definition_id, task_id) -> TaskReadyEvent:
+def _ready_event(sample_id, task_id) -> TaskReadyEvent:
     return TaskReadyEvent(
         sample_id=sample_id,
-        definition_id=definition_id,
         task_id=task_id,
     )
 
@@ -119,12 +117,11 @@ async def test_execute_task_emits_completed_strictly_after_eval_gather(
     ctx = _OrderedFakeCtx(ordering)
 
     sample_id = uuid4()
-    definition_id = uuid4()
     task_id = uuid4()
     execution_id = uuid4()
 
     prepared = _prepared(execution_id, task_id)
-    payload = _ready_event(sample_id, definition_id, task_id)
+    payload = _ready_event(sample_id, task_id)
 
     async def fake_prepare(
         _ctx: inngest.Context,
@@ -246,7 +243,7 @@ async def test_execute_task_emits_failed_when_worker_fails(
 
     sample_id = uuid4()
     prepared = _prepared(uuid4(), uuid4())
-    payload = _ready_event(sample_id, uuid4(), prepared.task_id)
+    payload = _ready_event(sample_id, prepared.task_id)
 
     async def fake_prepare(
         _ctx: inngest.Context,

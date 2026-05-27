@@ -40,10 +40,9 @@ class _FakeTaskExecutionService:
         return SimpleNamespace(task=self._task)
 
 
-def _prepared(sample_id, definition_id, task_id, execution_id) -> PreparedTaskExecution:
+def _prepared(sample_id, task_id, execution_id) -> PreparedTaskExecution:
     return PreparedTaskExecution(
         sample_id=sample_id,
-        definition_id=definition_id,
         task_id=task_id,
         task_slug="root",
         task_description="root task",
@@ -55,7 +54,6 @@ def _prepared(sample_id, definition_id, task_id, execution_id) -> PreparedTaskEx
 @pytest.mark.asyncio
 async def test_fanout_uses_object_bound_evaluator_count(monkeypatch) -> None:
     sample_id = uuid4()
-    definition_id = uuid4()
     task_id = uuid4()
     execution_id = uuid4()
     ctx = _FakeCtx()
@@ -72,10 +70,9 @@ async def test_fanout_uses_object_bound_evaluator_count(monkeypatch) -> None:
         _FakeTaskExecutionService(task),
         TaskReadyEvent(
             sample_id=sample_id,
-            definition_id=definition_id,
             task_id=task_id,
         ),
-        _prepared(sample_id, definition_id, task_id, execution_id),
+        _prepared(sample_id, task_id, execution_id),
         evaluate_task_run_function=object(),
     )
 
@@ -85,7 +82,6 @@ async def test_fanout_uses_object_bound_evaluator_count(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_fanout_emits_no_jobs_without_inline_evaluators(monkeypatch) -> None:
     sample_id = uuid4()
-    definition_id = uuid4()
     task_id = uuid4()
     execution_id = uuid4()
     ctx = _FakeCtx()
@@ -102,10 +98,9 @@ async def test_fanout_emits_no_jobs_without_inline_evaluators(monkeypatch) -> No
         _FakeTaskExecutionService(task),
         TaskReadyEvent(
             sample_id=sample_id,
-            definition_id=definition_id,
             task_id=task_id,
         ),
-        _prepared(sample_id, definition_id, task_id, execution_id),
+        _prepared(sample_id, task_id, execution_id),
         evaluate_task_run_function=object(),
     )
 

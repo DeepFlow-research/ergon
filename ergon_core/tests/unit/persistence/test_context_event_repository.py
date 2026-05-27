@@ -13,7 +13,6 @@ from ergon_core.core.shared.context_parts import (
 )
 from ergon_core.core.persistence.context.models import SampleContextEvent
 from ergon_core.core.application.context.service import ContextEventService
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
@@ -25,7 +24,6 @@ from sqlmodel import Session, SQLModel, create_engine
 
 
 def _session() -> Session:
-    _ = ExperimentDefinition
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -37,7 +35,6 @@ def _session() -> Session:
 
 def _execution_fixture(session: Session) -> tuple:
     sample_id = uuid4()
-    definition_id = uuid4()
     task_id = uuid4()
     node = SampleGraphNode(
         sample_id=sample_id,
@@ -49,17 +46,8 @@ def _execution_fixture(session: Session) -> tuple:
         assigned_worker_slug="worker",
     )
     session.add(
-        ExperimentDefinition(
-            id=definition_id,
-            benchmark_type="unit",
-            name="unit",
-            metadata_json={},
-        )
-    )
-    session.add(
         SampleRecord(
             id=sample_id,
-            definition_id=definition_id,
             benchmark_type="unit",
             instance_key="instance",
             status=SampleStatus.EXECUTING,
@@ -70,7 +58,6 @@ def _execution_fixture(session: Session) -> tuple:
     execution = SampleTaskAttempt(
         sample_id=sample_id,
         task_id=node.task_id,
-        node_id=node.task_id,
         status=TaskExecutionStatus.RUNNING,
     )
     session.add(execution)

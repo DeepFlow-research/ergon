@@ -7,12 +7,13 @@ ROOT = Path(__file__).resolve().parents[4]
 VERSIONS = ROOT / "ergon_core" / "migrations" / "versions"
 
 
-def test_v2_has_one_initial_migration() -> None:
+def test_v2_migration_stack_is_explicit() -> None:
     migrations = sorted(path.name for path in VERSIONS.glob("*.py"))
     assert migrations == [
         "00000000_initial_v2.py",
         "00000001_add_experiment_persistence.py",
         "00000002_add_sample_experiment_provenance.py",
+        "00000003_delete_definition_runtime_columns.py",
     ]
 
 

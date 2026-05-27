@@ -57,7 +57,7 @@ def test_evaluation_row_to_dto_maps_multiple_criterion_outcomes() -> None:
         sample_id=sample_id,
         task_execution_id=uuid4(),
         task_id=task_id,
-        definition_evaluator_id=uuid4(),
+        evaluator_slug="judge",
         score=1.5,
         passed=False,
         feedback="mixed",

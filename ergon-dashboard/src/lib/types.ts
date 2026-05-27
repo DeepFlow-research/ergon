@@ -13,9 +13,9 @@ import type {
 } from "@/lib/contracts/rest";
 export type { SampleDashboardState } from "@/lib/sample-state/dashboard";
 import type {
-  DashboardGraphMutationData as GeneratedDashboardGraphMutationData,
+  DashboardSampleRuntimeEventData as GeneratedDashboardSampleRuntimeEventData,
   DashboardResourcePublishedData as GeneratedDashboardResourcePublishedData,
-  GraphMutationSocketData as GeneratedGraphMutationSocketData,
+  SampleRuntimeEventSocketData as GeneratedSampleRuntimeEventSocketData,
   ResourceSocketData,
   SampleCompletedSocketData,
   DashboardSandboxClosedData as GeneratedDashboardSandboxClosedData,
@@ -101,8 +101,8 @@ export type DashboardTaskEvaluationUpdatedData = GeneratedDashboardTaskEvaluatio
 import type { DashboardContextEventEventData as _GeneratedDashboardContextEventEventData } from "@/lib/contracts/events";
 export type DashboardContextEventEventData = _GeneratedDashboardContextEventEventData;
 
-export type DashboardGraphMutationData = GeneratedDashboardGraphMutationData;
-export type GraphMutationSocketData = GeneratedGraphMutationSocketData;
+export type DashboardSampleRuntimeEventData = GeneratedDashboardSampleRuntimeEventData;
+export type SampleRuntimeEventSocketData = GeneratedSampleRuntimeEventSocketData;
 
 // =============================================================================
 // Union Types for Inngest Event Handling
@@ -118,7 +118,7 @@ export type DashboardEventData =
   | DashboardSandboxClosedData
   | DashboardThreadMessageCreatedData
   | DashboardTaskEvaluationUpdatedData
-  | DashboardGraphMutationData
+  | DashboardSampleRuntimeEventData
   | DashboardContextEventEventData;
 
 // =============================================================================
@@ -135,7 +135,7 @@ export type DashboardEvents = {
   "dashboard/sandbox.closed": { data: DashboardSandboxClosedData };
   "dashboard/thread.message_created": { data: DashboardThreadMessageCreatedData };
   "dashboard/task.evaluation_updated": { data: DashboardTaskEvaluationUpdatedData };
-  "dashboard/sample.runtime_event": { data: DashboardGraphMutationData };
+  "dashboard/sample.runtime_event": { data: DashboardSampleRuntimeEventData };
   "dashboard/context.event": { data: DashboardContextEventEventData };
 };
 
@@ -293,7 +293,7 @@ export interface UnhandledMutationRecord {
  */
 export interface SampleWorkspaceState {
   id: string;
-  definitionId: string;
+  experimentId: string | null;
   name: string;
   status: SampleLifecycleStatus;
 
@@ -364,7 +364,7 @@ export interface ServerToClientEvents {
   "sandbox:closed": (data: SandboxClosedSocketData) => void;
   "thread:message": (data: DashboardThreadMessageCreatedData) => void;
   "task:evaluation": (data: DashboardTaskEvaluationUpdatedData) => void;
-  "graph:mutation": (data: GraphMutationSocketData) => void;
+  "sample:runtime-event": (data: SampleRuntimeEventSocketData) => void;
   "context:event": (data: { sampleId: string; taskId: string; event: ContextEventState }) => void;
   // Sync event - sends all current runs to a client on request
   "sync:samples": (runs: SampleListEntry[]) => void;

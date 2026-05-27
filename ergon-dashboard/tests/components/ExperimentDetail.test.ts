@@ -13,6 +13,6 @@ test("experiment detail renders sample rows and environment contributions", () =
   );
 
   assert.match(html, /mini-validation/);
-  assert.match(html, /href="\/samples\/sample-1\/detail"/);
+  assert.match(html, /href="\/samples\/sample-1"/);
   assert.doesNotMatch(html, />Runs</);
 });

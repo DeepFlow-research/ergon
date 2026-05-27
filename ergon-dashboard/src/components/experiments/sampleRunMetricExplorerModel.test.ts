@@ -11,7 +11,7 @@ import {
   type RunMetricPoint,
 } from "./sampleRunMetricExplorerModel";
 
-const definitionId = "11111111-1111-4111-8111-111111111111";
+const experimentId = "11111111-1111-4111-8111-111111111111";
 const defaultSampleId = "22222222-2222-4222-8222-222222222222";
 
 function metrics(overrides: Partial<ExperimentRunRow["metrics"]> = {}): ExperimentRunRow["metrics"] {
@@ -28,7 +28,7 @@ function metrics(overrides: Partial<ExperimentRunRow["metrics"]> = {}): Experime
 function runRow(overrides: Partial<ExperimentRunRow> = {}): ExperimentRunRow {
   return {
     sample_id: defaultSampleId,
-    definition_id: definitionId,
+    experiment_id: experimentId,
     benchmark_type: "minif2f",
     instance_key: "sample-a",
     status: "completed",

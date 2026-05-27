@@ -43,11 +43,6 @@ def upgrade() -> None:
 
     bind = op.get_bind()
     existing_columns = {column["name"] for column in inspect(bind).get_columns("samples")}
-    if bind.dialect.name == "sqlite":
-        with op.batch_alter_table("samples") as batch_op:
-            batch_op.alter_column("definition_id", existing_type=sa.Uuid(), nullable=True)
-    else:
-        op.alter_column("samples", "definition_id", existing_type=sa.Uuid(), nullable=True)
     for column in _NEW_COLUMNS:
         if column.name not in existing_columns:
             op.add_column("samples", column.copy())
@@ -73,15 +68,9 @@ def downgrade() -> None:
     for column in reversed(_NEW_COLUMNS):
         if column.name in existing_columns:
             op.drop_column("samples", column.name)
-    if bind.dialect.name == "sqlite":
-        with op.batch_alter_table("samples") as batch_op:
-            batch_op.alter_column("definition_id", existing_type=sa.Uuid(), nullable=False)
-    else:
-        op.alter_column("samples", "definition_id", existing_type=sa.Uuid(), nullable=False)
 
 
 def _upgrade_unconditional() -> None:
-    op.alter_column("samples", "definition_id", existing_type=sa.Uuid(), nullable=True)
     for column in _NEW_COLUMNS:
         op.add_column("samples", column.copy())
     for index_name, columns in _NEW_INDEXES:
@@ -93,4 +82,3 @@ def _downgrade_unconditional() -> None:
         op.drop_index(index_name, table_name="samples")
     for column in reversed(_NEW_COLUMNS):
         op.drop_column("samples", column.name)
-    op.alter_column("samples", "definition_id", existing_type=sa.Uuid(), nullable=False)

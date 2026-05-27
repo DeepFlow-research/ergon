@@ -4,7 +4,7 @@ Covers three scenarios that exercise the facade methods landed in
 PR 9 Tasks 2-3:
 
 - ``spawn_task`` round-trips through ``TaskManagementService.spawn_dynamic_task``
-  and writes only to ``sample_graph_nodes`` (never ``experiment_definition_tasks``).
+  and writes only to ``sample_graph_nodes``.
 - The spawned dynamic node inflates correctly through
   ``RuntimeGraphRepository.node`` (is_dynamic=True + correct task_slug).
 - ``cancel_task`` enforces containment via ``_assert_descendant``,
@@ -32,7 +32,6 @@ from ergon_core.core.application.runtime import inspection as inspection_module
 from ergon_core.core.application.runtime import management as management_module
 from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
 from ergon_core.core.application.runtime.task_management import TaskManagementService
-from ergon_core.core.persistence.definitions.models import ExperimentDefinitionTask
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
 from sqlalchemy.pool import StaticPool
@@ -135,7 +134,6 @@ def _build_context(
         sample_id=sample_id,
         task_id=task_id,
         execution_id=uuid4(),
-        definition_id=None,
         sandbox_id="sandbox-test",
         task_mgmt=task_mgmt,
         task_inspect=task_inspect,
@@ -153,16 +151,13 @@ def _build_context(
 async def test_spawn_task_via_worker_context_does_not_write_definition_row(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """spawn_task through the facade writes one run-graph row, zero definition rows."""
+    """spawn_task through the facade writes one run-graph row without definition tables."""
 
     session = _make_session()
     sample_id = uuid4()
     parent = _seed_node(session, sample_id=sample_id, slug="parent")
     _patch_get_session(monkeypatch, session)
 
-    monkeypatch.setattr(
-        management_module, "definition_id_for_run", lambda _session, _run_id: uuid4()
-    )
     task_mgmt = TaskManagementService(
         dashboard_emitter=MagicMock(),
         task_ready_dispatcher=AsyncMock(),
@@ -176,17 +171,15 @@ async def test_spawn_task_via_worker_context_does_not_write_definition_row(
     )
 
     nodes_before = session.exec(select(SampleGraphNode)).all()
-    defs_before = session.exec(select(ExperimentDefinitionTask)).all()
     assert len(nodes_before) == 1  # only the parent
+    assert "experiment_definition_tasks" not in SQLModel.metadata.tables
 
     handle = await context.spawn_task(_make_task())
 
     nodes_after = session.exec(select(SampleGraphNode)).all()
-    defs_after = session.exec(select(ExperimentDefinitionTask)).all()
 
-    # Exactly one new run-graph row, no new definition rows.
+    # Exactly one new run-graph row.
     assert len(nodes_after) == len(nodes_before) + 1
-    assert len(defs_after) == len(defs_before) == 0
 
     new_node = session.exec(
         select(SampleGraphNode).where(
@@ -213,9 +206,6 @@ async def test_spawned_task_inflates_through_graph_repo_node(
     parent = _seed_node(session, sample_id=sample_id, slug="parent")
     _patch_get_session(monkeypatch, session)
 
-    monkeypatch.setattr(
-        management_module, "definition_id_for_run", lambda _session, _run_id: uuid4()
-    )
     task_mgmt = TaskManagementService(
         dashboard_emitter=MagicMock(),
         task_ready_dispatcher=AsyncMock(),

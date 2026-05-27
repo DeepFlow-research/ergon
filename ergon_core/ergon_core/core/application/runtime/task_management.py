@@ -2,7 +2,7 @@
 
 Dynamic task creation is intentionally object-bound: callers pass a public
 ``Task`` snapshot to ``spawn_dynamic_task(Task)`` and the runtime persists that
-snapshot directly on the run graph. Slug-only dynamic task APIs are retired so
+snapshot directly on the sample graph. Slug-only dynamic task APIs are retired so
 new runtime nodes cannot be created without the worker, criteria, and payload
 invariants carried by the public task object.
 """
@@ -36,7 +36,6 @@ from ergon_core.core.application.runtime.events import (
     RuntimeEventDispatcher,
     TaskReadyDispatcher,
 )
-from ergon_core.core.application.runtime.sample_identity import definition_id_for_run
 from ergon_core.core.application.runtime.task_errors import (
     TaskAlreadyTerminalError,
     TaskNotTerminalError,
@@ -118,14 +117,13 @@ class TaskManagementService:
         task: Task,
         depends_on: tuple[UUID, ...] = (),
     ) -> SpawnedTaskHandle:
-        """Insert a dynamic graph node with task JSON; no definition row.
+        """Insert a dynamic graph node with task JSON.
 
         Used by WorkerContext.spawn_task to make dynamic subtasks
-        graph-native. No experiment_definition_tasks row is written —
-        the full Task snapshot lives in sample_graph_nodes.task_json with
-        is_dynamic=True.
+        graph-native. The full Task snapshot lives in
+        sample_graph_nodes.task_json with is_dynamic=True.
         """
-        dispatch: tuple[UUID, UUID | None, UUID] | None = None
+        dispatch: tuple[UUID, UUID] | None = None
         with get_session() as session:
             parent = self._graph_repo.get_node(session, sample_id=sample_id, task_id=parent_task_id)
             node = await self._graph_repo.add_node(
@@ -153,15 +151,13 @@ class TaskManagementService:
                 )
             task_id = node.task_id
             if not depends_on:
-                definition_id = definition_id_for_run(session, sample_id)
-                dispatch = (sample_id, definition_id, task_id)
+                dispatch = (sample_id, task_id)
             session.commit()
 
         if dispatch is not None:
             await self._runtime_events.dispatch_task_ready(
                 sample_id=dispatch[0],
-                definition_id=dispatch[1],
-                task_id=dispatch[2],
+                task_id=dispatch[1],
             )
 
         return SpawnedTaskHandle(task_id=task_id)
@@ -207,11 +203,9 @@ class TaskManagementService:
         session.commit()
 
         if applied:
-            definition_id = definition_id_for_run(session, command.sample_id)
             event = self._task_cancelled_event(
                 session,
                 sample_id=command.sample_id,
-                definition_id=definition_id,
                 task_id=command.task_id,
                 cause="manager_decision",
             )
@@ -240,7 +234,6 @@ class TaskManagementService:
         session: Session,
         *,
         sample_id: UUID,
-        definition_id: UUID | None,
         parent_task_id: UUID,
         cause: PropagationCancelCause,
     ) -> CancelOrphansResult:
@@ -266,7 +259,6 @@ class TaskManagementService:
             self._task_cancelled_event(
                 session,
                 sample_id=sample_id,
-                definition_id=definition_id,
                 task_id=nid,
                 cause=cause,
             )
@@ -412,11 +404,8 @@ class TaskManagementService:
         )
 
         session.commit()
-
-        definition_id = definition_id_for_run(session, command.sample_id)
         await self._runtime_events.dispatch_task_ready(
             sample_id=command.sample_id,
-            definition_id=definition_id,
             task_id=command.task_id,
         )
 
@@ -551,12 +540,9 @@ class TaskManagementService:
             ),
             only_if_not_terminal=False,
         )
-
-        definition_id = definition_id_for_run(session, sample_id)
         event = self._task_cancelled_event(
             session,
             sample_id=sample_id,
-            definition_id=definition_id,
             task_id=task_id,
             cause="downstream_invalidation",
         )
@@ -636,14 +622,12 @@ class TaskManagementService:
         session: Session,
         *,
         sample_id: UUID,
-        definition_id: UUID | None,
         task_id: UUID,
         cause: CancelCause,
     ) -> TaskCancelledEvent:
         execution = self._task_execution_repo.latest_for_node(session, task_id)
         return TaskCancelledEvent(
             sample_id=sample_id,
-            definition_id=definition_id,
             task_id=task_id,
             execution_id=None if execution is None else execution.id,
             cause=cause,

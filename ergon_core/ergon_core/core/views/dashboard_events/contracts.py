@@ -8,7 +8,7 @@ change here that isn't regenerated will fail the CI drift check.
 """
 
 from datetime import datetime
-from typing import ClassVar
+from typing import Any, ClassVar
 from uuid import UUID
 
 from ergon_core.core.views.samples.models import (
@@ -32,7 +32,6 @@ class DashboardWorkflowStartedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/workflow.started"
 
     sample_id: UUID
-    definition_id: UUID
     workflow_name: str
     snapshot: SampleSnapshotDto
     started_at: datetime
@@ -163,6 +162,10 @@ class DashboardSampleRuntimeEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/sample.runtime_event"
 
     event: SampleRuntimeEventView
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        kwargs["by_alias"] = True
+        return super().model_dump(*args, **kwargs)
 
 
 class DashboardContextEventEvent(InngestEventContract):

@@ -11,7 +11,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, ClassVar
 
-from ergon_core.api import Benchmark, BenchmarkRequirements, Task
+from ergon_core.api import Benchmark, Task
 from ergon_core.api.rubric import Evaluator
 from ergon_core.api.sandbox import Sandbox
 from ergon_core.api.worker import Worker
@@ -48,7 +48,6 @@ class MiniF2FBenchmark(Benchmark):
 
     type_slug: ClassVar[str] = "minif2f"
     task_payload_model: ClassVar[type[MiniF2FTaskPayload]] = MiniF2FTaskPayload
-    onboarding_deps: ClassVar[BenchmarkRequirements] = BenchmarkRequirements(e2b=True)
 
     def __init__(
         self,

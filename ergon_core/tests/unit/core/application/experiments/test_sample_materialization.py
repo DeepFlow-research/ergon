@@ -23,7 +23,6 @@ from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.test_support.task_factory import task_with_id
 
 for module_name in (
-    "ergon_core.core.persistence.definitions.models",
     "ergon_core.core.persistence.experiments.models",
     "ergon_core.core.persistence.graph.models",
     "ergon_core.core.persistence.samples.models",
@@ -134,7 +133,7 @@ def test_materialization_persists_task_json_not_environment_or_experiment(
     assert worker_event.worker_type == node.task_json["worker"]["_type"]
     assert worker_event.model_target == "test:none"
     assert worker_event.worker_snapshot_json == node.task_json["worker"]
-    assert evaluator_event.evaluator_slug == "test-evaluator"
+    assert evaluator_event.evaluator_slug == "judge"
     assert evaluator_event.evaluator_type == node.task_json["evaluators"][0]["_type"]
     assert evaluator_event.evaluator_snapshot_json == node.task_json["evaluators"][0]
     assert sandbox_event.sandbox_slug == "TestSandbox"

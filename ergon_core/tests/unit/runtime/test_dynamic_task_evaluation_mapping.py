@@ -37,7 +37,7 @@ def test_task_keyed_evaluations_use_runtime_task_id_for_dynamic_tasks() -> None:
         sample_id=sample_id,
         task_execution_id=uuid4(),
         task_id=dynamic_task_id,
-        definition_evaluator_id=uuid4(),
+        evaluator_slug="dynamic-evaluator",
         score=1.0,
         passed=True,
         feedback="passed",

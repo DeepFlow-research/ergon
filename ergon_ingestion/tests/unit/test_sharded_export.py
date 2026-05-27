@@ -52,7 +52,7 @@ def test_sharded_export_writes_parquet_manifest_state_and_resources(tmp_path: Pa
         "dataset",
         "batch",
         "sample_id",
-        "sample_id",
+        "experiment_id",
         "instance_key",
         "observed_fields_json",
         "resources_json",

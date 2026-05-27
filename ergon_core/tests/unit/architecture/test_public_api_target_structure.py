@@ -11,7 +11,6 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
 
     expected = {
         "Benchmark",
-        "BenchmarkRequirements",
         "Task",
         "EmptyTaskPayload",
         "Environment",
@@ -91,7 +90,6 @@ def test_semantic_api_clusters_are_importable() -> None:
 
     assert benchmark.__all__ == [
         "Benchmark",
-        "BenchmarkRequirements",
         "Task",
         "EmptyTaskPayload",
     ]

@@ -8,7 +8,7 @@ cm2435-new/gdpval_preference_rubrics and exposes them via the
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any, ClassVar
 
-from ergon_core.api import Benchmark, BenchmarkRequirements, Task
+from ergon_core.api import Benchmark, Task
 from ergon_core.api.rubric import Evaluator
 from ergon_core.api.sandbox import Sandbox
 from ergon_core.api.worker import Worker
@@ -54,10 +54,6 @@ class GDPEvalBenchmark(Benchmark):
 
     type_slug: ClassVar[str] = "gdpeval"
     task_payload_model: ClassVar[type[GDPTaskConfig]] = GDPTaskConfig
-    onboarding_deps: ClassVar[BenchmarkRequirements] = BenchmarkRequirements(
-        e2b=True,
-        extras=("ergon-builtins[data]",),
-    )
     required_packages: ClassVar[list[str]] = ["pandas", "huggingface_hub"]
     install_hint: ClassVar[str] = "pip install 'ergon-builtins[data]'"
 

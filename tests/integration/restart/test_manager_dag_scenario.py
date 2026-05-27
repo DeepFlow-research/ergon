@@ -32,7 +32,6 @@ from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
 from tests.integration.propagation._helpers import (
     get_node_status,
     make_edge,
-    make_experiment_definition,
     make_node,
     make_run,
 )
@@ -63,8 +62,7 @@ async def test_diamond_restart_invalidates_fanin_and_reactivates_on_recompletion
       - task_b remains COMPLETED throughout
     """
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         root = make_node(session, run.id, task_slug="root", status="completed")
         task_a = make_node(
             session,
@@ -102,7 +100,6 @@ async def test_diamond_restart_invalidates_fanin_and_reactivates_on_recompletion
             status="satisfied",
         )
         sample_id = run.id
-        defn_id = defn.id
         task_a_id = task_a.task_id
         task_b_id = task_b.task_id
         task_c_id = task_c.task_id
@@ -159,7 +156,6 @@ async def test_diamond_restart_invalidates_fanin_and_reactivates_on_recompletion
         await prop_svc.propagate(
             PropagateTaskCompletionCommand(
                 sample_id=sample_id,
-                definition_id=defn_id,
                 task_id=task_a_id,
                 execution_id=task_a_id,
             )
@@ -175,4 +171,4 @@ async def test_diamond_restart_invalidates_fanin_and_reactivates_on_recompletion
             )
 
     finally:
-        cleanup_run(sample_id, defn_id)
+        cleanup_run(sample_id)

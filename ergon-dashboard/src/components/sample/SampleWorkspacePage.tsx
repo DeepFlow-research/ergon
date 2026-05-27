@@ -14,7 +14,7 @@ import { ActivityStackTimeline } from "@/features/activity/components/ActivitySt
 import { buildSampleActivities } from "@/features/activity/buildSampleActivities";
 import { resolveActivitySnapshotSequence } from "@/features/activity/snapshotSequence";
 import type { SampleActivity } from "@/features/activity/types";
-import type { GraphMutationDto, MutationType } from "@/features/graph/contracts/graphMutations";
+import type { SampleGraphEventDto, MutationType } from "@/features/graph/contracts/graphMutations";
 import { useSampleWorkspaceState } from "@/hooks/useSampleWorkspaceState";
 import { buildSampleEvents } from "@/lib/sampleEvents";
 import { parseSampleRuntimeEvents, type SampleRuntimeEventView } from "@/lib/contracts/rest";
@@ -126,7 +126,7 @@ function graphMutationValue(event: SampleRuntimeEventView, mutationType: Mutatio
   return payload;
 }
 
-function sampleRuntimeEventsToGraphMutations(events: SampleRuntimeEventView[]): GraphMutationDto[] {
+function sampleRuntimeEventsToGraphEvents(events: SampleRuntimeEventView[]): SampleGraphEventDto[] {
   return events.flatMap((event, index) => {
     const mutationType = graphMutationType(event.eventType);
     const targetId = event.targetId;
@@ -176,7 +176,7 @@ export function SampleWorkspacePage({
 
   const [runtimeEvents, setRuntimeEvents] = useState<SampleRuntimeEventView[]>([]);
   const mutations = useMemo(
-    () => sampleRuntimeEventsToGraphMutations(runtimeEvents),
+    () => sampleRuntimeEventsToGraphEvents(runtimeEvents),
     [runtimeEvents],
   );
   const requestedSequenceRef = useRef<number | null>(null);
@@ -208,7 +208,7 @@ export function SampleWorkspacePage({
       .then((data) => {
         if (cancelled) return;
         const events = parseSampleRuntimeEvents(data);
-        const parsed = sampleRuntimeEventsToGraphMutations(events);
+        const parsed = sampleRuntimeEventsToGraphEvents(events);
         mutationsLoadedRef.current = true;
         setRuntimeEvents(events);
         const requestedSequence = requestedSequenceRef.current;
@@ -340,7 +340,7 @@ export function SampleWorkspacePage({
   }, [displayState, selectedTaskId]);
 
   const status = runState?.status ?? "pending";
-  const experimentHref = runState?.definitionId ? `/experiments/${runState.definitionId}` : "/experiments";
+  const experimentHref = runState?.experimentId ? `/experiments/${runState.experimentId}` : "/experiments";
   const isInspectorOpen = selectedTaskId !== null;
 
   const handleTaskClick = (taskId: string) => {

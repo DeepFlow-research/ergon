@@ -4,7 +4,7 @@ import pytest
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
 from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
 from ergon_builtins.benchmarks.swebench_verified.benchmark import SweBenchVerifiedBenchmark
-from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, EmptyTaskPayload, Task
+from ergon_core.api.benchmark import Benchmark, EmptyTaskPayload, Task
 from pydantic import BaseModel, ValidationError
 from ergon_core.test_support.task_factory import TestSandbox, TestWorker
 
@@ -18,21 +18,8 @@ DATA_BENCHMARKS = {
 }
 
 
-def _require_onboarding_deps(slug: str, cls: type[Benchmark]) -> BenchmarkRequirements:
-    deps = cls.onboarding_deps
-    assert isinstance(deps, BenchmarkRequirements), (
-        f"Benchmark '{slug}' ({cls.__qualname__}).onboarding_deps is not a "
-        f"BenchmarkRequirements instance; got {type(deps)!r}."
-    )
-    return deps
-
-
-class TestBenchmarkOnboardingDepsContract:
-    """Every importable benchmark must declare onboarding_deps."""
-
-    @pytest.mark.parametrize("slug, cls", [*CORE_BENCHMARKS.items(), *DATA_BENCHMARKS.items()])
-    def test_benchmarks_have_onboarding_deps(self, slug: str, cls: type[Benchmark]) -> None:
-        _require_onboarding_deps(slug, cls)
+class TestBenchmarkDependencyMetadataContract:
+    """Every importable benchmark exposes current runtime dependency metadata."""
 
     @pytest.mark.parametrize("slug, cls", [*CORE_BENCHMARKS.items(), *DATA_BENCHMARKS.items()])
     def test_benchmarks_declare_payload_models(self, slug: str, cls: type[Benchmark]) -> None:
@@ -40,15 +27,19 @@ class TestBenchmarkOnboardingDepsContract:
             f"Benchmark '{slug}' ({cls.__qualname__}) must declare a Pydantic task_payload_model."
         )
 
-    def test_onboarding_deps_is_frozen(self) -> None:
-        for cls in CORE_BENCHMARKS.values():
-            deps = cls.onboarding_deps
-            with pytest.raises(ValidationError):
-                setattr(deps, "e2b", not deps.e2b)
+    @pytest.mark.parametrize("slug, cls", [*CORE_BENCHMARKS.items(), *DATA_BENCHMARKS.items()])
+    def test_required_packages_are_plain_strings(self, slug: str, cls: type[Benchmark]) -> None:
+        assert isinstance(cls.required_packages, list), (
+            f"Benchmark '{slug}' ({cls.__qualname__}).required_packages must be a list."
+        )
+        assert all(isinstance(package, str) for package in cls.required_packages), (
+            f"Benchmark '{slug}' ({cls.__qualname__}).required_packages must contain strings."
+        )
 
-    def test_known_e2b_benchmarks(self) -> None:
-        assert MiniF2FBenchmark.onboarding_deps.e2b is True
-        assert SweBenchVerifiedBenchmark.onboarding_deps.e2b is True
+    def test_data_benchmarks_with_package_deps_include_install_hint(self) -> None:
+        for cls in DATA_BENCHMARKS.values():
+            if cls.required_packages:
+                assert cls.install_hint
 
 
 class TestBenchmarkSubclassEnforcement:

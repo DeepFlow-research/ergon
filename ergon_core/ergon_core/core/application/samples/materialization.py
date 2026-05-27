@@ -111,15 +111,16 @@ def materialize_sample(
         )
         for evaluator in task.evaluators:
             evaluator_snapshot = evaluator.model_dump(mode="json")
+            evaluator_slug = evaluator.name
             wal.append_evaluator_event(
                 SampleEvaluatorEventRow(
                     sample_id=sample_row.id,
                     task_id=task_id,
                     event_type="evaluator.added",
-                    evaluator_slug=evaluator.type_slug,
+                    evaluator_slug=evaluator_slug,
                     evaluator_type=_snapshot_type(
                         evaluator_snapshot,
-                        fallback=evaluator.type_slug,
+                        fallback=evaluator_slug,
                     ),
                     evaluator_snapshot_json=evaluator_snapshot,
                     payload_json={"task_id": str(task_id), "evaluator": evaluator_snapshot},

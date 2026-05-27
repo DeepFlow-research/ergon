@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { GraphMutationDto } from "@/features/graph/contracts/graphMutations";
+import type { SampleGraphEventDto } from "@/features/graph/contracts/graphMutations";
 import { resolveReplayStep } from "./replayNavigation";
 
-function mutation(sequence: number, id = `mutation-${sequence}`): GraphMutationDto {
+function mutation(sequence: number, id = `mutation-${sequence}`): SampleGraphEventDto {
   return {
     id,
     sample_id: "run-1",

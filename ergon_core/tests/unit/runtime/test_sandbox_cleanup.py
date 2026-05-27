@@ -37,7 +37,6 @@ async def test_cleanup_on_completed_terminates_sandbox(monkeypatch: pytest.Monke
     """A ``task/completed`` event with a sandbox_id terminates that sandbox."""
     payload = TaskCompletedEvent(
         sample_id=uuid4(),
-        definition_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
         sandbox_id="sbx-completed",
@@ -66,7 +65,6 @@ async def test_cleanup_on_failed_terminates_sandbox(monkeypatch: pytest.MonkeyPa
     """A ``task/failed`` event with a sandbox_id terminates that sandbox."""
     payload = TaskFailedEvent(
         sample_id=uuid4(),
-        definition_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
         error="boom",
@@ -98,7 +96,6 @@ async def test_cleanup_on_failed_skips_when_sandbox_id_missing(
     """A failure before sandbox-setup carries ``sandbox_id=None``; cleanup is a no-op."""
     payload = TaskFailedEvent(
         sample_id=uuid4(),
-        definition_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
         error="prepare-failed",

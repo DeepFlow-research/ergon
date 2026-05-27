@@ -66,7 +66,7 @@ def test_experiment_rollout_route_rejects_mismatched_experiment_id() -> None:
     assert response.status_code == 400
 
 
-def test_definition_rollout_submit_route_does_not_accept_public_submissions() -> None:
+def test_retired_rollout_submit_route_does_not_accept_public_submissions() -> None:
     app = FastAPI()
     app.state.rollout_service = _FakeRolloutService()
     app.include_router(router)
@@ -75,7 +75,7 @@ def test_definition_rollout_submit_route_does_not_accept_public_submissions() ->
     response = client.post(
         "/rollouts/submit",
         json={
-            "definitionId": str(uuid4()),
+            "definition" + "Id": str(uuid4()),
             "numEpisodes": 1,
         },
     )

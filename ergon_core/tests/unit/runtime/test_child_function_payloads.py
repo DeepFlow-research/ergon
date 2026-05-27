@@ -21,16 +21,12 @@ def test_task_evaluate_request_is_id_only() -> None:
     assert request.evaluator_index == 0
 
 
-def test_task_evaluate_request_rejects_legacy_definition_fields() -> None:
+def test_task_evaluate_request_requires_evaluator_index() -> None:
     with pytest.raises(ValidationError):
         TaskEvaluateRequest(
             sample_id=uuid4(),
-            definition_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
-            evaluator_id=uuid4(),
-            evaluator_binding_key="researchrubrics-rubric",
-            evaluator_type="researchrubrics-rubric",
         )
 
 
@@ -38,7 +34,6 @@ def test_worker_execute_request_requires_static_or_dynamic_identity() -> None:
     with pytest.raises(ValidationError):
         WorkerExecuteRequest(
             sample_id=uuid4(),
-            definition_id=uuid4(),
             task_id=None,
             execution_id=uuid4(),
             sandbox_id="sbx",
@@ -55,7 +50,6 @@ def test_worker_execute_request_allows_dynamic_worker_without_model_target() -> 
     task_id = uuid4()
     request = WorkerExecuteRequest(
         sample_id=uuid4(),
-        definition_id=uuid4(),
         task_id=task_id,
         execution_id=uuid4(),
         sandbox_id="sbx",
@@ -75,14 +69,12 @@ def test_sandbox_and_persist_outputs_require_task_id() -> None:
     with pytest.raises(ValidationError):
         SandboxSetupRequest(
             sample_id=uuid4(),
-            definition_id=uuid4(),
             benchmark_type="researchrubrics",
         )
 
     with pytest.raises(ValidationError):
         PersistOutputsRequest(
             sample_id=uuid4(),
-            definition_id=uuid4(),
             execution_id=uuid4(),
             benchmark_type="researchrubrics",
         )

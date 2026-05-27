@@ -74,7 +74,6 @@ async def run_fail_workflow_job(payload: WorkflowFailedEvent) -> WorkflowFailedR
             status_message=truncate_text(payload.error),
             attributes={
                 "sample_id": str(payload.sample_id),
-                "definition_id": str(payload.definition_id),
                 "error": truncate_text(payload.error),
             },
         )
@@ -93,7 +92,6 @@ async def run_fail_workflow_job(payload: WorkflowFailedEvent) -> WorkflowFailedR
                     status_message=truncate_text(payload.error),
                     attributes={
                         "sample_id": str(payload.sample_id),
-                        "definition_id": str(payload.definition_id),
                         "status": run.status,
                         "error": truncate_text(payload.error),
                     },

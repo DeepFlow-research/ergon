@@ -8,7 +8,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any, ClassVar
 
 from datasets import load_dataset
-from ergon_core.api import Benchmark, BenchmarkRequirements, Task
+from ergon_core.api import Benchmark, Task
 from ergon_core.api.rubric import Evaluator
 from ergon_core.api.sandbox import Sandbox
 from ergon_core.api.worker import Worker
@@ -51,10 +51,6 @@ class ResearchRubricsBenchmark(Benchmark):
     type_slug: ClassVar[str] = "researchrubrics"
     dataset_name: ClassVar[str] = "ScaleAI/researchrubrics"
     task_payload_model: ClassVar[type[ResearchRubricsTaskPayload]] = ResearchRubricsTaskPayload
-    onboarding_deps: ClassVar[BenchmarkRequirements] = BenchmarkRequirements(
-        extras=("ergon-builtins[data]",),
-        optional_keys=("EXA_API_KEY",),
-    )
     required_packages: ClassVar[list[str]] = ["datasets", "huggingface_hub"]
     install_hint: ClassVar[str] = "pip install 'ergon-builtins[data]'"
 

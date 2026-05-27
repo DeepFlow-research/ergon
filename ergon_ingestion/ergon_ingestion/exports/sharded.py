@@ -177,7 +177,7 @@ def _run_row(
         "dataset": config.dataset,
         "batch": config.batch,
         "sample_id": str(run.id),
-        "definition_id": str(run.definition_id),
+        "experiment_id": str(run.experiment_id) if run.experiment_id else None,
         "benchmark_type": run.benchmark_type,
         "instance_key": run.instance_key,
         "sample_id": run.sample_id,

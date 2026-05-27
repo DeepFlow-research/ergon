@@ -12,7 +12,6 @@ from typing import ClassVar
 
 from ergon_core.api.benchmark import (
     Benchmark,
-    BenchmarkRequirements,
     EmptyTaskPayload,
     Task,
 )
@@ -116,7 +115,6 @@ class _SingleTaskSmokeBenchmark(Benchmark):
     of ``object-bound Task`` no longer fans out from this module.
     """
 
-    onboarding_deps: ClassVar[BenchmarkRequirements] = BenchmarkRequirements(e2b=True)
     task_slug: ClassVar[str]
     task_description: ClassVar[str]
     task_payload: ClassVar[JsonObject] = {}

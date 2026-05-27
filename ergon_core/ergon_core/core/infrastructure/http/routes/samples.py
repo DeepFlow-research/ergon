@@ -21,7 +21,6 @@ router = APIRouter(prefix="/samples", tags=["samples"])
 def list_samples(
     limit: int = 20,
     status: str | None = None,
-    definition_id: UUID | None = None,
     experiment: str | None = None,
     offset: int = 0,
 ) -> list[SampleSummaryDto]:
@@ -29,7 +28,6 @@ def list_samples(
     return SampleSnapshotReadService().list_samples(
         limit=limit,
         status=status,
-        definition_id=definition_id,
         experiment=experiment,
         offset=offset,
     )

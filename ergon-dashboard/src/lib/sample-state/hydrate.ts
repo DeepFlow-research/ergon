@@ -101,7 +101,7 @@ export function hydrateSampleSnapshot(input: unknown): SampleWorkspaceState {
 
   return {
     id: data.id,
-    definitionId: data.definitionId ?? "",
+    experimentId: data.experimentId ?? null,
     name: data.name,
     status: data.status as SampleWorkspaceState["status"],
     tasks: new Map(

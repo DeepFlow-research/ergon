@@ -18,7 +18,7 @@ from ergon_core.core.application.events import TaskReadyEvent
 
 logger = logging.getLogger(__name__)
 
-TaskReadyDispatcher = Callable[[UUID, UUID | None, UUID], Awaitable[None]]
+TaskReadyDispatcher = Callable[[UUID, UUID], Awaitable[None]]
 
 
 class RuntimeEventDispatcher:
@@ -31,18 +31,16 @@ class RuntimeEventDispatcher:
         self,
         *,
         sample_id: UUID,
-        definition_id: UUID | None,
         task_id: UUID,
     ) -> None:
         """Emit the canonical ``task/ready`` event for a committed task state."""
         if self._task_ready_dispatcher is not None:
-            await self._task_ready_dispatcher(sample_id, definition_id, task_id)
+            await self._task_ready_dispatcher(sample_id, task_id)
             logger.info("dispatch_task_ready: fired custom dispatcher for task %s", task_id)
             return
 
         event = TaskReadyEvent(
             sample_id=sample_id,
-            definition_id=definition_id,
             task_id=task_id,
         )
         inngest_client.send_sync(

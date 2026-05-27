@@ -96,7 +96,6 @@ async def _prepare_execution(
         return await svc.prepare(
             PrepareTaskExecutionCommand(
                 sample_id=payload.sample_id,
-                definition_id=payload.definition_id,
                 task_id=payload.task_id,
             )
         )
@@ -115,7 +114,6 @@ async def _invoke_sandbox_setup(
         function=sandbox_setup_function,
         data=SandboxSetupRequest(
             sample_id=payload.sample_id,
-            definition_id=payload.definition_id,
             task_id=payload.task_id,
             benchmark_type=prepared.benchmark_type,
             sandbox_slug=_load_sandbox_slug(payload.sample_id),
@@ -150,7 +148,6 @@ async def _invoke_worker_execute(
         function=worker_execute_function,
         data=WorkerExecuteJobRequest(
             sample_id=payload.sample_id,
-            definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=prepared.execution_id,
             sandbox_id=sandbox_result.sandbox_id,
@@ -231,7 +228,6 @@ async def _invoke_persist_outputs(
         function=persist_outputs_function,
         data=PersistOutputsRequest(
             sample_id=payload.sample_id,
-            definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=prepared.execution_id,
             sandbox_id=sandbox_result.sandbox_id,
@@ -251,7 +247,6 @@ async def _emit_task_completed(
         TaskCompletedEvent.name,
         TaskCompletedEvent(
             sample_id=payload.sample_id,
-            definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=prepared.execution_id,
             sandbox_id=sandbox_id,
@@ -269,7 +264,6 @@ async def _emit_task_failed(
         TaskFailedEvent.name,
         TaskFailedEvent(
             sample_id=payload.sample_id,
-            definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=prepared.execution_id,
             error=error_message,
@@ -389,7 +383,6 @@ async def run_execute_task_job(
                 end_time=datetime.now(UTC),
                 attributes={
                     "sample_id": str(payload.sample_id),
-                    "definition_id": str(payload.definition_id),
                     "task_id": str(prepared.task_id),
                     "execution_id": str(prepared.execution_id),
                     "task_slug": prepared.task_slug,
@@ -455,7 +448,6 @@ async def run_execute_task_job(
                     status_message=truncate_text(error_msg),
                     attributes={
                         "sample_id": str(payload.sample_id),
-                        "definition_id": str(payload.definition_id),
                         "task_id": str(prepared.task_id),
                         "execution_id": str(prepared.execution_id),
                         "task_slug": prepared.task_slug,

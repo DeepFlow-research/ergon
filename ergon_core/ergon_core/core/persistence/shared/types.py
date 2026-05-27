@@ -15,5 +15,4 @@ AssignedWorkerSlug = NewType("AssignedWorkerSlug", str)
 # ── UUID aliases ──────────────────────────────────────────────────
 SampleId = NewType("SampleId", UUID)
 NodeId = NewType("NodeId", UUID)
-DefinitionId = NewType("DefinitionId", UUID)
 EdgeId = NewType("EdgeId", UUID)

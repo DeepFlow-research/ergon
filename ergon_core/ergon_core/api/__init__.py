@@ -2,7 +2,6 @@
 
 from ergon_core.api.benchmark import (
     Benchmark,
-    BenchmarkRequirements,
     EmptyTaskPayload,
     Task,
 )
@@ -55,7 +54,6 @@ Task.model_rebuild()
 
 __all__ = [
     "Benchmark",
-    "BenchmarkRequirements",
     "AwaitCompletionNotSupportedError",
     "ContainmentViolation",
     "Criterion",

@@ -1,13 +1,8 @@
 from uuid import UUID, uuid4
 
 import pytest
-from ergon_core.core.persistence.definitions.models import (
-    ExperimentDefinition,
-    ExperimentDefinitionInstance,
-    ExperimentDefinitionTask,
-    ExperimentDefinitionTaskAssignment,
-    ExperimentDefinitionWorker,
-)
+from ergon_core.api import Sample
+from ergon_core.core.application.samples.materialization import materialize_sample
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
@@ -15,8 +10,6 @@ from ergon_core.core.persistence.telemetry.models import (
     SampleTaskAttempt,
 )
 from ergon_core.core.application.runtime import execution as task_execution_module
-from ergon_core.core.application.runtime.models import MutationMeta
-from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from ergon_core.core.application.runtime.orchestration import (
     InitializeWorkflowCommand,
     PrepareTaskExecutionCommand,
@@ -43,90 +36,52 @@ def _session() -> Session:
     return Session(engine)
 
 
-def _definition_with_worker(
+def _materialized_sample_with_worker(
     session: Session,
     *,
     worker_type: str = "minif2f-react",
     benchmark_type: str = "minif2f",
 ) -> UUID:
-    definition_id = uuid4()
-    instance_id = uuid4()
-    task_id = uuid4()
-    session.add_all(
-        [
-            ExperimentDefinition(
-                id=definition_id,
-                benchmark_type=benchmark_type,
-                name=benchmark_type,
-                metadata_json={},
-            ),
-            ExperimentDefinitionInstance(
-                id=instance_id,
-                experiment_definition_id=definition_id,
-                instance_key="sample-1",
-            ),
-            ExperimentDefinitionTask(
-                id=task_id,
-                experiment_definition_id=definition_id,
-                instance_id=instance_id,
-                task_slug="root",
-                description="Root task",
-                task_payload_json={},
-            ),
-            ExperimentDefinitionWorker(
-                experiment_definition_id=definition_id,
-                binding_key="primary",
-                worker_type=worker_type,
-                model_target="stub:constant",
-                snapshot_json={},
-            ),
-            ExperimentDefinitionTaskAssignment(
-                experiment_definition_id=definition_id,
-                task_id=task_id,
-                worker_binding_key="primary",
-            ),
-        ]
+    sample_id = uuid4()
+    task = task_with_id(
+        uuid4(),
+        task_slug="root",
+        instance_key="sample-1",
+        description="Root task",
     )
-    session.commit()
-    return definition_id
-
-
-def _run(
-    session: Session,
-    *,
-    definition_id: UUID,
-    sample_id: UUID | None = None,
-    model_target: str = "stub:constant",
-) -> UUID:
-    resolved_run_id = sample_id or uuid4()
-    session.add(
-        SampleRecord(
-            id=resolved_run_id,
-            definition_id=definition_id,
-            benchmark_type="minif2f",
-            instance_key="sample-1",
-            worker_team_json={"primary": "minif2f-react"},
-            model_target=model_target,
-            status=SampleStatus.EXECUTING,
+    original_type_slug = task.worker.__class__.type_slug
+    task.worker.__class__.type_slug = worker_type
+    task.worker.model = "stub:constant"
+    sample_row = SampleRecord(
+        id=sample_id,
+        benchmark_type=benchmark_type,
+        instance_key="sample-1",
+        worker_team_json={"primary": worker_type},
+        model_target="stub:constant",
+        status=SampleStatus.EXECUTING,
+    )
+    session.add(sample_row)
+    session.flush()
+    try:
+        materialize_sample(
+            session=session,
+            sample=Sample.from_tasks(
+                name="sample-1",
+                sample_key="sample-1",
+                environment_name=benchmark_type,
+                tasks=[task],
+            ),
+            sample_row=sample_row,
         )
-    )
+    finally:
+        task.worker.__class__.type_slug = original_type_slug
     session.commit()
-    return resolved_run_id
+    return sample_id
 
 
-def test_graph_initialization_writes_concrete_worker_slug_from_definition_binding() -> None:
+def test_materialization_writes_concrete_worker_slug_from_task_snapshot() -> None:
     session = _session()
-    definition_id = _definition_with_worker(session, worker_type="minif2f-react")
-    sample_id = _run(session, definition_id=definition_id)
-
-    RuntimeGraphRepository().initialize_from_definition(
-        session,
-        sample_id,
-        definition_id,
-        initial_node_status=TaskExecutionStatus.PENDING,
-        initial_edge_status="pending",
-        meta=MutationMeta(actor="test"),
-    )
+    sample_id = _materialized_sample_with_worker(session, worker_type="minif2f-react")
 
     node = session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).one()
     assert node.assigned_worker_slug == "minif2f-react"
@@ -138,21 +93,18 @@ async def test_workflow_initialization_returns_task_ids_for_initial_ready_static
 ) -> None:
     session = _session()
     benchmark_type = "ci-worker-identity"
-    definition_id = _definition_with_worker(
+    sample_id = _materialized_sample_with_worker(
         session,
         worker_type="minif2f-react",
         benchmark_type=benchmark_type,
     )
-    sample_id = _run(session, definition_id=definition_id)
 
     monkeypatch.setattr(
         "ergon_core.core.application.runtime.sample_lifecycle.get_session",
         lambda: _session_context(session),
     )
 
-    initialized = await WorkflowService().initialize(
-        InitializeWorkflowCommand(sample_id=sample_id, definition_id=definition_id)
-    )
+    initialized = await WorkflowService().initialize(InitializeWorkflowCommand(sample_id=sample_id))
 
     assert len(initialized.initial_ready_tasks) == 1
     ready_task = initialized.initial_ready_tasks[0]
@@ -164,12 +116,11 @@ async def test_workflow_initialization_returns_task_ids_for_initial_ready_static
 
 
 @pytest.mark.asyncio
-async def test_dynamic_prepare_uses_node_worker_slug_and_run_model_without_definition_binding(
+async def test_dynamic_prepare_uses_node_worker_slug_and_task_model_without_definition_binding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     session = _session()
-    definition_id = _definition_with_worker(session, worker_type="minif2f-react")
-    sample_id = _run(session, definition_id=definition_id, model_target="stub:constant")
+    sample_id = _materialized_sample_with_worker(session, worker_type="minif2f-react")
     task_id = uuid4()
     task = task_with_id(
         task_id,
@@ -198,7 +149,6 @@ async def test_dynamic_prepare_uses_node_worker_slug_and_run_model_without_defin
     prepared = await TaskExecutionService().prepare(
         PrepareTaskExecutionCommand(
             sample_id=sample_id,
-            definition_id=definition_id,
             task_id=node.task_id,
         )
     )
@@ -206,18 +156,12 @@ async def test_dynamic_prepare_uses_node_worker_slug_and_run_model_without_defin
     execution = session.exec(
         select(SampleTaskAttempt).where(SampleTaskAttempt.id == prepared.execution_id)
     ).one()
-    dynamic_worker = session.exec(
-        select(ExperimentDefinitionWorker).where(
-            ExperimentDefinitionWorker.experiment_definition_id == definition_id,
-            ExperimentDefinitionWorker.binding_key == "swebench-react",
-        )
-    ).first()
 
     assert prepared.assigned_worker_slug == "swebench-react"
     assert prepared.worker_type == "swebench-react"
-    assert prepared.model_target == "stub:constant"
-    assert execution.definition_worker_id is None
-    assert dynamic_worker is None
+    assert prepared.model_target == "test:none"
+    assert execution.task_id == task_id
+    assert "experiment_definition_workers" not in SQLModel.metadata.tables
 
 
 class _session_context:

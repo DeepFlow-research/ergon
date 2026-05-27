@@ -10,7 +10,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any, ClassVar
 
 from datasets import load_dataset
-from ergon_core.api import Benchmark, BenchmarkRequirements, Task
+from ergon_core.api import Benchmark, Task
 from ergon_core.api.rubric import Evaluator
 from ergon_core.api.sandbox import Sandbox
 from ergon_core.api.worker import Worker
@@ -50,10 +50,6 @@ class SweBenchVerifiedBenchmark(Benchmark):
 
     type_slug: ClassVar[str] = "swebench-verified"
     task_payload_model: ClassVar[type[SWEBenchTaskPayload]] = SWEBenchTaskPayload
-    onboarding_deps: ClassVar[BenchmarkRequirements] = BenchmarkRequirements(
-        e2b=True,
-        extras=("ergon-builtins[data]",),
-    )
 
     def __init__(
         self,

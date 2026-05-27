@@ -8,10 +8,6 @@ state.
 from uuid import UUID
 
 from ergon_core.core.shared.json_types import JsonObject
-from ergon_core.core.persistence.definitions.models import (
-    ExperimentDefinitionTask,
-    ExperimentDefinitionTaskDependency,
-)
 from ergon_core.core.application.runtime import status as graph_status
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.application.runtime.models import MutationMeta
@@ -107,7 +103,6 @@ async def mark_task_failed(
 async def get_initial_ready_tasks(
     session: Session,
     sample_id: UUID,
-    definition_id: UUID | None = None,
     *,
     graph_repo: RuntimeGraphRepository | None = None,
     graph_lookup: GraphNodeLookup | None = None,
@@ -116,20 +111,12 @@ async def get_initial_ready_tasks(
     """Return task IDs that have zero dependencies."""
     graph_repo = graph_repo or RuntimeGraphRepository()
     graph_lookup = graph_lookup or GraphNodeLookup(session, sample_id)
-    if definition_id is None:
-        all_tasks_stmt = select(SampleGraphNode.task_id).where(
-            SampleGraphNode.sample_id == sample_id,
-        )
-        tasks_with_deps_stmt = select(SampleGraphEdge.target_task_id).where(
-            SampleGraphEdge.sample_id == sample_id,
-        )
-    else:
-        all_tasks_stmt = select(ExperimentDefinitionTask.id).where(
-            ExperimentDefinitionTask.experiment_definition_id == definition_id,
-        )
-        tasks_with_deps_stmt = select(ExperimentDefinitionTaskDependency.task_id).where(
-            ExperimentDefinitionTaskDependency.experiment_definition_id == definition_id,
-        )
+    all_tasks_stmt = select(SampleGraphNode.task_id).where(
+        SampleGraphNode.sample_id == sample_id,
+    )
+    tasks_with_deps_stmt = select(SampleGraphEdge.target_task_id).where(
+        SampleGraphEdge.sample_id == sample_id,
+    )
     all_task_ids = set(session.exec(all_tasks_stmt).all())
     tasks_with_deps = set(session.exec(tasks_with_deps_stmt).all())
 

@@ -24,7 +24,6 @@ class _FakeSampleSnapshotReadService:
         *,
         limit: int = 20,
         status: str | None = None,
-        definition_id: UUID | None = None,
         experiment: str | None = None,
         offset: int = 0,
     ) -> list[SampleSummaryDto]:
@@ -32,7 +31,6 @@ class _FakeSampleSnapshotReadService:
             {
                 "limit": limit,
                 "status": status,
-                "definition_id": definition_id,
                 "experiment": experiment,
                 "offset": offset,
             }
@@ -43,8 +41,8 @@ class _FakeSampleSnapshotReadService:
                 name="route sample",
                 status="completed",
                 created_at=datetime(2026, 5, 20, 12, 0, tzinfo=UTC),
-                definition_id=definition_id or uuid4(),
-                definition_name="route experiment",
+                experiment_id=uuid4(),
+                experiment=experiment,
                 benchmark_type="route-bench",
                 instance_key="sample-a",
                 sample_label="sample-a",
@@ -58,7 +56,6 @@ class _FakeSampleSnapshotReadService:
             id=str(sample_id),
             name="route snapshot",
             status="completed",
-            definition_id=str(uuid4()),
         )
 
 
@@ -67,13 +64,10 @@ def test_list_samples_route_passes_filters_to_read_service(monkeypatch) -> None:
     app.include_router(router)
     client = TestClient(app)
     fake_service = _FakeSampleSnapshotReadService()
-    definition_id = uuid4()
 
     monkeypatch.setattr(module, "SampleSnapshotReadService", lambda: fake_service)
 
-    response = client.get(
-        f"/samples?limit=25&offset=50&status=completed&definition_id={definition_id}&experiment=alpha"
-    )
+    response = client.get("/samples?limit=25&offset=50&status=completed&experiment=alpha")
 
     assert response.status_code == 200
     assert fake_service.calls == [
@@ -81,13 +75,12 @@ def test_list_samples_route_passes_filters_to_read_service(monkeypatch) -> None:
             "limit": 25,
             "offset": 50,
             "status": "completed",
-            "definition_id": definition_id,
             "experiment": "alpha",
         }
     ]
     body = response.json()
     assert body[0]["name"] == "route sample"
-    assert body[0]["definition_name"] == "route experiment"
+    assert body[0]["experiment"] == "alpha"
     assert body[0]["total_tasks"] == 1
 
 

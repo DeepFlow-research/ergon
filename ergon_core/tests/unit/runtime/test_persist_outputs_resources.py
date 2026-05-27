@@ -38,7 +38,6 @@ async def test_worker_final_message_is_not_published_as_run_resource(monkeypatch
         PersistOutputsRequest.model_validate(
             {
                 "sample_id": uuid4(),
-                "definition_id": uuid4(),
                 "task_id": uuid4(),
                 "execution_id": uuid4(),
                 "sandbox_id": "sandbox",

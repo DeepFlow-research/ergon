@@ -3,7 +3,6 @@
 import time
 from uuid import UUID
 
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.persistence.samples.models import (
     SampleAnnotationEventRow,
@@ -101,20 +100,9 @@ def assert_cross_cutting_invariants(session: Session, sample_id: UUID) -> None:
 # ---------------------------------------------------------------------------
 
 
-def make_experiment_definition(session: Session) -> ExperimentDefinition:
-    """Create a minimal ExperimentDefinition row for test scaffolding."""
-    defn = ExperimentDefinition(benchmark_type="ci-propagation-test", name="ci-propagation-test")
-    session.add(defn)
-    session.flush()
-    session.refresh(defn)
-    return defn
-
-
-def make_run(session: Session, definition_id: UUID) -> SampleRecord:
+def make_run(session: Session) -> SampleRecord:
     """Create a minimal SampleRecord row for test scaffolding."""
     run = SampleRecord(
-        definition_id=definition_id,
-        workflow_definition_id=definition_id,
         benchmark_type="ci-propagation-test",
         instance_key="test",
         status=SampleStatus.EXECUTING,

@@ -1,4 +1,4 @@
-"""Read service for dashboard/API run snapshots and related views."""
+"""Read service for dashboard/API sample snapshots and related views."""
 
 import os
 from contextlib import AbstractContextManager
@@ -18,10 +18,6 @@ from ergon_core.core.views.samples.models import (
     SampleSnapshotDto,
 )
 from ergon_core.core.persistence.context.models import SampleContextEvent
-from ergon_core.core.persistence.definitions.models import (
-    ExperimentDefinition,
-    ExperimentDefinitionWorker,
-)
 from ergon_core.core.persistence.experiments.models import ExperimentEnvironmentRow
 from ergon_core.core.persistence.graph.models import (
     SampleGraphEdge,
@@ -77,7 +73,6 @@ class SampleSnapshotReadService:
         *,
         limit: int = 20,
         status: str | None = None,
-        definition_id: UUID | None = None,
         experiment: str | None = None,
         offset: int = 0,
     ) -> list[SampleSummaryDto]:
@@ -85,30 +80,14 @@ class SampleSnapshotReadService:
             stmt = select(SampleRecord).order_by(col(SampleRecord.created_at).desc())
             if status:
                 stmt = stmt.where(SampleRecord.status == status)
-            if definition_id:
-                stmt = stmt.where(SampleRecord.definition_id == definition_id)
             if experiment:
                 stmt = stmt.where(SampleRecord.experiment == experiment)
             stmt = stmt.offset(offset).limit(limit)
             rows = list(session.exec(stmt).all())
-            definition_ids = [row.definition_id for row in rows if row.definition_id is not None]
-            definition_names = {
-                definition.id: definition.name
-                for definition in session.exec(
-                    select(ExperimentDefinition).where(
-                        col(ExperimentDefinition.id).in_(definition_ids)
-                    )
-                ).all()
-            }
             task_counts = _task_counts_by_sample(session, [row.id for row in rows])
         return [
             _run_summary(
                 row,
-                definition_name=(
-                    definition_names.get(row.definition_id)
-                    if row.definition_id is not None
-                    else None
-                ),
                 task_counts=task_counts.get(row.id),
             )
             for row in rows
@@ -125,11 +104,6 @@ class SampleSnapshotReadService:
             if run is None:
                 return None
 
-            definition = (
-                session.get(ExperimentDefinition, run.definition_id)
-                if run.definition_id is not None
-                else None
-            )
             nodes = list(
                 session.exec(
                     select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)
@@ -139,17 +113,6 @@ class SampleSnapshotReadService:
                 session.exec(
                     select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)
                 ).all()
-            )
-            def_workers = (
-                list(
-                    session.exec(
-                        select(ExperimentDefinitionWorker).where(
-                            ExperimentDefinitionWorker.experiment_definition_id == run.definition_id
-                        )
-                    ).all()
-                )
-                if run.definition_id is not None
-                else []
             )
             executions = list(
                 session.exec(
@@ -183,10 +146,6 @@ class SampleSnapshotReadService:
                 ).all()
             )
 
-        worker_by_id: dict[UUID, ExperimentDefinitionWorker] = {w.id: w for w in def_workers}
-        worker_by_binding: dict[str, ExperimentDefinitionWorker] = {
-            w.binding_key: w for w in def_workers
-        }
         timestamps = _task_timestamps(executions)
         (
             task_map,
@@ -197,7 +156,7 @@ class SampleSnapshotReadService:
             failed_tasks,
             running_tasks,
             cancelled_tasks,
-        ) = _build_task_map(nodes, edges, worker_by_binding, timestamps)
+        ) = _build_task_map(nodes, edges, timestamps)
 
         execution_task_map: dict[UUID, UUID] = {ex.id: ex.task_id for ex in executions}
 
@@ -216,7 +175,7 @@ class SampleSnapshotReadService:
         run_summary = run.parsed_summary()
         aggregated_metrics = aggregate_run_metrics(context_events, summary=run_summary)
         assignment = run.parsed_assignment()
-        meta = definition.parsed_metadata() if definition is not None else assignment
+        meta = assignment
         run_name = str(
             run_summary.get("name")
             or assignment.get("sample_name")
@@ -226,7 +185,6 @@ class SampleSnapshotReadService:
 
         return SampleSnapshotDto(
             id=sample_id_str,
-            definition_id=str(run.definition_id) if run.definition_id is not None else None,
             name=run_name,
             status=run.status,
             tasks=task_map,
@@ -237,7 +195,6 @@ class SampleSnapshotReadService:
             ),
             executions_by_task=_task_keyed_executions(
                 executions,
-                worker_by_id,
             ),
             evaluations_by_task=_task_keyed_evaluations(
                 evaluations,
@@ -471,7 +428,6 @@ def _display_run_score(
 def _run_summary(
     run: SampleRecord,
     *,
-    definition_name: str | None = None,
     task_counts: dict[str, object] | None = None,
 ) -> SampleSummaryDto:
     summary = run.parsed_summary()
@@ -488,8 +444,7 @@ def _run_summary(
         completed_at=run.completed_at,
         latest_activity_at=_latest_activity(run, task_counts),
         duration_seconds=_duration_seconds(run),
-        definition_id=run.definition_id,
-        definition_name=definition_name,
+        experiment_id=run.experiment_id,
         experiment=run.experiment,
         benchmark_type=run.benchmark_type,
         instance_key=run.instance_key,

@@ -20,7 +20,8 @@ import {
   broadcastSandboxClosed,
 } from "@/lib/socket/server";
 import {
-  parseDashboardGraphMutationData,
+  isDashboardSampleRuntimeGraphEvent,
+  parseDashboardSampleRuntimeEventData,
   parseDashboardTaskEvaluationUpdatedData,
   parseDashboardThreadMessageCreatedData,
   parseDashboardWorkflowStartedData,
@@ -51,7 +52,6 @@ const onWorkflowStarted = inngest.createFunction(
     const payload = parseDashboardWorkflowStartedData(event.data);
     const {
       sample_id,
-      definition_id,
       workflow_name,
       snapshot,
       started_at,
@@ -68,7 +68,6 @@ const onWorkflowStarted = inngest.createFunction(
     // Update store
     store.initializeSample(
       sample_id,
-      definition_id,
       workflow_name,
       snapshot,
       started_at,
@@ -413,7 +412,10 @@ const onGraphMutation = inngest.createFunction(
   { id: "handle-sample-runtime-event", name: "Handle Sample Runtime Event" },
   { event: "dashboard/sample.runtime_event" },
   async ({ event }) => {
-    const mutation = parseDashboardGraphMutationData(event.data);
+    if (!isDashboardSampleRuntimeGraphEvent(event.data)) {
+      return { success: true, ignored: true };
+    }
+    const mutation = parseDashboardSampleRuntimeEventData(event.data);
     store.applyGraphMutation(mutation.sample_id, mutation);
     broadcastGraphMutation(mutation.sample_id, mutation);
     return { success: true };

@@ -2,7 +2,6 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.persistence.shared.enums import (
     SampleResourceKind,
@@ -20,7 +19,6 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 
 def _session() -> Session:
-    _ = ExperimentDefinition
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -98,11 +96,9 @@ def _resource(
 
 def _run(session: Session) -> UUID:
     sample_id = uuid4()
-    definition_id = uuid4()
     session.add(
         SampleRecord(
             id=sample_id,
-            definition_id=definition_id,
             benchmark_type="ci-workflow-service",
             instance_key="sample-1",
             worker_team_json={"primary": "test-worker"},

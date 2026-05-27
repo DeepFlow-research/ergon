@@ -1,9 +1,9 @@
-import type { GraphMutationDto } from "@/features/graph/contracts/graphMutations";
+import type { SampleGraphEventDto } from "@/features/graph/contracts/graphMutations";
 
 export type ReplayDirection = "previous" | "next";
 
 export function resolveReplayStep(
-  mutations: GraphMutationDto[],
+  mutations: SampleGraphEventDto[],
   currentSequence: number | null,
   direction: ReplayDirection,
 ): number | null {

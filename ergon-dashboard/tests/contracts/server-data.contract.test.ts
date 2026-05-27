@@ -65,8 +65,7 @@ test("run list server data applies list filters and parses index summary fields"
           completed_at: "2026-05-20T12:10:00Z",
           latest_activity_at: "2026-05-20T12:10:00Z",
           duration_seconds: 600,
-          definition_id: "11111111-1111-1111-1111-111111111111",
-          definition_name: "MiniWob comparison",
+          experiment_id: "11111111-1111-1111-1111-111111111111",
           experiment: "alpha",
           benchmark_type: "miniwob",
           instance_key: "task-1",
@@ -92,7 +91,7 @@ test("run list server data applies list filters and parses index summary fields"
       limit: 25,
       offset: 50,
       status: "completed",
-      definitionId: "11111111-1111-1111-1111-111111111111",
+      experimentId: "11111111-1111-1111-1111-111111111111",
       experiment: "alpha",
     });
 
@@ -100,11 +99,11 @@ test("run list server data applies list filters and parses index summary fields"
     assert.match(requestedUrl, /limit=25/);
     assert.match(requestedUrl, /offset=50/);
     assert.match(requestedUrl, /status=completed/);
-    assert.match(requestedUrl, /definition_id=11111111-1111-1111-1111-111111111111/);
+    assert.match(requestedUrl, /experiment_id=11111111-1111-1111-1111-111111111111/);
     assert.match(requestedUrl, /experiment=alpha/);
     assert.equal(result.ok, true);
     assert.equal(result.ok && result.data[0].name, "alpha task 1");
-    assert.equal(result.ok && result.data[0].definition_name, "MiniWob comparison");
+    assert.equal(result.ok && result.data[0].experiment_id, "11111111-1111-1111-1111-111111111111");
     assert.equal(result.ok && result.data[0].total_tasks, 3);
     assert.deepEqual(result.ok && result.data[0].metrics, { pass_rate: 0.9 });
   } finally {

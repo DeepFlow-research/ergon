@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { GraphMutationDtoSchema } from "@/features/graph/contracts/graphMutations";
+import { SampleGraphEventDtoSchema } from "@/features/graph/contracts/graphMutations";
 import {
   dashboardEventSchemas,
   DashboardContextEventEventSchema as GeneratedDashboardContextEventEventSchema,
@@ -21,6 +21,7 @@ import {
   parseSampleSnapshot,
   parseSampleTaskEvaluation,
   SampleRuntimeEventView,
+  SampleRuntimeEventViewSchema,
   SampleCommunicationMessageSchema,
   SampleCommunicationThreadSchema,
   SampleResourceSchema,
@@ -62,7 +63,6 @@ export type EvaluatorRef = z.infer<typeof EvaluatorRefSchema>;
 
 export const DashboardWorkflowStartedDataSchema = z.object({
   sample_id: z.string().uuid(),
-  definition_id: z.string().uuid(),
   workflow_name: z.string(),
   snapshot: z.unknown(),
   started_at: z.string().datetime({ offset: true }),
@@ -133,7 +133,6 @@ export const SandboxClosedSocketDataSchema = z.object({
 export type TaskTrigger = z.infer<typeof TaskTriggerSchema>;
 export interface DashboardWorkflowStartedData {
   sample_id: string;
-  definition_id: string;
   workflow_name: string;
   snapshot: SampleSnapshot;
   started_at: string;
@@ -248,7 +247,6 @@ export function parseDashboardWorkflowStartedData(input: unknown): DashboardWork
   });
   return {
     sample_id: parsed.sample_id,
-    definition_id: parsed.definition_id,
     workflow_name: parsed.workflow_name,
     snapshot: parseSampleSnapshot(parsed.snapshot),
     started_at: parsed.started_at,
@@ -306,16 +304,21 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
 
-export const DashboardGraphMutationDataSchema = z.preprocess((input) => {
+export const DashboardSampleRuntimeEventDataSchema = z.preprocess((input) => {
   const outer = asRecord(input);
   if (outer.mutation !== undefined) {
     return outer.mutation;
   }
-  const event = (outer.event === undefined ? outer : GeneratedDashboardSampleRuntimeEventSchema.parse(input).event) as SampleRuntimeEventView;
+  const event =
+    outer.event === undefined
+      ? SampleRuntimeEventViewSchema.parse(input)
+      : GeneratedDashboardSampleRuntimeEventSchema.parse(input).event;
   const targetType = event.targetType === "task" ? "node" : event.targetType;
-  const mutationType = event.eventType
+  const rawMutationType = event.eventType
     .replace("task.", "node.")
     .replace("sample.", "node.");
+  const mutationType =
+    rawMutationType === "annotation.updated" ? "annotation.set" : rawMutationType;
   return {
     id: event.eventId,
     sample_id: event.sampleId,
@@ -325,23 +328,118 @@ export const DashboardGraphMutationDataSchema = z.preprocess((input) => {
     target_id: event.targetId ?? event.sampleId,
     actor: "typed-sample-wal",
     old_value: null,
-    new_value: event.payload,
+    new_value: sampleRuntimeGraphMutationValue(event),
     reason: null,
     created_at: event.timestamp,
   };
-}, GraphMutationDtoSchema);
+}, SampleGraphEventDtoSchema);
 
-export type DashboardGraphMutationData = z.infer<typeof DashboardGraphMutationDataSchema>;
+export type DashboardSampleRuntimeEventData = z.infer<typeof DashboardSampleRuntimeEventDataSchema>;
 
-export function parseDashboardGraphMutationData(input: unknown): DashboardGraphMutationData {
-  return DashboardGraphMutationDataSchema.parse(input);
+export function parseDashboardSampleRuntimeEventData(input: unknown): DashboardSampleRuntimeEventData {
+  return DashboardSampleRuntimeEventDataSchema.parse(input);
 }
 
-export const GraphMutationSocketDataSchema = z.object({
+const GRAPH_RUNTIME_EVENT_TYPES = new Set([
+  "task.added",
+  "task.removed",
+  "task.status_changed",
+  "edge.added",
+  "edge.removed",
+  "edge.status_changed",
+  "annotation.set",
+  "annotation.updated",
+  "annotation.deleted",
+]);
+
+export function isDashboardSampleRuntimeGraphEvent(input: unknown): boolean {
+  const outer = asRecord(input);
+  if (outer.mutation !== undefined) {
+    return true;
+  }
+  const parsed = GeneratedDashboardSampleRuntimeEventSchema.parse(input);
+  return GRAPH_RUNTIME_EVENT_TYPES.has(parsed.event.eventType);
+}
+
+function stringField(input: Record<string, unknown>, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = input[key];
+    if (typeof value === "string" && value.length > 0) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function jsonRecord(input: unknown): Record<string, unknown> {
+  return asRecord(input);
+}
+
+function annotationValue(input: unknown, namespace: string): Record<string, unknown> {
+  const value = jsonRecord(input);
+  const payload = jsonRecord(value.payload ?? value);
+  return {
+    namespace: stringField(value, "namespace") ?? namespace,
+    payload,
+  };
+}
+
+function sampleRuntimeGraphMutationValue(
+  event: SampleRuntimeEventView,
+): Record<string, unknown> {
+  switch (event.eventType) {
+    case "task.added": {
+      const task = jsonRecord(event.task);
+      const payload = jsonRecord(event.payload);
+      const taskSlug =
+        event.taskSlug ?? stringField(payload, "task_slug", "taskSlug") ?? event.targetId;
+      return {
+        task_slug: taskSlug,
+        instance_key:
+          stringField(task, "instance_key", "instanceKey") ??
+          stringField(payload, "instance_key", "instanceKey") ??
+          taskSlug,
+        description: stringField(task, "description") ?? "",
+        status: event.status ?? "pending",
+        assigned_worker_slug:
+          stringField(payload, "worker_slug", "workerSlug", "assigned_worker_slug") ?? null,
+      };
+    }
+    case "task.status_changed":
+      return { status: event.status };
+    case "edge.added":
+      return {
+        mutation_type: "edge.added",
+        source_task_id: event.sourceTaskId,
+        target_task_id: event.targetTaskId,
+        status: event.status ?? "pending",
+      };
+    case "edge.removed":
+      return {
+        mutation_type: "edge.removed",
+        source_task_id: event.sourceTaskId,
+        target_task_id: event.targetTaskId,
+        status: "removed",
+      };
+    case "edge.status_changed":
+      return { status: event.status };
+    case "annotation.set":
+    case "annotation.updated":
+      return annotationValue(event.value, event.key);
+    case "annotation.deleted":
+      return annotationValue(event.payload, event.key);
+    case "task.removed":
+      return {};
+    default:
+      return jsonRecord(event.payload);
+  }
+}
+
+export const SampleRuntimeEventSocketDataSchema = z.object({
   sampleId: z.string().uuid(),
-  mutation: DashboardGraphMutationDataSchema,
+  mutation: DashboardSampleRuntimeEventDataSchema,
 });
-export type GraphMutationSocketData = z.infer<typeof GraphMutationSocketDataSchema>;
+export type SampleRuntimeEventSocketData = z.infer<typeof SampleRuntimeEventSocketDataSchema>;
 
 // =============================================================================
 // Context Event Events

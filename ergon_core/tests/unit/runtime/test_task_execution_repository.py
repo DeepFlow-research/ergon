@@ -24,7 +24,6 @@ def _run(session: Session) -> UUID:
     session.add(
         SampleRecord(
             id=sample_id,
-            definition_id=uuid4(),
             benchmark_type="ci-task-execution-repository",
             instance_key="sample-1",
             worker_team_json={"primary": "test-worker"},

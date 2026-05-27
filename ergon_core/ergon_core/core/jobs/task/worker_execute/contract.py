@@ -11,7 +11,6 @@ class WorkerExecuteRequest(InngestEventContract):
     name: ClassVar[str] = "task/worker-execute"
 
     sample_id: UUID
-    definition_id: UUID | None = None
     task_id: UUID
     execution_id: UUID
     sandbox_id: str
