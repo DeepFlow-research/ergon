@@ -6,7 +6,11 @@ export const BenchmarkNameSchema = z.string();
 export const SampleStatusSchema = z.enum(["pending", "executing", "evaluating", "completed", "failed", "cancelled"]);
 export const TaskStatusSchema = z.string();
 
-export const ExperimentDetailSchema = schemas.ExperimentDetailDto;
+const restSchemas = schemas as typeof schemas & {
+  ExperimentDetailDto?: z.ZodTypeAny;
+};
+
+export const ExperimentDetailSchema = restSchemas.ExperimentDetailDto ?? schemas.ExperimentDetailView;
 
 export const SampleExecutionAttemptSchema = schemas.SampleExecutionAttemptDto;
 export const SampleResourceSchema = schemas.SampleResourceDto;
@@ -29,9 +33,9 @@ export type BenchmarkName = z.infer<typeof BenchmarkNameSchema>;
 export type SampleLifecycleStatus = z.infer<typeof SampleStatusSchema>;
 export type TaskStatusValue = z.infer<typeof TaskStatusSchema>;
 
-type RawExperimentDetail = KnownKeys<z.infer<typeof ExperimentDetailSchema>>;
-type RawExperimentRunRow = KnownKeys<NonNullable<RawExperimentDetail["runs"]>[number]>;
-type RawExperimentSummary = KnownKeys<RawExperimentDetail["experiment"]>;
+type RawExperimentDetail = Record<string, any>;
+type RawExperimentRunRow = Record<string, any>;
+type RawExperimentSummary = Record<string, any>;
 type RawSampleExecutionAttempt = KnownKeys<z.infer<typeof SampleExecutionAttemptSchema>>;
 type RawSampleResource = KnownKeys<z.infer<typeof SampleResourceSchema>>;
 type RawSampleSandboxCommand = KnownKeys<z.infer<typeof SampleSandboxCommandSchema>>;
@@ -337,9 +341,10 @@ function normalizeSampleTaskEvaluation(evaluation: RawSampleTaskEvaluation): Sam
 }
 
 export function parseExperimentDetail(input: unknown): ExperimentDetail {
-  const detail = ExperimentDetailSchema.parse(input);
+  const detail = ExperimentDetailSchema.parse(input) as RawExperimentDetail;
   return {
     ...detail,
+    experiment: detail.experiment ?? {},
     analytics: {
       total_runs: detail.analytics?.total_runs ?? 0,
       average_duration_ms: detail.analytics?.average_duration_ms ?? null,
@@ -357,7 +362,7 @@ export function parseExperimentDetail(input: unknown): ExperimentDetail {
       },
       total_cost_usd: detail.analytics?.total_cost_usd ?? null,
     },
-    runs: (detail.runs ?? []).map((run) => ({
+    runs: ((detail.runs ?? []) as RawExperimentRunRow[]).map((run) => ({
       ...run,
       completed_at: run.completed_at ?? null,
       error_message: run.error_message ?? null,

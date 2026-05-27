@@ -113,14 +113,14 @@
         }
       }
     },
-    "/samples/{sample_id}": {
+    "/samples/{sample_id}/workspace": {
       "get": {
         "tags": [
           "samples"
         ],
-        "summary": "Get Sample Snapshot",
-        "description": "Get a persisted sample-detail snapshot suitable for frontend hydration.",
-        "operationId": "get_sample_snapshot_samples__sample_id__get",
+        "summary": "Get Sample Workspace",
+        "description": "Get the existing dashboard-compatible sample snapshot contract.",
+        "operationId": "get_sample_workspace_samples__sample_id__workspace_get",
         "parameters": [
           {
             "name": "sample_id",
@@ -140,6 +140,50 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SampleSnapshotDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/samples/{sample_id}": {
+      "get": {
+        "tags": [
+          "samples"
+        ],
+        "summary": "Get Sample Detail",
+        "description": "Get persisted sample provenance and status details.",
+        "operationId": "get_sample_detail_samples__sample_id__get",
+        "parameters": [
+          {
+            "name": "sample_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sample Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SampleDetailView"
                 }
               }
             }
@@ -183,11 +227,51 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SampleRuntimeEventView"
-                  },
-                  "title": "Response Get Sample Runtime Events Samples  Sample Id  Events Get"
+                  "$ref": "#/components/schemas/SampleEventsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/samples/{sample_id}/graph": {
+      "get": {
+        "tags": [
+          "samples"
+        ],
+        "summary": "Get Sample Graph",
+        "description": "Return the sample graph projection.",
+        "operationId": "get_sample_graph_samples__sample_id__graph_get",
+        "parameters": [
+          {
+            "name": "sample_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sample Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SampleGraphView"
                 }
               }
             }
@@ -282,11 +366,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ExperimentSummaryDto"
-                  },
-                  "title": "Response List Experiments Experiments Get"
+                  "$ref": "#/components/schemas/ExperimentListView"
                 }
               }
             }
@@ -304,22 +384,22 @@
         }
       }
     },
-    "/experiments/{definition_id}": {
+    "/experiments/{experiment_id}": {
       "get": {
         "tags": [
           "experiments"
         ],
         "summary": "Get Experiment",
-        "operationId": "get_experiment_experiments__definition_id__get",
+        "operationId": "get_experiment_experiments__experiment_id__get",
         "parameters": [
           {
-            "name": "definition_id",
+            "name": "experiment_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "format": "uuid",
-              "title": "Definition Id"
+              "title": "Experiment Id"
             }
           }
         ],
@@ -329,7 +409,93 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ExperimentDetailDto"
+                  "$ref": "#/components/schemas/ExperimentDetailView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/experiments/{experiment_id}/samples": {
+      "get": {
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Get Experiment Samples",
+        "operationId": "get_experiment_samples_experiments__experiment_id__samples_get",
+        "parameters": [
+          {
+            "name": "experiment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Experiment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExperimentSamplesView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/experiments/{experiment_id}/sampler-invocations": {
+      "get": {
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Get Experiment Sampler Invocations",
+        "operationId": "get_experiment_sampler_invocations_experiments__experiment_id__sampler_invocations_get",
+        "parameters": [
+          {
+            "name": "experiment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Experiment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SamplerInvocationsView"
                 }
               }
             }
@@ -514,6 +680,50 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rollouts/batches/{batch_id}": {
+      "get": {
+        "tags": [
+          "rollouts"
+        ],
+        "summary": "Get Rollout Batch",
+        "description": "Load durable trainer batch membership by sample id.",
+        "operationId": "get_rollout_batch_rollouts_batches__batch_id__get",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RolloutBatchSummary"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1017,6 +1227,45 @@
         "title": "ContextPartChunkLog",
         "description": "Core-enriched context stream item suitable for API/dashboard projection."
       },
+      "EnvironmentContributionView": {
+        "properties": {
+          "environmentId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Environmentid"
+          },
+          "environmentName": {
+            "type": "string",
+            "title": "Environmentname"
+          },
+          "sourceMode": {
+            "type": "string",
+            "title": "Sourcemode"
+          },
+          "sampleCount": {
+            "type": "integer",
+            "title": "Samplecount"
+          },
+          "selectedCount": {
+            "type": "integer",
+            "title": "Selectedcount"
+          },
+          "sourceMetadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Sourcemetadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "environmentId",
+          "environmentName",
+          "sourceMode",
+          "sampleCount",
+          "selectedCount"
+        ],
+        "title": "EnvironmentContributionView"
+      },
       "EpisodeFailure": {
         "properties": {
           "sample_id": {
@@ -1037,104 +1286,15 @@
         "title": "EpisodeFailure",
         "description": "An episode that didn't complete successfully."
       },
-      "ExperimentAnalyticsDto": {
+      "ExperimentDetailView": {
         "properties": {
-          "total_runs": {
-            "type": "integer",
-            "title": "Total Runs",
-            "default": 0
-          },
-          "status_counts": {
-            "$ref": "#/components/schemas/ExperimentStatusCountsDto"
-          },
-          "average_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Average Score"
-          },
-          "average_duration_ms": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Average Duration Ms"
-          },
-          "average_tasks": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Average Tasks"
-          },
-          "total_cost_usd": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total Cost Usd"
-          },
-          "latest_activity_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Latest Activity At"
-          },
-          "error_count": {
-            "type": "integer",
-            "title": "Error Count",
-            "default": 0
-          }
-        },
-        "type": "object",
-        "title": "ExperimentAnalyticsDto"
-      },
-      "ExperimentDetailDto": {
-        "properties": {
-          "definition_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Definition Id"
+          "experimentId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Experimentid"
           },
           "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
             "title": "Name"
           },
           "description": {
@@ -1148,213 +1308,63 @@
             ],
             "title": "Description"
           },
-          "benchmark_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Benchmark Type"
-          },
-          "experiment": {
-            "$ref": "#/components/schemas/ExperimentSummaryDto"
-          },
-          "runs": {
+          "environments": {
             "items": {
-              "$ref": "#/components/schemas/ExperimentRunRowDto"
+              "$ref": "#/components/schemas/EnvironmentContributionView"
             },
             "type": "array",
-            "title": "Runs"
+            "title": "Environments"
           },
-          "analytics": {
-            "$ref": "#/components/schemas/ExperimentAnalyticsDto"
+          "sampleCount": {
+            "type": "integer",
+            "title": "Samplecount"
           },
-          "sample_selection": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Sample Selection"
+          "samples": {
+            "items": {
+              "$ref": "#/components/schemas/ExperimentSampleSummaryView"
+            },
+            "type": "array",
+            "title": "Samples"
           },
-          "design": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Design"
+          "samplerInvocations": {
+            "items": {
+              "$ref": "#/components/schemas/SamplerInvocationView"
+            },
+            "type": "array",
+            "title": "Samplerinvocations"
           },
           "metadata": {
             "additionalProperties": true,
             "type": "object",
             "title": "Metadata"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
           }
         },
         "type": "object",
         "required": [
-          "experiment"
+          "experimentId",
+          "name",
+          "sampleCount",
+          "createdAt"
         ],
-        "title": "ExperimentDetailDto"
+        "title": "ExperimentDetailView"
       },
-      "ExperimentRunMetricsDto": {
+      "ExperimentListView": {
         "properties": {
-          "sample_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Sample Id"
-          },
-          "run_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Run Name"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "sample_label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sample Label"
-          },
-          "instance_key": {
-            "type": "string",
-            "title": "Instance Key"
-          },
-          "score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Score"
-          },
-          "return_value": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Return Value"
-          },
-          "duration_ms": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Duration Ms"
-          },
-          "total_tasks": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total Tasks"
-          },
-          "tool_call_count": {
-            "type": "integer",
-            "title": "Tool Call Count",
-            "default": 0
-          },
-          "total_tokens": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total Tokens"
-          },
-          "token_breakdown": {
-            "additionalProperties": {
-              "type": "integer"
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExperimentDetailView"
             },
-            "type": "object",
-            "title": "Token Breakdown"
-          },
-          "total_cost_usd": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total Cost Usd"
-          },
-          "cost_observed": {
-            "type": "boolean",
-            "title": "Cost Observed",
-            "default": false
-          },
-          "model_target": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model Target"
-          },
-          "evaluator_slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Evaluator Slug"
-          },
-          "error_summary": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error Summary"
+            "type": "array",
+            "title": "Items"
           }
         },
         "type": "object",
-        "required": [
-          "sample_id",
-          "status",
-          "instance_key"
-        ],
-        "title": "ExperimentRunMetricsDto"
+        "title": "ExperimentListView"
       },
       "ExperimentRunRequest": {
         "properties": {
@@ -1417,168 +1427,6 @@
         ],
         "title": "ExperimentRunResult"
       },
-      "ExperimentRunRowDto": {
-        "properties": {
-          "sample_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Sample Id"
-          },
-          "definition_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Definition Id"
-          },
-          "benchmark_type": {
-            "type": "string",
-            "title": "Benchmark Type"
-          },
-          "instance_key": {
-            "type": "string",
-            "title": "Instance Key"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "started_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Started At"
-          },
-          "completed_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completed At"
-          },
-          "evaluator_slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Evaluator Slug"
-          },
-          "model_target": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model Target"
-          },
-          "worker_team": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Worker Team"
-          },
-          "seed": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Seed"
-          },
-          "running_time_ms": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Running Time Ms"
-          },
-          "final_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Final Score"
-          },
-          "total_tasks": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total Tasks"
-          },
-          "total_cost_usd": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total Cost Usd"
-          },
-          "error_message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error Message"
-          },
-          "metrics": {
-            "$ref": "#/components/schemas/ExperimentRunMetricsDto"
-          }
-        },
-        "type": "object",
-        "required": [
-          "sample_id",
-          "definition_id",
-          "benchmark_type",
-          "instance_key",
-          "status",
-          "created_at",
-          "metrics"
-        ],
-        "title": "ExperimentRunRowDto"
-      },
       "ExperimentRunSlotRequest": {
         "properties": {
           "worker_slug": {
@@ -1597,223 +1445,75 @@
         ],
         "title": "ExperimentRunSlotRequest"
       },
-      "ExperimentStatusCountsDto": {
+      "ExperimentSampleSummaryView": {
         "properties": {
-          "pending": {
-            "type": "integer",
-            "title": "Pending",
-            "default": 0
-          },
-          "executing": {
-            "type": "integer",
-            "title": "Executing",
-            "default": 0
-          },
-          "evaluating": {
-            "type": "integer",
-            "title": "Evaluating",
-            "default": 0
-          },
-          "completed": {
-            "type": "integer",
-            "title": "Completed",
-            "default": 0
-          },
-          "failed": {
-            "type": "integer",
-            "title": "Failed",
-            "default": 0
-          },
-          "cancelled": {
-            "type": "integer",
-            "title": "Cancelled",
-            "default": 0
-          }
-        },
-        "type": "object",
-        "title": "ExperimentStatusCountsDto"
-      },
-      "ExperimentSummaryDto": {
-        "properties": {
-          "definition_id": {
+          "sampleId": {
             "type": "string",
             "format": "uuid",
-            "title": "Definition Id"
+            "title": "Sampleid"
           },
-          "name": {
+          "experimentId": {
             "type": "string",
-            "title": "Name"
+            "format": "uuid",
+            "title": "Experimentid"
           },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "benchmark_type": {
+          "environmentId": {
             "type": "string",
-            "title": "Benchmark Type"
+            "format": "uuid",
+            "title": "Environmentid"
           },
-          "sample_count": {
-            "type": "integer",
-            "title": "Sample Count"
+          "environmentName": {
+            "type": "string",
+            "title": "Environmentname"
+          },
+          "sampleKey": {
+            "type": "string",
+            "title": "Samplekey"
+          },
+          "sampleRef": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Sampleref"
+          },
+          "sourceMetadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Sourcemetadata"
           },
           "status": {
             "type": "string",
             "title": "Status"
           },
-          "default_worker_team": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Default Worker Team"
-          },
-          "default_evaluator_slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Default Evaluator Slug"
-          },
-          "default_model_target": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Default Model Target"
-          },
-          "created_by": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created By"
-          },
-          "created_at": {
+          "createdAt": {
             "type": "string",
             "format": "date-time",
-            "title": "Created At"
-          },
-          "started_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Started At"
-          },
-          "completed_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completed At"
-          },
-          "run_count": {
-            "type": "integer",
-            "title": "Run Count",
-            "default": 0
-          },
-          "status_counts": {
-            "$ref": "#/components/schemas/ExperimentStatusCountsDto"
-          },
-          "failure_count": {
-            "type": "integer",
-            "title": "Failure Count",
-            "default": 0
-          },
-          "latest_activity_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Latest Activity At"
-          },
-          "average_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Average Score"
-          },
-          "average_duration_ms": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Average Duration Ms"
-          },
-          "average_tasks": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Average Tasks"
-          },
-          "total_cost_usd": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total Cost Usd"
+            "title": "Createdat"
           }
         },
         "type": "object",
         "required": [
-          "definition_id",
-          "name",
-          "benchmark_type",
-          "sample_count",
+          "sampleId",
+          "experimentId",
+          "environmentId",
+          "environmentName",
+          "sampleKey",
           "status",
-          "created_at"
+          "createdAt"
         ],
-        "title": "ExperimentSummaryDto"
+        "title": "ExperimentSampleSummaryView"
+      },
+      "ExperimentSamplesView": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExperimentSampleSummaryView"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "title": "ExperimentSamplesView"
       },
       "HTTPValidationError": {
         "properties": {
@@ -2031,6 +1731,58 @@
         ],
         "title": "ResetRequest"
       },
+      "RolloutBatchSummary": {
+        "properties": {
+          "batch_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Batch Id"
+          },
+          "sample_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Sample Ids"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RolloutStatus"
+          },
+          "experiment_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiment Id"
+          },
+          "sampler_invocation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sampler Invocation Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "batch_id",
+          "sample_ids",
+          "status"
+        ],
+        "title": "RolloutBatchSummary",
+        "description": "Durable trainer batch membership exposed by sample id."
+      },
       "RolloutStatus": {
         "type": "string",
         "enum": [
@@ -2041,6 +1793,168 @@
           "cancelled"
         ],
         "title": "RolloutStatus"
+      },
+      "SampleAnnotationDeletedEventView": {
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Eventid"
+          },
+          "sampleId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sampleid"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "eventType": {
+            "type": "string",
+            "const": "annotation.deleted",
+            "title": "Eventtype"
+          },
+          "targetType": {
+            "type": "string",
+            "title": "Targettype"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Targetid"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonObject",
+            "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+          }
+        },
+        "type": "object",
+        "required": [
+          "eventId",
+          "sampleId",
+          "timestamp",
+          "eventType",
+          "targetType",
+          "targetId",
+          "key"
+        ],
+        "title": "SampleAnnotationDeletedEventView"
+      },
+      "SampleAnnotationSetEventView": {
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Eventid"
+          },
+          "sampleId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sampleid"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "eventType": {
+            "type": "string",
+            "const": "annotation.set",
+            "title": "Eventtype"
+          },
+          "targetType": {
+            "type": "string",
+            "title": "Targettype"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Targetid"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "value": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonObject",
+            "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+          }
+        },
+        "type": "object",
+        "required": [
+          "eventId",
+          "sampleId",
+          "timestamp",
+          "eventType",
+          "targetType",
+          "targetId",
+          "key"
+        ],
+        "title": "SampleAnnotationSetEventView"
+      },
+      "SampleAnnotationUpdatedEventView": {
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Eventid"
+          },
+          "sampleId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sampleid"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "eventType": {
+            "type": "string",
+            "const": "annotation.updated",
+            "title": "Eventtype"
+          },
+          "targetType": {
+            "type": "string",
+            "title": "Targettype"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Targetid"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "value": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonObject",
+            "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+          }
+        },
+        "type": "object",
+        "required": [
+          "eventId",
+          "sampleId",
+          "timestamp",
+          "eventType",
+          "targetType",
+          "targetId",
+          "key"
+        ],
+        "title": "SampleAnnotationUpdatedEventView"
       },
       "SampleCommunicationMessageDto": {
         "properties": {
@@ -2284,6 +2198,320 @@
         ],
         "title": "SampleContextEventDto"
       },
+      "SampleDetailView": {
+        "properties": {
+          "sampleId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sampleid"
+          },
+          "experimentId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Experimentid"
+          },
+          "environmentId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Environmentid"
+          },
+          "environmentName": {
+            "type": "string",
+            "title": "Environmentname"
+          },
+          "sampleKey": {
+            "type": "string",
+            "title": "Samplekey"
+          },
+          "sampleRef": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Sampleref"
+          },
+          "sourceMetadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Sourcemetadata"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "completedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sampleId",
+          "experimentId",
+          "environmentId",
+          "environmentName",
+          "sampleKey",
+          "status",
+          "createdAt"
+        ],
+        "title": "SampleDetailView"
+      },
+      "SampleEdgeAddedEventView": {
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Eventid"
+          },
+          "sampleId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sampleid"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "eventType": {
+            "type": "string",
+            "const": "edge.added",
+            "title": "Eventtype"
+          },
+          "targetType": {
+            "type": "string",
+            "const": "edge",
+            "title": "Targettype"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Targetid"
+          },
+          "sourceTaskId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sourcetaskid"
+          },
+          "targetTaskId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Targettaskid"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "edge": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonObject",
+            "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+          }
+        },
+        "type": "object",
+        "required": [
+          "eventId",
+          "sampleId",
+          "timestamp",
+          "eventType",
+          "targetType",
+          "targetId",
+          "sourceTaskId",
+          "targetTaskId"
+        ],
+        "title": "SampleEdgeAddedEventView"
+      },
+      "SampleEdgeRemovedEventView": {
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Eventid"
+          },
+          "sampleId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sampleid"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "eventType": {
+            "type": "string",
+            "const": "edge.removed",
+            "title": "Eventtype"
+          },
+          "targetType": {
+            "type": "string",
+            "const": "edge",
+            "title": "Targettype"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Targetid"
+          },
+          "sourceTaskId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sourcetaskid"
+          },
+          "targetTaskId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Targettaskid"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonObject",
+            "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+          }
+        },
+        "type": "object",
+        "required": [
+          "eventId",
+          "sampleId",
+          "timestamp",
+          "eventType",
+          "targetType",
+          "targetId",
+          "sourceTaskId",
+          "targetTaskId"
+        ],
+        "title": "SampleEdgeRemovedEventView"
+      },
+      "SampleEdgeStatusChangedEventView": {
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Eventid"
+          },
+          "sampleId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sampleid"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "eventType": {
+            "type": "string",
+            "const": "edge.status_changed",
+            "title": "Eventtype"
+          },
+          "targetType": {
+            "type": "string",
+            "const": "edge",
+            "title": "Targettype"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Targetid"
+          },
+          "sourceTaskId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sourcetaskid"
+          },
+          "targetTaskId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Targettaskid"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonObject",
+            "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+          }
+        },
+        "type": "object",
+        "required": [
+          "eventId",
+          "sampleId",
+          "timestamp",
+          "eventType",
+          "targetType",
+          "targetId",
+          "sourceTaskId",
+          "targetTaskId",
+          "status"
+        ],
+        "title": "SampleEdgeStatusChangedEventView"
+      },
       "SampleEvaluationCriterionDto": {
         "properties": {
           "id": {
@@ -2451,6 +2679,244 @@
         ],
         "title": "SampleEvaluationCriterionDto"
       },
+      "SampleEvaluatorAddedEventView": {
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Eventid"
+          },
+          "sampleId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sampleid"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "eventType": {
+            "type": "string",
+            "const": "evaluator.added",
+            "title": "Eventtype"
+          },
+          "targetType": {
+            "type": "string",
+            "const": "task",
+            "title": "Targettype"
+          },
+          "targetId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targetid"
+          },
+          "evaluatorSlug": {
+            "type": "string",
+            "title": "Evaluatorslug"
+          },
+          "evaluatorType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluatortype"
+          },
+          "evaluator": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonObject",
+            "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+          }
+        },
+        "type": "object",
+        "required": [
+          "eventId",
+          "sampleId",
+          "timestamp",
+          "eventType",
+          "targetType",
+          "evaluatorSlug"
+        ],
+        "title": "SampleEvaluatorAddedEventView"
+      },
+      "SampleEvaluatorRemovedEventView": {
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Eventid"
+          },
+          "sampleId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sampleid"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "eventType": {
+            "type": "string",
+            "const": "evaluator.removed",
+            "title": "Eventtype"
+          },
+          "targetType": {
+            "type": "string",
+            "const": "task",
+            "title": "Targettype"
+          },
+          "targetId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targetid"
+          },
+          "evaluatorSlug": {
+            "type": "string",
+            "title": "Evaluatorslug"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonObject",
+            "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+          }
+        },
+        "type": "object",
+        "required": [
+          "eventId",
+          "sampleId",
+          "timestamp",
+          "eventType",
+          "targetType",
+          "evaluatorSlug"
+        ],
+        "title": "SampleEvaluatorRemovedEventView"
+      },
+      "SampleEventsView": {
+        "properties": {
+          "items": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SampleStatusChangedEventView"
+                },
+                {
+                  "$ref": "#/components/schemas/SampleTaskAddedEventView"
+                },
+                {
+                  "$ref": "#/components/schemas/SampleTaskRemovedEventView"
+                },
+                {
+                  "$ref": "#/components/schemas/SampleTaskStatusChangedEventView"
+                },
+                {
+                  "$ref": "#/components/schemas/SampleEdgeAddedEventView"
+                },
+                {
+                  "$ref": "#/components/schemas/SampleEdgeRemovedEventView"
+                },
+                {
+                  "$ref": "#/components/schemas/SampleEdgeStatusChangedEventView"
+                },
+                {
+                  "$ref": "#/components/schemas/SampleWorkerAddedEventView"
+                },
+                {
+                  "$ref": "#/components/schemas/SampleWorkerRemovedEventView"
+                },
+                {
+                  "$ref": "#/components/schemas/SampleEvaluatorAddedEventView"
+                },
+                {
+                  "$ref": "#/components/schemas/SampleEvaluatorRemovedEventView"
+                },
+                {
+                  "$ref": "#/components/schemas/SampleSandboxAddedEventView"
+                },
+                {
+                  "$ref": "#/components/schemas/SampleSandboxRemovedEventView"
+                },
+                {
+                  "$ref": "#/components/schemas/SampleAnnotationSetEventView"
+                },
+                {
+                  "$ref": "#/components/schemas/SampleAnnotationUpdatedEventView"
+                },
+                {
+                  "$ref": "#/components/schemas/SampleAnnotationDeletedEventView"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "eventType",
+                "mapping": {
+                  "annotation.deleted": "#/components/schemas/SampleAnnotationDeletedEventView",
+                  "annotation.set": "#/components/schemas/SampleAnnotationSetEventView",
+                  "annotation.updated": "#/components/schemas/SampleAnnotationUpdatedEventView",
+                  "edge.added": "#/components/schemas/SampleEdgeAddedEventView",
+                  "edge.removed": "#/components/schemas/SampleEdgeRemovedEventView",
+                  "edge.status_changed": "#/components/schemas/SampleEdgeStatusChangedEventView",
+                  "evaluator.added": "#/components/schemas/SampleEvaluatorAddedEventView",
+                  "evaluator.removed": "#/components/schemas/SampleEvaluatorRemovedEventView",
+                  "sample.status_changed": "#/components/schemas/SampleStatusChangedEventView",
+                  "sandbox.added": "#/components/schemas/SampleSandboxAddedEventView",
+                  "sandbox.removed": "#/components/schemas/SampleSandboxRemovedEventView",
+                  "task.added": "#/components/schemas/SampleTaskAddedEventView",
+                  "task.removed": "#/components/schemas/SampleTaskRemovedEventView",
+                  "task.status_changed": "#/components/schemas/SampleTaskStatusChangedEventView",
+                  "worker.added": "#/components/schemas/SampleWorkerAddedEventView",
+                  "worker.removed": "#/components/schemas/SampleWorkerRemovedEventView"
+                }
+              }
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SampleEventsView"
+      },
       "SampleExecutionAttemptDto": {
         "properties": {
           "id": {
@@ -2578,6 +3044,141 @@
         ],
         "title": "SampleExecutionAttemptDto"
       },
+      "SampleGraphEdgeView": {
+        "properties": {
+          "edgeId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Edgeid"
+          },
+          "sourceTaskId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sourcetaskid"
+          },
+          "targetTaskId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Targettaskid"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "edgeId",
+          "sourceTaskId",
+          "targetTaskId",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "SampleGraphEdgeView"
+      },
+      "SampleGraphNodeView": {
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Taskid"
+          },
+          "taskSlug": {
+            "type": "string",
+            "title": "Taskslug"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "parentTaskId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parenttaskid"
+          },
+          "level": {
+            "type": "integer",
+            "title": "Level",
+            "default": 0
+          },
+          "assignedWorkerSlug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignedworkerslug"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "taskId",
+          "taskSlug",
+          "description",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "SampleGraphNodeView"
+      },
+      "SampleGraphView": {
+        "properties": {
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/SampleGraphNodeView"
+            },
+            "type": "array",
+            "title": "Nodes"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/SampleGraphEdgeView"
+            },
+            "type": "array",
+            "title": "Edges"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SampleGraphView"
+      },
       "SampleResourceDto": {
         "properties": {
           "id": {
@@ -2628,45 +3229,34 @@
         ],
         "title": "SampleResourceDto"
       },
-      "SampleRuntimeEventView": {
+      "SampleSandboxAddedEventView": {
         "properties": {
-          "id": {
+          "eventId": {
             "type": "string",
             "format": "uuid",
-            "title": "Id"
+            "title": "Eventid"
           },
-          "sample_id": {
+          "sampleId": {
             "type": "string",
             "format": "uuid",
-            "title": "Sample Id"
+            "title": "Sampleid"
           },
-          "event_timestamp": {
+          "timestamp": {
             "type": "string",
             "format": "date-time",
-            "title": "Event Timestamp"
+            "title": "Timestamp"
           },
-          "table": {
+          "eventType": {
             "type": "string",
-            "enum": [
-              "sample_status_events",
-              "sample_task_events",
-              "sample_edge_events",
-              "sample_worker_events",
-              "sample_evaluator_events",
-              "sample_sandbox_events",
-              "sample_annotation_events"
-            ],
-            "title": "Table"
+            "const": "sandbox.added",
+            "title": "Eventtype"
           },
-          "event_type": {
+          "targetType": {
             "type": "string",
-            "title": "Event Type"
+            "const": "task",
+            "title": "Targettype"
           },
-          "target_type": {
-            "type": "string",
-            "title": "Target Type"
-          },
-          "target_id": {
+          "targetId": {
             "anyOf": [
               {
                 "type": "string",
@@ -2676,24 +3266,52 @@
                 "type": "null"
               }
             ],
-            "title": "Target Id"
+            "title": "Targetid"
+          },
+          "sandboxSlug": {
+            "type": "string",
+            "title": "Sandboxslug"
+          },
+          "sandboxType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sandboxtype"
+          },
+          "sandbox": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
           },
           "payload": {
             "$ref": "#/components/schemas/JsonObject",
-            "description": "Typed event payload copied from the source sample runtime WAL row."
+            "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
           }
         },
         "type": "object",
         "required": [
-          "id",
-          "sample_id",
-          "event_timestamp",
-          "table",
-          "event_type",
-          "target_type",
-          "target_id"
+          "eventId",
+          "sampleId",
+          "timestamp",
+          "eventType",
+          "targetType",
+          "sandboxSlug"
         ],
-        "title": "SampleRuntimeEventView"
+        "title": "SampleSandboxAddedEventView"
       },
       "SampleSandboxCommandDto": {
         "properties": {
@@ -2835,6 +3453,76 @@
         ],
         "title": "SampleSandboxDto"
       },
+      "SampleSandboxRemovedEventView": {
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Eventid"
+          },
+          "sampleId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sampleid"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "eventType": {
+            "type": "string",
+            "const": "sandbox.removed",
+            "title": "Eventtype"
+          },
+          "targetType": {
+            "type": "string",
+            "const": "task",
+            "title": "Targettype"
+          },
+          "targetId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targetid"
+          },
+          "sandboxSlug": {
+            "type": "string",
+            "title": "Sandboxslug"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonObject",
+            "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+          }
+        },
+        "type": "object",
+        "required": [
+          "eventId",
+          "sampleId",
+          "timestamp",
+          "eventType",
+          "targetType",
+          "sandboxSlug"
+        ],
+        "title": "SampleSandboxRemovedEventView"
+      },
       "SampleSnapshotDto": {
         "properties": {
           "id": {
@@ -2842,7 +3530,14 @@
             "title": "Id"
           },
           "definitionId": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Definitionid"
           },
           "name": {
@@ -3018,7 +3713,6 @@
         "type": "object",
         "required": [
           "id",
-          "definitionId",
           "name",
           "status"
         ],
@@ -3098,6 +3792,70 @@
         ],
         "title": "SampleSnapshotMetricsDto"
       },
+      "SampleStatusChangedEventView": {
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Eventid"
+          },
+          "sampleId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sampleid"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "eventType": {
+            "type": "string",
+            "const": "sample.status_changed",
+            "title": "Eventtype"
+          },
+          "targetType": {
+            "type": "string",
+            "const": "sample",
+            "title": "Targettype"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Targetid"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonObject",
+            "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+          }
+        },
+        "type": "object",
+        "required": [
+          "eventId",
+          "sampleId",
+          "timestamp",
+          "eventType",
+          "targetType",
+          "targetId",
+          "status"
+        ],
+        "title": "SampleStatusChangedEventView"
+      },
       "SampleSummaryDto": {
         "properties": {
           "id": {
@@ -3173,8 +3931,15 @@
             "title": "Duration Seconds"
           },
           "definition_id": {
-            "type": "string",
-            "format": "uuid",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Definition Id"
           },
           "definition_name": {
@@ -3324,12 +4089,95 @@
           "id",
           "name",
           "status",
-          "definition_id",
           "benchmark_type",
           "instance_key",
           "sample_label"
         ],
         "title": "SampleSummaryDto"
+      },
+      "SampleTaskAddedEventView": {
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Eventid"
+          },
+          "sampleId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sampleid"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "eventType": {
+            "type": "string",
+            "const": "task.added",
+            "title": "Eventtype"
+          },
+          "targetType": {
+            "type": "string",
+            "const": "task",
+            "title": "Targettype"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Targetid"
+          },
+          "taskSlug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taskslug"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "task": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonObject",
+            "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+          }
+        },
+        "type": "object",
+        "required": [
+          "eventId",
+          "sampleId",
+          "timestamp",
+          "eventType",
+          "targetType",
+          "targetId"
+        ],
+        "title": "SampleTaskAddedEventView"
       },
       "SampleTaskDto": {
         "properties": {
@@ -3530,6 +4378,374 @@
           "createdAt"
         ],
         "title": "SampleTaskEvaluationDto"
+      },
+      "SampleTaskRemovedEventView": {
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Eventid"
+          },
+          "sampleId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sampleid"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "eventType": {
+            "type": "string",
+            "const": "task.removed",
+            "title": "Eventtype"
+          },
+          "targetType": {
+            "type": "string",
+            "const": "task",
+            "title": "Targettype"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Targetid"
+          },
+          "taskSlug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taskslug"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonObject",
+            "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+          }
+        },
+        "type": "object",
+        "required": [
+          "eventId",
+          "sampleId",
+          "timestamp",
+          "eventType",
+          "targetType",
+          "targetId"
+        ],
+        "title": "SampleTaskRemovedEventView"
+      },
+      "SampleTaskStatusChangedEventView": {
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Eventid"
+          },
+          "sampleId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sampleid"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "eventType": {
+            "type": "string",
+            "const": "task.status_changed",
+            "title": "Eventtype"
+          },
+          "targetType": {
+            "type": "string",
+            "const": "task",
+            "title": "Targettype"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Targetid"
+          },
+          "taskSlug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taskslug"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonObject",
+            "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+          }
+        },
+        "type": "object",
+        "required": [
+          "eventId",
+          "sampleId",
+          "timestamp",
+          "eventType",
+          "targetType",
+          "targetId",
+          "status"
+        ],
+        "title": "SampleTaskStatusChangedEventView"
+      },
+      "SampleWorkerAddedEventView": {
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Eventid"
+          },
+          "sampleId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sampleid"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "eventType": {
+            "type": "string",
+            "const": "worker.added",
+            "title": "Eventtype"
+          },
+          "targetType": {
+            "type": "string",
+            "const": "task",
+            "title": "Targettype"
+          },
+          "targetId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targetid"
+          },
+          "workerSlug": {
+            "type": "string",
+            "title": "Workerslug"
+          },
+          "workerType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workertype"
+          },
+          "modelTarget": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modeltarget"
+          },
+          "worker": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonObject",
+            "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+          }
+        },
+        "type": "object",
+        "required": [
+          "eventId",
+          "sampleId",
+          "timestamp",
+          "eventType",
+          "targetType",
+          "workerSlug"
+        ],
+        "title": "SampleWorkerAddedEventView"
+      },
+      "SampleWorkerRemovedEventView": {
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Eventid"
+          },
+          "sampleId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sampleid"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "eventType": {
+            "type": "string",
+            "const": "worker.removed",
+            "title": "Eventtype"
+          },
+          "targetType": {
+            "type": "string",
+            "const": "task",
+            "title": "Targettype"
+          },
+          "targetId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targetid"
+          },
+          "workerSlug": {
+            "type": "string",
+            "title": "Workerslug"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonObject",
+            "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+          }
+        },
+        "type": "object",
+        "required": [
+          "eventId",
+          "sampleId",
+          "timestamp",
+          "eventType",
+          "targetType",
+          "workerSlug"
+        ],
+        "title": "SampleWorkerRemovedEventView"
+      },
+      "SamplerInvocationView": {
+        "properties": {
+          "samplerInvocationId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Samplerinvocationid"
+          },
+          "samplerName": {
+            "type": "string",
+            "title": "Samplername"
+          },
+          "requestedK": {
+            "type": "integer",
+            "title": "Requestedk"
+          },
+          "candidatePoolSize": {
+            "type": "integer",
+            "title": "Candidatepoolsize"
+          },
+          "selectedCount": {
+            "type": "integer",
+            "title": "Selectedcount"
+          },
+          "samplerConfig": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Samplerconfig"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "samplerInvocationId",
+          "samplerName",
+          "requestedK",
+          "candidatePoolSize",
+          "selectedCount",
+          "createdAt"
+        ],
+        "title": "SamplerInvocationView"
+      },
+      "SamplerInvocationsView": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SamplerInvocationView"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "title": "SamplerInvocationsView"
       },
       "SeedRunRequest": {
         "properties": {

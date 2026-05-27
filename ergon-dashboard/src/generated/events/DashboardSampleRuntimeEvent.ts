@@ -1,3 +1,6 @@
-import { z } from "zod"
+import { z } from "zod";
+import { SampleRuntimeEventViewSchema } from "@/lib/contracts/rest";
 
-export const DashboardSampleRuntimeEventSchema = z.object({ "event": z.any() }).catchall(z.any())
+export const DashboardSampleRuntimeEventSchema = z.object({
+  event: SampleRuntimeEventViewSchema,
+}).catchall(z.any());

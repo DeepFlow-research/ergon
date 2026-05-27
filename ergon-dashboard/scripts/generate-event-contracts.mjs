@@ -50,6 +50,15 @@ export const DashboardGraphMutationEventSchema = z.object({
 }).catchall(z.any());
 `;
   }
+  if (entry.modelName === "DashboardSampleRuntimeEvent") {
+    return `import { z } from "zod";
+import { SampleRuntimeEventViewSchema } from "@/lib/contracts/rest";
+
+export const DashboardSampleRuntimeEventSchema = z.object({
+  event: SampleRuntimeEventViewSchema,
+}).catchall(z.any());
+`;
+  }
   return null;
 }
 

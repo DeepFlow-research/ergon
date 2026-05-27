@@ -1,8 +1,16 @@
 from datetime import UTC, datetime, timedelta
 import json
+from typing import Literal, get_args, get_origin
 from uuid import uuid4
 
 import pytest
+from pydantic import TypeAdapter
+from ergon_core.core.application.samples.event_views import (
+    ALL_SAMPLE_RUNTIME_EVENT_TYPES,
+    ROW_MODEL_EVENT_TYPES,
+    VIEW_EVENT_TYPES,
+    SampleRuntimeEventView,
+)
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.experiments.models import ExperimentEnvironmentRow, ExperimentRow
 from ergon_core.core.persistence.graph.models import SampleGraphNode
@@ -13,6 +21,17 @@ from ergon_core.core.views.samples import service as module
 from ergon_core.core.views.samples.service import SampleReadService, SampleSnapshotReadService
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
+
+
+def _sample_runtime_event_view_types() -> tuple[type, ...]:
+    union_type = get_args(SampleRuntimeEventView)[0]
+    return get_args(union_type)
+
+
+def _literal_values(annotation: object) -> set[str]:
+    if get_origin(annotation) is Literal:
+        return set(get_args(annotation))
+    return set()
 
 
 @pytest.fixture()
@@ -281,3 +300,22 @@ def test_sample_state_uses_typed_wal_and_graph_projection(session_factory) -> No
     dumped = state.model_dump(mode="json", by_alias=True)
     assert "GraphMutation" not in json.dumps(dumped)
     assert "runId" not in json.dumps(dumped)
+
+
+def test_sample_runtime_event_view_union_covers_every_typed_wal_event() -> None:
+    union_event_types = {
+        event_type
+        for view_type in _sample_runtime_event_view_types()
+        for event_type in _literal_values(view_type.model_fields["event_type"].annotation)
+    }
+
+    assert ROW_MODEL_EVENT_TYPES == ALL_SAMPLE_RUNTIME_EVENT_TYPES
+    assert VIEW_EVENT_TYPES == ALL_SAMPLE_RUNTIME_EVENT_TYPES
+    assert union_event_types == ALL_SAMPLE_RUNTIME_EVENT_TYPES
+
+
+def test_sample_runtime_event_view_is_discriminated_by_event_type() -> None:
+    schema = TypeAdapter(SampleRuntimeEventView).json_schema(by_alias=True)
+
+    assert schema["discriminator"]["propertyName"] == "eventType"
+    assert set(schema["discriminator"]["mapping"]) == ALL_SAMPLE_RUNTIME_EVENT_TYPES

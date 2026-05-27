@@ -22,7 +22,7 @@ from ergon_core.core.application.runtime.models import (
     GraphEdgeDto,
     GraphNodeDto,
 )
-from ergon_core.core.application.samples.events import SampleRuntimeEventView
+from ergon_core.core.application.samples.event_views import SampleTaskAddedEventView
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import (
     SWEBenchInstance,
     SWEBenchTaskPayload,
@@ -57,7 +57,7 @@ def test_dashboard_context_event_field_docs_are_schema_metadata() -> None:
 def test_graph_dto_field_docs_are_schema_metadata() -> None:
     assert _description(GraphNodeDto, "status")
     assert _description(GraphEdgeDto, "status")
-    assert _description(SampleRuntimeEventView, "payload")
+    assert _description(SampleTaskAddedEventView, "payload")
 
 
 def test_sqlmodel_field_docs_are_schema_metadata() -> None:

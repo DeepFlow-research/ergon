@@ -10,6 +10,9 @@ from typing import Any
 from uuid import UUID
 
 from ergon_core.core.application.evaluation.summary import EvalCriterionStatus
+from ergon_core.core.application.samples.event_views import (
+    SampleRuntimeEventView as SampleEventView,
+)
 from ergon_core.core.shared.context_parts import ContextEventType, ContextPartChunkLog
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -264,16 +267,6 @@ class SampleDetailView(CamelModel):
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
-
-
-class SampleEventView(CamelModel):
-    event_id: UUID
-    sample_id: UUID
-    event_type: str
-    target_type: str
-    target_id: UUID | None = None
-    timestamp: datetime
-    payload: dict[str, Any] = Field(default_factory=dict)
 
 
 class SampleGraphNodeView(CamelModel):

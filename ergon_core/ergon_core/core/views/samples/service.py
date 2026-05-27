@@ -8,7 +8,6 @@ from uuid import UUID
 
 from ergon_core.core.views.samples.models import (
     SampleDetailView,
-    SampleEventView,
     SampleEventsView,
     SampleGraphEdgeView,
     SampleGraphNodeView,
@@ -28,10 +27,10 @@ from ergon_core.core.persistence.graph.models import (
     SampleGraphEdge,
     SampleGraphNode,
 )
-from ergon_core.core.application.samples.events import (
-    SampleRuntimeEventReadService,
+from ergon_core.core.application.samples.event_views import (
     SampleRuntimeEventView,
 )
+from ergon_core.core.application.samples.events import SampleRuntimeEventReadService
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import (
@@ -326,7 +325,7 @@ class SampleReadService:
             if session.get(SampleRecord, sample_id) is None:
                 return None
             events = SampleRuntimeEventReadService().list_events(session, sample_id)
-            return SampleEventsView(items=[_sample_event_view(event) for event in events])
+            return SampleEventsView(items=events)
 
     def get_sample_graph(self, sample_id: UUID) -> SampleGraphView | None:
         with self._session_scope() as session:
@@ -349,7 +348,7 @@ class SampleReadService:
                 environment_id=detail.environment_id,
                 environment_name=detail.environment_name,
                 detail=detail,
-                events=[_sample_event_view(event) for event in events],
+                events=events,
                 graph=graph,
             )
 
@@ -402,18 +401,6 @@ def _sample_detail_view(
         created_at=sample.created_at,
         started_at=sample.started_at,
         completed_at=sample.completed_at,
-    )
-
-
-def _sample_event_view(event: SampleRuntimeEventView) -> SampleEventView:
-    return SampleEventView(
-        event_id=event.id,
-        sample_id=event.sample_id,
-        event_type=event.event_type,
-        target_type=event.target_type,
-        target_id=event.target_id,
-        timestamp=event.event_timestamp,
-        payload=event.payload,
     )
 
 

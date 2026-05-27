@@ -20,6 +20,7 @@ import {
   parseSampleSandboxCommand,
   parseSampleSnapshot,
   parseSampleTaskEvaluation,
+  SampleRuntimeEventView,
   SampleCommunicationMessageSchema,
   SampleCommunicationThreadSchema,
   SampleResourceSchema,
@@ -310,23 +311,23 @@ export const DashboardGraphMutationDataSchema = z.preprocess((input) => {
   if (outer.mutation !== undefined) {
     return outer.mutation;
   }
-  const event = outer.event === undefined ? outer : GeneratedDashboardSampleRuntimeEventSchema.parse(input).event;
-  const targetType = event.target_type === "task" ? "node" : event.target_type;
-  const mutationType = event.event_type
+  const event = (outer.event === undefined ? outer : GeneratedDashboardSampleRuntimeEventSchema.parse(input).event) as SampleRuntimeEventView;
+  const targetType = event.targetType === "task" ? "node" : event.targetType;
+  const mutationType = event.eventType
     .replace("task.", "node.")
     .replace("sample.", "node.");
   return {
-    id: event.id,
-    sample_id: event.sample_id,
+    id: event.eventId,
+    sample_id: event.sampleId,
     sequence: 0,
     mutation_type: mutationType,
     target_type: targetType,
-    target_id: event.target_id ?? event.sample_id,
+    target_id: event.targetId ?? event.sampleId,
     actor: "typed-sample-wal",
     old_value: null,
     new_value: event.payload,
     reason: null,
-    created_at: event.event_timestamp,
+    created_at: event.timestamp,
   };
 }, GraphMutationDtoSchema);
 

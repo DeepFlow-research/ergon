@@ -4,9 +4,9 @@ from uuid import UUID, uuid4
 from ergon_core.core.infrastructure.http.routes import samples as module
 from ergon_core.core.infrastructure.http.routes.samples import router
 from ergon_core.core.views.samples.models import SampleSummaryDto
+from ergon_core.core.application.samples.event_views import SampleTaskAddedEventView
 from ergon_core.core.views.samples.models import (
     SampleDetailView,
-    SampleEventView,
     SampleEventsView,
     SampleGraphNodeView,
     SampleGraphView,
@@ -113,13 +113,14 @@ class _FakeSampleReadService:
     def list_sample_events(self, sample_id: UUID):
         return SampleEventsView(
             items=[
-                SampleEventView(
+                SampleTaskAddedEventView(
                     event_id=uuid4(),
                     sample_id=sample_id,
                     event_type="task.added",
                     target_type="task",
                     target_id=self.task_id,
                     timestamp=datetime(2026, 5, 26, tzinfo=UTC),
+                    task_slug="solve",
                 )
             ]
         )

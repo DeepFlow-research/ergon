@@ -19,7 +19,7 @@ const SampleSummaryDto = z
     completed_at: z.union([z.string(), z.null()]).optional(),
     latest_activity_at: z.union([z.string(), z.null()]).optional(),
     duration_seconds: z.union([z.number(), z.null()]).optional(),
-    definition_id: z.string().uuid(),
+    definition_id: z.union([z.string(), z.null()]).optional(),
     definition_name: z.union([z.string(), z.null()]).optional(),
     experiment: z.union([z.string(), z.null()]).optional(),
     benchmark_type: z.string(),
@@ -306,7 +306,7 @@ const SampleSnapshotMetricsDto = z.object({
 });
 const SampleSnapshotDto = z.object({
   id: z.string(),
-  definitionId: z.string(),
+  definitionId: z.union([z.string(), z.null()]).optional(),
   name: z.string(),
   status: z.string(),
   tasks: z.record(z.string(), SampleTaskDto).optional(),
@@ -330,131 +330,367 @@ const SampleSnapshotDto = z.object({
   metrics: z.union([SampleSnapshotMetricsDto, z.null()]).optional(),
   error: z.union([z.string(), z.null()]).optional(),
 });
-const SampleRuntimeEventView = z
+const SampleDetailView = z.object({
+  sampleId: z.string().uuid(),
+  experimentId: z.string().uuid(),
+  environmentId: z.string().uuid(),
+  environmentName: z.string(),
+  sampleKey: z.string(),
+  sampleRef: z.object({}).partial().passthrough().optional(),
+  sourceMetadata: z.object({}).partial().passthrough().optional(),
+  status: z.string(),
+  createdAt: z.string().datetime({ offset: true }),
+  startedAt: z.union([z.string(), z.null()]).optional(),
+  completedAt: z.union([z.string(), z.null()]).optional(),
+});
+const SampleStatusChangedEventView = z
   .object({
-    id: z.string().uuid(),
-    sample_id: z.string().uuid(),
-    event_timestamp: z.string().datetime({ offset: true }),
-    table: z.enum([
-      "sample_status_events",
-      "sample_task_events",
-      "sample_edge_events",
-      "sample_worker_events",
-      "sample_evaluator_events",
-      "sample_sandbox_events",
-      "sample_annotation_events",
-    ]),
-    event_type: z.string(),
-    target_type: z.string(),
-    target_id: z.union([z.string(), z.null()]),
+    eventId: z.string().uuid(),
+    sampleId: z.string().uuid(),
+    timestamp: z.string().datetime({ offset: true }),
+    eventType: z.literal("sample.status_changed"),
+    targetType: z.string(),
+    targetId: z.string().uuid(),
+    status: z.string(),
+    actor: z.union([z.string(), z.null()]).optional(),
     payload: JsonObject.optional(),
   })
   .passthrough();
-const ExperimentStatusCountsDto = z
+const SampleTaskAddedEventView = z
   .object({
-    pending: z.number().int().default(0),
-    executing: z.number().int().default(0),
-    evaluating: z.number().int().default(0),
-    completed: z.number().int().default(0),
-    failed: z.number().int().default(0),
-    cancelled: z.number().int().default(0),
+    eventId: z.string().uuid(),
+    sampleId: z.string().uuid(),
+    timestamp: z.string().datetime({ offset: true }),
+    eventType: z.literal("task.added"),
+    targetType: z.string(),
+    targetId: z.string().uuid(),
+    taskSlug: z.union([z.string(), z.null()]).optional(),
+    status: z.union([z.string(), z.null()]).optional(),
+    task: JsonObject.optional(),
+    actor: z.union([z.string(), z.null()]).optional(),
+    payload: JsonObject.optional(),
   })
-  .partial()
   .passthrough();
-const ExperimentSummaryDto = z
+const SampleTaskRemovedEventView = z
   .object({
-    definition_id: z.string().uuid(),
+    eventId: z.string().uuid(),
+    sampleId: z.string().uuid(),
+    timestamp: z.string().datetime({ offset: true }),
+    eventType: z.literal("task.removed"),
+    targetType: z.string(),
+    targetId: z.string().uuid(),
+    taskSlug: z.union([z.string(), z.null()]).optional(),
+    actor: z.union([z.string(), z.null()]).optional(),
+    payload: JsonObject.optional(),
+  })
+  .passthrough();
+const SampleTaskStatusChangedEventView = z
+  .object({
+    eventId: z.string().uuid(),
+    sampleId: z.string().uuid(),
+    timestamp: z.string().datetime({ offset: true }),
+    eventType: z.literal("task.status_changed"),
+    targetType: z.string(),
+    targetId: z.string().uuid(),
+    taskSlug: z.union([z.string(), z.null()]).optional(),
+    status: z.string(),
+    actor: z.union([z.string(), z.null()]).optional(),
+    payload: JsonObject.optional(),
+  })
+  .passthrough();
+const SampleEdgeAddedEventView = z
+  .object({
+    eventId: z.string().uuid(),
+    sampleId: z.string().uuid(),
+    timestamp: z.string().datetime({ offset: true }),
+    eventType: z.literal("edge.added"),
+    targetType: z.string(),
+    targetId: z.string().uuid(),
+    sourceTaskId: z.string().uuid(),
+    targetTaskId: z.string().uuid(),
+    status: z.union([z.string(), z.null()]).optional(),
+    edge: JsonObject.optional(),
+    actor: z.union([z.string(), z.null()]).optional(),
+    payload: JsonObject.optional(),
+  })
+  .passthrough();
+const SampleEdgeRemovedEventView = z
+  .object({
+    eventId: z.string().uuid(),
+    sampleId: z.string().uuid(),
+    timestamp: z.string().datetime({ offset: true }),
+    eventType: z.literal("edge.removed"),
+    targetType: z.string(),
+    targetId: z.string().uuid(),
+    sourceTaskId: z.string().uuid(),
+    targetTaskId: z.string().uuid(),
+    actor: z.union([z.string(), z.null()]).optional(),
+    payload: JsonObject.optional(),
+  })
+  .passthrough();
+const SampleEdgeStatusChangedEventView = z
+  .object({
+    eventId: z.string().uuid(),
+    sampleId: z.string().uuid(),
+    timestamp: z.string().datetime({ offset: true }),
+    eventType: z.literal("edge.status_changed"),
+    targetType: z.string(),
+    targetId: z.string().uuid(),
+    sourceTaskId: z.string().uuid(),
+    targetTaskId: z.string().uuid(),
+    status: z.string(),
+    actor: z.union([z.string(), z.null()]).optional(),
+    payload: JsonObject.optional(),
+  })
+  .passthrough();
+const SampleWorkerAddedEventView = z
+  .object({
+    eventId: z.string().uuid(),
+    sampleId: z.string().uuid(),
+    timestamp: z.string().datetime({ offset: true }),
+    eventType: z.literal("worker.added"),
+    targetType: z.string(),
+    targetId: z.union([z.string(), z.null()]).optional(),
+    workerSlug: z.string(),
+    workerType: z.union([z.string(), z.null()]).optional(),
+    modelTarget: z.union([z.string(), z.null()]).optional(),
+    worker: JsonObject.optional(),
+    actor: z.union([z.string(), z.null()]).optional(),
+    payload: JsonObject.optional(),
+  })
+  .passthrough();
+const SampleWorkerRemovedEventView = z
+  .object({
+    eventId: z.string().uuid(),
+    sampleId: z.string().uuid(),
+    timestamp: z.string().datetime({ offset: true }),
+    eventType: z.literal("worker.removed"),
+    targetType: z.string(),
+    targetId: z.union([z.string(), z.null()]).optional(),
+    workerSlug: z.string(),
+    actor: z.union([z.string(), z.null()]).optional(),
+    payload: JsonObject.optional(),
+  })
+  .passthrough();
+const SampleEvaluatorAddedEventView = z
+  .object({
+    eventId: z.string().uuid(),
+    sampleId: z.string().uuid(),
+    timestamp: z.string().datetime({ offset: true }),
+    eventType: z.literal("evaluator.added"),
+    targetType: z.string(),
+    targetId: z.union([z.string(), z.null()]).optional(),
+    evaluatorSlug: z.string(),
+    evaluatorType: z.union([z.string(), z.null()]).optional(),
+    evaluator: JsonObject.optional(),
+    actor: z.union([z.string(), z.null()]).optional(),
+    payload: JsonObject.optional(),
+  })
+  .passthrough();
+const SampleEvaluatorRemovedEventView = z
+  .object({
+    eventId: z.string().uuid(),
+    sampleId: z.string().uuid(),
+    timestamp: z.string().datetime({ offset: true }),
+    eventType: z.literal("evaluator.removed"),
+    targetType: z.string(),
+    targetId: z.union([z.string(), z.null()]).optional(),
+    evaluatorSlug: z.string(),
+    actor: z.union([z.string(), z.null()]).optional(),
+    payload: JsonObject.optional(),
+  })
+  .passthrough();
+const SampleSandboxAddedEventView = z
+  .object({
+    eventId: z.string().uuid(),
+    sampleId: z.string().uuid(),
+    timestamp: z.string().datetime({ offset: true }),
+    eventType: z.literal("sandbox.added"),
+    targetType: z.string(),
+    targetId: z.union([z.string(), z.null()]).optional(),
+    sandboxSlug: z.string(),
+    sandboxType: z.union([z.string(), z.null()]).optional(),
+    sandbox: JsonObject.optional(),
+    actor: z.union([z.string(), z.null()]).optional(),
+    payload: JsonObject.optional(),
+  })
+  .passthrough();
+const SampleSandboxRemovedEventView = z
+  .object({
+    eventId: z.string().uuid(),
+    sampleId: z.string().uuid(),
+    timestamp: z.string().datetime({ offset: true }),
+    eventType: z.literal("sandbox.removed"),
+    targetType: z.string(),
+    targetId: z.union([z.string(), z.null()]).optional(),
+    sandboxSlug: z.string(),
+    actor: z.union([z.string(), z.null()]).optional(),
+    payload: JsonObject.optional(),
+  })
+  .passthrough();
+const SampleAnnotationSetEventView = z
+  .object({
+    eventId: z.string().uuid(),
+    sampleId: z.string().uuid(),
+    timestamp: z.string().datetime({ offset: true }),
+    eventType: z.literal("annotation.set"),
+    targetType: z.string(),
+    targetId: z.string().uuid(),
+    key: z.string(),
+    value: JsonObject.optional(),
+    payload: JsonObject.optional(),
+  })
+  .passthrough();
+const SampleAnnotationUpdatedEventView = z
+  .object({
+    eventId: z.string().uuid(),
+    sampleId: z.string().uuid(),
+    timestamp: z.string().datetime({ offset: true }),
+    eventType: z.literal("annotation.updated"),
+    targetType: z.string(),
+    targetId: z.string().uuid(),
+    key: z.string(),
+    value: JsonObject.optional(),
+    payload: JsonObject.optional(),
+  })
+  .passthrough();
+const SampleAnnotationDeletedEventView = z
+  .object({
+    eventId: z.string().uuid(),
+    sampleId: z.string().uuid(),
+    timestamp: z.string().datetime({ offset: true }),
+    eventType: z.literal("annotation.deleted"),
+    targetType: z.string(),
+    targetId: z.string().uuid(),
+    key: z.string(),
+    payload: JsonObject.optional(),
+  })
+  .passthrough();
+const SampleRuntimeEventView = z.discriminatedUnion("eventType", [
+  SampleStatusChangedEventView,
+  SampleTaskAddedEventView,
+  SampleTaskRemovedEventView,
+  SampleTaskStatusChangedEventView,
+  SampleEdgeAddedEventView,
+  SampleEdgeRemovedEventView,
+  SampleEdgeStatusChangedEventView,
+  SampleWorkerAddedEventView,
+  SampleWorkerRemovedEventView,
+  SampleEvaluatorAddedEventView,
+  SampleEvaluatorRemovedEventView,
+  SampleSandboxAddedEventView,
+  SampleSandboxRemovedEventView,
+  SampleAnnotationSetEventView,
+  SampleAnnotationUpdatedEventView,
+  SampleAnnotationDeletedEventView,
+]);
+const SampleEventsView = z
+  .object({
+    items: z.array(
+      z.discriminatedUnion("eventType", [
+        SampleStatusChangedEventView,
+        SampleTaskAddedEventView,
+        SampleTaskRemovedEventView,
+        SampleTaskStatusChangedEventView,
+        SampleEdgeAddedEventView,
+        SampleEdgeRemovedEventView,
+        SampleEdgeStatusChangedEventView,
+        SampleWorkerAddedEventView,
+        SampleWorkerRemovedEventView,
+        SampleEvaluatorAddedEventView,
+        SampleEvaluatorRemovedEventView,
+        SampleSandboxAddedEventView,
+        SampleSandboxRemovedEventView,
+        SampleAnnotationSetEventView,
+        SampleAnnotationUpdatedEventView,
+        SampleAnnotationDeletedEventView,
+      ])
+    ),
+  })
+  .partial();
+const SampleGraphNodeView = z.object({
+  taskId: z.string().uuid(),
+  taskSlug: z.string(),
+  description: z.string(),
+  status: z.string(),
+  parentTaskId: z.union([z.string(), z.null()]).optional(),
+  level: z.number().int().optional().default(0),
+  assignedWorkerSlug: z.union([z.string(), z.null()]).optional(),
+  createdAt: z.string().datetime({ offset: true }),
+  updatedAt: z.string().datetime({ offset: true }),
+});
+const SampleGraphEdgeView = z.object({
+  edgeId: z.string().uuid(),
+  sourceTaskId: z.string().uuid(),
+  targetTaskId: z.string().uuid(),
+  status: z.string(),
+  createdAt: z.string().datetime({ offset: true }),
+  updatedAt: z.string().datetime({ offset: true }),
+});
+const SampleGraphView = z
+  .object({
+    nodes: z.array(SampleGraphNodeView),
+    edges: z.array(SampleGraphEdgeView),
+  })
+  .partial();
+const EnvironmentContributionView = z
+  .object({
+    environmentId: z.string().uuid(),
+    environmentName: z.string(),
+    sourceMode: z.string(),
+    sampleCount: z.number().int(),
+    selectedCount: z.number().int(),
+    sourceMetadata: z.object({}).partial().passthrough().optional(),
+  })
+  .passthrough();
+const ExperimentSampleSummaryView = z
+  .object({
+    sampleId: z.string().uuid(),
+    experimentId: z.string().uuid(),
+    environmentId: z.string().uuid(),
+    environmentName: z.string(),
+    sampleKey: z.string(),
+    sampleRef: z.object({}).partial().passthrough().optional(),
+    sourceMetadata: z.object({}).partial().passthrough().optional(),
+    status: z.string(),
+    createdAt: z.string().datetime({ offset: true }),
+  })
+  .passthrough();
+const SamplerInvocationView = z
+  .object({
+    samplerInvocationId: z.string().uuid(),
+    samplerName: z.string(),
+    requestedK: z.number().int(),
+    candidatePoolSize: z.number().int(),
+    selectedCount: z.number().int(),
+    samplerConfig: z.object({}).partial().passthrough().optional(),
+    createdAt: z.string().datetime({ offset: true }),
+  })
+  .passthrough();
+const ExperimentDetailView = z
+  .object({
+    experimentId: z.string().uuid(),
     name: z.string(),
     description: z.union([z.string(), z.null()]).optional(),
-    benchmark_type: z.string(),
-    sample_count: z.number().int(),
-    status: z.string(),
-    default_worker_team: z.object({}).partial().passthrough().optional(),
-    default_evaluator_slug: z.union([z.string(), z.null()]).optional(),
-    default_model_target: z.union([z.string(), z.null()]).optional(),
-    created_by: z.union([z.string(), z.null()]).optional(),
-    created_at: z.string().datetime({ offset: true }),
-    started_at: z.union([z.string(), z.null()]).optional(),
-    completed_at: z.union([z.string(), z.null()]).optional(),
-    run_count: z.number().int().optional().default(0),
-    status_counts: ExperimentStatusCountsDto.optional(),
-    failure_count: z.number().int().optional().default(0),
-    latest_activity_at: z.union([z.string(), z.null()]).optional(),
-    average_score: z.union([z.number(), z.null()]).optional(),
-    average_duration_ms: z.union([z.number(), z.null()]).optional(),
-    average_tasks: z.union([z.number(), z.null()]).optional(),
-    total_cost_usd: z.union([z.number(), z.null()]).optional(),
+    environments: z.array(EnvironmentContributionView).optional(),
+    sampleCount: z.number().int(),
+    samples: z.array(ExperimentSampleSummaryView).optional(),
+    samplerInvocations: z.array(SamplerInvocationView).optional(),
+    metadata: z.object({}).partial().passthrough().optional(),
+    createdAt: z.string().datetime({ offset: true }),
   })
   .passthrough();
-const ExperimentRunMetricsDto = z
-  .object({
-    sample_id: z.string().uuid(),
-    run_name: z.union([z.string(), z.null()]).optional(),
-    status: z.string(),
-    sample_label: z.union([z.string(), z.null()]).optional(),
-    instance_key: z.string(),
-    score: z.union([z.number(), z.null()]).optional(),
-    return_value: z.union([z.number(), z.null()]).optional(),
-    duration_ms: z.union([z.number(), z.null()]).optional(),
-    total_tasks: z.union([z.number(), z.null()]).optional(),
-    tool_call_count: z.number().int().optional().default(0),
-    total_tokens: z.union([z.number(), z.null()]).optional(),
-    token_breakdown: z.record(z.string(), z.number().int()).optional(),
-    total_cost_usd: z.union([z.number(), z.null()]).optional(),
-    cost_observed: z.boolean().optional().default(false),
-    model_target: z.union([z.string(), z.null()]).optional(),
-    evaluator_slug: z.union([z.string(), z.null()]).optional(),
-    error_summary: z.union([z.string(), z.null()]).optional(),
-  })
-  .passthrough();
-const ExperimentRunRowDto = z
-  .object({
-    sample_id: z.string().uuid(),
-    definition_id: z.string().uuid(),
-    benchmark_type: z.string(),
-    instance_key: z.string(),
-    status: z.string(),
-    created_at: z.string().datetime({ offset: true }),
-    started_at: z.union([z.string(), z.null()]).optional(),
-    completed_at: z.union([z.string(), z.null()]).optional(),
-    evaluator_slug: z.union([z.string(), z.null()]).optional(),
-    model_target: z.union([z.string(), z.null()]).optional(),
-    worker_team: z.object({}).partial().passthrough().optional(),
-    seed: z.union([z.number(), z.null()]).optional(),
-    running_time_ms: z.union([z.number(), z.null()]).optional(),
-    final_score: z.union([z.number(), z.null()]).optional(),
-    total_tasks: z.union([z.number(), z.null()]).optional(),
-    total_cost_usd: z.union([z.number(), z.null()]).optional(),
-    error_message: z.union([z.string(), z.null()]).optional(),
-    metrics: ExperimentRunMetricsDto,
-  })
-  .passthrough();
-const ExperimentAnalyticsDto = z
-  .object({
-    total_runs: z.number().int().default(0),
-    status_counts: ExperimentStatusCountsDto,
-    average_score: z.union([z.number(), z.null()]),
-    average_duration_ms: z.union([z.number(), z.null()]),
-    average_tasks: z.union([z.number(), z.null()]),
-    total_cost_usd: z.union([z.number(), z.null()]),
-    latest_activity_at: z.union([z.string(), z.null()]),
-    error_count: z.number().int().default(0),
-  })
+const ExperimentListView = z
+  .object({ items: z.array(ExperimentDetailView) })
   .partial()
   .passthrough();
-const ExperimentDetailDto = z
-  .object({
-    definition_id: z.union([z.string(), z.null()]).optional(),
-    name: z.union([z.string(), z.null()]).optional(),
-    description: z.union([z.string(), z.null()]).optional(),
-    benchmark_type: z.union([z.string(), z.null()]).optional(),
-    experiment: ExperimentSummaryDto,
-    runs: z.array(ExperimentRunRowDto).optional(),
-    analytics: ExperimentAnalyticsDto.optional(),
-    sample_selection: z.object({}).partial().passthrough().optional(),
-    design: z.object({}).partial().passthrough().optional(),
-    metadata: z.object({}).partial().passthrough().optional(),
-  })
+const ExperimentSamplesView = z
+  .object({ items: z.array(ExperimentSampleSummaryView) })
+  .partial()
+  .passthrough();
+const SamplerInvocationsView = z
+  .object({ items: z.array(SamplerInvocationView) })
+  .partial()
   .passthrough();
 const ExperimentRunRequest = z
   .object({
@@ -519,6 +755,15 @@ const PollResponse = z
     total: z.number().int().optional().default(0),
     trajectories: z.array(Trajectory).optional(),
     failures: z.array(EpisodeFailure).optional(),
+  })
+  .passthrough();
+const RolloutBatchSummary = z
+  .object({
+    batch_id: z.string().uuid(),
+    sample_ids: z.array(z.string().uuid()),
+    status: RolloutStatus,
+    experiment_id: z.union([z.string(), z.null()]).optional(),
+    sampler_invocation_id: z.union([z.string(), z.null()]).optional(),
   })
   .passthrough();
 const WeightSyncRequest = z
@@ -637,13 +882,35 @@ export const schemas = {
   SampleCommunicationThreadDto,
   SampleSnapshotMetricsDto,
   SampleSnapshotDto,
+  SampleDetailView,
+  SampleStatusChangedEventView,
+  SampleTaskAddedEventView,
+  SampleTaskRemovedEventView,
+  SampleTaskStatusChangedEventView,
+  SampleEdgeAddedEventView,
+  SampleEdgeRemovedEventView,
+  SampleEdgeStatusChangedEventView,
+  SampleWorkerAddedEventView,
+  SampleWorkerRemovedEventView,
+  SampleEvaluatorAddedEventView,
+  SampleEvaluatorRemovedEventView,
+  SampleSandboxAddedEventView,
+  SampleSandboxRemovedEventView,
+  SampleAnnotationSetEventView,
+  SampleAnnotationUpdatedEventView,
+  SampleAnnotationDeletedEventView,
   SampleRuntimeEventView,
-  ExperimentStatusCountsDto,
-  ExperimentSummaryDto,
-  ExperimentRunMetricsDto,
-  ExperimentRunRowDto,
-  ExperimentAnalyticsDto,
-  ExperimentDetailDto,
+  SampleEventsView,
+  SampleGraphNodeView,
+  SampleGraphEdgeView,
+  SampleGraphView,
+  EnvironmentContributionView,
+  ExperimentSampleSummaryView,
+  SamplerInvocationView,
+  ExperimentDetailView,
+  ExperimentListView,
+  ExperimentSamplesView,
+  SamplerInvocationsView,
   ExperimentRunRequest,
   run_experiment_experiments__definition_id__run_post_Body,
   ExperimentRunResult,
@@ -653,6 +920,7 @@ export const schemas = {
   Trajectory,
   EpisodeFailure,
   PollResponse,
+  RolloutBatchSummary,
   WeightSyncRequest,
   WeightSyncResponse,
   TestGraphNodeDto,

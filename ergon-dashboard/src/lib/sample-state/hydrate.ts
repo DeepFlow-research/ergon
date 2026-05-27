@@ -101,13 +101,13 @@ export function hydrateSampleSnapshot(input: unknown): SampleWorkspaceState {
 
   return {
     id: data.id,
-    definitionId: data.definitionId,
+    definitionId: data.definitionId ?? "",
     name: data.name,
     status: data.status as SampleWorkspaceState["status"],
     tasks: new Map(
       Object.entries(data.tasks ?? {}).map(([taskId, task]) => [taskId, deserializeTask(task)]),
     ),
-    rootTaskId: data.rootTaskId,
+    rootTaskId: data.rootTaskId ?? "",
     resourcesByTask: new Map(
       Object.entries(data.resourcesByTask ?? {}).map(([taskId, resources]) => [
         taskId,

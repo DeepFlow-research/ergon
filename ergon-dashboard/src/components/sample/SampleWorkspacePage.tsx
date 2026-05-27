@@ -77,15 +77,14 @@ function payloadRecord(value: unknown): Record<string, unknown> {
 
 function graphMutationValue(event: SampleRuntimeEventView, mutationType: MutationType): Record<string, unknown> {
   const payload = payloadRecord(event.payload);
-  const task = payloadRecord(payload.task);
-  const edge = payloadRecord(payload.edge);
 
-  if (mutationType === "node.added") {
+  if (event.eventType === "task.added" && mutationType === "node.added") {
+    const task = payloadRecord(event.task);
     return {
-      task_slug: String(payload.task_slug ?? task.task_slug ?? task.name ?? event.target_id ?? "task"),
-      instance_key: String(task.instance_key ?? payload.instance_key ?? event.target_id ?? "task"),
+      task_slug: String(event.taskSlug ?? task.task_slug ?? task.name ?? event.targetId ?? "task"),
+      instance_key: String(task.instance_key ?? payload.instance_key ?? event.targetId ?? "task"),
       description: String(task.description ?? payload.description ?? ""),
-      status: String(payload.status ?? task.status ?? "pending"),
+      status: String(event.status ?? task.status ?? "pending"),
       assigned_worker_slug:
         typeof task.assigned_worker_slug === "string"
           ? task.assigned_worker_slug
@@ -95,22 +94,32 @@ function graphMutationValue(event: SampleRuntimeEventView, mutationType: Mutatio
     };
   }
 
-  if (mutationType === "node.status_changed" || mutationType === "edge.status_changed") {
-    return { status: String(payload.status ?? "pending") };
+  if (
+    (event.eventType === "task.status_changed" && mutationType === "node.status_changed") ||
+    (event.eventType === "edge.status_changed" && mutationType === "edge.status_changed")
+  ) {
+    return { status: event.status };
   }
 
-  if (mutationType === "edge.added" || mutationType === "edge.removed") {
+  if (
+    (event.eventType === "edge.added" || event.eventType === "edge.removed") &&
+    (mutationType === "edge.added" || mutationType === "edge.removed")
+  ) {
+    const edge = event.eventType === "edge.added" ? payloadRecord(event.edge) : {};
     return {
-      source_task_id: String(payload.source_task_id ?? edge.source_task_id ?? event.target_id),
-      target_task_id: String(payload.target_task_id ?? edge.target_task_id ?? event.target_id),
-      status: String(payload.status ?? edge.status ?? "pending"),
+      source_task_id: event.sourceTaskId,
+      target_task_id: event.targetTaskId,
+      status: String(event.eventType === "edge.added" ? (event.status ?? edge.status ?? "pending") : "removed"),
     };
   }
 
-  if (mutationType === "annotation.set" || mutationType === "annotation.deleted") {
+  if (
+    (event.eventType === "annotation.set" || event.eventType === "annotation.deleted") &&
+    (mutationType === "annotation.set" || mutationType === "annotation.deleted")
+  ) {
     return {
-      namespace: String(payload.namespace ?? payload.key ?? "runtime"),
-      payload: payloadRecord(payload.value ?? payload.payload),
+      namespace: event.key,
+      payload: event.eventType === "annotation.set" ? payloadRecord(event.value) : payload,
     };
   }
 
@@ -119,23 +128,24 @@ function graphMutationValue(event: SampleRuntimeEventView, mutationType: Mutatio
 
 function sampleRuntimeEventsToGraphMutations(events: SampleRuntimeEventView[]): GraphMutationDto[] {
   return events.flatMap((event, index) => {
-    const mutationType = graphMutationType(event.event_type);
-    if (mutationType === null || event.target_id === null) return [];
-    const targetType = event.target_type === "edge" ? "edge" : "node";
+    const mutationType = graphMutationType(event.eventType);
+    const targetId = event.targetId;
+    if (mutationType === null || !targetId) return [];
+    const targetType = event.targetType === "edge" ? "edge" : "node";
     const newValue = graphMutationValue(event, mutationType);
     return [
       {
-        id: event.id,
-        sample_id: event.sample_id,
+        id: event.eventId,
+        sample_id: event.sampleId,
         sequence: index + 1,
         mutation_type: mutationType,
         target_type: targetType,
-        target_id: event.target_id,
+        target_id: targetId,
         actor: "runtime",
         old_value: null,
         new_value: newValue,
         reason: null,
-        created_at: event.event_timestamp,
+        created_at: event.timestamp,
       },
     ];
   });
