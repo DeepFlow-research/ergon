@@ -10,7 +10,7 @@ DISALLOWED_ROLLOUT_RUN_SYMBOLS = [
     "rollout_batch_runs",
     "batch_run",
     "run_ids",
-    "RolloutBatch.model_fields[\"definition_id\"]",
+    'RolloutBatch.model_fields["definition_id"]',
 ]
 
 
