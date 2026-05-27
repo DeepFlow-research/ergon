@@ -30,6 +30,8 @@ class TrainingRolloutRequest(BaseModel):
 class RolloutBatchSummary(BaseModel):
     """Durable trainer batch membership exposed by sample id."""
 
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
+
     batch_id: UUID
     sample_ids: list[UUID]
     status: BatchStatus

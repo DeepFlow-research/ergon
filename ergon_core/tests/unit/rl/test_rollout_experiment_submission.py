@@ -16,6 +16,7 @@ class _FakeRolloutService:
             batch_id=uuid4(),
             sample_ids=[uuid4()],
             status=BatchStatus.PENDING,
+            experiment_id=request.experiment_id,
             sampler_invocation_id=uuid4(),
         )
 
@@ -40,6 +41,7 @@ def test_experiment_rollout_route_accepts_camel_case_training_request() -> None:
     )
 
     assert response.status_code == 202
+    assert response.json()["experimentId"] == str(experiment_id)
     assert service.request.experiment_id == experiment_id
     assert service.request.k == 32
     assert service.request.sampler == "random"

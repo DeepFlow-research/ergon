@@ -65,8 +65,8 @@ def test_rollout_batch_route_exposes_sample_ids() -> None:
 
     assert resp.status_code == 200
     body = resp.json()
-    assert body["sample_ids"] == [str(app.state.rollout_service.sample_id)]
-    assert "run_ids" not in body
+    assert body["sampleIds"] == [str(app.state.rollout_service.sample_id)]
+    assert "runIds" not in body
 
 
 def test_sync_weights_gets_vllm_manager_from_app_state() -> None:

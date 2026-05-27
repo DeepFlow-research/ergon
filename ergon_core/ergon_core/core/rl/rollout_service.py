@@ -159,6 +159,7 @@ class RolloutService:
             summary = self.create_rollout_batch(
                 session,
                 sample_ids=sample_ids,
+                experiment_id=request.experiment_id,
                 sampler_invocation_id=invocation.id,
             )
             session.commit()
