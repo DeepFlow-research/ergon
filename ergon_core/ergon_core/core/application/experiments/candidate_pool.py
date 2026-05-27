@@ -140,7 +140,7 @@ def reserve_sample_pool_entries_for_sampler(
     invocation = record_sampler_invocation(
         session=session,
         experiment_ref=ExperimentRef(
-            id=experiment.id,
+            experiment_id=experiment.id,
             name=experiment.name,
             environment_ids={},
             created_at=experiment.created_at,
