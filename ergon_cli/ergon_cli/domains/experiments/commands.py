@@ -3,17 +3,13 @@ from argparse import Namespace
 from ergon_cli.domains.experiments.models import (
     ExperimentSamplesCommand,
     ExperimentSamplerInvocationsCommand,
-    ListByTagCommand,
     ListExperimentsCommand,
-    ListTagsCommand,
     ShowExperimentCommand,
 )
 from ergon_cli.domains.experiments.service import (
-    list_by_tag,
     list_experiment_samples,
     list_experiment_sampler_invocations,
     list_experiments,
-    list_tags,
     show_experiment,
 )
 from ergon_cli.shared import exit_codes
@@ -31,11 +27,7 @@ async def handle_experiment(args: Namespace) -> int:
         return handle_experiment_samples(args)
     if args.experiment_action == "sampler-invocations":
         return handle_experiment_sampler_invocations(args)
-    if args.experiment_action == "tags":
-        return handle_experiment_tags(args)
-    if args.experiment_action == "by-tag":
-        return handle_experiment_by_tag(args)
-    print("Usage: ergon experiment {show|list|samples|sampler-invocations|tags|by-tag}")
+    print("Usage: ergon experiment {show|list|samples|sampler-invocations}")
     return exit_codes.RUNTIME_ERROR
 
 
@@ -140,55 +132,21 @@ def handle_experiment_sampler_invocations(args: Namespace) -> int:
 
 
 def handle_experiment_list(args: Namespace) -> int:
-    experiments = list_experiments(ListExperimentsCommand(limit=args.limit))
-    if not experiments:
+    result = list_experiments(ListExperimentsCommand(limit=args.limit))
+    if not result.experiments:
         print("No experiments found.")
         return exit_codes.OK
-    lines = ["DEFINITION_ID\tNAME\tBENCHMARK\tSTATUS\tSAMPLES\tATTEMPTS\tMODEL"]
+    lines = ["EXPERIMENT_ID\tNAME\tSAMPLES\tSAMPLER_INVOCATIONS"]
     lines.extend(
         "\t".join(
             [
-                str(experiment.definition_id),
+                str(experiment.experiment_id),
                 experiment.name,
-                experiment.benchmark_type,
-                experiment.status,
                 str(experiment.sample_count),
-                str(experiment.run_count),
-                "" if experiment.default_model_target is None else experiment.default_model_target,
+                str(experiment.sampler_invocation_count),
             ]
         )
-        for experiment in experiments
-    )
-    print(render_text(lines))
-    return exit_codes.OK
-
-
-def handle_experiment_tags(args: Namespace) -> int:
-    del args
-    tags = list_tags(ListTagsCommand())
-    if not tags:
-        print("No experiment tags found.")
-        return exit_codes.OK
-    print(render_text(tags))
-    return exit_codes.OK
-
-
-def handle_experiment_by_tag(args: Namespace) -> int:
-    rows = list_by_tag(ListByTagCommand(tag=args.tag))
-    if not rows:
-        print(f"No definitions found for experiment tag {args.tag!r}.")
-        return exit_codes.OK
-    lines = ["DEFINITION_ID\tNAME\tBENCHMARK\tLATEST_RUN_STATUS"]
-    lines.extend(
-        "\t".join(
-            [
-                str(row.definition_id),
-                row.name,
-                row.benchmark_type,
-                "" if row.latest_run_status is None else row.latest_run_status,
-            ]
-        )
-        for row in rows
+        for experiment in result.experiments
     )
     print(render_text(lines))
     return exit_codes.OK

@@ -28,15 +28,14 @@ def test_sample_subcommands_are_registered_in_main_parser() -> None:
     show_args = parser.parse_args(["sample", "show", str(uuid4())])
     events_args = parser.parse_args(["sample", "events", str(uuid4())])
     graph_args = parser.parse_args(["sample", "graph", str(uuid4())])
-    definition_id = uuid4()
-    list_args = parser.parse_args(["sample", "list", "--definition-id", str(definition_id)])
+    list_args = parser.parse_args(["sample", "list", "--limit", "3"])
 
     assert status_args.sample_action == "status"
     assert show_args.sample_action == "show"
     assert events_args.sample_action == "events"
     assert graph_args.sample_action == "graph"
     assert list_args.sample_action == "list"
-    assert list_args.definition_id == str(definition_id)
+    assert list_args.limit == 3
 
 
 def test_sample_list_accepts_experiment_tag_filter() -> None:
@@ -46,6 +45,13 @@ def test_sample_list_accepts_experiment_tag_filter() -> None:
 
     assert list_args.sample_action == "list"
     assert list_args.experiment == "alpha"
+
+
+def test_sample_cancel_is_not_registered() -> None:
+    parser = build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["sample", "cancel", str(uuid4())])
 
 
 # ---------------------------------------------------------------------------
@@ -189,42 +195,6 @@ def test_sample_status_reports_missing_run(monkeypatch, capsys):
 
 
 # ---------------------------------------------------------------------------
-# test_sample_list_filters_by_definition
-# ---------------------------------------------------------------------------
-
-
-def test_sample_list_filters_by_definition(monkeypatch, session_factory, capsys):
-    """Only samples for the requested definition appear."""
-    definition_matching = _definition(name="matching")
-    definition_other = _definition(name="other")
-
-    sample_matching = _sample_record(definition_id=definition_matching.id)
-    sample_other = _sample_record(definition_id=definition_other.id)
-
-    # Capture IDs before the session closes to avoid DetachedInstanceError
-    matching_definition_id = str(definition_matching.id)
-    matching_id = str(sample_matching.id)
-    other_id = str(sample_other.id)
-
-    with session_factory() as session:
-        session.add(definition_matching)
-        session.add(definition_other)
-        session.add(sample_matching)
-        session.add(sample_other)
-        session.commit()
-
-    monkeypatch.setattr(core_sample_views, "get_session", session_factory)
-
-    rc = sample_cmd.list_samples_command(
-        Namespace(definition_id=matching_definition_id, experiment=None, status=None, limit=20)
-    )
-
-    assert rc == 0
-    out = capsys.readouterr().out
-    assert matching_id in out
-    assert other_id not in out
-
-
 def test_sample_list_filters_by_experiment_tag(monkeypatch, session_factory, capsys):
     """The experiment filter reads the v2 ``SampleRecord.experiment`` tag."""
     definition = _definition(name="matching")
@@ -243,9 +213,7 @@ def test_sample_list_filters_by_experiment_tag(monkeypatch, session_factory, cap
 
     monkeypatch.setattr(core_sample_views, "get_session", session_factory)
 
-    rc = sample_cmd.list_samples_command(
-        Namespace(definition_id=None, experiment="alpha", status=None, limit=20)
-    )
+    rc = sample_cmd.list_samples_command(Namespace(experiment="alpha", status=None, limit=20))
 
     assert rc == 0
     out = capsys.readouterr().out

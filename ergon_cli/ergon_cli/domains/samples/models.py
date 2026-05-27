@@ -8,7 +8,6 @@ class ListSamplesCommand(BaseModel):
 
     limit: int = 20
     status: str | None = None
-    definition_id: UUID | None = None
     experiment: str | None = None
 
 
@@ -30,12 +29,6 @@ class SampleGraphCommand(BaseModel):
     sample_id: UUID
 
 
-class CancelSampleCommand(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    sample_id: UUID
-
-
 class SampleSummaryView(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -45,7 +38,6 @@ class SampleSummaryView(BaseModel):
     started: str | None = None
     completed: str | None = None
     duration: str
-    definition_id: UUID
     benchmark_type: str
     instance_key: str
     evaluator_slug: str | None = None
@@ -85,11 +77,4 @@ class SampleListResult(BaseModel):
 
     samples: tuple[SampleSummaryView, ...]
     status: str | None = None
-    definition_id: UUID | None = None
     experiment: str | None = None
-
-
-class CancelSampleResult(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    sample: SampleSummaryView

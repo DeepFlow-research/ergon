@@ -18,8 +18,3 @@ def register_experiment_parser(subparsers: argparse._SubParsersAction) -> None:
         help="List sampler invocations for an experiment",
     )
     experiment_invocations.add_argument("experiment_id", help="Experiment UUID")
-    experiment_sub.add_parser("tags", help="List distinct experiment tags")
-    experiment_by_tag = experiment_sub.add_parser(
-        "by-tag", help="List definitions for an experiment tag"
-    )
-    experiment_by_tag.add_argument("tag", help="Experiment tag")

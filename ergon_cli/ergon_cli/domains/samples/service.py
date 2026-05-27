@@ -1,6 +1,4 @@
 from ergon_cli.domains.samples.models import (
-    CancelSampleCommand,
-    CancelSampleResult,
     ListSamplesCommand,
     SampleListResult,
     SampleDetailCliState,
@@ -12,7 +10,6 @@ from ergon_cli.domains.samples.models import (
     SampleSummaryView,
 )
 from ergon_cli.shared.errors import CliNotFoundError
-from ergon_core.core.application.runtime.sample_records import cancel_sample
 from ergon_core.core.views.samples.models import SampleSummaryDto
 from ergon_core.core.views.samples.service import SampleReadService, SampleSnapshotReadService
 
@@ -24,13 +21,11 @@ def list_samples(
     rows = service.list_samples(
         limit=command.limit,
         status=command.status,
-        definition_id=command.definition_id,
         experiment=command.experiment,
     )
     return SampleListResult(
         samples=tuple(_view(row) for row in rows),
         status=command.status,
-        definition_id=command.definition_id,
         experiment=command.experiment,
     )
 
@@ -101,16 +96,6 @@ def get_sample_graph(
     )
 
 
-def cancel_existing_sample(command: CancelSampleCommand) -> CancelSampleResult:
-    try:
-        sample = cancel_sample(command.sample_id)
-    except ValueError as exc:
-        raise CliNotFoundError(f"Error: {exc}") from exc
-    return CancelSampleResult(
-        sample=_view(SampleSummaryDto.model_validate(sample, from_attributes=True))
-    )
-
-
 def _view(row: SampleSummaryDto) -> SampleSummaryView:
     created = row.created_at.strftime("%Y-%m-%d %H:%M") if row.created_at else "-"
     started = row.started_at.strftime("%Y-%m-%d %H:%M:%S") if row.started_at else None
@@ -126,7 +111,6 @@ def _view(row: SampleSummaryDto) -> SampleSummaryView:
         started=started,
         completed=completed,
         duration=duration,
-        definition_id=row.definition_id,
         benchmark_type=row.benchmark_type,
         instance_key=row.instance_key,
         evaluator_slug=row.evaluator_slug,
