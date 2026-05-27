@@ -267,103 +267,133 @@ SampleRuntimeEventRow = (
 )
 
 
-def sample_runtime_event_from_row(row: SampleRuntimeEventRow) -> SampleRuntimeEventView:
-    common = {
+EventViewFields = dict[str, object]
+
+
+def _event_common(row: SampleRuntimeEventRow) -> EventViewFields:
+    return {
         "event_id": row.id,
         "sample_id": row.sample_id,
         "event_type": row.event_type,
         "timestamp": row.event_timestamp,
         "payload": dict(row.payload_json),
     }
-    if isinstance(row, SampleStatusEventRow):
-        return SampleStatusChangedEventView(
-            **common,
-            target_type="sample",
-            target_id=row.sample_id,
+
+
+def _task_event_from_row(
+    row: SampleTaskEventRow,
+    common: EventViewFields,
+) -> SampleTaskAddedEventView | SampleTaskRemovedEventView | SampleTaskStatusChangedEventView:
+    fields = dict(
+        common,
+        target_type="task",
+        target_id=row.task_id,
+        task_slug=row.task_slug,
+        actor=row.actor,
+    )
+    if row.event_type == "task.added":
+        return SampleTaskAddedEventView(
+            **fields,
             status=row.status,
-            actor=row.actor,
+            task=row.task_snapshot_json,
         )
-    if isinstance(row, SampleTaskEventRow):
-        fields = dict(
-            common,
-            target_type="task",
-            target_id=row.task_id,
-            task_slug=row.task_slug,
-            actor=row.actor,
+    if row.event_type == "task.removed":
+        return SampleTaskRemovedEventView(**fields)
+    return SampleTaskStatusChangedEventView(**fields, status=str(row.status))
+
+
+def _edge_event_from_row(
+    row: SampleEdgeEventRow,
+    common: EventViewFields,
+) -> SampleEdgeAddedEventView | SampleEdgeRemovedEventView | SampleEdgeStatusChangedEventView:
+    fields = dict(
+        common,
+        target_type="edge",
+        target_id=row.edge_id,
+        source_task_id=row.source_task_id,
+        target_task_id=row.target_task_id,
+        actor=row.actor,
+    )
+    if row.event_type == "edge.added":
+        return SampleEdgeAddedEventView(
+            **fields,
+            status=row.status,
+            edge=row.edge_snapshot_json,
         )
-        if row.event_type == "task.added":
-            return SampleTaskAddedEventView(
-                **fields,
-                status=row.status,
-                task=row.task_snapshot_json,
-            )
-        if row.event_type == "task.removed":
-            return SampleTaskRemovedEventView(**fields)
-        return SampleTaskStatusChangedEventView(**fields, status=str(row.status))
-    if isinstance(row, SampleEdgeEventRow):
-        fields = dict(
-            common,
-            target_type="edge",
-            target_id=row.edge_id,
-            source_task_id=row.source_task_id,
-            target_task_id=row.target_task_id,
-            actor=row.actor,
+    if row.event_type == "edge.removed":
+        return SampleEdgeRemovedEventView(**fields)
+    return SampleEdgeStatusChangedEventView(**fields, status=str(row.status))
+
+
+def _worker_event_from_row(
+    row: SampleWorkerEventRow,
+    common: EventViewFields,
+) -> SampleWorkerAddedEventView | SampleWorkerRemovedEventView:
+    fields = dict(
+        common,
+        target_type="task",
+        target_id=row.task_id,
+        worker_slug=row.worker_slug,
+        actor=row.actor,
+    )
+    if row.event_type == "worker.added":
+        return SampleWorkerAddedEventView(
+            **fields,
+            worker_type=row.worker_type,
+            model_target=row.model_target,
+            worker=row.worker_snapshot_json,
         )
-        if row.event_type == "edge.added":
-            return SampleEdgeAddedEventView(
-                **fields,
-                status=row.status,
-                edge=row.edge_snapshot_json,
-            )
-        if row.event_type == "edge.removed":
-            return SampleEdgeRemovedEventView(**fields)
-        return SampleEdgeStatusChangedEventView(**fields, status=str(row.status))
-    if isinstance(row, SampleWorkerEventRow):
-        fields = dict(
-            common,
-            target_type="task",
-            target_id=row.task_id,
-            worker_slug=row.worker_slug,
-            actor=row.actor,
+    return SampleWorkerRemovedEventView(**fields)
+
+
+def _evaluator_event_from_row(
+    row: SampleEvaluatorEventRow,
+    common: EventViewFields,
+) -> SampleEvaluatorAddedEventView | SampleEvaluatorRemovedEventView:
+    fields = dict(
+        common,
+        target_type="task",
+        target_id=row.task_id,
+        evaluator_slug=row.evaluator_slug,
+        actor=row.actor,
+    )
+    if row.event_type == "evaluator.added":
+        return SampleEvaluatorAddedEventView(
+            **fields,
+            evaluator_type=row.evaluator_type,
+            evaluator=row.evaluator_snapshot_json,
         )
-        if row.event_type == "worker.added":
-            return SampleWorkerAddedEventView(
-                **fields,
-                worker_type=row.worker_type,
-                model_target=row.model_target,
-                worker=row.worker_snapshot_json,
-            )
-        return SampleWorkerRemovedEventView(**fields)
-    if isinstance(row, SampleEvaluatorEventRow):
-        fields = dict(
-            common,
-            target_type="task",
-            target_id=row.task_id,
-            evaluator_slug=row.evaluator_slug,
-            actor=row.actor,
+    return SampleEvaluatorRemovedEventView(**fields)
+
+
+def _sandbox_event_from_row(
+    row: SampleSandboxEventRow,
+    common: EventViewFields,
+) -> SampleSandboxAddedEventView | SampleSandboxRemovedEventView:
+    fields = dict(
+        common,
+        target_type="task",
+        target_id=row.task_id,
+        sandbox_slug=row.sandbox_slug,
+        actor=row.actor,
+    )
+    if row.event_type == "sandbox.added":
+        return SampleSandboxAddedEventView(
+            **fields,
+            sandbox_type=row.sandbox_type,
+            sandbox=row.sandbox_snapshot_json,
         )
-        if row.event_type == "evaluator.added":
-            return SampleEvaluatorAddedEventView(
-                **fields,
-                evaluator_type=row.evaluator_type,
-                evaluator=row.evaluator_snapshot_json,
-            )
-        return SampleEvaluatorRemovedEventView(**fields)
-    if isinstance(row, SampleSandboxEventRow):
-        fields = dict(
-            common,
-            target_type="task",
-            target_id=row.task_id,
-            sandbox_slug=row.sandbox_slug,
-            actor=row.actor,
-        )
-        if row.event_type == "sandbox.added":
-            return SampleSandboxAddedEventView(
-                **fields,
-                sandbox_type=row.sandbox_type,
-                sandbox=row.sandbox_snapshot_json,
-            )
-        return SampleSandboxRemovedEventView(**fields)
+    return SampleSandboxRemovedEventView(**fields)
+
+
+def _annotation_event_from_row(
+    row: SampleAnnotationEventRow,
+    common: EventViewFields,
+) -> (
+    SampleAnnotationSetEventView
+    | SampleAnnotationUpdatedEventView
+    | SampleAnnotationDeletedEventView
+):
     value = row.payload_json.get("value")
     fields = dict(
         common,
@@ -382,3 +412,26 @@ def sample_runtime_event_from_row(row: SampleRuntimeEventRow) -> SampleRuntimeEv
             value=value if isinstance(value, dict) else {},
         )
     return SampleAnnotationDeletedEventView(**fields)
+
+
+def sample_runtime_event_from_row(row: SampleRuntimeEventRow) -> SampleRuntimeEventView:
+    common = _event_common(row)
+    if isinstance(row, SampleStatusEventRow):
+        return SampleStatusChangedEventView(
+            **common,
+            target_type="sample",
+            target_id=row.sample_id,
+            status=row.status,
+            actor=row.actor,
+        )
+    if isinstance(row, SampleTaskEventRow):
+        return _task_event_from_row(row, common)
+    if isinstance(row, SampleEdgeEventRow):
+        return _edge_event_from_row(row, common)
+    if isinstance(row, SampleWorkerEventRow):
+        return _worker_event_from_row(row, common)
+    if isinstance(row, SampleEvaluatorEventRow):
+        return _evaluator_event_from_row(row, common)
+    if isinstance(row, SampleSandboxEventRow):
+        return _sandbox_event_from_row(row, common)
+    return _annotation_event_from_row(row, common)
