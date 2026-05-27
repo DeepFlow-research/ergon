@@ -72,7 +72,6 @@ def test_rollout_batch_sample_membership_uses_sample_ids(session_factory) -> Non
         summary = _service(session_factory).create_rollout_batch(
             session,
             sample_ids=[sample_id],
-            definition_id=uuid4(),
         )
         session.commit()
 
@@ -139,20 +138,29 @@ def test_rollout_batch_status_is_loaded_by_sample_membership(session_factory) ->
     assert reloaded.status.value in {"pending", "running"}
 
 
-def test_rollout_batch_records_definition_id_as_temporary_bridge(session_factory) -> None:
-    definition_id = uuid4()
+def test_rollout_batch_records_experiment_and_sampler_identity(session_factory) -> None:
+    experiment_id = uuid4()
+    sampler_invocation_id = uuid4()
     with session_factory() as session:
         sample = _sample(session)
         sample_id = sample.id
         summary = _service(session_factory).create_rollout_batch(
             session,
             sample_ids=[sample_id],
-            definition_id=definition_id,
+            experiment_id=experiment_id,
+            sampler_invocation_id=sampler_invocation_id,
         )
         session.commit()
 
         reloaded = _service(session_factory).get_rollout_batch(session, summary.batch_id)
 
     assert reloaded is not None
-    assert reloaded.definition_id == definition_id
-    assert reloaded.sampler_invocation_id is None
+    assert reloaded.experiment_id == experiment_id
+    assert reloaded.sampler_invocation_id == sampler_invocation_id
+
+
+def test_rollout_batches_do_not_reference_definitions() -> None:
+    assert "definition_id" not in RolloutBatch.model_fields
+    from ergon_core.core.rl.rollout_types import RolloutBatchSummary
+
+    assert "definition_id" not in RolloutBatchSummary.model_fields

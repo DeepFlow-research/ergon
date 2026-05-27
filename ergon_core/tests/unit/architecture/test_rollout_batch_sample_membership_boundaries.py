@@ -10,6 +10,7 @@ DISALLOWED_ROLLOUT_RUN_SYMBOLS = [
     "rollout_batch_runs",
     "batch_run",
     "run_ids",
+    "RolloutBatch.model_fields[\"definition_id\"]",
 ]
 
 
@@ -28,9 +29,7 @@ def test_rollout_batch_sample_membership_no_longer_uses_runs() -> None:
     assert offenders == []
 
 
-def test_rollout_batch_definition_id_is_documented_as_temporary_bridge() -> None:
-    field = RolloutBatch.model_fields["definition_id"]
-
-    assert field.description is not None
-    assert "Temporary compatibility bridge" in field.description
-    assert "experiment-backed" in field.description
+def test_rollout_batch_schema_uses_experiment_sampler_and_sample_identity() -> None:
+    assert "definition_id" not in RolloutBatch.model_fields
+    assert "experiment_id" in RolloutBatch.model_fields
+    assert "sampler_invocation_id" in RolloutBatch.model_fields

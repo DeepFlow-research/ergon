@@ -73,7 +73,7 @@ def test_rollout_submit_uses_rollout_batch_and_run_definition_without_legacy_rec
         memberships = list(session.exec(select(RolloutBatchSampleMembership)).all())
 
     assert batch is not None
-    assert batch.definition_id == definition_id
+    assert batch.experiment_id is None
     assert {run.definition_id for run in runs} == {definition_id}
     assert {run.model_target for run in runs} == {"openai:test"}
     assert {membership.sample_id for membership in memberships} == {run.id for run in runs}

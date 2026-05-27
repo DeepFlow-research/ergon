@@ -90,7 +90,6 @@ class RolloutService:
             session.add(
                 RolloutBatch(
                     id=batch_id,
-                    definition_id=request.definition_id,
                     status=BatchStatus.PENDING,
                 )
             )
@@ -147,12 +146,12 @@ class RolloutService:
         session: Session,
         *,
         sample_ids: Sequence[UUID],
-        definition_id: UUID | None = None,
+        experiment_id: UUID | None = None,
         sampler_invocation_id: UUID | None = None,
     ) -> RolloutBatchSummary:
         """Create a durable sample-based batch without launching samples."""
         batch = RolloutBatch(
-            definition_id=definition_id,
+            experiment_id=experiment_id,
             sampler_invocation_id=sampler_invocation_id,
             status=BatchStatus.PENDING,
         )
@@ -171,7 +170,7 @@ class RolloutService:
             batch_id=batch.id,
             sample_ids=list(sample_ids),
             status=BatchStatus(batch.status),
-            definition_id=batch.definition_id,
+            experiment_id=batch.experiment_id,
             sampler_invocation_id=batch.sampler_invocation_id,
         )
 
@@ -185,7 +184,7 @@ class RolloutService:
             batch_id=batch.id,
             sample_ids=sample_ids,
             status=BatchStatus(batch.status),
-            definition_id=batch.definition_id,
+            experiment_id=batch.experiment_id,
             sampler_invocation_id=batch.sampler_invocation_id,
         )
 

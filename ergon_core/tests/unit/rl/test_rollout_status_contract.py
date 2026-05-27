@@ -12,7 +12,7 @@ def test_rollout_api_and_persistence_share_status_contract() -> None:
 
     batch = RolloutBatch.model_validate(
         {
-            "definition_id": str(uuid4()),
+            "experiment_id": str(uuid4()),
             "status": RolloutStatus.RUNNING,
         }
     )
@@ -24,7 +24,7 @@ def test_rollout_batch_rejects_unknown_status() -> None:
     try:
         RolloutBatch.model_validate(
             {
-                "definition_id": str(uuid4()),
+                "experiment_id": str(uuid4()),
                 "status": "not-a-status",
             }
         )

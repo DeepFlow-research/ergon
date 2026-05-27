@@ -353,12 +353,7 @@ class RolloutBatch(SQLModel, table=True):
     __tablename__ = "rollout_batches"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    definition_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_definitions.id",
-        index=True,
-        description="Temporary compatibility bridge until rollout batches are experiment-backed.",
-    )
+    experiment_id: UUID | None = Field(default=None, index=True)
     sampler_invocation_id: UUID | None = Field(default=None, index=True)
     status: RolloutStatus = Field(default=RolloutStatus.PENDING, index=True)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)

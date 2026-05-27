@@ -33,7 +33,7 @@ class RolloutBatchSummary(BaseModel):
     batch_id: UUID
     sample_ids: list[UUID]
     status: BatchStatus
-    definition_id: UUID | None = None
+    experiment_id: UUID | None = None
     sampler_invocation_id: UUID | None = None
 
 
