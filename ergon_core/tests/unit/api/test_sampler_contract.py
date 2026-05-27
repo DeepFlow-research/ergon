@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID, uuid4
 
@@ -7,6 +8,7 @@ import pytest
 from ergon_core.api import (
     Environment,
     Experiment,
+    ExperimentRef,
     ExperimentSubmitResult,
     persist_experiment,
     RandomSampler,
@@ -45,7 +47,7 @@ async def test_random_sampler_returns_all_candidates_in_seeded_order_without_tru
     selected = await RandomSampler(seed=7).select(
         samples=samples,
         k=2,
-        context=SamplingContext(experiment_ref_id=uuid4()),
+        context=SamplingContext(experiment_id=uuid4()),
     )
 
     assert sorted(sample.sample_key for sample in selected) == ["0", "1", "2", "3", "4"]
@@ -75,7 +77,7 @@ class FakeSubmissionService:
             }
         )
         return ExperimentSubmitResult(
-            experiment_ref_id=uuid4(),
+            experiment_id=uuid4(),
             requested_k=k,
             candidate_pool_size=candidate_pool_size or k,
             selected_count=0,
@@ -90,7 +92,7 @@ async def test_experiment_submit_validates_then_delegates_to_service() -> None:
 
     result = await experiment.submit(service=service, k=1, sampler=RandomSampler(seed=1))
 
-    assert isinstance(result.experiment_ref_id, UUID)
+    assert isinstance(result.experiment_id, UUID)
     assert service.calls[0]["k"] == 1
     assert service.calls[0]["experiment"] is experiment
 
@@ -122,3 +124,31 @@ async def test_persist_experiment_validates_before_delegating() -> None:
         await persist_experiment(Experiment(name="", environments=[]), service=service)
 
     assert service.calls == []
+
+
+def test_public_experiment_api_uses_experiment_id_names() -> None:
+    ref = ExperimentRef(
+        experiment_id=uuid4(),
+        name="demo",
+        environment_ids={},
+        created_at=datetime.now(timezone.utc),
+        metadata={},
+    )
+    result = ExperimentSubmitResult(
+        experiment_id=ref.experiment_id,
+        requested_k=1,
+        candidate_pool_size=1,
+        selected_count=0,
+        sample_ids=[],
+    )
+    context = SamplingContext(experiment_id=ref.experiment_id)
+
+    assert ref.experiment_id
+    assert result.experiment_id == ref.experiment_id
+    assert context.experiment_id == ref.experiment_id
+
+
+def test_public_persistence_facade_is_owned_by_api_package() -> None:
+    from ergon_core.api.experiment.persistence import persist_experiment as facade
+
+    assert facade is persist_experiment

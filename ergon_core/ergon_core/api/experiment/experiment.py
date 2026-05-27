@@ -4,19 +4,30 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime
+from typing import Protocol, runtime_checkable
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from ergon_core.api.experiment.environment import Environment
 from ergon_core.api.experiment.sampling import RandomSampler, Sampler
-from ergon_core.core.application.experiments.service import (
-    ExperimentSubmissionService,
-)
+
+
+@runtime_checkable
+class ExperimentSubmissionPort(Protocol):
+    async def submit(
+        self,
+        *,
+        experiment: "Experiment",
+        k: int,
+        sampler: Sampler,
+        candidate_pool_size: int | None,
+        policy_version: int | None,
+    ) -> "ExperimentSubmitResult": ...
 
 
 class ExperimentRef(BaseModel):
-    id: UUID
+    experiment_id: UUID
     name: str
     environment_ids: Mapping[str, UUID] = Field(default_factory=dict)
     created_at: datetime | None = None
@@ -25,7 +36,7 @@ class ExperimentRef(BaseModel):
 
 
 class ExperimentSubmitResult(BaseModel):
-    experiment_ref_id: UUID
+    experiment_id: UUID
     sampler_invocation_id: UUID | None = None
     batch_id: UUID | None = None
     requested_k: int
@@ -69,7 +80,7 @@ class Experiment(BaseModel):
     async def submit(
         self,
         *,
-        service: ExperimentSubmissionService,
+        service: ExperimentSubmissionPort,
         k: int,
         sampler: Sampler | None = None,
         candidate_pool_size: int | None = None,
