@@ -18,7 +18,7 @@ test("experiment detail sample table exposes each row as sample navigation", () 
   const source = readFileSync("src/components/experiments/SampleTable.tsx", "utf8");
 
   assert.match(source, /data-testid=\{`experiment-sample-row-\$\{sample\.sampleId\}`\}/);
-  assert.match(source, /href=\{`\/samples\/\$\{sample\.sampleId\}`\}/);
+  assert.match(source, /href=\{`\/samples\/\$\{sample\.sampleId\}\/detail`\}/);
 });
 
 test("run workspace can collapse the bottom activity timeline", () => {
