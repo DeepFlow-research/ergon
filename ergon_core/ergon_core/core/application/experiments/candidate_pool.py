@@ -45,7 +45,7 @@ class SampleCandidatePool:
         }
         known_keys = self._repository.known_sample_keys_by_environment(handle.experiment_id)
         iterators = {
-            environment.name: iter(environment.iter_samples())
+            environment.name: environment.iter_candidate_samples()
             for environment in experiment.environments
         }
         active_names = [environment.name for environment in experiment.environments]

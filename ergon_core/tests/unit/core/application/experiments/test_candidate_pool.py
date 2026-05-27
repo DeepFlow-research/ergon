@@ -165,6 +165,39 @@ def test_candidate_pool_reuses_unselected_entries_before_advancing_stream(
     assert counted_streaming_experiment.environments[0].pull_count == 10
 
 
+def test_candidate_pool_resumes_stateless_stream_cursor_after_retained_entries(
+    session: Session,
+    streamed_experiment: Experiment,
+) -> None:
+    handle = persist_experiment(session=session, experiment=streamed_experiment)
+    pool = SampleCandidatePool(session)
+
+    first = pool.fill(
+        experiment=streamed_experiment,
+        handle=handle,
+        candidate_pool_size=8,
+    )
+    pool.mark_selected(first[:2], sampler_invocation_id=uuid4())
+    session.commit()
+
+    second = pool.fill(
+        experiment=streamed_experiment,
+        handle=handle,
+        candidate_pool_size=8,
+    )
+
+    assert [entry.sample_key for entry in second] == [
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+    ]
+
+
 def test_candidate_pool_round_robins_new_entries_across_environments(
     session: Session,
 ) -> None:
