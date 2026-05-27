@@ -114,15 +114,20 @@ def append_sample_status_changed(
 
 class SampleRuntimeEventReadService:
     def list_events(self, session: Session, sample_id: UUID) -> list[SampleRuntimeEventView]:
-        from ergon_core.core.application.samples.event_views import (
-            sample_runtime_event_from_row,
-        )
-
         rows: list[SampleRuntimeEventRow] = []
         for model in _EVENT_MODELS:
             rows.extend(session.exec(select(model).where(model.sample_id == sample_id)).all())
         rows.sort(key=lambda row: (row.event_timestamp, row.id))
-        return [sample_runtime_event_from_row(row) for row in rows]
+        return [sample_runtime_event_view_from_row(row) for row in rows]
+
+
+def sample_runtime_event_view_from_row(row: SampleRuntimeEventRow) -> SampleRuntimeEventView:
+    """Convert a typed WAL row into the public sample runtime event view."""
+    from ergon_core.core.application.samples.event_views import (
+        sample_runtime_event_from_row,
+    )
+
+    return sample_runtime_event_from_row(row)
 
 
 _EVENT_MODELS = (

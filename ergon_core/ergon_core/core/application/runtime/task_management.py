@@ -17,8 +17,10 @@ from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.application.ports import DashboardEventPublisher
-from ergon_core.core.application.samples.event_views import sample_runtime_event_from_row
-from ergon_core.core.application.samples.events import SampleRuntimeEventRow
+from ergon_core.core.application.samples.events import (
+    SampleRuntimeEventRow,
+    sample_runtime_event_view_from_row,
+)
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.application.runtime.status import (
     BLOCKED,
@@ -103,7 +105,7 @@ class TaskManagementService:
         if self._dashboard_publisher is None:
             return
         await self._dashboard_publisher.publish(
-            DashboardSampleRuntimeEvent(event=sample_runtime_event_from_row(row))
+            DashboardSampleRuntimeEvent(event=sample_runtime_event_view_from_row(row))
         )
 
     # ── spawn_dynamic_task ───────────────────────────────────

@@ -82,7 +82,7 @@ LAYOUT_FILE_EXCEPTIONS = {
         "workflow_errors.py",
         "workflow_models.py",
     },
-    "samples": {"events.py", "materialization.py", "state.py"},
+    "samples": {"events.py", "event_views.py", "materialization.py", "state.py"},
     "testing": {"suppression_budget.py", "test_harness_service.py"},
 }
 LAYOUT_DIR_EXCEPTIONS: dict[str, set[str]] = {}
