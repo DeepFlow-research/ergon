@@ -17,4 +17,9 @@ class CoreExperimentPersistencePort:
         self._session = session
 
     async def persist_experiment(self, experiment: Experiment) -> ExperimentRef:
-        return persist_row_graph(session=self._session, experiment=experiment)
+        ref = experiment.persisted_ref()
+        if ref is not None:
+            return ref
+        ref = persist_row_graph(session=self._session, experiment=experiment)
+        experiment.mark_persisted(ref)
+        return ref

@@ -197,6 +197,34 @@ async def test_submit_retains_unselected_candidate_pool_entries(
 
 
 @pytest.mark.asyncio
+async def test_submit_reuses_persisted_experiment_and_retained_candidates(
+    session: Session,
+    streaming_experiment: Experiment,
+) -> None:
+    service = ExperimentSubmissionService(session=session, event_bus=FakeEventBus())
+
+    first = await streaming_experiment.submit(
+        service=service,
+        k=2,
+        sampler=SequentialSampler(),
+        candidate_pool_size=8,
+    )
+    second = await streaming_experiment.submit(
+        service=service,
+        k=2,
+        sampler=SequentialSampler(),
+        candidate_pool_size=8,
+    )
+
+    rows = session.exec(
+        select(ExperimentSamplePoolEntryRow).order_by(ExperimentSamplePoolEntryRow.created_at)
+    ).all()
+    assert second.experiment_id == first.experiment_id
+    assert [row.sample_key for row in rows] == [str(index) for index in range(10)]
+    assert sum(row.selected for row in rows) == 4
+
+
+@pytest.mark.asyncio
 async def test_submit_caps_random_sampler_selection_to_requested_k(
     session: Session,
     streaming_experiment: Experiment,
