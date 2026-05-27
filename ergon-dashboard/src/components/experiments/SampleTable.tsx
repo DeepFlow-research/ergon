@@ -26,7 +26,7 @@ export function SampleTable({ samples }: { samples: ExperimentSampleSummaryView[
             >
               <td>
                 <Link
-                  href={`/samples/${sample.sampleId}`}
+                  href={`/samples/${sample.sampleId}/detail`}
                   className="block px-3 py-2 font-mono text-xs text-[var(--ink)] underline-offset-2 group-hover:underline"
                 >
                   {sample.sampleKey}
