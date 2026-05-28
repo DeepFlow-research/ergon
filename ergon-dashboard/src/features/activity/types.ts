@@ -18,7 +18,7 @@ export type ActivityBand =
 
 export interface ActivityLineage {
   taskId?: string | null;
-  taskExecutionId?: string | null;
+  taskAttemptId?: string | null;
   sandboxId?: string | null;
   agentId?: string | null;
   workerBindingKey?: string | null;

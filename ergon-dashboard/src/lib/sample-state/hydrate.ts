@@ -81,7 +81,7 @@ function deserializeContextEvents(data: SampleSnapshot): Map<string, ContextEven
         .map((event) => ({
           id: String(event.id ?? ""),
           sampleId: String(event.sampleId ?? data.id),
-          taskExecutionId: String(event.taskExecutionId ?? ""),
+          taskAttemptId: String(event.taskAttemptId ?? ""),
           taskId: String(event.taskId ?? taskId),
           workerBindingKey: String(event.workerBindingKey ?? ""),
           sequence: Number(event.sequence ?? 0),

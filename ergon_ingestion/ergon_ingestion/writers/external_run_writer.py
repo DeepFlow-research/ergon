@@ -33,7 +33,7 @@ class WriteRunResult(BaseModel):
 
     sample_id: UUID
     task_id: UUID
-    task_execution_id: UUID
+    task_attempt_id: UUID
 
 
 class ExternalRunWriter:
@@ -110,20 +110,18 @@ class ExternalRunWriter:
         for resource in parsed.resources:
             self._session.add(self._resource_row(run.id, execution.id, resource))
 
-        return WriteRunResult(
-            sample_id=run.id, task_id=node.task_id, task_execution_id=execution.id
-        )
+        return WriteRunResult(sample_id=run.id, task_id=node.task_id, task_attempt_id=execution.id)
 
     def _resource_row(
         self,
         sample_id: UUID,
-        task_execution_id: UUID,
+        task_attempt_id: UUID,
         resource: ParsedResource,
     ) -> SampleResource:
         path, content_hash, size = self._materialize_resource(sample_id, resource)
         return SampleResource(
             sample_id=sample_id,
-            task_execution_id=task_execution_id,
+            task_attempt_id=task_attempt_id,
             kind=SampleResourceKind(resource.kind).value,
             name=resource.name,
             mime_type=resource.mime_type,

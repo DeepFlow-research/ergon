@@ -23,7 +23,7 @@ function activity(
     actor,
     sourceKind: "execution.span",
     metadata: {},
-    lineage: { taskId: id, taskExecutionId: id },
+    lineage: { taskId: id, taskAttemptId: id },
     debug: { source: "execution.span", payload: { id } },
   };
 }

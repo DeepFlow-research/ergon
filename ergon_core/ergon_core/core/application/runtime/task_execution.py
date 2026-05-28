@@ -167,9 +167,6 @@ class TaskExecutionService:
             execution = SampleTaskAttempt(
                 sample_id=command.sample_id,
                 task_id=view.task_id,
-                attempt_number=self._task_execution_repo.next_attempt_for_node(
-                    session, command.sample_id, view.task_id
-                ),
                 status=TaskExecutionStatus.RUNNING,
                 started_at=utcnow(),
             )

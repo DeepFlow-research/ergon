@@ -69,7 +69,7 @@ test("run snapshot hydration orders context events across retried executions", (
   const retryEvent = {
     ...first,
     id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
-    taskExecutionId: "99999999-9999-4999-8999-999999999998",
+    taskAttemptId: "99999999-9999-4999-8999-999999999998",
     sequence: 0,
     createdAt: "2026-03-18T12:00:30.000Z",
     payload: {
@@ -403,7 +403,7 @@ test("dashboard context event parser accepts backend context part payloads", () 
   const parsed = parseDashboardContextEventData({
     id: "88888888-8888-4888-8888-888888888888",
     sample_id: FIXTURE_IDS.sampleId,
-    task_execution_id: "99999999-9999-4999-8999-999999999999",
+    task_attempt_id: "99999999-9999-4999-8999-999999999999",
     task_id: FIXTURE_IDS.solveTaskNodeUuid,
     worker_binding_key: "swebench-smoke-worker",
     sequence: 0,

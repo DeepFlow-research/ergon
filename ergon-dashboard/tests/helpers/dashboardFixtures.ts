@@ -84,7 +84,7 @@ function serializedRunState(): SerializedSampleWorkspaceState {
     {
       id: FIXTURE_IDS.toolCallEventId,
       sampleId: FIXTURE_IDS.sampleId,
-      taskExecutionId: FIXTURE_IDS.solveExecutionId,
+      taskAttemptId: FIXTURE_IDS.solveExecutionId,
       taskId: FIXTURE_IDS.solveTaskNodeUuid,
       workerBindingKey: "react-worker",
       sequence: 0,
@@ -112,7 +112,7 @@ function serializedRunState(): SerializedSampleWorkspaceState {
     {
       id: FIXTURE_IDS.toolResultEventId,
       sampleId: FIXTURE_IDS.sampleId,
-      taskExecutionId: FIXTURE_IDS.solveExecutionId,
+      taskAttemptId: FIXTURE_IDS.solveExecutionId,
       taskId: FIXTURE_IDS.solveTaskNodeUuid,
       workerBindingKey: "react-worker",
       sequence: 1,
@@ -159,7 +159,7 @@ function serializedRunState(): SerializedSampleWorkspaceState {
         {
           id: "resource-proof",
           taskId: FIXTURE_IDS.solveTaskId,
-          taskExecutionId: "execution-1",
+          taskAttemptId: "execution-1",
           name: "proof.lean",
           mimeType: "text/plain",
           sizeBytes: 320,
@@ -374,7 +374,7 @@ export function createDeltaContextEvent(): ContextEventState {
   return {
     id: FIXTURE_IDS.deltaToolCallEventId,
     sampleId: FIXTURE_IDS.sampleId,
-    taskExecutionId: "execution-solve-1",
+    taskAttemptId: "execution-solve-1",
     taskId: FIXTURE_IDS.solveTaskId,
     workerBindingKey: "react-worker",
     sequence: 2,

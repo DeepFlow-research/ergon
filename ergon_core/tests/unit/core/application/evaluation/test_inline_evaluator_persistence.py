@@ -73,7 +73,7 @@ async def test_persist_success_records_inline_evaluator_binding_key(monkeypatch)
 
     await service.persist_success(
         sample_id=sample_id,
-        task_execution_id=execution_id,
+        task_attempt_id=execution_id,
         task_id=task_id,
         binding_key="judge",
         service_result=EvaluationServiceResult(
@@ -105,7 +105,7 @@ async def test_persist_failure_records_inline_evaluator_binding_key(monkeypatch)
 
     await service.persist_failure(
         sample_id=sample_id,
-        task_execution_id=execution_id,
+        task_attempt_id=execution_id,
         task_id=task_id,
         binding_key="judge",
         exc=RuntimeError("boom"),

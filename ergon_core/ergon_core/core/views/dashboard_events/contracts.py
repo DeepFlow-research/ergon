@@ -90,7 +90,7 @@ class DashboardResourcePublishedEvent(InngestEventContract):
 
     sample_id: UUID
     task_id: UUID
-    task_execution_id: UUID
+    task_attempt_id: UUID
     resource_id: UUID
     resource_name: str
     mime_type: str
@@ -175,7 +175,7 @@ class DashboardContextEventEvent(InngestEventContract):
         description="SampleContextEvent.id used by the frontend as a stable deduplication key."
     )
     sample_id: UUID
-    task_execution_id: UUID
+    task_attempt_id: UUID
     task_id: UUID = Field(
         description=(
             "Graph task id resolved from the task execution by the dashboard emitter at "

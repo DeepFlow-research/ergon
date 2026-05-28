@@ -59,6 +59,35 @@ def upgrade() -> None:
     _replace_sample_fk(inspector, "thread_messages", "sample_id", "samples")
     _drop_sample_fk(inspector, "sandbox_command_wal_entries", "sample_id")
     _drop_sample_fk(inspector, "sandbox_events", "sample_id")
+    _ensure_sample_attempt_timestamp_identity(inspector)
+    _rename_column_if_needed(inspector, "sample_resources", "task_execution_id", "task_attempt_id")
+    _rename_column_if_needed(
+        inspector,
+        "sample_task_evaluations",
+        "task_execution_id",
+        "task_attempt_id",
+    )
+    _rename_column_if_needed(inspector, "thread_messages", "task_execution_id", "task_attempt_id")
+    _rename_column_if_needed(
+        inspector,
+        "sample_context_events",
+        "task_execution_id",
+        "task_attempt_id",
+    )
+    _replace_unique_constraint(
+        inspector,
+        "threads",
+        old_name="uq_threads_run_topic",
+        new_name="uq_threads_sample_topic",
+        columns=["sample_id", "topic"],
+    )
+    _replace_unique_constraint(
+        inspector,
+        "sample_context_events",
+        old_name="uq_sample_context_events_execution_sequence",
+        new_name="uq_sample_context_events_attempt_sequence",
+        columns=["task_attempt_id", "sequence"],
+    )
     _add_column_if_missing(
         inspector,
         "experiment_sampler_invocations",
@@ -145,6 +174,57 @@ def _rename_run_id_to_sample_id_if_needed(inspector: sa.Inspector, table_name: s
     columns = {column["name"] for column in inspector.get_columns(table_name)}
     if "sample_id" not in columns and "run_id" in columns:
         op.alter_column(table_name, "run_id", new_column_name="sample_id")
+
+
+def _rename_column_if_needed(
+    inspector: sa.Inspector,
+    table_name: str,
+    old_name: str,
+    new_name: str,
+) -> None:
+    if table_name not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns(table_name)}
+    if new_name not in columns and old_name in columns:
+        op.alter_column(table_name, old_name, new_column_name=new_name)
+
+
+def _ensure_sample_attempt_timestamp_identity(inspector: sa.Inspector) -> None:
+    if "sample_task_attempts" not in inspector.get_table_names():
+        return
+    _add_column_if_missing(
+        inspector,
+        "sample_task_attempts",
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+    )
+    op.execute(
+        "UPDATE sample_task_attempts "
+        "SET created_at = COALESCE(created_at, started_at, completed_at, CURRENT_TIMESTAMP)"
+    )
+    if op.get_context().dialect.name != "sqlite":
+        op.alter_column("sample_task_attempts", "created_at", nullable=False)
+    _drop_column_if_exists(inspector, "sample_task_attempts", "attempt_number")
+
+
+def _replace_unique_constraint(
+    inspector: sa.Inspector,
+    table_name: str,
+    *,
+    old_name: str,
+    new_name: str,
+    columns: list[str],
+) -> None:
+    if table_name not in inspector.get_table_names():
+        return
+    constraints = {
+        constraint["name"]: constraint
+        for constraint in inspector.get_unique_constraints(table_name)
+        if constraint.get("name")
+    }
+    if old_name in constraints:
+        op.drop_constraint(old_name, table_name, type_="unique")
+    if new_name not in constraints:
+        op.create_unique_constraint(new_name, table_name, columns)
 
 
 def _add_column_if_missing(
@@ -239,6 +319,39 @@ def _upgrade_offline() -> None:
         op.execute(
             f'ALTER TABLE "{table_name}" DROP CONSTRAINT IF EXISTS "{table_name}_run_id_fkey"'
         )
+    op.add_column(
+        "sample_task_attempts",
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+    )
+    op.execute(
+        "UPDATE sample_task_attempts "
+        "SET created_at = COALESCE(created_at, started_at, completed_at, CURRENT_TIMESTAMP)"
+    )
+    op.alter_column("sample_task_attempts", "created_at", nullable=False)
+    op.drop_column("sample_task_attempts", "attempt_number")
+    op.alter_column("sample_resources", "task_execution_id", new_column_name="task_attempt_id")
+    op.alter_column(
+        "sample_task_evaluations",
+        "task_execution_id",
+        new_column_name="task_attempt_id",
+    )
+    op.alter_column("thread_messages", "task_execution_id", new_column_name="task_attempt_id")
+    op.alter_column(
+        "sample_context_events",
+        "task_execution_id",
+        new_column_name="task_attempt_id",
+    )
+    op.execute('ALTER TABLE "threads" DROP CONSTRAINT IF EXISTS "uq_threads_run_topic"')
+    op.create_unique_constraint("uq_threads_sample_topic", "threads", ["sample_id", "topic"])
+    op.execute(
+        'ALTER TABLE "sample_context_events" '
+        'DROP CONSTRAINT IF EXISTS "uq_sample_context_events_execution_sequence"'
+    )
+    op.create_unique_constraint(
+        "uq_sample_context_events_attempt_sequence",
+        "sample_context_events",
+        ["task_attempt_id", "sequence"],
+    )
     op.add_column(
         "experiment_sampler_invocations",
         sa.Column("policy_version", sa.Integer(), nullable=True),

@@ -116,9 +116,9 @@ def _missing_task_report(
         return False
 
     report_execution_ids = {
-        str(resource["task_execution_id"])
+        str(resource["task_attempt_id"])
         for resource in resources
-        if resource.get("task_execution_id") is not None and _is_report_resource(resource)
+        if resource.get("task_attempt_id") is not None and _is_report_resource(resource)
     }
     return not completed_execution_ids.issubset(report_execution_ids)
 

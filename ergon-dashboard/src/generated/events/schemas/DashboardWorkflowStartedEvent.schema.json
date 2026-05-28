@@ -362,7 +362,7 @@
           "default": null,
           "title": "Taskid"
         },
-        "taskExecutionId": {
+        "taskAttemptId": {
           "anyOf": [
             {
               "type": "string"
@@ -372,7 +372,7 @@
             }
           ],
           "default": null,
-          "title": "Taskexecutionid"
+          "title": "Taskattemptid"
         },
         "fromAgentId": {
           "title": "Fromagentid",
@@ -500,9 +500,9 @@
           "title": "Sampleid",
           "type": "string"
         },
-        "taskExecutionId": {
+        "taskAttemptId": {
           "format": "uuid",
-          "title": "Taskexecutionid",
+          "title": "Taskattemptid",
           "type": "string"
         },
         "taskId": {
@@ -568,7 +568,7 @@
       "required": [
         "id",
         "sampleId",
-        "taskExecutionId",
+        "taskAttemptId",
         "taskId",
         "workerBindingKey",
         "sequence",
@@ -898,8 +898,8 @@
           "title": "Taskid",
           "type": "string"
         },
-        "taskExecutionId": {
-          "title": "Taskexecutionid",
+        "taskAttemptId": {
+          "title": "Taskattemptid",
           "type": "string"
         },
         "name": {
@@ -927,7 +927,7 @@
       "required": [
         "id",
         "taskId",
-        "taskExecutionId",
+        "taskAttemptId",
         "name",
         "mimeType",
         "filePath",

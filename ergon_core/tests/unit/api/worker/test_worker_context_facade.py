@@ -123,7 +123,7 @@ class _FakeResources:
             SampleResourceView(
                 id=uuid4(),
                 sample_id=self.sample_id,
-                task_execution_id=kwargs.get("task_execution_id"),
+                task_attempt_id=kwargs.get("task_attempt_id"),
                 kind=SampleResourceKind.REPORT,
                 name="report.txt",
                 mime_type="text/plain",
@@ -275,7 +275,7 @@ async def test_resources_are_run_scoped_not_descendant_scoped(tmp_path: Path) ->
 
     assert data == b"ok"
     assert repo.calls[0][1]["task_id"] == sibling_task_id
-    assert repo.calls[0][1]["task_execution_id"] == execution_id
+    assert repo.calls[0][1]["task_attempt_id"] == execution_id
 
 
 @pytest.mark.asyncio
@@ -350,7 +350,7 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
             ),
             SampleResource(
                 sample_id=sample_id,
-                task_execution_id=sibling_execution_id,
+                task_attempt_id=sibling_execution_id,
                 kind=SampleResourceKind.REPORT.value,
                 name="report.txt",
                 mime_type="text/plain",

@@ -105,7 +105,7 @@ class RecursiveSmokeWorkerBase(Worker):
         await communication_service.save_message(
             CreateMessageRequest(
                 sample_id=context.sample_id,
-                task_execution_id=context.execution_id,
+                task_attempt_id=context.execution_id,
                 from_agent_id=f"leaf-{task_slug}",
                 to_agent_id="parent",
                 thread_topic="smoke-completion",

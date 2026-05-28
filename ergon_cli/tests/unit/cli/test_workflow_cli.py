@@ -73,7 +73,7 @@ def test_resource_list_json_uses_injected_context() -> None:
     resource = WorkflowResourceRef(
         resource_id=uuid4(),
         sample_id=sample_id,
-        task_execution_id=uuid4(),
+        task_attempt_id=uuid4(),
         task_id=task_id,
         task_slug="research",
         kind="report",

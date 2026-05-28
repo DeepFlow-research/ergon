@@ -10,7 +10,7 @@ from sqlmodel import Session
 from ergon_core.api.experiment.experiment import Experiment, ExperimentSubmitResult
 from ergon_core.api.experiment.sample import Sample
 from ergon_core.api.experiment.sampling import Sampler, SamplingContext
-from ergon_core.core.application.events.runtime import WorkflowStartedEvent
+from ergon_core.core.application.events.runtime import SampleStartedEvent
 from ergon_core.core.application.experiments.candidate_pool import (
     SampleCandidatePool,
     sample_from_pool_entry,
@@ -30,14 +30,14 @@ from ergon_core.core.persistence.telemetry.models import SampleRecord
 
 
 class EventBus(Protocol):
-    async def publish(self, event: WorkflowStartedEvent) -> None: ...
+    async def publish(self, event: SampleStartedEvent) -> None: ...
 
 
-class InngestWorkflowEventBus:
-    async def publish(self, event: WorkflowStartedEvent) -> None:
+class InngestSampleEventBus:
+    async def publish(self, event: SampleStartedEvent) -> None:
         await inngest_client.send(
             InngestEvent(
-                name=WorkflowStartedEvent.name,
+                name=SampleStartedEvent.name,
                 data=event.model_dump(mode="json"),
             )
         )
@@ -46,7 +46,7 @@ class InngestWorkflowEventBus:
 class ExperimentSubmissionService:
     def __init__(self, *, session: Session, event_bus: EventBus | None = None) -> None:
         self._session = session
-        self._event_bus = event_bus or InngestWorkflowEventBus()
+        self._event_bus = event_bus or InngestSampleEventBus()
 
     @classmethod
     def for_session(
@@ -148,7 +148,7 @@ class ExperimentSubmissionService:
 
     async def _start_samples(self, sample_ids: Sequence[UUID]) -> None:
         for sample_id in sample_ids:
-            await self._event_bus.publish(WorkflowStartedEvent(sample_id=sample_id))
+            await self._event_bus.publish(SampleStartedEvent(sample_id=sample_id))
 
 
 def _entries_for_selected_samples(

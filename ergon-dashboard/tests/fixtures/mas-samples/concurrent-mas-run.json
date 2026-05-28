@@ -124,7 +124,7 @@
         {
           "id": "20000000-0000-4000-8000-000000000001",
           "taskId": "10000000-0000-4000-8000-000000000002",
-          "taskExecutionId": "30000000-0000-4000-8000-000000000001",
+          "taskAttemptId": "30000000-0000-4000-8000-000000000001",
           "name": "references.md",
           "mimeType": "text/markdown",
           "filePath": "/workspace/references.md",
@@ -227,7 +227,7 @@
             "threadTopic": "task_clarification",
             "sampleId": "99999999-9999-4999-8999-999999999999",
             "taskId": "10000000-0000-4000-8000-000000000003",
-            "taskExecutionId": "30000000-0000-4000-8000-000000000002",
+            "taskAttemptId": "30000000-0000-4000-8000-000000000002",
             "fromAgentId": "agent-b",
             "toAgentId": "stakeholder",
             "content": "Should I reject ungrounded claims?",
@@ -283,7 +283,7 @@
         {
           "id": "60000000-0000-4000-8000-000000000001",
           "sampleId": "99999999-9999-4999-8999-999999999999",
-          "taskExecutionId": "30000000-0000-4000-8000-000000000001",
+          "taskAttemptId": "30000000-0000-4000-8000-000000000001",
           "taskId": "10000000-0000-4000-8000-000000000002",
           "workerBindingKey": "researcher-a",
           "sequence": 0,

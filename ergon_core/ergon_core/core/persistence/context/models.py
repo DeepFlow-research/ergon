@@ -26,13 +26,13 @@ class SampleContextEvent(SQLModel, table=True):
     __tablename__ = "sample_context_events"
     __table_args__ = (
         sa.UniqueConstraint(
-            "task_execution_id", "sequence", name="uq_sample_context_events_execution_sequence"
+            "task_attempt_id", "sequence", name="uq_sample_context_events_attempt_sequence"
         ),
     )
 
     id: UUID = Field(default_factory=new_id, primary_key=True)
     sample_id: UUID = Field(foreign_key="samples.id", index=True)
-    task_execution_id: UUID = Field(foreign_key="sample_task_attempts.id", index=True)
+    task_attempt_id: UUID = Field(foreign_key="sample_task_attempts.id", index=True)
     worker_binding_key: str = Field(index=True)
     sequence: int
     event_type: str = Field(

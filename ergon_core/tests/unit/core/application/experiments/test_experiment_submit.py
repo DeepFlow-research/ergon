@@ -10,10 +10,10 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 from ergon_core.api import Environment, Experiment, RandomSampler, Sample
 from ergon_core.api.experiment.sampling import SamplingContext
-from ergon_core.core.application.events.runtime import WorkflowStartedEvent
+from ergon_core.core.application.events.runtime import SampleStartedEvent
 from ergon_core.core.application.experiments.submission import (
     ExperimentSubmissionService,
-    InngestWorkflowEventBus,
+    InngestSampleEventBus,
 )
 from ergon_core.core.persistence.experiments.models import (
     ExperimentSamplePoolEntryRow,
@@ -46,9 +46,9 @@ class FakeEventBus:
 class CommittedStateEventBus:
     def __init__(self, engine) -> None:
         self._engine = engine
-        self.events: list[WorkflowStartedEvent] = []
+        self.events: list[SampleStartedEvent] = []
 
-    async def publish(self, event: WorkflowStartedEvent) -> None:
+    async def publish(self, event: SampleStartedEvent) -> None:
         with Session(self._engine) as observer:
             assert observer.get(SampleRecord, event.sample_id) is not None
             assert observer.exec(
@@ -323,7 +323,7 @@ async def test_submit_commits_materialized_sample_before_start_event(tmp_path: P
 
 
 @pytest.mark.asyncio
-async def test_default_event_bus_sends_workflow_started(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_default_event_bus_sends_sample_started(monkeypatch: pytest.MonkeyPatch) -> None:
     sent: list[object] = []
 
     async def fake_send(event: object) -> None:
@@ -333,12 +333,12 @@ async def test_default_event_bus_sends_workflow_started(monkeypatch: pytest.Monk
         "ergon_core.core.application.experiments.submission.inngest_client.send",
         fake_send,
     )
-    event = WorkflowStartedEvent(sample_id=uuid4())
+    event = SampleStartedEvent(sample_id=uuid4())
 
-    await InngestWorkflowEventBus().publish(event)
+    await InngestSampleEventBus().publish(event)
 
     assert len(sent) == 1
-    assert getattr(sent[0], "name") == WorkflowStartedEvent.name
+    assert getattr(sent[0], "name") == SampleStartedEvent.name
     assert getattr(sent[0], "data") == event.model_dump(mode="json")
 
 
@@ -362,7 +362,7 @@ async def test_submit_uses_inngest_event_bus_by_default(
     result = await experiment.submit(service=service, k=1, sampler=SequentialSampler())
 
     assert len(sent) == 1
-    assert getattr(sent[0], "name") == WorkflowStartedEvent.name
+    assert getattr(sent[0], "name") == SampleStartedEvent.name
     assert getattr(sent[0], "data") == {
         "sample_id": str(result.sample_ids[0]),
     }

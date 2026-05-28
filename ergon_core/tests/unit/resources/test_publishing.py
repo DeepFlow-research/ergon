@@ -46,12 +46,12 @@ class _Repository:
         self.prior_by_hash = prior_by_hash
         self.appended: list[dict] = []
 
-    def latest_by_path(self, _session, *, task_execution_id, file_path):
-        del task_execution_id, file_path
+    def latest_by_path(self, _session, *, task_attempt_id, file_path):
+        del task_attempt_id, file_path
         return self.prior_by_path
 
-    def find_by_hash(self, _session, *, task_execution_id, content_hash):
-        del task_execution_id, content_hash
+    def find_by_hash(self, _session, *, task_attempt_id, content_hash):
+        del task_attempt_id, content_hash
         return self.prior_by_hash
 
     def append(self, _session, **kwargs):
@@ -99,14 +99,14 @@ async def test_publish_sandbox_files_writes_blob_and_appends_resource_row() -> N
         reader=_Reader(),
         blob_store=blob_store,
         sample_id=sample_id,
-        task_execution_id=execution_id,
+        task_attempt_id=execution_id,
         publish_dirs=(("/workspace/final_output/", SampleResourceKind.REPORT),),
     )
 
     assert len(created) == 1
     appended = repository.appended[0]
     assert appended["sample_id"] == sample_id
-    assert appended["task_execution_id"] == execution_id
+    assert appended["task_attempt_id"] == execution_id
     assert appended["kind"] == SampleResourceKind.REPORT.value
     assert appended["name"] == "report.md"
     assert appended["mime_type"] == "text/markdown"
@@ -133,7 +133,7 @@ async def test_publish_sandbox_files_skips_existing_blob_path_without_writing() 
         reader=_Reader(),
         blob_store=blob_store,
         sample_id=uuid4(),
-        task_execution_id=uuid4(),
+        task_attempt_id=uuid4(),
         publish_dirs=(("/workspace/final_output/", SampleResourceKind.REPORT),),
     )
 
@@ -156,7 +156,7 @@ def test_publish_value_dedups_by_hash_before_blob_write() -> None:
     created = service.publish_value(
         blob_store=blob_store,
         sample_id=uuid4(),
-        task_execution_id=uuid4(),
+        task_attempt_id=uuid4(),
         kind=SampleResourceKind.REPORT,
         name="summary.txt",
         content="already present",

@@ -97,7 +97,7 @@ def _task_keyed_executions(
     by_task: dict[str, list[SampleExecutionAttemptDto]] = defaultdict(list)
     for ex in sorted(
         executions,
-        key=lambda e: (str(e.task_id), e.attempt_number),
+        key=lambda e: (str(e.task_id), e.created_at, e.id),
     ):
         tid = str(ex.task_id)
         error_msg: str | None = None
@@ -115,7 +115,7 @@ def _task_keyed_executions(
             SampleExecutionAttemptDto(
                 id=str(ex.id),
                 task_id=tid,
-                attempt_number=ex.attempt_number,
+                attempt_number=len(by_task[tid]) + 1,
                 status=ex.status,
                 started_at=ex.started_at,
                 completed_at=ex.completed_at,
@@ -135,9 +135,7 @@ def _task_keyed_resources(
     by_task: dict[str, list[SampleResourceDto]] = defaultdict(list)
     for resource in resources:
         task_id_uuid = (
-            execution_task_map.get(resource.task_execution_id)
-            if resource.task_execution_id
-            else None
+            execution_task_map.get(resource.task_attempt_id) if resource.task_attempt_id else None
         )
         if task_id_uuid is None:
             continue
@@ -146,9 +144,7 @@ def _task_keyed_resources(
             SampleResourceDto(
                 id=str(resource.id),
                 task_id=tid,
-                task_execution_id=(
-                    str(resource.task_execution_id) if resource.task_execution_id else ""
-                ),
+                task_attempt_id=(str(resource.task_attempt_id) if resource.task_attempt_id else ""),
                 name=resource.name,
                 mime_type=resource.mime_type,
                 file_path=resource.file_path,
@@ -217,8 +213,8 @@ def _build_communication_threads(
         task_ids = {
             task_id
             for message in thread_messages
-            if message.task_execution_id is not None
-            for task_id in [execution_task_map.get(message.task_execution_id)]
+            if message.task_attempt_id is not None
+            for task_id in [execution_task_map.get(message.task_attempt_id)]
             if task_id is not None
         }
         thread_task_id = next(iter(task_ids)) if len(task_ids) == 1 else None
@@ -240,15 +236,15 @@ def _build_communication_threads(
                         sample_id=str(message.sample_id),
                         thread_topic=thread.topic,
                         task_id=(
-                            str(execution_task_map[message.task_execution_id])
+                            str(execution_task_map[message.task_attempt_id])
                             if (
-                                message.task_execution_id
-                                and message.task_execution_id in execution_task_map
+                                message.task_attempt_id
+                                and message.task_attempt_id in execution_task_map
                             )
                             else None
                         ),
-                        task_execution_id=(
-                            str(message.task_execution_id) if message.task_execution_id else None
+                        task_attempt_id=(
+                            str(message.task_attempt_id) if message.task_attempt_id else None
                         ),
                         from_agent_id=message.from_agent_id,
                         to_agent_id=message.to_agent_id,
@@ -291,14 +287,14 @@ def _context_events_by_task(
 ) -> dict[str, list[SampleContextEventDto]]:
     context_events_by_task: dict[str, list[SampleContextEventDto]] = defaultdict(list)
     for event in context_events_rows:
-        task_id = execution_task_map.get(event.task_execution_id)
+        task_id = execution_task_map.get(event.task_attempt_id)
         if task_id is None:
             continue
         context_events_by_task[str(task_id)].append(
             SampleContextEventDto(
                 id=event.id,
                 sample_id=event.sample_id,
-                task_execution_id=event.task_execution_id,
+                task_attempt_id=event.task_attempt_id,
                 task_id=task_id,
                 worker_binding_key=event.worker_binding_key,
                 sequence=event.sequence,

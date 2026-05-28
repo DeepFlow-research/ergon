@@ -46,7 +46,7 @@ from ergon_core.core.rl.rollout_types import (
     Trajectory,
     TrainingRolloutRequest,
 )
-from ergon_core.core.application.events.runtime import WorkflowStartedEvent
+from ergon_core.core.application.events.runtime import SampleStartedEvent
 from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
@@ -167,8 +167,8 @@ class RolloutService:
         for sample_id in summary.sample_ids:
             self._inngest_send(
                 inngest.Event(
-                    name=WorkflowStartedEvent.name,
-                    data=WorkflowStartedEvent(sample_id=sample_id).model_dump(mode="json"),
+                    name=SampleStartedEvent.name,
+                    data=SampleStartedEvent(sample_id=sample_id).model_dump(mode="json"),
                 )
             )
         return summary
@@ -332,7 +332,7 @@ class RolloutService:
                     .where(SampleContextEvent.sample_id.in_(sample_ids))  # type: ignore[union-attr]
                     .order_by(
                         SampleContextEvent.sample_id,
-                        SampleContextEvent.task_execution_id,
+                        SampleContextEvent.task_attempt_id,
                         SampleContextEvent.sequence,
                     )
                 ).all()

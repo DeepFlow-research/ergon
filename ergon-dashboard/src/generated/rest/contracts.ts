@@ -71,7 +71,7 @@ const SampleTaskDto = z.object({
 const SampleResourceDto = z.object({
   id: z.string(),
   taskId: z.string(),
-  taskExecutionId: z.string(),
+  taskAttemptId: z.string(),
   name: z.string(),
   mimeType: z.string(),
   filePath: z.string(),
@@ -251,7 +251,7 @@ const ContextPartChunkLog = z
 const SampleContextEventDto = z.object({
   id: z.string().uuid(),
   sampleId: z.string().uuid(),
-  taskExecutionId: z.string().uuid(),
+  taskAttemptId: z.string().uuid(),
   taskId: z.string().uuid(),
   workerBindingKey: z.string(),
   sequence: z.number().int(),
@@ -274,7 +274,7 @@ const SampleCommunicationMessageDto = z.object({
   threadTopic: z.string(),
   sampleId: z.string(),
   taskId: z.union([z.string(), z.null()]).optional(),
-  taskExecutionId: z.union([z.string(), z.null()]).optional(),
+  taskAttemptId: z.union([z.string(), z.null()]).optional(),
   fromAgentId: z.string(),
   toAgentId: z.string(),
   content: z.string(),

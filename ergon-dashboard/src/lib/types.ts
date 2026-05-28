@@ -210,7 +210,7 @@ export interface ExecutionAttemptState {
 export interface ResourceState {
   id: string;
   taskId: string;
-  taskExecutionId: string;
+  taskAttemptId: string;
   name: string;
   mimeType: string;
   sizeBytes: number;

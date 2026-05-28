@@ -38,7 +38,7 @@ def _resource_view(
         SampleResourceView(
             id=resource_id,
             sample_id=uuid4(),
-            task_execution_id=uuid4(),
+            task_attempt_id=uuid4(),
             kind=kind,
             name=name,
             mime_type="text/markdown",

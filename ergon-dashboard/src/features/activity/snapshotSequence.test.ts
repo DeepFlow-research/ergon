@@ -19,7 +19,7 @@ function activity(overrides: Partial<SampleActivity> = {}): SampleActivity {
     actor: null,
     sourceKind: "execution.span",
     metadata: {},
-    lineage: { taskId: "task-1", taskExecutionId: "activity-1" },
+    lineage: { taskId: "task-1", taskAttemptId: "activity-1" },
     ...overrides,
     debug: overrides.debug ?? { source: "execution.span", payload: { id: "activity-1" } },
   };

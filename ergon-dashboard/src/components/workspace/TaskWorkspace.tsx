@@ -54,7 +54,7 @@ function ActivityDetail({ activity }: { activity: SampleActivity }) {
         <span>Started: {formatClockTime(activity.startAt)}</span>
         <span>Sequence: {activity.sequence ?? "—"}</span>
         <span>Task: {activity.lineage.taskId ?? "—"}</span>
-        <span>Execution: {activity.lineage.taskExecutionId ?? "—"}</span>
+        <span>Execution: {activity.lineage.taskAttemptId ?? "—"}</span>
         <span>Sandbox: {activity.lineage.sandboxId ?? "—"}</span>
         {activity.endAt && <span>Ended: {formatClockTime(activity.endAt)}</span>}
         {metadata.map(([key, value]) => (

@@ -84,7 +84,7 @@ def _resource(
     path.write_bytes(content)
     return SampleResource(
         sample_id=sample_id,
-        task_execution_id=execution_id,
+        task_attempt_id=execution_id,
         kind=kind.value,
         name=name,
         mime_type="text/plain",
@@ -261,14 +261,14 @@ async def test_materialize_resource_creates_current_task_owned_copy(tmp_path: Pa
     original = session.get(SampleResource, source.id)
 
     assert copy.id != source.id
-    assert copy.task_execution_id == consumer_exec.id
+    assert copy.task_attempt_id == consumer_exec.id
     assert copy.kind == SampleResourceKind.IMPORT.value
     assert copy.name == "paper (copy).pdf"
     assert copy.file_path == source.file_path
     assert copy.content_hash == source.content_hash
     assert copy.copied_from_resource_id == source.id
     assert original is not None
-    assert original.task_execution_id == producer_exec.id
+    assert original.task_attempt_id == producer_exec.id
     assert manager.uploads == [
         (consumer.task_id, source.file_path, "/workspace/imported/producer/paper (copy).pdf")
     ]

@@ -72,7 +72,7 @@ async def test_persist_success_writes_evaluation_row_with_service_summary(monkey
 
     persisted = await EvaluationService().persist_success(
         sample_id=sample_id,
-        task_execution_id=execution_id,
+        task_attempt_id=execution_id,
         task_id=task_id,
         binding_key="judge",
         service_result=EvaluationServiceResult(
@@ -91,6 +91,6 @@ async def test_persist_success_writes_evaluation_row_with_service_summary(monkey
     assert row.summary_json == persisted.summary.model_dump(mode="json")
     assert row.score == 0.75
     assert row.passed is True
-    assert row.task_execution_id == execution_id
+    assert row.task_attempt_id == execution_id
     assert row.task_id == task_id
     assert row.evaluator_slug == "judge"

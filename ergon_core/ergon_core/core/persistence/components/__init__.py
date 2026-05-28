@@ -1,1 +1,0 @@
-"""Persistent component catalog models."""

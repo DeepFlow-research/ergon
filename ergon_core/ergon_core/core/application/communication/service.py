@@ -51,7 +51,7 @@ class CommunicationService:
             message = ThreadMessage(
                 thread_id=thread.id,
                 sample_id=request.sample_id,
-                task_execution_id=request.task_execution_id,
+                task_attempt_id=request.task_attempt_id,
                 from_agent_id=request.from_agent_id,
                 to_agent_id=request.to_agent_id,
                 content=request.content,
@@ -74,7 +74,7 @@ class CommunicationService:
                 to_agent_id=message.to_agent_id,
                 content=message.content,
                 sequence_num=message.sequence_num,
-                task_execution_id=message.task_execution_id,
+                task_attempt_id=message.task_attempt_id,
                 created_at=message.created_at,
             )
 
@@ -98,7 +98,7 @@ class CommunicationService:
             to_agent_id=message.to_agent_id,
             content=message.content,
             sequence_num=message.sequence_num,
-            task_execution_id=str(message.task_execution_id) if message.task_execution_id else None,
+            task_attempt_id=str(message.task_attempt_id) if message.task_attempt_id else None,
             created_at=message.created_at,
         )
         try:
@@ -138,7 +138,7 @@ class CommunicationService:
                     to_agent_id=m.to_agent_id,
                     content=m.content,
                     sequence_num=m.sequence_num,
-                    task_execution_id=m.task_execution_id,
+                    task_attempt_id=m.task_attempt_id,
                     created_at=m.created_at,
                 )
                 for m in messages
@@ -204,8 +204,8 @@ class CommunicationService:
         thread_summary: str | None = None,
     ) -> Thread:
         # Threads are keyed by (sample_id, topic) only — all senders on the same
-        # topic share one thread per run (broadcast/group semantics).
-        # The unique constraint uq_threads_run_topic enforces this at the DB level
+        # topic share one thread per sample (broadcast/group semantics).
+        # The unique constraint uq_threads_sample_topic enforces this at the DB level
         # and lets us safely retry on concurrent INSERT races.
         stmt = select(Thread).where(Thread.sample_id == sample_id).where(Thread.topic == topic)
         existing = session.exec(stmt).first()

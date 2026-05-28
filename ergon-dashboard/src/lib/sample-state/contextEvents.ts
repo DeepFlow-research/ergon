@@ -94,8 +94,8 @@ export function compareContextEvents(a: ContextEventState, b: ContextEventState)
   if (Number.isFinite(at) && Number.isFinite(bt) && at !== bt) {
     return at - bt;
   }
-  if (a.taskExecutionId !== b.taskExecutionId) {
-    return a.taskExecutionId.localeCompare(b.taskExecutionId);
+  if (a.taskAttemptId !== b.taskAttemptId) {
+    return a.taskAttemptId.localeCompare(b.taskAttemptId);
   }
   return a.sequence - b.sequence;
 }

@@ -20,7 +20,7 @@ def test_build_communication_threads_populates_summary_and_task_anchors() -> Non
     message = ThreadMessage(
         thread_id=thread_id,
         sample_id=sample_id,
-        task_execution_id=execution_id,
+        task_attempt_id=execution_id,
         from_agent_id="leaf-l_1",
         to_agent_id="parent",
         content="l_1: done exit=0",
@@ -38,7 +38,7 @@ def test_build_communication_threads_populates_summary_and_task_anchors() -> Non
     assert dto.summary == "Leaf workers report completion artifacts and probe exit status."
     assert dto.task_id == str(task_id)
     assert dto.messages[0].task_id == str(task_id)
-    assert dto.messages[0].task_execution_id == str(execution_id)
+    assert dto.messages[0].task_attempt_id == str(execution_id)
 
 
 def test_build_communication_threads_keeps_run_level_thread_when_messages_span_tasks() -> None:
@@ -57,7 +57,7 @@ def test_build_communication_threads_keeps_run_level_thread_when_messages_span_t
         ThreadMessage(
             thread_id=thread_id,
             sample_id=sample_id,
-            task_execution_id=execution_a,
+            task_attempt_id=execution_a,
             from_agent_id="leaf-l_1",
             to_agent_id="parent",
             content="l_1: done exit=0",
@@ -66,7 +66,7 @@ def test_build_communication_threads_keeps_run_level_thread_when_messages_span_t
         ThreadMessage(
             thread_id=thread_id,
             sample_id=sample_id,
-            task_execution_id=execution_b,
+            task_attempt_id=execution_b,
             from_agent_id="leaf-l_2",
             to_agent_id="parent",
             content="l_2: done exit=0",

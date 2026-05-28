@@ -82,8 +82,8 @@ class TaskFailedEvent(InngestEventContract):
     sandbox_id: str | None = None
 
 
-class WorkflowStartedEvent(InngestEventContract):
-    name: ClassVar[str] = "workflow/started"
+class SampleStartedEvent(InngestEventContract):
+    name: ClassVar[str] = "sample/started"
 
     sample_id: UUID
 

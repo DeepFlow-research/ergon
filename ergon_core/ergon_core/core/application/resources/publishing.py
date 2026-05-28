@@ -36,7 +36,7 @@ class SampleResourcePublishService:
         reader: SandboxFileReader,
         blob_store: ResourceBlobWriter,
         sample_id: UUID,
-        task_execution_id: UUID,
+        task_attempt_id: UUID,
         publish_dirs: tuple[tuple[str, SampleResourceKind], ...],
     ) -> list[SampleResourceView]:
         """Publish changed files from configured sandbox dirs as run resources."""
@@ -55,7 +55,7 @@ class SampleResourcePublishService:
                 with self._session_factory() as session:
                     prior = self._resource_repo.latest_by_path(
                         session,
-                        task_execution_id=task_execution_id,
+                        task_attempt_id=task_attempt_id,
                         file_path=str(durable_path),
                     )
                 if prior is not None:
@@ -67,7 +67,7 @@ class SampleResourcePublishService:
                     row = self._resource_repo.append(
                         session,
                         sample_id=sample_id,
-                        task_execution_id=task_execution_id,
+                        task_attempt_id=task_attempt_id,
                         kind=resource_kind.value,
                         name=entry_name,
                         mime_type=self._mime_type(entry_name),
@@ -88,7 +88,7 @@ class SampleResourcePublishService:
         *,
         blob_store: ResourceBlobWriter,
         sample_id: UUID,
-        task_execution_id: UUID,
+        task_attempt_id: UUID,
         kind: SampleResourceKind,
         name: str,
         content: str,
@@ -101,7 +101,7 @@ class SampleResourcePublishService:
         with self._session_factory() as session:
             prior = self._resource_repo.find_by_hash(
                 session,
-                task_execution_id=task_execution_id,
+                task_attempt_id=task_attempt_id,
                 content_hash=content_hash,
             )
         if prior is not None:
@@ -113,7 +113,7 @@ class SampleResourcePublishService:
             row = self._resource_repo.append(
                 session,
                 sample_id=sample_id,
-                task_execution_id=task_execution_id,
+                task_attempt_id=task_attempt_id,
                 kind=kind.value,
                 name=name,
                 mime_type=mime_type,

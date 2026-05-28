@@ -10,7 +10,6 @@ class WorkflowExecutionRef(BaseModel):
 
     execution_id: UUID
     status: str
-    attempt_number: int
     final_assistant_message: str | None = None
 
 
@@ -19,7 +18,7 @@ class WorkflowResourceRef(BaseModel):
 
     resource_id: UUID
     sample_id: UUID
-    task_execution_id: UUID | None
+    task_attempt_id: UUID | None
     task_id: UUID | None
     task_slug: str | None
     kind: str

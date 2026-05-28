@@ -106,3 +106,29 @@ def test_run_record_exposes_sample_experiment_provenance() -> None:
     from ergon_core.core.persistence.telemetry.models import SampleRecord
 
     assert ("experiment" + "_id") in SampleRecord.model_fields
+
+
+def test_sample_task_attempt_uses_timestamp_identity_not_attempt_number() -> None:
+    from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
+
+    assert "created_at" in SampleTaskAttempt.model_fields
+    assert "attempt_number" not in SampleTaskAttempt.model_fields
+
+
+def test_attempt_scoped_rows_use_task_attempt_id_naming() -> None:
+    from ergon_core.core.persistence.context.models import SampleContextEvent
+    from ergon_core.core.persistence.telemetry.models import (
+        SampleResource,
+        SampleTaskEvaluation,
+        ThreadMessage,
+    )
+
+    for model in (SampleContextEvent, SampleResource, SampleTaskEvaluation, ThreadMessage):
+        assert "task_attempt_id" in model.model_fields
+        assert ("task" + "_execution_id") not in model.model_fields
+
+
+def test_empty_component_persistence_package_is_absent() -> None:
+    components_dir = Path("ergon_core/ergon_core/core/persistence/components")
+
+    assert not components_dir.exists()

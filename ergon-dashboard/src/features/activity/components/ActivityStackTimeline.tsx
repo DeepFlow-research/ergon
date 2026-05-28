@@ -69,7 +69,7 @@ function lineageValueMatches(
 function areActivitiesRelated(a: SampleActivity, b: SampleActivity): boolean {
   if (a.id === b.id) return true;
   return (
-    lineageValueMatches(a.lineage.taskExecutionId, b.lineage.taskExecutionId) ||
+    lineageValueMatches(a.lineage.taskAttemptId, b.lineage.taskAttemptId) ||
     lineageValueMatches(a.lineage.sandboxId, b.lineage.sandboxId) ||
     lineageValueMatches(a.lineage.threadId, b.lineage.threadId) ||
     lineageValueMatches(a.lineage.taskId, b.lineage.taskId)
@@ -118,7 +118,7 @@ function ActivityLineageCard({
         <span>Band: {activity.band}</span>
         <span>Source: {activity.debug.source}</span>
         <span>Task: {activity.lineage.taskId ?? "—"}</span>
-        <span>Execution: {activity.lineage.taskExecutionId ?? "—"}</span>
+        <span>Execution: {activity.lineage.taskAttemptId ?? "—"}</span>
         <span>Sandbox: {activity.lineage.sandboxId ?? "—"}</span>
         <span>Seq: {activity.sequence ?? "—"}</span>
       </div>

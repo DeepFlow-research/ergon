@@ -243,7 +243,7 @@ def _assert_thread_messages_ordered(sample_id: UUID) -> None:
         f"from_agent_id slug set mismatch: {sorted(from_slugs)}"
     )
     assert all(m.to_agent_id == "parent" for m in msgs)
-    assert all(m.task_execution_id is not None for m in msgs)
+    assert all(m.task_attempt_id is not None for m in msgs)
 
 
 def _assert_blob_roundtrip(sample_id: UUID) -> None:

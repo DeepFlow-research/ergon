@@ -57,7 +57,7 @@ def extract_agent_trajectories(
     """Build per-agent trajectories from context event rows.
 
     One AgentTrajectory per unique worker_binding_key.
-    Events must be pre-ordered by (task_execution_id, sequence).
+    Events must be pre-ordered by (task_attempt_id, sequence).
     """
     if reward_strategy is None:
         reward_strategy = IndependentTaskReward()
@@ -80,7 +80,7 @@ def extract_agent_trajectories(
         for event in events:
             parsed = event.parsed_payload()
             part = parsed.part
-            execution_ids.add(str(event.task_execution_id))
+            execution_ids.add(str(event.task_attempt_id))
 
             if isinstance(part, (SystemPromptPart, UserMessagePart)):
                 continue  # prompt context — not in completion

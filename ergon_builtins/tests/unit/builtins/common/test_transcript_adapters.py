@@ -34,7 +34,7 @@ def _make_event(part, sequence: int, turn_id: str | None = None) -> SampleContex
     )
     return SampleContextEvent(
         sample_id=uuid4(),
-        task_execution_id=uuid4(),
+        task_attempt_id=uuid4(),
         worker_binding_key="test-worker",
         sequence=sequence,
         event_type=part.part_kind,

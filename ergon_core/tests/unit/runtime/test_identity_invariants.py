@@ -206,17 +206,13 @@ def test_execution_id_is_unique_per_attempt_and_shared_across_evaluators() -> No
     that (a) ``TaskEvaluateRequest`` carries ``execution_id``, (b) the
     orchestrator's fanout reuses ``prepared.execution_id`` for every
     invoke (one execution_id, many evaluator_indices), and (c) a fresh
-    attempt mints a new execution_id via the existing
-    ``next_attempt_for_node`` path.
+    attempt mints a new execution_id without relying on a persisted attempt
+    ordinal.
     """
 
-    import inspect
     from pathlib import Path
 
     from ergon_core.core.jobs.task.evaluate.contract import TaskEvaluateRequest
-    from ergon_core.core.application.runtime.task_execution_repository import (
-        TaskExecutionRepository,
-    )
 
     # (a) execution_id is on the payload.
     assert "execution_id" in TaskEvaluateRequest.model_fields
@@ -239,9 +235,13 @@ def test_execution_id_is_unique_per_attempt_and_shared_across_evaluators() -> No
         "evaluator_index must vary across the parallel fanout (one execution, many indices)"
     )
 
-    # (c) a retry mints a new execution_id — the attempt counter on
-    # TaskExecutionRepository is the canonical source.
-    assert "next_attempt_for_node" in inspect.getsource(TaskExecutionRepository)
+    # (c) a retry mints a new execution_id via SampleTaskAttempt's UUID primary
+    # key. Ordering is derived from (created_at, id), not a persisted ordinal.
+    task_service = (
+        root / "ergon_core/ergon_core/core/application/runtime/task_execution.py"
+    ).read_text()
+    assert "SampleTaskAttempt(" in task_service
+    assert "attempt_number" not in task_service
 
 
 class _SessionContext:

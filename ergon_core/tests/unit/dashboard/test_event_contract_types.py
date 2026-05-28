@@ -50,7 +50,7 @@ def test_thread_message_event_uses_dashboard_dtos() -> None:
 
 
 def test_thread_message_dto_exposes_execution_identity() -> None:
-    assert "task_execution_id" in SampleCommunicationMessageDto.model_fields
+    assert "task_attempt_id" in SampleCommunicationMessageDto.model_fields
 
 
 def test_thread_dto_exposes_summary_and_task_identity() -> None:
@@ -59,7 +59,7 @@ def test_thread_dto_exposes_summary_and_task_identity() -> None:
     assert "task_id" in SampleCommunicationMessageDto.model_fields
 
 
-def test_workflow_started_event_embeds_run_snapshot_contract() -> None:
+def test_sample_started_event_embeds_run_snapshot_contract() -> None:
     assert "task_tree" not in DashboardWorkflowStartedEvent.model_fields
     assert DashboardWorkflowStartedEvent.model_fields["snapshot"].annotation is SampleSnapshotDto
 

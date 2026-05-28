@@ -222,7 +222,7 @@ const onResourcePublished = inngest.createFunction(
     const {
       sample_id,
       task_id,
-      task_execution_id,
+      task_attempt_id,
       resource_id,
       resource_name,
       mime_type,
@@ -243,7 +243,7 @@ const onResourcePublished = inngest.createFunction(
     const resource: ResourceState = {
       id: resource_id,
       taskId: task_id,
-      taskExecutionId: task_execution_id,
+      taskAttemptId: task_attempt_id,
       name: resource_name,
       mimeType: mime_type,
       sizeBytes: size_bytes,

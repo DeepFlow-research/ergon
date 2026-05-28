@@ -31,7 +31,7 @@
           "default": null,
           "title": "Taskid"
         },
-        "taskExecutionId": {
+        "taskAttemptId": {
           "anyOf": [
             {
               "type": "string"
@@ -41,7 +41,7 @@
             }
           ],
           "default": null,
-          "title": "Taskexecutionid"
+          "title": "Taskattemptid"
         },
         "fromAgentId": {
           "title": "Fromagentid",

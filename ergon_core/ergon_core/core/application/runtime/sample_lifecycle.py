@@ -440,7 +440,7 @@ class WorkflowService:
         )
         stmt = select(SampleResource).where(SampleResource.sample_id == sample_id)
         if execution_ids is not None:
-            stmt = stmt.where(col(SampleResource.task_execution_id).in_(execution_ids))
+            stmt = stmt.where(col(SampleResource.task_attempt_id).in_(execution_ids))
         if kind is not None:
             stmt = stmt.where(SampleResource.kind == kind)
         resources = list(session.exec(stmt).all())
@@ -498,7 +498,7 @@ class WorkflowService:
                 session.exec(
                     select(SampleResource)
                     .where(SampleResource.sample_id == sample_id)
-                    .where(SampleResource.task_execution_id == latest.id),
+                    .where(SampleResource.task_attempt_id == latest.id),
                 ).all(),
             )
             own_rows.sort(key=lambda resource: (resource.created_at, resource.id), reverse=True)
@@ -690,7 +690,7 @@ class WorkflowService:
 
         copy = SampleResource(
             sample_id=sample_id,
-            task_execution_id=current_execution_id,
+            task_attempt_id=current_execution_id,
             kind=SampleResourceKind.IMPORT.value,
             name=result.copied_name,
             mime_type=source.mime_type,
@@ -766,7 +766,7 @@ class WorkflowService:
         return WorkflowResourceRef(
             resource_id=resource.id,
             sample_id=resource.sample_id,
-            task_execution_id=resource.task_execution_id,
+            task_attempt_id=resource.task_attempt_id,
             task_id=producer.task_id if producer is not None else None,
             task_slug=producer.task_slug if producer is not None else None,
             kind=resource.kind,
@@ -784,7 +784,6 @@ class WorkflowService:
         return WorkflowExecutionRef(
             execution_id=execution.id,
             status=execution.status,
-            attempt_number=execution.attempt_number,
             final_assistant_message=execution.final_assistant_message,
         )
 
@@ -899,9 +898,9 @@ class WorkflowService:
         session: Session,
         resource: SampleResource,
     ) -> SampleGraphNode | None:
-        if resource.task_execution_id is None:
+        if resource.task_attempt_id is None:
             return None
-        execution = session.get(SampleTaskAttempt, resource.task_execution_id)
+        execution = session.get(SampleTaskAttempt, resource.task_attempt_id)
         if execution is None:
             return None
         return session.get(SampleGraphNode, (execution.sample_id, execution.task_id))

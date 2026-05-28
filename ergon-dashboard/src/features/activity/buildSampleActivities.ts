@@ -71,7 +71,7 @@ function executionActivities(
         },
         lineage: {
           taskId: execution.taskId,
-          taskExecutionId: execution.id,
+          taskAttemptId: execution.id,
           agentId: execution.agentId,
         },
         debug: {
@@ -195,11 +195,11 @@ function contextActivities(run: SampleWorkspaceState): SampleActivity[] {
           eventId: event.id,
           eventType: event.eventType,
           contextSequence: event.sequence ?? null,
-          taskExecutionId: event.taskExecutionId,
+          taskAttemptId: event.taskAttemptId,
         },
         lineage: {
           taskId,
-          taskExecutionId: event.taskExecutionId,
+          taskAttemptId: event.taskAttemptId,
           workerBindingKey: event.workerBindingKey,
         },
         debug: {

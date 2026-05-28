@@ -64,7 +64,7 @@ async def test_save_message_persists_thread_summary_and_emits_it(
             thread_topic="smoke-completion",
             thread_summary=summary,
             content="l_1: done exit=0",
-            task_execution_id=execution_id,
+            task_attempt_id=execution_id,
         )
     )
 
@@ -75,7 +75,7 @@ async def test_save_message_persists_thread_summary_and_emits_it(
     assert emitted
     event = emitted[0]
     assert event.thread.summary == summary
-    assert event.message.task_execution_id == str(execution_id)
+    assert event.message.task_attempt_id == str(execution_id)
 
 
 @pytest.mark.asyncio

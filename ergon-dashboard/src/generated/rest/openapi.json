@@ -1985,7 +1985,7 @@
             ],
             "title": "Taskid"
           },
-          "taskExecutionId": {
+          "taskAttemptId": {
             "anyOf": [
               {
                 "type": "string"
@@ -2120,7 +2120,7 @@
             "format": "uuid",
             "title": "Sampleid"
           },
-          "taskExecutionId": {
+          "taskAttemptId": {
             "type": "string",
             "format": "uuid",
             "title": "Taskexecutionid"
@@ -2188,7 +2188,7 @@
         "required": [
           "id",
           "sampleId",
-          "taskExecutionId",
+          "taskAttemptId",
           "taskId",
           "workerBindingKey",
           "sequence",
@@ -3189,7 +3189,7 @@
             "type": "string",
             "title": "Taskid"
           },
-          "taskExecutionId": {
+          "taskAttemptId": {
             "type": "string",
             "title": "Taskexecutionid"
           },
@@ -3220,7 +3220,7 @@
         "required": [
           "id",
           "taskId",
-          "taskExecutionId",
+          "taskAttemptId",
           "name",
           "mimeType",
           "filePath",

@@ -12,13 +12,13 @@ def context_event_to_dashboard_event(
     event: SampleContextEvent,
     execution_task_map: dict[UUID, UUID],
 ) -> DashboardContextEventEvent | None:
-    task_id = execution_task_map.get(event.task_execution_id)
+    task_id = execution_task_map.get(event.task_attempt_id)
     if task_id is None:
         return None
     return DashboardContextEventEvent(
         id=event.id,
         sample_id=event.sample_id,
-        task_execution_id=event.task_execution_id,
+        task_attempt_id=event.task_attempt_id,
         task_id=task_id,
         worker_binding_key=event.worker_binding_key,
         sequence=event.sequence,

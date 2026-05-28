@@ -101,7 +101,7 @@ async def run_worker_execute_job(
         if dashboard_event is None:
             logger.warning(
                 "context_event: no task_id for execution %s",
-                event.task_execution_id,
+                event.task_attempt_id,
             )
             return
         await dashboard_publisher.publish(dashboard_event)

@@ -33,7 +33,7 @@ class SampleResourceReadService:
         *,
         sample_id: UUID,
         task_id: UUID | None = None,
-        task_execution_id: UUID | None = None,
+        task_attempt_id: UUID | None = None,
         kind: str | None = None,
         name: str | None = None,
     ) -> tuple[SampleResourceView, ...]:
@@ -44,7 +44,7 @@ class SampleResourceReadService:
                 session,
                 sample_id=sample_id,
                 task_id=task_id,
-                task_execution_id=task_execution_id,
+                task_attempt_id=task_attempt_id,
                 kind=kind,
                 name=name,
             )

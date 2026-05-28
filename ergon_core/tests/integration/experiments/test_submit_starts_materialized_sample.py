@@ -10,7 +10,7 @@ from ergon_core.api.benchmark import Task
 from ergon_core.api.criterion.outcome import CriterionOutcome
 from ergon_core.api.rubric.evaluator import Evaluator
 from ergon_core.api.rubric.results import TaskEvaluationResult
-from ergon_core.core.application.events.runtime import TaskCancelledEvent, WorkflowStartedEvent
+from ergon_core.core.application.events.runtime import TaskCancelledEvent, SampleStartedEvent
 from ergon_core.core.application.runtime.lifecycle import get_initial_ready_tasks
 from ergon_core.core.application.runtime.orchestration import (
     InitializeWorkflowCommand,
@@ -106,7 +106,7 @@ async def test_workflow_start_uses_materialized_sample_graph_without_definition(
 ) -> None:
     result = await run_workflow_start_job(
         session=session,
-        event=WorkflowStartedEvent(sample_id=materialized_sample.id),
+        event=SampleStartedEvent(sample_id=materialized_sample.id),
     )
     assert result.initial_ready_tasks == 1
 

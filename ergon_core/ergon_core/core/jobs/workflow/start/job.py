@@ -3,7 +3,7 @@
 import logging
 from datetime import UTC, datetime
 
-from .contract import WorkflowStartedEvent, WorkflowStartResult
+from .contract import SampleStartedEvent, WorkflowStartResult
 from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.application.runtime.orchestration import InitializeWorkflowCommand
@@ -22,7 +22,7 @@ from ergon_core.core.views.samples.service import SampleSnapshotReadService
 logger = logging.getLogger(__name__)
 
 
-async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStartResult:
+async def run_start_workflow_job(payload: SampleStartedEvent) -> WorkflowStartResult:
     logger.info("workflow-start sample_id=%s", payload.sample_id)
     span_start = datetime.now(UTC)
 
@@ -92,7 +92,7 @@ async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStart
 async def run_workflow_start_job(
     *,
     session: Session,
-    event: WorkflowStartedEvent,
+    event: SampleStartedEvent,
 ) -> WorkflowStartResult:
     svc = WorkflowService()
     initialized = await svc.initialize(

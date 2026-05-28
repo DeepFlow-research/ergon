@@ -162,7 +162,7 @@ async def _run_evaluation(
         )
         await _evaluation_persistence.persist_failure(
             sample_id=sample_id,
-            task_execution_id=execution_id,
+            task_attempt_id=execution_id,
             task_id=view.task_id,
             binding_key=binding_key,
             exc=exc,
@@ -176,7 +176,7 @@ async def _run_evaluation(
     result = service_result.result
     persisted = await _evaluation_persistence.persist_success(
         sample_id=sample_id,
-        task_execution_id=execution_id,
+        task_attempt_id=execution_id,
         task_id=view.task_id,
         binding_key=binding_key,
         service_result=service_result,

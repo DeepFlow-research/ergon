@@ -10,7 +10,7 @@ JOBS_ROOT = ROOT / "ergon_core/core/jobs"
 
 
 EXPECTED_FUNCTION_TRIGGERS = {
-    "workflow-start": "workflow/started",
+    "workflow-start": "sample/started",
     "task-execute": "task/ready",
     "task-propagate": "task/completed",
     "task-failure-propagate": "task/failed",

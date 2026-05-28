@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from ergon_core.core.application.events.runtime import WorkflowStartedEvent
+from ergon_core.core.application.events.runtime import SampleStartedEvent
 from pydantic import BaseModel
 
 

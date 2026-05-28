@@ -38,7 +38,7 @@ class SampleCommunicationMessageDto(CamelModel):
     thread_topic: str
     sample_id: str
     task_id: str | None = None
-    task_execution_id: str | None = None
+    task_attempt_id: str | None = None
     from_agent_id: str
     to_agent_id: str
     content: str
@@ -84,7 +84,7 @@ class SampleTaskDto(CamelModel):
 class SampleResourceDto(CamelModel):
     id: str
     task_id: str
-    task_execution_id: str
+    task_attempt_id: str
     name: str
     mime_type: str
     file_path: str
@@ -173,7 +173,7 @@ class SampleSandboxDto(CamelModel):
 class SampleContextEventDto(CamelModel):
     id: UUID
     sample_id: UUID
-    task_execution_id: UUID
+    task_attempt_id: UUID
     task_id: UUID
     worker_binding_key: str
     sequence: int

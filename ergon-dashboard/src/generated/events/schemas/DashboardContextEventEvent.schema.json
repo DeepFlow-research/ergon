@@ -510,9 +510,9 @@
       "title": "Sample Id",
       "type": "string"
     },
-    "task_execution_id": {
+    "task_attempt_id": {
       "format": "uuid",
-      "title": "Task Execution Id",
+      "title": "Task Attempt Id",
       "type": "string"
     },
     "task_id": {
@@ -578,7 +578,7 @@
   "required": [
     "id",
     "sample_id",
-    "task_execution_id",
+    "task_attempt_id",
     "task_id",
     "worker_binding_key",
     "sequence",

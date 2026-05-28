@@ -140,7 +140,7 @@ class SampleSnapshotReadService:
                     select(SampleContextEvent)
                     .where(SampleContextEvent.sample_id == sample_id)
                     .order_by(
-                        col(SampleContextEvent.task_execution_id),
+                        col(SampleContextEvent.task_attempt_id),
                         col(SampleContextEvent.sequence),
                     )
                 ).all()

@@ -56,7 +56,7 @@ test("buildSampleActivities surfaces semantic activity kinds without creating ac
     {
       id: "context-noisy",
       sampleId: runState.id,
-      taskExecutionId: "execution-noisy",
+      taskAttemptId: "execution-noisy",
       taskId: noisyTaskId,
       workerBindingKey: "worker-1",
       sequence: 12,
@@ -93,7 +93,7 @@ test("buildSampleActivities surfaces semantic activity kinds without creating ac
           threadTopic: "coordination",
           sampleId: runState.id,
           taskId: noisyTaskId,
-          taskExecutionId: null,
+          taskAttemptId: null,
           fromAgentId: "agent-a",
           toAgentId: "agent-b",
           content: "Verbose coordination message",
@@ -213,7 +213,7 @@ test("buildSampleActivities surfaces semantic activity kinds without creating ac
       (activity) =>
         activity.kind === "execution" &&
         activity.band === "work" &&
-        activity.lineage.taskExecutionId === "execution-noisy",
+        activity.lineage.taskAttemptId === "execution-noisy",
     ),
   );
   assert.ok(
@@ -221,7 +221,7 @@ test("buildSampleActivities surfaces semantic activity kinds without creating ac
       (activity) =>
         activity.kind === "context" &&
         activity.band === "tools" &&
-        activity.lineage.taskExecutionId === "execution-noisy",
+        activity.lineage.taskAttemptId === "execution-noisy",
     ),
   );
   assert.ok(

@@ -144,7 +144,7 @@ class SampleTaskAttempt(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     sample_id: UUID = Field(foreign_key="samples.id", index=True)
     task_id: UUID = Field(index=True)
-    attempt_number: int = 1
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
     status: TaskExecutionStatus = Field(index=True)
     started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
@@ -215,7 +215,7 @@ class SampleResource(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     sample_id: UUID = Field(foreign_key="samples.id", index=True)
-    task_execution_id: UUID | None = Field(
+    task_attempt_id: UUID | None = Field(
         default=None,
         foreign_key="sample_task_attempts.id",
     )
@@ -275,7 +275,7 @@ class SampleTaskEvaluation(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     sample_id: UUID = Field(foreign_key="samples.id", index=True)
-    task_execution_id: UUID = Field(
+    task_attempt_id: UUID = Field(
         foreign_key="sample_task_attempts.id",
         index=True,
     )
@@ -301,7 +301,7 @@ class SampleTaskEvaluation(SQLModel, table=True):
 
 class Thread(SQLModel, table=True):
     __tablename__ = "threads"
-    __table_args__ = (sa.UniqueConstraint("sample_id", "topic", name="uq_threads_run_topic"),)
+    __table_args__ = (sa.UniqueConstraint("sample_id", "topic", name="uq_threads_sample_topic"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     sample_id: UUID = Field(foreign_key="samples.id", index=True)
@@ -324,7 +324,7 @@ class ThreadMessage(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     thread_id: UUID = Field(foreign_key="threads.id", index=True)
     sample_id: UUID = Field(foreign_key="samples.id", index=True)
-    task_execution_id: UUID | None = Field(
+    task_attempt_id: UUID | None = Field(
         default=None,
         foreign_key="sample_task_attempts.id",
         index=True,

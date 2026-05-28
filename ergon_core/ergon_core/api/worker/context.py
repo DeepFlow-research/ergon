@@ -248,7 +248,7 @@ class WorkerContext(BaseModel):
         return self.resource_service.list_for_run(
             sample_id=self.sample_id,
             task_id=task_id,
-            task_execution_id=execution_id,
+            task_attempt_id=execution_id,
             kind=kind,
             name=name,
         )

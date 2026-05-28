@@ -74,7 +74,7 @@ def test_run_context_event_parsed_payload_is_context_part_chunk_log() -> None:
     )
     event = SampleContextEvent(
         sample_id=uuid4(),
-        task_execution_id=uuid4(),
+        task_attempt_id=uuid4(),
         worker_binding_key="worker-a",
         sequence=3,
         event_type="assistant_text",

@@ -55,7 +55,7 @@ def test_evaluation_row_to_dto_maps_multiple_criterion_outcomes() -> None:
     row = SampleTaskEvaluation(
         id=evaluation_id,
         sample_id=sample_id,
-        task_execution_id=uuid4(),
+        task_attempt_id=uuid4(),
         task_id=task_id,
         evaluator_slug="judge",
         score=1.5,

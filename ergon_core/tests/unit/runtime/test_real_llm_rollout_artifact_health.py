@@ -18,15 +18,15 @@ def _write_minimal_rollout(
     task_count: int = 1,
     evaluation_rows: list[dict] | None = None,
     resource_rows: list[dict] | None = None,
-    task_execution_ids: list[str] | None = None,
+    task_attempt_ids: list[str] | None = None,
 ) -> None:
-    execution_ids = task_execution_ids or [str(uuid4()) for _ in range(task_count)]
+    execution_ids = task_attempt_ids or [str(uuid4()) for _ in range(task_count)]
     resources = resource_rows
     if resources is None:
         resources = [
             {
                 "id": str(uuid4()),
-                "task_execution_id": execution_ids[0],
+                "task_attempt_id": execution_ids[0],
                 "kind": "report",
                 "name": "report.md",
                 "file_path": "/durable/blob",
@@ -165,14 +165,14 @@ def test_artifact_health_summarizes_scores_and_workers(tmp_path: Path) -> None:
 
 
 def test_artifact_health_uses_task_scoped_report_resources(tmp_path: Path) -> None:
-    task_execution_id = str(uuid4())
+    task_attempt_id = str(uuid4())
     _write_minimal_rollout(
         tmp_path,
         task_count=1,
         evaluation_rows=[
             {
                 "id": str(uuid4()),
-                "task_execution_id": task_execution_id,
+                "task_attempt_id": task_attempt_id,
                 "score": 0.75,
                 "summary_json": {
                     "evaluator_name": "research-rubric",
@@ -197,14 +197,14 @@ def test_artifact_health_uses_task_scoped_report_resources(tmp_path: Path) -> No
         resource_rows=[
             {
                 "id": str(uuid4()),
-                "task_execution_id": task_execution_id,
+                "task_attempt_id": task_attempt_id,
                 "kind": "report",
                 "name": "report.md",
                 "file_path": "/durable/blob/not/final_output",
                 "metadata_json": {"sandbox_origin": "/workspace/final_output/report.md"},
             }
         ],
-        task_execution_ids=[task_execution_id],
+        task_attempt_ids=[task_attempt_id],
     )
 
     health = analyze_rollout_artifacts(tmp_path, expected_task_count=1)
@@ -214,14 +214,14 @@ def test_artifact_health_uses_task_scoped_report_resources(tmp_path: Path) -> No
 
 
 def test_artifact_health_flags_completed_task_without_report_resource(tmp_path: Path) -> None:
-    task_execution_id = str(uuid4())
+    task_attempt_id = str(uuid4())
     _write_minimal_rollout(
         tmp_path,
         task_count=1,
         evaluation_rows=[
             {
                 "id": str(uuid4()),
-                "task_execution_id": task_execution_id,
+                "task_attempt_id": task_attempt_id,
                 "score": 0.75,
                 "summary_json": {
                     "evaluator_name": "research-rubric",
@@ -246,13 +246,13 @@ def test_artifact_health_flags_completed_task_without_report_resource(tmp_path: 
         resource_rows=[
             {
                 "id": str(uuid4()),
-                "task_execution_id": task_execution_id,
+                "task_attempt_id": task_attempt_id,
                 "kind": "note",
                 "name": "notes.md",
                 "file_path": "/durable/blob",
             }
         ],
-        task_execution_ids=[task_execution_id],
+        task_attempt_ids=[task_attempt_id],
     )
 
     health = analyze_rollout_artifacts(tmp_path, expected_task_count=1)
