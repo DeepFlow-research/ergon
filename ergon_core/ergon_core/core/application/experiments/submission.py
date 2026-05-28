@@ -12,15 +12,16 @@ from ergon_core.api.experiment.sample import Sample
 from ergon_core.api.experiment.sampling import Sampler, SamplingContext
 from ergon_core.core.application.events.runtime import SampleStartedEvent
 from ergon_core.core.application.experiments.candidate_pool import (
-    SampleCandidatePool,
+    ExperimentCandidatePoolService,
     sample_from_pool_entry,
 )
-from ergon_core.core.application.experiments.persistence import CoreExperimentPersistencePort
+from ergon_core.core.application.experiments.persistence import ExperimentPersistenceService
 from ergon_core.core.application.experiments.repository import (
     record_sampler_invocation,
 )
 from ergon_core.core.application.samples.materialization import materialize_sample
 from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
+from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.experiments.models import (
     ExperimentSamplePoolEntryRow,
     ExperimentSamplerInvocationRow,
@@ -66,9 +67,9 @@ class ExperimentSubmissionService:
         candidate_pool_size: int | None,
         policy_version: int | None = None,
     ) -> ExperimentSubmitResult:
-        handle = await CoreExperimentPersistencePort(self._session).persist_experiment(experiment)
+        handle = await ExperimentPersistenceService(self._session).persist_experiment(experiment)
         pool_size = candidate_pool_size or k
-        pool = SampleCandidatePool(self._session)
+        pool = ExperimentCandidatePoolService(self._session)
         entries = pool.fill(
             experiment=experiment,
             handle=handle,
@@ -183,3 +184,37 @@ def _assignment_json(sample: Sample) -> dict[str, JsonValue]:
         "source_metadata": dict(sample.source_metadata),
         "metadata": dict(sample.metadata),
     }
+
+
+async def submit_experiment(
+    *,
+    experiment: Experiment,
+    k: int,
+    sampler: Sampler,
+    candidate_pool_size: int | None = None,
+    policy_version: int | None = None,
+    session: Session | None = None,
+    event_bus: EventBus | None = None,
+) -> ExperimentSubmitResult:
+    if session is not None:
+        return await ExperimentSubmissionService.for_session(
+            session,
+            event_bus=event_bus,
+        ).submit(
+            experiment=experiment,
+            k=k,
+            sampler=sampler,
+            candidate_pool_size=candidate_pool_size,
+            policy_version=policy_version,
+        )
+    with get_session() as managed_session:
+        return await ExperimentSubmissionService.for_session(
+            managed_session,
+            event_bus=event_bus,
+        ).submit(
+            experiment=experiment,
+            k=k,
+            sampler=sampler,
+            candidate_pool_size=candidate_pool_size,
+            policy_version=policy_version,
+        )

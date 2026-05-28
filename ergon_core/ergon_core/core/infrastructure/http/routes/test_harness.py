@@ -11,7 +11,6 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from ergon_core.api.experiment import Environment, Experiment, Sample
-from ergon_core.core.application.experiments.service import ExperimentSubmissionService
 from ergon_core.core.application.testing.test_harness_service import (
     UnknownSampleStatusError,
     get_session_dep,
@@ -269,7 +268,7 @@ async def submit_experiment_samples(
         )
         with get_session() as session:
             result = await experiment.submit(
-                service=ExperimentSubmissionService.for_session(session),
+                session=session,
                 k=body.limit,
             )
         sample_ids.extend(result.sample_ids)

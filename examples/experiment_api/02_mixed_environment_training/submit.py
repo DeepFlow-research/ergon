@@ -30,7 +30,7 @@ from ergon_builtins.benchmarks.swebench_verified.sandbox import SWEBenchSandbox
 from ergon_builtins.benchmarks.swebench_verified.sample import make_swebench_sample
 from ergon_builtins.benchmarks.swebench_verified.toolkit import SWEBenchToolkit
 from ergon_core.api import Environment, Experiment, RandomSampler
-from experiment_api._shared import experiment_submission_service
+from experiment_api._shared import prepare_experiment_runtime
 
 
 async def main() -> None:
@@ -122,8 +122,8 @@ async def main() -> None:
             ),
         ],
     )
+    prepare_experiment_runtime()
     result = await experiment.submit(
-        service=experiment_submission_service(),
         k=32,
         candidate_pool_size=128,
         sampler=RandomSampler(seed=0),

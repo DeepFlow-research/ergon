@@ -2,24 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Any
 
-from ergon_core.api.experiment.experiment import Experiment, ExperimentRef
-
-
-# PR03 only defines the public seam. PR04 must provide the concrete
-# application-backed adapter, and PR05 submit paths must call that adapter rather
-# than passing bespoke fake ports around. Keep this protocol thin so public API
-# code never imports SQLModel repositories directly.
-@runtime_checkable
-class PersistExperimentPort(Protocol):
-    async def persist_experiment(self, experiment: Experiment) -> ExperimentRef: ...
+from ergon_core.api.experiment.experiment import Experiment, PersistedExperiment
 
 
 async def persist_experiment(
     experiment: Experiment,
     *,
-    service: PersistExperimentPort,
-) -> ExperimentRef:
+    session: Any | None = None,
+) -> PersistedExperiment:
+    from ergon_core.core.application.experiments.persistence import persist_public_experiment
+
     experiment.validate_authoring()
-    return await service.persist_experiment(experiment)
+    return await persist_public_experiment(experiment, session=session)

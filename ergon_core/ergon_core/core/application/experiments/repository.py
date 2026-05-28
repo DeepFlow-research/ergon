@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import JsonValue
 from sqlmodel import Session, select
 
-from ergon_core.api.experiment.experiment import Experiment, ExperimentRef
+from ergon_core.api.experiment.experiment import Experiment, PersistedExperiment
 from ergon_core.api.experiment.sample import Sample
 from ergon_core.core.persistence.experiments.models import (
     ExperimentEnvironmentRow,
@@ -22,7 +22,7 @@ class ExperimentRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def persist_experiment(self, experiment: Experiment) -> ExperimentRef:
+    def persist_experiment(self, experiment: Experiment) -> PersistedExperiment:
         experiment.validate_authoring()
         row = ExperimentRow(
             name=experiment.name,
@@ -53,7 +53,7 @@ class ExperimentRepository:
                 )
             ).all()
         }
-        return ExperimentRef(
+        return PersistedExperiment(
             experiment_id=row.id,
             name=row.name,
             environment_ids=environment_ids,
@@ -103,7 +103,7 @@ class ExperimentRepository:
     def record_candidate(
         self,
         *,
-        handle: ExperimentRef,
+        handle: PersistedExperiment,
         environment_id: UUID,
         sample: Sample,
     ) -> ExperimentSamplePoolEntryRow:
@@ -133,14 +133,14 @@ class ExperimentRepository:
         self._session.flush()
 
 
-def persist_experiment(*, session: Session, experiment: Experiment) -> ExperimentRef:
+def persist_experiment(*, session: Session, experiment: Experiment) -> PersistedExperiment:
     return ExperimentRepository(session).persist_experiment(experiment)
 
 
 def record_sampler_invocation(
     *,
     session: Session,
-    experiment_ref: ExperimentRef,
+    experiment_ref: PersistedExperiment,
     sampler_name: str,
     requested_k: int,
     candidate_pool_size: int,

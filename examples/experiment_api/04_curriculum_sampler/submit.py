@@ -13,7 +13,7 @@ from ergon_builtins.benchmarks.minif2f.sandbox import LeanSandbox
 from ergon_builtins.benchmarks.minif2f.sample import make_minif2f_sample
 from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
 from ergon_core.api import Environment, Experiment, RandomSampler, Sample, SamplingContext
-from experiment_api._shared import experiment_submission_service
+from experiment_api._shared import prepare_experiment_runtime
 
 
 class EasyFirstSampler(RandomSampler):
@@ -64,8 +64,8 @@ async def main() -> None:
         ),
     )
     experiment = Experiment(name="mini-curriculum", environments=[env])
+    prepare_experiment_runtime()
     result = await experiment.submit(
-        service=experiment_submission_service(),
         k=16,
         candidate_pool_size=64,
         sampler=EasyFirstSampler(seed=0),

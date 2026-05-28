@@ -1,26 +1,14 @@
 """E2B runtime adapter for public ``Sandbox`` implementations."""
 
 from collections.abc import Sequence
-from importlib import import_module
 from shlex import quote
 from typing import Any
 
+from e2b import SandboxNotFoundException, TimeoutException
+from e2b_code_interpreter import AsyncSandbox
+
 from ergon_core.api.sandbox.runtime import CommandResult, SandboxRuntime
 from ergon_core.core.shared.settings import settings
-
-try:
-    from e2b import SandboxNotFoundException, TimeoutException
-
-    _AsyncSandbox: Any = import_module("e2b_code_interpreter").AsyncSandbox
-except ImportError:  # pragma: no cover - optional dependency boundary
-
-    class SandboxNotFoundException(RuntimeError):
-        pass
-
-    class TimeoutException(RuntimeError):
-        pass
-
-    _AsyncSandbox: Any = None
 
 
 class E2BSandboxRuntime(SandboxRuntime):
@@ -38,8 +26,8 @@ class E2BSandboxRuntime(SandboxRuntime):
         envs: dict[str, str] | None,
         timeout_seconds: int | None,
     ) -> "E2BSandboxRuntime":
-        sandbox_cls = _async_sandbox_cls()
-        sandbox = await sandbox_cls.create(
+        _ensure_e2b_api_key()
+        sandbox = await AsyncSandbox.create(
             template=template,
             timeout=timeout_seconds,
             envs=envs,
@@ -54,9 +42,9 @@ class E2BSandboxRuntime(SandboxRuntime):
 
     @classmethod
     async def connect(cls, sandbox_id: str) -> "E2BSandboxRuntime":
-        sandbox_cls = _async_sandbox_cls()
+        _ensure_e2b_api_key()
         try:
-            sandbox = await sandbox_cls.connect(
+            sandbox = await AsyncSandbox.connect(
                 sandbox_id=sandbox_id,
                 api_key=settings.e2b_api_key,
             )
@@ -100,12 +88,6 @@ class E2BSandboxRuntime(SandboxRuntime):
         await self._sandbox.close()
 
 
-def _async_sandbox_cls() -> Any:
-    if _AsyncSandbox is None:
-        raise RuntimeError(
-            "e2b_code_interpreter is not installed. "
-            "Install it with: pip install e2b-code-interpreter"
-        )
+def _ensure_e2b_api_key() -> None:
     if not settings.e2b_api_key:
         raise ValueError("E2B_API_KEY is not set.")
-    return _AsyncSandbox

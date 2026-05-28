@@ -16,8 +16,7 @@ from ergon_builtins.benchmarks.minif2f.sandbox import LeanSandbox
 from ergon_builtins.benchmarks.minif2f.sample import make_minif2f_sample
 from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
 from ergon_core.api import Environment, Experiment, RandomSampler
-from ergon_core.core.application.experiments.submission import ExperimentSubmissionService
-from ergon_core.core.persistence.shared.db import ensure_db, get_session
+from ergon_core.core.persistence.shared.db import ensure_db
 from getting_started._shared.env import (
     DEFAULT_LLAMA_CPP_BASE_URL,
     DEFAULT_MINIF2F_LIMIT,
@@ -142,10 +141,9 @@ def preflight_base_url_from_args(args: argparse.Namespace) -> str:
     return base_url
 
 
-def experiment_submission_service() -> ExperimentSubmissionService:
-    """Create the concrete service behind this Python composition example."""
+def prepare_experiment_runtime() -> None:
+    """Prepare persistence before submitting through the public API."""
     ensure_db()
-    return ExperimentSubmissionService.for_session(get_session())
 
 
 async def async_main(argv: Sequence[str] | None = None) -> int:
@@ -202,8 +200,8 @@ async def async_main(argv: Sequence[str] | None = None) -> int:
             ),
         )
         experiment = Experiment(name="minif2f-local-llamacpp", environments=[env])
+        prepare_experiment_runtime()
         result = await experiment.submit(
-            service=experiment_submission_service(),
             k=args.limit,
             sampler=RandomSampler(seed=0),
         )

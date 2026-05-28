@@ -38,7 +38,7 @@ class FakeEnvironment(Environment):
 
 
 class FakeSubmissionService:
-    async def submit(
+    async def __call__(
         self,
         *,
         experiment,
@@ -46,8 +46,10 @@ class FakeSubmissionService:
         sampler,
         candidate_pool_size: int | None,
         policy_version: int | None,
+        session,
+        event_bus,
     ) -> ExperimentSubmitResult:
-        del experiment, sampler, candidate_pool_size, policy_version
+        del experiment, sampler, candidate_pool_size, policy_version, session, event_bus
         return ExperimentSubmitResult(
             experiment_id=UUID("11111111-1111-1111-1111-111111111111"),
             sampler_invocation_id=UUID("22222222-2222-2222-2222-222222222222"),
@@ -155,7 +157,11 @@ async def test_getting_started_submit_uses_experiment_api(monkeypatch, capsys) -
     monkeypatch.setattr(module, "LeanSandbox", FakeSandbox)
     monkeypatch.setattr(module, "load_minif2f_rows", fake_load_rows)
     monkeypatch.setattr(module, "make_minif2f_sample", fake_make_sample)
-    monkeypatch.setattr(module, "experiment_submission_service", lambda: FakeSubmissionService())
+    monkeypatch.setattr(module, "prepare_experiment_runtime", lambda: None)
+    monkeypatch.setattr(
+        "ergon_core.core.application.experiments.submission.submit_experiment",
+        FakeSubmissionService(),
+    )
 
     exit_code = await module.async_main(
         [

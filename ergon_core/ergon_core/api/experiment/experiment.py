@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime
-from typing import Protocol, runtime_checkable
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, PrivateAttr
@@ -13,20 +13,7 @@ from ergon_core.api.experiment.environment import Environment
 from ergon_core.api.experiment.sampling import RandomSampler, Sampler
 
 
-@runtime_checkable
-class ExperimentSubmissionPort(Protocol):
-    async def submit(
-        self,
-        *,
-        experiment: "Experiment",
-        k: int,
-        sampler: Sampler,
-        candidate_pool_size: int | None,
-        policy_version: int | None,
-    ) -> "ExperimentSubmitResult": ...
-
-
-class ExperimentRef(BaseModel):
+class PersistedExperiment(BaseModel):
     experiment_id: UUID
     name: str
     environment_ids: Mapping[str, UUID] = Field(default_factory=dict)
@@ -56,7 +43,7 @@ class Experiment(BaseModel):
     description: str | None = None
     created_by: str | None = None
     metadata: dict[str, JsonValue] = Field(default_factory=dict)
-    _persisted_ref: ExperimentRef | None = PrivateAttr(default=None)
+    _persisted_experiment: PersistedExperiment | None = PrivateAttr(default=None)
 
     def environment_names(self) -> Sequence[str]:
         return [environment.name for environment in self.environments]
@@ -78,26 +65,31 @@ class Experiment(BaseModel):
         for environment in self.environments:
             environment.validate_authoring()
 
-    def persisted_ref(self) -> ExperimentRef | None:
-        return self._persisted_ref
+    def persisted_experiment(self) -> PersistedExperiment | None:
+        return self._persisted_experiment
 
-    def mark_persisted(self, ref: ExperimentRef) -> None:
-        self._persisted_ref = ref
+    def mark_persisted(self, persisted: PersistedExperiment) -> None:
+        self._persisted_experiment = persisted
 
     async def submit(
         self,
         *,
-        service: ExperimentSubmissionPort,
         k: int,
         sampler: Sampler | None = None,
         candidate_pool_size: int | None = None,
         policy_version: int | None = None,
+        session: Any | None = None,
+        event_bus: Any | None = None,
     ) -> ExperimentSubmitResult:
+        from ergon_core.core.application.experiments.submission import submit_experiment
+
         self.validate_authoring()
-        return await service.submit(
+        return await submit_experiment(
             experiment=self,
             k=k,
             sampler=sampler or RandomSampler(),
             candidate_pool_size=candidate_pool_size,
             policy_version=policy_version,
+            session=session,
+            event_bus=event_bus,
         )

@@ -3,12 +3,12 @@
 from collections.abc import Sequence
 from uuid import UUID, uuid4
 
-from pydantic import JsonValue
+from pydantic import BaseModel, Field, JsonValue, ValidationError
 from sqlmodel import Session
 
 from ergon_core.api.task import Task
 from ergon_core.api.task import EmptyTaskPayload
-from ergon_core.api.experiment.experiment import Experiment, ExperimentRef
+from ergon_core.api.experiment.experiment import Experiment, PersistedExperiment
 from ergon_core.api.experiment.sample import Sample
 from ergon_core.core.application.experiments.repository import (
     ExperimentRepository,
@@ -21,7 +21,17 @@ from ergon_core.core.persistence.experiments.models import (
 )
 
 
-class SampleCandidatePool:
+class CandidateSampleSnapshot(BaseModel):
+    name: str
+    sample_key: str
+    environment_name: str
+    tasks: list[dict[str, JsonValue]]
+    sample_ref: dict[str, JsonValue] = Field(default_factory=dict)
+    source_metadata: dict[str, JsonValue] = Field(default_factory=dict)
+    metadata: dict[str, JsonValue] = Field(default_factory=dict)
+
+
+class ExperimentCandidatePoolService:
     def __init__(
         self,
         session: Session,
@@ -36,7 +46,7 @@ class SampleCandidatePool:
         self,
         *,
         experiment: Experiment,
-        handle: ExperimentRef,
+        handle: PersistedExperiment,
         candidate_pool_size: int,
     ) -> list[ExperimentSamplePoolEntryRow]:
         entries = self._repository.pending_unselected_pool_entries(handle.experiment_id)
@@ -139,7 +149,7 @@ def reserve_sample_pool_entries_for_sampler(
     )
     invocation = record_sampler_invocation(
         session=session,
-        experiment_ref=ExperimentRef(
+        experiment_ref=PersistedExperiment(
             experiment_id=experiment.id,
             name=experiment.name,
             environment_ids={},
@@ -162,23 +172,21 @@ def reserve_sample_pool_entries_for_sampler(
 async def sample_from_pool_entry(entry: ExperimentSamplePoolEntryRow) -> Sample:
     """Rehydrate retained candidate JSON into an authored, unmaterialized Sample."""
 
-    payload = dict(entry.sample_json)
-    task_snapshots = payload.pop("tasks", [])
-    tasks = [await _task_from_candidate_snapshot(task_json) for task_json in task_snapshots]
+    try:
+        snapshot = CandidateSampleSnapshot.model_validate(entry.sample_json)
+    except ValidationError as exc:
+        raise ValueError(
+            f"Candidate sample snapshot for pool entry {entry.id} is malformed"
+        ) from exc
+    tasks = [await _task_from_candidate_snapshot(task_json) for task_json in snapshot.tasks]
     return Sample.from_tasks(
-        name=str(payload["name"]),
-        sample_key=str(payload["sample_key"]),
-        environment_name=str(payload["environment_name"]),
+        name=snapshot.name,
+        sample_key=snapshot.sample_key,
+        environment_name=snapshot.environment_name,
         tasks=tasks,
-        sample_ref=payload.get("sample_ref")
-        if isinstance(payload.get("sample_ref"), dict)
-        else None,
-        source_metadata=(
-            payload.get("source_metadata")
-            if isinstance(payload.get("source_metadata"), dict)
-            else None
-        ),
-        metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else None,
+        sample_ref=snapshot.sample_ref,
+        source_metadata=snapshot.source_metadata,
+        metadata=snapshot.metadata,
     )
 
 

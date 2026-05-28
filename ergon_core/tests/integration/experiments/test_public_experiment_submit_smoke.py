@@ -53,13 +53,12 @@ def session() -> Iterator[Session]:
 
 @pytest.mark.asyncio
 async def test_public_experiment_submit_materializes_samples_and_typed_wal(session) -> None:
-    from ergon_core.core.application.experiments.submission import ExperimentSubmissionService
-
     env = MaterializedEnvironment(name="mini")
     experiment = Experiment(name="mini-smoke", environments=[env])
 
     result = await experiment.submit(
-        service=ExperimentSubmissionService.for_session(session, event_bus=FakeEventBus()),
+        session=session,
+        event_bus=FakeEventBus(),
         k=1,
         sampler=RandomSampler(seed=0),
     )

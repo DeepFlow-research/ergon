@@ -38,7 +38,6 @@ from ergon_builtins.benchmarks.researchrubrics.sandbox import ResearchE2BSandbox
 from ergon_builtins.benchmarks.researchrubrics.sample import make_researchrubrics_sample
 from ergon_builtins.benchmarks.researchrubrics.toolkit import ResearchRubricsToolkit
 from ergon_core.api import Environment, Experiment, RandomSampler
-from ergon_core.core.application.experiments.submission import ExperimentSubmissionService
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from ergon_core.core.persistence.telemetry.models import (
     SampleResource,
@@ -115,7 +114,7 @@ async def _submit_researchrubrics_sample(
             metadata={"source": "real-llm-harness"},
         )
         result = await experiment.submit(
-            service=ExperimentSubmissionService.for_session(session),
+            session=session,
             k=1,
             candidate_pool_size=limit,
             sampler=RandomSampler(seed=0),

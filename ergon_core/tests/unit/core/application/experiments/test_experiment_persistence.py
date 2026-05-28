@@ -12,7 +12,6 @@ from ergon_core.api import (
     Sample,
     persist_experiment as persist_public_experiment,
 )
-from ergon_core.core.application.experiments.persistence import CoreExperimentPersistencePort
 from ergon_core.core.application.experiments.repository import (
     persist_experiment,
     record_sampler_invocation,
@@ -132,13 +131,13 @@ def test_record_sampler_invocation_writes_no_runtime_state(
 
 
 @pytest.mark.asyncio
-async def test_public_persistence_facade_wires_to_core_port(
+async def test_public_persistence_facade_wires_to_core(
     session: Session,
     two_env_experiment: Experiment,
 ) -> None:
     ref = await persist_public_experiment(
         two_env_experiment,
-        service=CoreExperimentPersistencePort(session),
+        session=session,
     )
 
     assert ref.experiment_id

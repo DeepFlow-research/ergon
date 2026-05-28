@@ -19,14 +19,13 @@ from ergon_core.api.errors import (
 from ergon_core.api.experiment import (
     Environment,
     Experiment,
-    ExperimentRef,
     ExperimentSubmitResult,
+    PersistedExperiment,
     persist_experiment,
     RandomSampler,
     Sample,
     Sampler,
     SamplingContext,
-    SamplingHistory,
 )
 from ergon_core.api.rubric import Evaluator, Rubric, TaskEvaluationResult
 from ergon_core.api.sandbox import Sandbox, SandboxRuntime
@@ -60,8 +59,8 @@ __all__ = [
     "EmptyTaskPayload",
     "Environment",
     "Experiment",
-    "ExperimentRef",
     "ExperimentSubmitResult",
+    "PersistedExperiment",
     "Evaluator",
     "EvidenceMessage",
     "persist_experiment",
@@ -75,7 +74,6 @@ __all__ = [
     "ScoreScale",
     "Sampler",
     "SamplingContext",
-    "SamplingHistory",
     "SpawnedTaskHandle",
     "Task",
     "TaskEvaluationResult",

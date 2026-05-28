@@ -69,9 +69,11 @@ class Environment(BaseModel):
         return list(self.iter_samples())
 
     def iter_samples(self) -> Iterator[Sample]:
-        # TODO(PR06): builtin environments implement this for MiniF2F,
-        # SWE-bench Verified, ResearchRubrics, and GDPEval. User-defined
-        # environments continue to override it directly.
+        """Yield authored samples.
+
+        Subclasses override this for custom loading. ``Environment.from_dataset``
+        and ``Environment.from_records`` provide the common row-backed path.
+        """
         raise NotImplementedError
 
     def iter_candidate_samples(self) -> Iterator[Sample]:

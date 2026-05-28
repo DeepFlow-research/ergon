@@ -8,11 +8,12 @@ import pytest
 from ergon_core.api import (
     Environment,
     Experiment,
-    ExperimentRef,
+    PersistedExperiment,
     ExperimentSubmitResult,
     persist_experiment,
     RandomSampler,
     Sample,
+    Sampler,
     SamplingContext,
 )
 from ergon_core.test_support.task_factory import task_with_id
@@ -65,11 +66,25 @@ async def test_random_sampler_returns_all_candidates_in_seeded_order_without_tru
     assert [sample.sample_key for sample in selected] != ["0", "1", "2", "3", "4"]
 
 
-class FakeSubmissionService:
+class ReverseSampler(Sampler):
+    name: str = "reverse"
+
+    async def select(
+        self,
+        *,
+        samples,
+        k: int,
+        context: SamplingContext,
+    ):
+        del k, context
+        return list(reversed(samples))
+
+
+class FakeSubmissionResult:
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
 
-    async def submit(
+    async def __call__(
         self,
         *,
         experiment: Experiment,
@@ -77,7 +92,10 @@ class FakeSubmissionService:
         sampler: RandomSampler,
         candidate_pool_size: int | None,
         policy_version: int | None,
+        session,
+        event_bus,
     ) -> ExperimentSubmitResult:
+        del session, event_bus
         self.calls.append(
             {
                 "experiment": experiment,
@@ -97,15 +115,32 @@ class FakeSubmissionService:
 
 
 @pytest.mark.asyncio
-async def test_experiment_submit_validates_then_delegates_to_service() -> None:
-    service = FakeSubmissionService()
+async def test_experiment_submit_validates_then_delegates_to_core(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_submit = FakeSubmissionResult()
+    monkeypatch.setattr(
+        "ergon_core.core.application.experiments.submission.submit_experiment",
+        fake_submit,
+    )
     experiment = Experiment(name="x", environments=[MaterializedEnvironment(name="m")])
 
-    result = await experiment.submit(service=service, k=1, sampler=RandomSampler(seed=1))
+    result = await experiment.submit(k=1, sampler=RandomSampler(seed=1))
 
     assert isinstance(result.experiment_id, UUID)
-    assert service.calls[0]["k"] == 1
-    assert service.calls[0]["experiment"] is experiment
+    assert fake_submit.calls[0]["k"] == 1
+    assert fake_submit.calls[0]["experiment"] is experiment
+
+
+@pytest.mark.asyncio
+async def test_custom_sampler_subclasses_public_base_model() -> None:
+    selected = await ReverseSampler().select(
+        samples=[make_sample("a"), make_sample("b")],
+        k=1,
+        context=SamplingContext(experiment_id=uuid4()),
+    )
+
+    assert [sample.sample_key for sample in selected] == ["b", "a"]
 
 
 def test_experiment_rejects_duplicate_environment_names() -> None:
@@ -130,36 +165,23 @@ def test_streaming_environment_candidate_cursor_does_not_replay() -> None:
     assert second == ["3", "4"]
 
 
-def test_experiment_can_remember_persisted_ref_between_submissions() -> None:
+def test_experiment_can_remember_persisted_experiment_between_submissions() -> None:
     experiment = Experiment(name="x", environments=[MaterializedEnvironment(name="m")])
-    ref = ExperimentRef(experiment_id=uuid4(), name="x")
+    ref = PersistedExperiment(experiment_id=uuid4(), name="x")
 
     experiment.mark_persisted(ref)
 
-    assert experiment.persisted_ref() == ref
-
-
-class FakePersistenceService:
-    def __init__(self) -> None:
-        self.calls: list[Experiment] = []
-
-    async def persist_experiment(self, experiment: Experiment):
-        self.calls.append(experiment)
-        raise AssertionError("invalid experiment should not reach persistence service")
+    assert experiment.persisted_experiment() == ref
 
 
 @pytest.mark.asyncio
 async def test_persist_experiment_validates_before_delegating() -> None:
-    service = FakePersistenceService()
-
     with pytest.raises(ValueError, match="Experiment name is required"):
-        await persist_experiment(Experiment(name="", environments=[]), service=service)
-
-    assert service.calls == []
+        await persist_experiment(Experiment(name="", environments=[]))
 
 
 def test_public_experiment_api_uses_experiment_id_names() -> None:
-    ref = ExperimentRef(
+    ref = PersistedExperiment(
         experiment_id=uuid4(),
         name="demo",
         environment_ids={},

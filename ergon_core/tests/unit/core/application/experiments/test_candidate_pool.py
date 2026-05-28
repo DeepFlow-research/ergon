@@ -9,7 +9,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 from ergon_core.api import Environment, Experiment, Sample
 from ergon_core.core.application.experiments.candidate_pool import (
-    SampleCandidatePool,
+    ExperimentCandidatePoolService,
     sample_from_pool_entry,
 )
 from ergon_core.core.application.experiments.repository import (
@@ -112,7 +112,7 @@ def test_candidate_pool_retains_unselected_streamed_candidates(
     streamed_experiment: Experiment,
 ) -> None:
     handle = persist_experiment(session=session, experiment=streamed_experiment)
-    pool = SampleCandidatePool(session)
+    pool = ExperimentCandidatePoolService(session)
 
     candidates = pool.fill(
         experiment=streamed_experiment,
@@ -144,7 +144,7 @@ def test_candidate_pool_reuses_unselected_entries_before_advancing_stream(
     counted_streaming_experiment: Experiment,
 ) -> None:
     handle = persist_experiment(session=session, experiment=counted_streaming_experiment)
-    pool = SampleCandidatePool(session)
+    pool = ExperimentCandidatePoolService(session)
 
     first = pool.fill(
         experiment=counted_streaming_experiment,
@@ -169,7 +169,7 @@ def test_candidate_pool_resumes_stateless_stream_cursor_after_retained_entries(
     streamed_experiment: Experiment,
 ) -> None:
     handle = persist_experiment(session=session, experiment=streamed_experiment)
-    pool = SampleCandidatePool(session)
+    pool = ExperimentCandidatePoolService(session)
 
     first = pool.fill(
         experiment=streamed_experiment,
@@ -208,7 +208,7 @@ def test_candidate_pool_round_robins_new_entries_across_environments(
         ],
     )
     handle = persist_experiment(session=session, experiment=experiment)
-    pool = SampleCandidatePool(session)
+    pool = ExperimentCandidatePoolService(session)
 
     entries = pool.fill(experiment=experiment, handle=handle, candidate_pool_size=4)
 
@@ -229,7 +229,7 @@ def test_candidate_pool_stops_after_duplicate_pull_budget(
     duplicate_env = DuplicateStreamingEnvironment(name="stream")
     experiment = Experiment(name="duplicates", environments=[duplicate_env])
     handle = persist_experiment(session=session, experiment=experiment)
-    pool = SampleCandidatePool(session, max_duplicate_pulls_per_environment=3)
+    pool = ExperimentCandidatePoolService(session, max_duplicate_pulls_per_environment=3)
 
     entries = pool.fill(experiment=experiment, handle=handle, candidate_pool_size=2)
 
@@ -255,7 +255,7 @@ async def test_candidate_pool_entry_rehydrates_object_bound_sample_without_runti
         environments=[MaterializedEnvironment(name="mini-validation", keys=("a",))],
     )
     handle = persist_experiment(session=session, experiment=experiment)
-    entry = SampleCandidatePool(session).fill(
+    entry = ExperimentCandidatePoolService(session).fill(
         experiment=experiment,
         handle=handle,
         candidate_pool_size=1,
@@ -268,3 +268,16 @@ async def test_candidate_pool_entry_rehydrates_object_bound_sample_without_runti
     assert sample.tasks[0].task_slug == "solve-mini-validation-a"
     with pytest.raises(RuntimeError, match="not been materialized"):
         _ = sample.tasks[0].task_id
+
+
+@pytest.mark.asyncio
+async def test_candidate_pool_entry_rejects_malformed_sample_snapshot() -> None:
+    entry = ExperimentSamplePoolEntryRow(
+        experiment_id=uuid4(),
+        environment_id=uuid4(),
+        sample_key="bad",
+        sample_json={"name": "bad", "sample_key": "bad", "environment_name": "mini"},
+    )
+
+    with pytest.raises(ValueError, match="malformed"):
+        await sample_from_pool_entry(entry)

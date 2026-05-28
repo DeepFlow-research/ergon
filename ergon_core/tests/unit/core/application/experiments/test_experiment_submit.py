@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from ergon_core.api import Environment, Experiment, RandomSampler, Sample
+from ergon_core.api import Environment, Experiment, RandomSampler, Sample, Sampler
 from ergon_core.api.experiment.sampling import SamplingContext
 from ergon_core.core.application.events.runtime import SampleStartedEvent
 from ergon_core.core.application.experiments.submission import (
@@ -60,8 +60,8 @@ class CommittedStateEventBus:
         self.events.append(event)
 
 
-class SequentialSampler:
-    name = "sequential"
+class SequentialSampler(Sampler):
+    name: str = "sequential"
 
     def config(self) -> dict:
         return {}
@@ -161,7 +161,9 @@ async def test_submit_selects_and_materializes_k_samples(
 ) -> None:
     service = ExperimentSubmissionService(session=session, event_bus=FakeEventBus())
 
-    result = await experiment.submit(service=service, k=3, sampler=SequentialSampler())
+    result = await experiment.submit(
+        session=session, event_bus=service._event_bus, k=3, sampler=SequentialSampler()
+    )
 
     assert result.selected_count == 3
     assert len(result.sample_ids) == 3
@@ -183,7 +185,8 @@ async def test_submit_retains_unselected_candidate_pool_entries(
     service = ExperimentSubmissionService(session=session, event_bus=FakeEventBus())
 
     result = await streaming_experiment.submit(
-        service=service,
+        session=session,
+        event_bus=service._event_bus,
         k=2,
         sampler=SequentialSampler(),
         candidate_pool_size=8,
@@ -203,13 +206,15 @@ async def test_submit_reuses_persisted_experiment_and_retained_candidates(
     service = ExperimentSubmissionService(session=session, event_bus=FakeEventBus())
 
     first = await streaming_experiment.submit(
-        service=service,
+        session=session,
+        event_bus=service._event_bus,
         k=2,
         sampler=SequentialSampler(),
         candidate_pool_size=8,
     )
     second = await streaming_experiment.submit(
-        service=service,
+        session=session,
+        event_bus=service._event_bus,
         k=2,
         sampler=SequentialSampler(),
         candidate_pool_size=8,
@@ -231,7 +236,8 @@ async def test_submit_caps_random_sampler_selection_to_requested_k(
     service = ExperimentSubmissionService(session=session, event_bus=FakeEventBus())
 
     result = await streaming_experiment.submit(
-        service=service,
+        session=session,
+        event_bus=service._event_bus,
         k=2,
         sampler=RandomSampler(seed=7),
         candidate_pool_size=8,
@@ -253,7 +259,9 @@ async def test_submit_records_selected_sample_provenance(
 ) -> None:
     service = ExperimentSubmissionService(session=session, event_bus=FakeEventBus())
 
-    result = await two_env_experiment.submit(service=service, k=2, sampler=SequentialSampler())
+    result = await two_env_experiment.submit(
+        session=session, event_bus=service._event_bus, k=2, sampler=SequentialSampler()
+    )
 
     sample_rows = session.exec(select(SampleRecord).order_by(SampleRecord.created_at)).all()
     pool_rows = session.exec(select(ExperimentSamplePoolEntryRow)).all()
@@ -277,7 +285,8 @@ async def test_submit_records_sampler_policy_version(
     service = ExperimentSubmissionService(session=session, event_bus=FakeEventBus())
 
     result = await experiment.submit(
-        service=service,
+        session=session,
+        event_bus=service._event_bus,
         k=1,
         sampler=SequentialSampler(),
         policy_version=7,
@@ -296,7 +305,9 @@ async def test_submit_emits_sample_start_events_without_definition_or_run_ids(
     event_bus = FakeEventBus()
     service = ExperimentSubmissionService(session=session, event_bus=event_bus)
 
-    result = await experiment.submit(service=service, k=1, sampler=SequentialSampler())
+    result = await experiment.submit(
+        session=session, event_bus=service._event_bus, k=1, sampler=SequentialSampler()
+    )
 
     assert event_bus.events
     assert event_bus.events[0].payload["sample_id"] == str(result.sample_ids[0])
@@ -317,7 +328,9 @@ async def test_submit_commits_materialized_sample_before_start_event(tmp_path: P
         )
         service = ExperimentSubmissionService(session=session, event_bus=event_bus)
 
-        result = await experiment.submit(service=service, k=1, sampler=SequentialSampler())
+        result = await experiment.submit(
+            session=session, event_bus=service._event_bus, k=1, sampler=SequentialSampler()
+        )
 
     assert [event.sample_id for event in event_bus.events] == list(result.sample_ids)
 
@@ -359,7 +372,9 @@ async def test_submit_uses_inngest_event_bus_by_default(
     )
     service = ExperimentSubmissionService(session=session)
 
-    result = await experiment.submit(service=service, k=1, sampler=SequentialSampler())
+    result = await experiment.submit(
+        session=session, event_bus=service._event_bus, k=1, sampler=SequentialSampler()
+    )
 
     assert len(sent) == 1
     assert getattr(sent[0], "name") == SampleStartedEvent.name

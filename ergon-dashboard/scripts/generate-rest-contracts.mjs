@@ -28,6 +28,13 @@ let source = readFileSync(contractsPath, "utf8")
   );
 
 const sampleRuntimeEventDiscriminators = {
+  // openapi-zod-client currently loses literal discriminators for this Pydantic
+  // discriminated union. The dashboard relies on eventType narrowing, so this
+  // post-process keeps SampleRuntimeEventView type-safe until the generator can
+  // emit the correct z.discriminatedUnion shape directly.
+  //
+  // When adding a new backend SampleRuntimeEventView union member, add the
+  // schema name and eventType here as well, then regenerate contracts.
   SampleStatusChangedEventView: "sample.status_changed",
   SampleTaskAddedEventView: "task.added",
   SampleTaskRemovedEventView: "task.removed",

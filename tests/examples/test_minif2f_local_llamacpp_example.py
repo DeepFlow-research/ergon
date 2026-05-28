@@ -412,7 +412,7 @@ async def test_main_submits_minif2f_with_local_worker(monkeypatch, capsys) -> No
             return _ObservedEnvironment(name=kwargs["name"])
 
     class FakeService:
-        async def submit(
+        async def __call__(
             self,
             *,
             experiment,
@@ -420,7 +420,10 @@ async def test_main_submits_minif2f_with_local_worker(monkeypatch, capsys) -> No
             sampler,
             candidate_pool_size,
             policy_version,
+            session,
+            event_bus,
         ):
+            del session, event_bus
             observed["experiment_name"] = experiment.name
             observed["k"] = k
             observed["sampler_name"] = sampler.name
@@ -442,7 +445,11 @@ async def test_main_submits_minif2f_with_local_worker(monkeypatch, capsys) -> No
     monkeypatch.setattr(module, "LeanSandbox", _ObservedSandbox)
     monkeypatch.setattr(module, "load_minif2f_rows", _fake_minif2f_rows)
     monkeypatch.setattr(module, "make_minif2f_sample", _fake_minif2f_sample)
-    monkeypatch.setattr(module, "experiment_submission_service", lambda: FakeService())
+    monkeypatch.setattr(module, "prepare_experiment_runtime", lambda: None)
+    monkeypatch.setattr(
+        "ergon_core.core.application.experiments.submission.submit_experiment",
+        FakeService(),
+    )
     monkeypatch.setenv("ERGON_DASHBOARD_URL", "http://localhost:3000")
 
     exit_code = await module.async_main(
@@ -514,7 +521,7 @@ async def test_main_resolves_base_model_starts_llamacpp_and_cleans_up(
             return _ObservedEnvironment(name=kwargs["name"])
 
     class FakeService:
-        async def submit(
+        async def __call__(
             self,
             *,
             experiment,
@@ -522,7 +529,10 @@ async def test_main_resolves_base_model_starts_llamacpp_and_cleans_up(
             sampler,
             candidate_pool_size,
             policy_version,
+            session,
+            event_bus,
         ):
+            del session, event_bus
             observed["experiment_name"] = experiment.name
             observed["k"] = k
             observed["sampler_name"] = sampler.name
@@ -546,7 +556,11 @@ async def test_main_resolves_base_model_starts_llamacpp_and_cleans_up(
     monkeypatch.setattr(module, "LeanSandbox", _ObservedSandbox)
     monkeypatch.setattr(module, "load_minif2f_rows", _fake_minif2f_rows)
     monkeypatch.setattr(module, "make_minif2f_sample", _fake_minif2f_sample)
-    monkeypatch.setattr(module, "experiment_submission_service", lambda: FakeService())
+    monkeypatch.setattr(module, "prepare_experiment_runtime", lambda: None)
+    monkeypatch.setattr(
+        "ergon_core.core.application.experiments.submission.submit_experiment",
+        FakeService(),
+    )
 
     exit_code = await module.async_main(
         [

@@ -13,7 +13,6 @@ from datetime import timezone, datetime
 
 import pytest
 from ergon_core.api import Experiment, RandomSampler
-from ergon_core.core.application.experiments.submission import ExperimentSubmissionService
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from tests.fixtures.smoke_components.benchmarks import ResearchRubricsSmokeEnvironment
 
@@ -36,7 +35,7 @@ async def _submit_smoke_sample() -> str:
             metadata={"source": "real-llm-canary"},
         )
         result = await experiment.submit(
-            service=ExperimentSubmissionService.for_session(session),
+            session=session,
             k=1,
             sampler=RandomSampler(seed=0),
         )

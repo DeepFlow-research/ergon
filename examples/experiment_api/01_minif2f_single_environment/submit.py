@@ -12,7 +12,7 @@ from ergon_builtins.benchmarks.minif2f.sandbox import LeanSandbox
 from ergon_builtins.benchmarks.minif2f.sample import make_minif2f_sample
 from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
 from ergon_core.api import Environment, Experiment, RandomSampler
-from experiment_api._shared import experiment_submission_service
+from experiment_api._shared import prepare_experiment_runtime
 
 
 async def main() -> None:
@@ -37,8 +37,8 @@ async def main() -> None:
         ),
     )
     experiment = Experiment(name="mini-validation-smoke", environments=[env])
+    prepare_experiment_runtime()
     result = await experiment.submit(
-        service=experiment_submission_service(),
         k=10,
         sampler=RandomSampler(seed=0),
     )

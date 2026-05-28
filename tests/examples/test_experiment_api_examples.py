@@ -66,7 +66,7 @@ class FakeSubmissionService:
         self.submitted_experiments: list[Experiment] = []
         self.submit_calls: list[dict[str, object]] = []
 
-    async def submit(
+    async def __call__(
         self,
         *,
         experiment: Experiment,
@@ -74,13 +74,15 @@ class FakeSubmissionService:
         sampler,
         candidate_pool_size: int | None,
         policy_version: int | None,
+        session,
+        event_bus,
     ) -> ExperimentSubmitResult:
-        del policy_version
+        del policy_version, session, event_bus
         samples = [_sample(str(index), "fake") for index in range(candidate_pool_size or k)]
         selected = await sampler.select(
             samples=samples,
             k=k,
-            context=SamplingContext(experiment_ref_id=uuid4(), candidate_pool_size=len(samples)),
+            context=SamplingContext(experiment_id=uuid4(), candidate_pool_size=len(samples)),
         )
         self.submitted_experiments.append(experiment)
         self.submit_calls.append(
@@ -255,7 +257,11 @@ def test_minif2f_example_prints_sample_ids_not_run_ids(monkeypatch, capsys) -> N
     module = _load_submit_module("01_minif2f_single_environment")
     service = FakeSubmissionService()
     _stub_runtime_components(monkeypatch, module)
-    monkeypatch.setattr(module, "experiment_submission_service", lambda: service)
+    monkeypatch.setattr(module, "prepare_experiment_runtime", lambda: None)
+    monkeypatch.setattr(
+        "ergon_core.core.application.experiments.submission.submit_experiment",
+        service,
+    )
 
     asyncio.run(module.main())
 
@@ -272,7 +278,11 @@ def test_mixed_environment_example_composes_all_builtin_environments(monkeypatch
     module = _load_submit_module("02_mixed_environment_training")
     service = FakeSubmissionService()
     _stub_runtime_components(monkeypatch, module)
-    monkeypatch.setattr(module, "experiment_submission_service", lambda: service)
+    monkeypatch.setattr(module, "prepare_experiment_runtime", lambda: None)
+    monkeypatch.setattr(
+        "ergon_core.core.application.experiments.submission.submit_experiment",
+        service,
+    )
 
     asyncio.run(module.main())
 
@@ -289,7 +299,11 @@ def test_streaming_example_uses_candidate_pool_larger_than_k(monkeypatch) -> Non
     module = _load_submit_module("03_streaming_hf_dataset")
     service = FakeSubmissionService()
     _stub_runtime_components(monkeypatch, module)
-    monkeypatch.setattr(module, "experiment_submission_service", lambda: service)
+    monkeypatch.setattr(module, "prepare_experiment_runtime", lambda: None)
+    monkeypatch.setattr(
+        "ergon_core.core.application.experiments.submission.submit_experiment",
+        service,
+    )
 
     asyncio.run(module.main())
 
@@ -302,7 +316,11 @@ def test_curriculum_example_uses_custom_sampler_and_larger_pool(monkeypatch) -> 
     module = _load_submit_module("04_curriculum_sampler")
     service = FakeSubmissionService()
     _stub_runtime_components(monkeypatch, module)
-    monkeypatch.setattr(module, "experiment_submission_service", lambda: service)
+    monkeypatch.setattr(module, "prepare_experiment_runtime", lambda: None)
+    monkeypatch.setattr(
+        "ergon_core.core.application.experiments.submission.submit_experiment",
+        service,
+    )
 
     asyncio.run(module.main())
 
@@ -332,7 +350,11 @@ def test_row_dependent_example_passes_runtime_config_callables(monkeypatch) -> N
 
     _stub_runtime_components(monkeypatch, module)
     monkeypatch.setattr(module, "Environment", CapturingEnvironment)
-    monkeypatch.setattr(module, "experiment_submission_service", lambda: FakeSubmissionService())
+    monkeypatch.setattr(module, "prepare_experiment_runtime", lambda: None)
+    monkeypatch.setattr(
+        "ergon_core.core.application.experiments.submission.submit_experiment",
+        FakeSubmissionService(),
+    )
 
     asyncio.run(module.main())
 

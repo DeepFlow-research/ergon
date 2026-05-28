@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from ergon_core.core.application.experiments.submission import ExperimentSubmissionService
-from ergon_core.core.persistence.shared.db import ensure_db, get_session
+from ergon_core.core.persistence.shared.db import ensure_db
 
 
-def experiment_submission_service() -> ExperimentSubmissionService:
-    """Create the concrete submission service used by example scripts."""
+def prepare_experiment_runtime() -> None:
+    """Prepare persistence before examples submit through the public API."""
     ensure_db()
-    return ExperimentSubmissionService.for_session(get_session())

@@ -1,5 +1,6 @@
 """Architecture guards for the Phase 1 public API target structure."""
 
+from abc import ABC
 import importlib
 import inspect
 
@@ -14,8 +15,8 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "EmptyTaskPayload",
         "Environment",
         "Experiment",
-        "ExperimentRef",
         "ExperimentSubmitResult",
+        "PersistedExperiment",
         "Worker",
         "WorkerContext",
         "WorkerOutput",
@@ -46,7 +47,6 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "SandboxNotLiveError",
         "Sampler",
         "SamplingContext",
-        "SamplingHistory",
         "TaskEvaluationResult",
         "CriterionCheckError",
     }
@@ -80,6 +80,38 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
     assert all(hasattr(public_api, name) for name in expected)
     assert retired.isdisjoint(public_api.__all__)
     assert all(not hasattr(public_api, name) for name in retired)
+
+
+def test_experiment_public_api_does_not_export_service_ports() -> None:
+    public_api = importlib.import_module("ergon_core.api")
+    experiment_api = importlib.import_module("ergon_core.api.experiment")
+
+    forbidden = {
+        "ExperimentSubmissionPort",
+        "PersistExperimentPort",
+        "SamplingHistory",
+    }
+
+    for module in (public_api, experiment_api):
+        for name in forbidden:
+            assert not hasattr(module, name), f"{module.__name__} exports {name}"
+
+
+def test_sampler_is_public_abstract_base_model() -> None:
+    from pydantic import BaseModel
+
+    from ergon_core.api import RandomSampler, Sampler
+
+    assert issubclass(Sampler, BaseModel)
+    assert issubclass(Sampler, ABC)
+    assert issubclass(RandomSampler, Sampler)
+
+
+def test_persisted_experiment_is_the_public_persistence_receipt() -> None:
+    public_api = importlib.import_module("ergon_core.api")
+
+    assert hasattr(public_api, "PersistedExperiment")
+    assert not hasattr(public_api, "ExperimentRef")
 
 
 def test_semantic_api_clusters_are_importable() -> None:
