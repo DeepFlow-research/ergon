@@ -39,20 +39,31 @@ class RolloutBatchSummary(BaseModel):
     sampler_invocation_id: UUID | None = None
 
 
-class Trajectory(BaseModel):
-    """One agent's extracted trajectory from a completed episode.
+class TrainerActorIdentity(BaseModel):
+    """Trace identity for one trainer-facing projected actor record."""
 
-    Maps 1:1 to AgentTrajectory from extraction.py, plus metadata.
-    """
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
+
+    actor_slug: str
+    base_worker_slug: str | None = None
+    parent_actor_slug: str | None = None
+    task_id: UUID | None = None
+    parent_task_id: UUID | None = None
+
+
+class TrainerTrainingRecord(BaseModel):
+    """One projected parent-visible training record for adapter examples."""
+
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
 
     sample_id: UUID
-    agent_id: str
-    prompt_ids: list[int]
-    completion_ids: list[int]
-    logprobs: list[float]
-    env_mask: list[int]
+    actor: TrainerActorIdentity
+    prompt_ids: list[int] = Field(default_factory=list)
+    completion_ids: list[int] = Field(default_factory=list)
+    logprobs: list[float] = Field(default_factory=list)
     reward: float
-    num_turns: int
+    task_id: UUID | None = None
+    task_attempt_id: UUID | None = None
 
 
 class EpisodeFailure(BaseModel):
@@ -63,13 +74,15 @@ class EpisodeFailure(BaseModel):
 
 
 class PollResponse(BaseModel):
-    """Ergon → Trainer: current batch status + trajectories if complete."""
+    """Ergon → Trainer: current batch status + projected records if complete."""
+
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
 
     batch_id: UUID
     status: BatchStatus
     completed: int = 0
     total: int = 0
-    trajectories: list[Trajectory] = Field(default_factory=list)
+    training_records: list[TrainerTrainingRecord] = Field(default_factory=list)
     failures: list[EpisodeFailure] = Field(default_factory=list)
 
 

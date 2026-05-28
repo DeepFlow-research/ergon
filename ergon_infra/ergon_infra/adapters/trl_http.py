@@ -17,7 +17,7 @@ Usage::
 import logging
 import time
 from collections.abc import Callable
-from typing import Protocol, TypedDict
+from typing import Any, Protocol, TypedDict, cast
 
 import httpx
 
@@ -31,7 +31,7 @@ class RolloutBatch(TypedDict):
     completion_ids: list[list[int]]
     logprobs: list[list[float]]
     completion_reward: list[float]
-    env_mask: list[list[int]]
+    trace_metadata: list[dict]
 
 
 class TRLTrainerContext(Protocol):
@@ -71,7 +71,10 @@ def make_ergon_http_rollout_func(
             },
         )
         resp.raise_for_status()
-        batch_id = resp.json()["batch_id"]
+        submit_data = resp.json()
+        batch_id = submit_data.get("batchId") or submit_data.get("batch_id")
+        if batch_id is None:
+            raise RuntimeError("Rollout submit response missing batchId")
         logger.info("Submitted rollout batch %s (%d episodes)", batch_id, len(prompts))
 
         deadline = time.monotonic() + timeout_s
@@ -81,18 +84,34 @@ def make_ergon_http_rollout_func(
             data = poll.json()
 
             if data["status"] == "complete":
-                trajs = data["trajectories"]
+                records = data.get("trainingRecords")
+                if records is None:
+                    raise RuntimeError("Rollout poll response missing trainingRecords")
                 logger.info(
-                    "Batch %s complete: %d trajectories",
+                    "Batch %s complete: %d training records",
                     batch_id,
-                    len(trajs),
+                    len(records),
                 )
                 return {
-                    "prompt_ids": [t["prompt_ids"] for t in trajs],
-                    "completion_ids": [t["completion_ids"] for t in trajs],
-                    "logprobs": [t["logprobs"] for t in trajs],
-                    "completion_reward": [t["reward"] for t in trajs],
-                    "env_mask": [t["env_mask"] for t in trajs],
+                    "prompt_ids": [
+                        _get_int_list(record, "promptIds", "prompt_ids") for record in records
+                    ],
+                    "completion_ids": [
+                        _get_int_list(record, "completionIds", "completion_ids")
+                        for record in records
+                    ],
+                    "logprobs": [cast(list[float], record["logprobs"]) for record in records],
+                    "completion_reward": [cast(float, record["reward"]) for record in records],
+                    "trace_metadata": [
+                        {
+                            "sampleId": _get(record, "sampleId", "sample_id"),
+                            "actor": record["actor"],
+                            "taskId": record.get("taskId") or record.get("task_id"),
+                            "taskAttemptId": record.get("taskAttemptId")
+                            or record.get("task_attempt_id"),
+                        }
+                        for record in records
+                    ],
                 }
 
             if data["status"] == "failed":
@@ -110,3 +129,13 @@ def make_ergon_http_rollout_func(
         raise TimeoutError(f"Rollout batch {batch_id} timed out after {timeout_s}s")
 
     return rollout_func
+
+
+def _get(data: dict[str, Any], camel: str, snake: str) -> object:
+    if camel in data:
+        return data[camel]
+    return data[snake]
+
+
+def _get_int_list(data: dict[str, Any], camel: str, snake: str) -> list[int]:
+    return cast(list[int], _get(data, camel, snake))

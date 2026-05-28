@@ -4,5 +4,3 @@ from ergon_core.core.application.experiments.results import (
     ExperimentSubmitResult,
     PersistedExperiment,
 )
-
-__all__ = ["ExperimentSubmitResult", "PersistedExperiment"]

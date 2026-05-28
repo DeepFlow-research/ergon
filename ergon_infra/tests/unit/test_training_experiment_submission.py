@@ -21,11 +21,25 @@ class _FakeClient:
 
     def post(self, path, *, json):
         self.requests.append(("POST", path, json))
-        return _FakeResponse({"batch_id": "batch-1"})
+        return _FakeResponse({"batchId": "batch-1"})
 
     def get(self, path):
         self.requests.append(("GET", path, None))
-        return _FakeResponse({"status": "complete", "trajectories": []})
+        return _FakeResponse(
+            {
+                "status": "complete",
+                "trainingRecords": [
+                    {
+                        "sampleId": "sample-1",
+                        "actor": {"actorSlug": "planner", "baseWorkerSlug": "planner"},
+                        "promptIds": [11, 12, 13],
+                        "completionIds": [21, 22],
+                        "logprobs": [-0.31, -0.42],
+                        "reward": 0.75,
+                    }
+                ],
+            }
+        )
 
     def delete(self, path):
         self.requests.append(("DELETE", path, None))
@@ -57,3 +71,43 @@ def test_trl_rollout_func_submits_experiment_batch(monkeypatch) -> None:
             "candidatePoolSize": 256,
         },
     )
+
+
+def test_trl_http_adapter_maps_projected_records_to_rollout_batch(monkeypatch) -> None:
+    fake = _FakeClient()
+    monkeypatch.setattr(trl_http.httpx, "Client", lambda *args, **kwargs: fake)
+
+    rollout_func = trl_http.make_ergon_http_rollout_func(
+        ergon_url="http://ergon.test",
+        experiment_id=str(uuid4()),
+    )
+
+    batch = rollout_func([{"prompt": "a"}], object())
+
+    assert batch["prompt_ids"] == [[11, 12, 13]]
+    assert batch["completion_ids"] == [[21, 22]]
+    assert batch["logprobs"] == [[-0.31, -0.42]]
+    assert batch["completion_reward"] == [0.75]
+    assert batch["trace_metadata"][0]["actor"]["actorSlug"] == "planner"
+
+
+def test_trl_http_adapter_rejects_or_ignores_legacy_trajectories_payload(monkeypatch) -> None:
+    class LegacyClient(_FakeClient):
+        def get(self, path):
+            self.requests.append(("GET", path, None))
+            return _FakeResponse({"status": "complete", "trajectories": []})
+
+    fake = LegacyClient()
+    monkeypatch.setattr(trl_http.httpx, "Client", lambda *args, **kwargs: fake)
+    rollout_func = trl_http.make_ergon_http_rollout_func(
+        ergon_url="http://ergon.test",
+        experiment_id=str(uuid4()),
+        timeout_s=0.01,
+    )
+
+    try:
+        rollout_func([{"prompt": "a"}], object())
+    except RuntimeError as exc:
+        assert "trainingRecords" in str(exc)
+    else:
+        raise AssertionError("legacy trajectories payload was accepted")

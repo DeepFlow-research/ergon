@@ -716,16 +716,25 @@ const RolloutBatchSummary = z
     samplerInvocationId: z.union([z.string(), z.null()]).optional(),
   })
   .passthrough();
-const Trajectory = z
+const TrainerActorIdentity = z
   .object({
-    sample_id: z.string().uuid(),
-    agent_id: z.string(),
-    prompt_ids: z.array(z.number().int()),
-    completion_ids: z.array(z.number().int()),
-    logprobs: z.array(z.number()),
-    env_mask: z.array(z.number().int()),
+    actorSlug: z.string(),
+    baseWorkerSlug: z.union([z.string(), z.null()]).optional(),
+    parentActorSlug: z.union([z.string(), z.null()]).optional(),
+    taskId: z.union([z.string(), z.null()]).optional(),
+    parentTaskId: z.union([z.string(), z.null()]).optional(),
+  })
+  .passthrough();
+const TrainerTrainingRecord = z
+  .object({
+    sampleId: z.string().uuid(),
+    actor: TrainerActorIdentity,
+    promptIds: z.array(z.number().int()).optional(),
+    completionIds: z.array(z.number().int()).optional(),
+    logprobs: z.array(z.number()).optional(),
     reward: z.number(),
-    num_turns: z.number().int(),
+    taskId: z.union([z.string(), z.null()]).optional(),
+    taskAttemptId: z.union([z.string(), z.null()]).optional(),
   })
   .passthrough();
 const EpisodeFailure = z
@@ -733,11 +742,11 @@ const EpisodeFailure = z
   .passthrough();
 const PollResponse = z
   .object({
-    batch_id: z.string().uuid(),
+    batchId: z.string().uuid(),
     status: RolloutStatus,
     completed: z.number().int().optional().default(0),
     total: z.number().int().optional().default(0),
-    trajectories: z.array(Trajectory).optional(),
+    trainingRecords: z.array(TrainerTrainingRecord).optional(),
     failures: z.array(EpisodeFailure).optional(),
   })
   .passthrough();
@@ -809,7 +818,8 @@ export const schemas = {
   TrainingRolloutRequest,
   RolloutStatus,
   RolloutBatchSummary,
-  Trajectory,
+  TrainerActorIdentity,
+  TrainerTrainingRecord,
   EpisodeFailure,
   PollResponse,
   WeightSyncRequest,

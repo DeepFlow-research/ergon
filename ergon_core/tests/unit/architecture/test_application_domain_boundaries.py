@@ -55,6 +55,7 @@ LAYOUT_FILE_EXCEPTIONS = {
         "launch.py",
         "persistence.py",
         "repositories.py",
+        "results.py",
         "submission.py",
     },
     "ports": {"dashboard.py", "resources.py"},

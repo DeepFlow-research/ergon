@@ -1,3 +1,9 @@
+2026-05-28 19:49:43,286 INFO alembic.runtime.plugins: setup plugin alembic.autogenerate.schemas
+2026-05-28 19:49:43,286 INFO alembic.runtime.plugins: setup plugin alembic.autogenerate.tables
+2026-05-28 19:49:43,286 INFO alembic.runtime.plugins: setup plugin alembic.autogenerate.types
+2026-05-28 19:49:43,286 INFO alembic.runtime.plugins: setup plugin alembic.autogenerate.constraints
+2026-05-28 19:49:43,286 INFO alembic.runtime.plugins: setup plugin alembic.autogenerate.defaults
+2026-05-28 19:49:43,286 INFO alembic.runtime.plugins: setup plugin alembic.autogenerate.comments
 {
   "openapi": "3.1.0",
   "info": {
@@ -556,7 +562,7 @@
           "rollouts"
         ],
         "summary": "Poll Rollout",
-        "description": "Poll batch status. Returns trajectories when complete.",
+        "description": "Poll batch status. Returns projected training records when complete.",
         "operationId": "poll_rollout_rollouts__batch_id__get",
         "parameters": [
           {
@@ -1221,10 +1227,10 @@
       },
       "PollResponse": {
         "properties": {
-          "batch_id": {
+          "batchId": {
             "type": "string",
             "format": "uuid",
-            "title": "Batch Id"
+            "title": "Batchid"
           },
           "status": {
             "$ref": "#/components/schemas/RolloutStatus"
@@ -1239,12 +1245,12 @@
             "title": "Total",
             "default": 0
           },
-          "trajectories": {
+          "trainingRecords": {
             "items": {
-              "$ref": "#/components/schemas/Trajectory"
+              "$ref": "#/components/schemas/TrainerTrainingRecord"
             },
             "type": "array",
-            "title": "Trajectories"
+            "title": "Trainingrecords"
           },
           "failures": {
             "items": {
@@ -1256,11 +1262,11 @@
         },
         "type": "object",
         "required": [
-          "batch_id",
+          "batchId",
           "status"
         ],
         "title": "PollResponse",
-        "description": "Ergon \u2192 Trainer: current batch status + trajectories if complete."
+        "description": "Ergon \u2192 Trainer: current batch status + projected records if complete."
       },
       "ProviderTokenUsage": {
         "properties": {
@@ -4515,6 +4521,135 @@
         ],
         "title": "ToolResultPart"
       },
+      "TrainerActorIdentity": {
+        "properties": {
+          "actorSlug": {
+            "type": "string",
+            "title": "Actorslug"
+          },
+          "baseWorkerSlug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseworkerslug"
+          },
+          "parentActorSlug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parentactorslug"
+          },
+          "taskId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taskid"
+          },
+          "parentTaskId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parenttaskid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "actorSlug"
+        ],
+        "title": "TrainerActorIdentity",
+        "description": "Trace identity for one trainer-facing projected actor record."
+      },
+      "TrainerTrainingRecord": {
+        "properties": {
+          "sampleId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sampleid"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/TrainerActorIdentity"
+          },
+          "promptIds": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Promptids"
+          },
+          "completionIds": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Completionids"
+          },
+          "logprobs": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Logprobs"
+          },
+          "reward": {
+            "type": "number",
+            "title": "Reward"
+          },
+          "taskId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taskid"
+          },
+          "taskAttemptId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taskattemptid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sampleId",
+          "actor",
+          "reward"
+        ],
+        "title": "TrainerTrainingRecord",
+        "description": "One projected parent-visible training record for adapter examples."
+      },
       "TrainingRolloutRequest": {
         "properties": {
           "experimentId": {
@@ -4556,68 +4691,6 @@
         ],
         "title": "TrainingRolloutRequest",
         "description": "Trainer \u2192 Ergon: select and launch samples from a persisted experiment."
-      },
-      "Trajectory": {
-        "properties": {
-          "sample_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Sample Id"
-          },
-          "agent_id": {
-            "type": "string",
-            "title": "Agent Id"
-          },
-          "prompt_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "title": "Prompt Ids"
-          },
-          "completion_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "title": "Completion Ids"
-          },
-          "logprobs": {
-            "items": {
-              "type": "number"
-            },
-            "type": "array",
-            "title": "Logprobs"
-          },
-          "env_mask": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "title": "Env Mask"
-          },
-          "reward": {
-            "type": "number",
-            "title": "Reward"
-          },
-          "num_turns": {
-            "type": "integer",
-            "title": "Num Turns"
-          }
-        },
-        "type": "object",
-        "required": [
-          "sample_id",
-          "agent_id",
-          "prompt_ids",
-          "completion_ids",
-          "logprobs",
-          "env_mask",
-          "reward",
-          "num_turns"
-        ],
-        "title": "Trajectory",
-        "description": "One agent's extracted trajectory from a completed episode.\n\nMaps 1:1 to AgentTrajectory from extraction.py, plus metadata."
       },
       "UserMessagePart": {
         "properties": {

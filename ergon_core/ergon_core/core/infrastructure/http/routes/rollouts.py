@@ -1,7 +1,7 @@
 """Rollout-as-a-Service HTTP endpoints.
 
 Exposes ``RolloutService`` over HTTP so RL trainers on remote GPU nodes
-can submit episode batches and retrieve trajectories without importing
+can submit episode batches and retrieve projected training records without importing
 any Ergon internals.
 """
 
@@ -65,7 +65,7 @@ def poll_rollout(
     batch_id: UUID,
     service: Annotated[RolloutService, Depends(get_rollout_service)],
 ) -> PollResponse:
-    """Poll batch status. Returns trajectories when complete."""
+    """Poll batch status. Returns projected training records when complete."""
     result = service.poll(batch_id)
     if result is None:
         raise HTTPException(404, f"Batch {batch_id} not found")
