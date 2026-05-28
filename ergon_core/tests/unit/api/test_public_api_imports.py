@@ -39,7 +39,8 @@ def test_object_first_experiment_run_api_is_retired() -> None:
     assert not hasattr(public_api, "ExperimentRunHandle")
     assert hasattr(public_api, "Experiment")
     assert hasattr(public_api, "Sample")
-    assert hasattr(public_api, "persist_experiment")
+    assert hasattr(public_api.Experiment, "persist")
+    assert not hasattr(public_api, "persist_experiment")
     assert not hasattr(public_api, "persist_benchmark")
 
 

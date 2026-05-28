@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from sqlmodel import Session
 
-from ergon_core.api.experiment.experiment import Experiment, PersistedExperiment
+from ergon_core.core.application.experiments.results import PersistedExperiment
 from ergon_core.core.application.experiments.repository import (
     persist_experiment as persist_row_graph,
 )
 from ergon_core.core.persistence.shared.db import get_session
+
+if TYPE_CHECKING:
+    from ergon_core.api.experiment.experiment import Experiment
 
 
 class ExperimentPersistenceService:
@@ -17,7 +22,7 @@ class ExperimentPersistenceService:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    async def persist_experiment(self, experiment: Experiment) -> PersistedExperiment:
+    async def persist_experiment(self, experiment: "Experiment") -> PersistedExperiment:
         persisted = experiment.persisted_experiment()
         if persisted is not None:
             return persisted
@@ -27,7 +32,7 @@ class ExperimentPersistenceService:
 
 
 async def persist_public_experiment(
-    experiment: Experiment,
+    experiment: "Experiment",
     *,
     session: Session | None = None,
 ) -> PersistedExperiment:

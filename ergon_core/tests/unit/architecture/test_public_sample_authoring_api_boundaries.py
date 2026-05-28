@@ -28,7 +28,7 @@ def test_public_api_exports_new_names_and_not_retired_names() -> None:
     assert "Sampler" in public_api.__all__
     assert "SamplingContext" in public_api.__all__
     assert "SamplingHistory" not in public_api.__all__
-    assert "persist_experiment" in public_api.__all__
+    assert "persist_experiment" not in public_api.__all__
     assert "SourceDescriptor" not in public_api.__all__
     assert "EnvironmentSource" not in public_api.__all__
     assert "Episode" not in public_api.__all__

@@ -8,9 +8,8 @@ import pytest
 from ergon_core.api import (
     Environment,
     Experiment,
-    PersistedExperiment,
     ExperimentSubmitResult,
-    persist_experiment,
+    PersistedExperiment,
     RandomSampler,
     Sample,
     Sampler,
@@ -120,7 +119,7 @@ async def test_experiment_submit_validates_then_delegates_to_core(
 ) -> None:
     fake_submit = FakeSubmissionResult()
     monkeypatch.setattr(
-        "ergon_core.core.application.experiments.submission.submit_experiment",
+        "ergon_core.api.experiment.experiment.submit_experiment",
         fake_submit,
     )
     experiment = Experiment(name="x", environments=[MaterializedEnvironment(name="m")])
@@ -175,9 +174,9 @@ def test_experiment_can_remember_persisted_experiment_between_submissions() -> N
 
 
 @pytest.mark.asyncio
-async def test_persist_experiment_validates_before_delegating() -> None:
+async def test_experiment_persist_validates_before_delegating() -> None:
     with pytest.raises(ValueError, match="Experiment name is required"):
-        await persist_experiment(Experiment(name="", environments=[]))
+        await Experiment(name="", environments=[]).persist()
 
 
 def test_public_experiment_api_uses_experiment_id_names() -> None:
@@ -202,7 +201,8 @@ def test_public_experiment_api_uses_experiment_id_names() -> None:
     assert context.experiment_id == ref.experiment_id
 
 
-def test_public_persistence_facade_is_owned_by_api_package() -> None:
-    from ergon_core.api.experiment.persistence import persist_experiment as facade
+def test_public_persistence_facade_is_retired() -> None:
+    import ergon_core.api as public_api
 
-    assert facade is persist_experiment
+    assert not hasattr(public_api, "persist_experiment")
+    assert hasattr(Experiment, "persist")

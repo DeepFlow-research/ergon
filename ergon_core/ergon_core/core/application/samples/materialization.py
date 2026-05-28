@@ -1,13 +1,12 @@
 """Materialize authored Samples into typed runtime WAL and graph projections."""
 
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlmodel import Session
 
 from pydantic import JsonValue
 
-from ergon_core.api._serialization import component_type_path
-from ergon_core.api.experiment.sample import Sample
 from ergon_core.core.application.runtime import status as graph_status
 from ergon_core.core.application.samples.events import (
     SampleRuntimeEventAppender,
@@ -24,11 +23,14 @@ from ergon_core.core.persistence.samples.models import (
 from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord
 
+if TYPE_CHECKING:
+    from ergon_core.api.experiment.sample import Sample
+
 
 def materialize_sample(
     session: Session,
     *,
-    sample: Sample,
+    sample: "Sample",
     sample_row: SampleRecord,
 ) -> None:
     wal = SampleRuntimeEventAppender(session)
@@ -50,7 +52,7 @@ def materialize_sample(
         worker_slug = task.worker.type_slug
         sandbox_type = _snapshot_type(
             sandbox_snapshot,
-            fallback=component_type_path(task.sandbox),
+            fallback=_component_type_path(task.sandbox),
         )
         sandbox_slug = _component_display_slug(sandbox_type)
 
@@ -167,6 +169,11 @@ def materialize_sample(
 
 def _component_display_slug(type_path: str) -> str:
     return type_path.rsplit(":", 1)[-1].rsplit(".", 1)[-1]
+
+
+def _component_type_path(component: object) -> str:
+    cls = component.__class__
+    return f"{cls.__module__}:{cls.__qualname__}"
 
 
 def _snapshot_type(snapshot: dict[str, JsonValue], *, fallback: str) -> str:

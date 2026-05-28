@@ -1,13 +1,15 @@
 """Experiment submit orchestration for selected sample materialization."""
 
+from __future__ import annotations
+
 from collections.abc import Sequence
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 from uuid import UUID
 
 from pydantic import JsonValue
 from sqlmodel import Session
 
-from ergon_core.api.experiment.experiment import Experiment, ExperimentSubmitResult
+from ergon_core.core.application.experiments.results import ExperimentSubmitResult
 from ergon_core.api.experiment.sample import Sample
 from ergon_core.api.experiment.sampling import Sampler, SamplingContext
 from ergon_core.core.application.events.runtime import SampleStartedEvent
@@ -28,6 +30,9 @@ from ergon_core.core.persistence.experiments.models import (
 )
 from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord
+
+if TYPE_CHECKING:
+    from ergon_core.api.experiment.experiment import Experiment
 
 
 class EventBus(Protocol):
@@ -61,7 +66,7 @@ class ExperimentSubmissionService:
     async def submit(
         self,
         *,
-        experiment: Experiment,
+        experiment: "Experiment",
         k: int,
         sampler: Sampler,
         candidate_pool_size: int | None,
@@ -188,7 +193,7 @@ def _assignment_json(sample: Sample) -> dict[str, JsonValue]:
 
 async def submit_experiment(
     *,
-    experiment: Experiment,
+    experiment: "Experiment",
     k: int,
     sampler: Sampler,
     candidate_pool_size: int | None = None,

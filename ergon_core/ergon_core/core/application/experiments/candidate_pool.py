@@ -1,15 +1,15 @@
 """Candidate-pool persistence for public experiment samples."""
 
+from __future__ import annotations
+
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, JsonValue, ValidationError
 from sqlmodel import Session
 
-from ergon_core.api.task import Task
-from ergon_core.api.task import EmptyTaskPayload
-from ergon_core.api.experiment.experiment import Experiment, PersistedExperiment
-from ergon_core.api.experiment.sample import Sample
+from ergon_core.core.application.experiments.results import PersistedExperiment
 from ergon_core.core.application.experiments.repository import (
     ExperimentRepository,
     record_sampler_invocation,
@@ -19,6 +19,11 @@ from ergon_core.core.persistence.experiments.models import (
     ExperimentSamplerInvocationRow,
     ExperimentSamplePoolEntryRow,
 )
+
+if TYPE_CHECKING:
+    from ergon_core.api.experiment.experiment import Experiment
+    from ergon_core.api.experiment.sample import Sample
+    from ergon_core.api.task import Task
 
 
 class CandidateSampleSnapshot(BaseModel):
@@ -45,7 +50,7 @@ class ExperimentCandidatePoolService:
     def fill(
         self,
         *,
-        experiment: Experiment,
+        experiment: "Experiment",
         handle: PersistedExperiment,
         candidate_pool_size: int,
     ) -> list[ExperimentSamplePoolEntryRow]:
@@ -169,8 +174,10 @@ def reserve_sample_pool_entries_for_sampler(
     return invocation, selected_entries
 
 
-async def sample_from_pool_entry(entry: ExperimentSamplePoolEntryRow) -> Sample:
+async def sample_from_pool_entry(entry: ExperimentSamplePoolEntryRow) -> "Sample":
     """Rehydrate retained candidate JSON into an authored, unmaterialized Sample."""
+
+    from ergon_core.api.experiment.sample import Sample
 
     try:
         snapshot = CandidateSampleSnapshot.model_validate(entry.sample_json)
@@ -190,7 +197,9 @@ async def sample_from_pool_entry(entry: ExperimentSamplePoolEntryRow) -> Sample:
     )
 
 
-async def _task_from_candidate_snapshot(task_json: object) -> Task:
+async def _task_from_candidate_snapshot(task_json: object) -> "Task":
+    from ergon_core.api.task import EmptyTaskPayload, Task
+
     if not isinstance(task_json, dict):
         raise ValueError(
             f"Candidate task snapshot must be an object, got {type(task_json).__name__}"

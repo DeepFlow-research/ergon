@@ -37,7 +37,6 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "EvidenceMessage",
         # PR 5 — object-bound authoring surface.
         "Evaluator",
-        "persist_experiment",
         "RandomSampler",
         "Rubric",
         "Sample",
@@ -68,6 +67,7 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "ExperimentHandle",
         "ExperimentRunHandle",
         "persist_benchmark",
+        "persist_experiment",
         "SourceDescriptor",
         # Toolkit is a ReAct/builtins implementation detail, not a core
         # authoring API concept.

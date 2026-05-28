@@ -1,12 +1,14 @@
 """Application repository helpers for experiment persistence."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from pydantic import JsonValue
 from sqlmodel import Session, select
 
-from ergon_core.api.experiment.experiment import Experiment, PersistedExperiment
-from ergon_core.api.experiment.sample import Sample
+from ergon_core.core.application.experiments.results import PersistedExperiment
 from ergon_core.core.persistence.experiments.models import (
     ExperimentEnvironmentRow,
     ExperimentRow,
@@ -15,6 +17,10 @@ from ergon_core.core.persistence.experiments.models import (
 )
 from ergon_core.core.shared.utils import utcnow
 
+if TYPE_CHECKING:
+    from ergon_core.api.experiment.experiment import Experiment
+    from ergon_core.api.experiment.sample import Sample
+
 
 class ExperimentRepository:
     """Data-access boundary for experiment authoring persistence."""
@@ -22,7 +28,7 @@ class ExperimentRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def persist_experiment(self, experiment: Experiment) -> PersistedExperiment:
+    def persist_experiment(self, experiment: "Experiment") -> PersistedExperiment:
         experiment.validate_authoring()
         row = ExperimentRow(
             name=experiment.name,
@@ -105,7 +111,7 @@ class ExperimentRepository:
         *,
         handle: PersistedExperiment,
         environment_id: UUID,
-        sample: Sample,
+        sample: "Sample",
     ) -> ExperimentSamplePoolEntryRow:
         row = ExperimentSamplePoolEntryRow(
             experiment_id=handle.experiment_id,
@@ -133,7 +139,7 @@ class ExperimentRepository:
         self._session.flush()
 
 
-def persist_experiment(*, session: Session, experiment: Experiment) -> PersistedExperiment:
+def persist_experiment(*, session: Session, experiment: "Experiment") -> PersistedExperiment:
     return ExperimentRepository(session).persist_experiment(experiment)
 
 

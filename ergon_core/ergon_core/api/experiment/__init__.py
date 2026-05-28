@@ -3,10 +3,11 @@
 from ergon_core.api.experiment.environment import Environment
 from ergon_core.api.experiment.experiment import (
     Experiment,
+)
+from ergon_core.core.application.experiments.results import (
     ExperimentSubmitResult,
     PersistedExperiment,
 )
-from ergon_core.api.experiment.persistence import persist_experiment
 from ergon_core.api.experiment.sample import Sample
 from ergon_core.api.experiment.sampling import (
     RandomSampler,
@@ -19,7 +20,6 @@ __all__ = [
     "Experiment",
     "ExperimentSubmitResult",
     "PersistedExperiment",
-    "persist_experiment",
     "RandomSampler",
     "Sample",
     "Sampler",

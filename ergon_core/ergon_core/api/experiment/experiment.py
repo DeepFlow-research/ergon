@@ -2,35 +2,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from datetime import datetime
+from collections.abc import Sequence
 from typing import Any
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, PrivateAttr
 
 from ergon_core.api.experiment.environment import Environment
+from ergon_core.core.application.experiments.results import (
+    ExperimentSubmitResult,
+    PersistedExperiment,
+)
 from ergon_core.api.experiment.sampling import RandomSampler, Sampler
-
-
-class PersistedExperiment(BaseModel):
-    experiment_id: UUID
-    name: str
-    environment_ids: Mapping[str, UUID] = Field(default_factory=dict)
-    created_at: datetime | None = None
-    dashboard_url: str | None = None
-    metadata: dict[str, JsonValue] = Field(default_factory=dict)
-
-
-class ExperimentSubmitResult(BaseModel):
-    experiment_id: UUID
-    sampler_invocation_id: UUID | None = None
-    batch_id: UUID | None = None
-    requested_k: int
-    candidate_pool_size: int
-    selected_count: int
-    sample_ids: Sequence[UUID]
-    dashboard_url: str | None = None
+from ergon_core.core.application.experiments.persistence import persist_public_experiment
+from ergon_core.core.application.experiments.submission import submit_experiment
 
 
 class Experiment(BaseModel):
@@ -71,6 +55,14 @@ class Experiment(BaseModel):
     def mark_persisted(self, persisted: PersistedExperiment) -> None:
         self._persisted_experiment = persisted
 
+    async def persist(
+        self,
+        *,
+        session: Any | None = None,
+    ) -> PersistedExperiment:
+        self.validate_authoring()
+        return await persist_public_experiment(self, session=session)
+
     async def submit(
         self,
         *,
@@ -81,8 +73,6 @@ class Experiment(BaseModel):
         session: Any | None = None,
         event_bus: Any | None = None,
     ) -> ExperimentSubmitResult:
-        from ergon_core.core.application.experiments.submission import submit_experiment
-
         self.validate_authoring()
         return await submit_experiment(
             experiment=self,
