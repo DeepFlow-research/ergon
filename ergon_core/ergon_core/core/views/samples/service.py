@@ -185,6 +185,7 @@ class SampleSnapshotReadService:
 
         return SampleSnapshotDto(
             id=sample_id_str,
+            experiment_id=run.experiment_id,
             name=run_name,
             status=run.status,
             tasks=task_map,

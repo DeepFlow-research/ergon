@@ -16,10 +16,9 @@ from pydantic import JsonValue
 
 type TaskDefinitionJson = dict[str, JsonValue]
 """Serialized form of a Task / Worker / Sandbox / Criterion / etc —
-``_type``-discriminated JSON written to ``run_graph_nodes.task_json``
-and the matching definition columns. Field names are NOT enforced by
-this type (the discriminator dispatch in ``from_definition`` does
-that); the value side IS typed via pydantic's ``JsonValue``, so
+``_type``-discriminated JSON written to sample graph/component snapshots.
+Field names are NOT enforced by this type (the discriminator dispatch in
+``from_definition`` does that); the value side IS typed via pydantic's ``JsonValue``, so
 accidentally stuffing a ``datetime`` or ``UUID`` object into the
 snapshot fails at typecheck time instead of at JSON-serialization
 time. The alias is the named boundary every ``from_definition``

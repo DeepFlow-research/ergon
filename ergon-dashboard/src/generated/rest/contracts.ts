@@ -20,7 +20,6 @@ const SampleSummaryDto = z
     latest_activity_at: z.union([z.string(), z.null()]).optional(),
     duration_seconds: z.union([z.number(), z.null()]).optional(),
     experiment_id: z.union([z.string(), z.null()]).optional(),
-    experiment_name: z.union([z.string(), z.null()]).optional(),
     experiment: z.union([z.string(), z.null()]).optional(),
     benchmark_type: z.string(),
     instance_key: z.string(),
@@ -692,30 +691,13 @@ const SamplerInvocationsView = z
   .object({ items: z.array(SamplerInvocationView) })
   .partial()
   .passthrough();
-const ExperimentRunRequest = z
+const TrainingRolloutRequest = z
   .object({
-    experiment_id: z.string().uuid(),
-    timeout_seconds: z.union([z.number(), z.null()]).optional(),
-    wait: z.boolean().optional().default(true),
-  })
-  .passthrough();
-const submit_experiment_experiments__experiment_id__run_post_Body = z.union([
-  ExperimentRunRequest,
-  z.null(),
-]);
-const ExperimentRunResult = z
-  .object({
-    experiment_id: z.string().uuid(),
-    sample_ids: z.array(z.string().uuid()),
-    experiment_ids: z.array(z.string().uuid()).optional(),
-  })
-  .passthrough();
-const SubmitRequest = z
-  .object({
-    experiment_id: z.string().uuid(),
-    num_episodes: z.number().int().gte(1),
-    policy_version: z.union([z.number(), z.null()]).optional(),
-    model_target_override: z.union([z.string(), z.null()]).optional(),
+    experimentId: z.string().uuid(),
+    k: z.number().int().gte(1),
+    sampler: z.string().optional().default("random"),
+    samplerConfig: z.object({}).partial().passthrough().optional(),
+    candidatePoolSize: z.union([z.number(), z.null()]).optional(),
   })
   .passthrough();
 const RolloutStatus = z.enum([
@@ -725,11 +707,13 @@ const RolloutStatus = z.enum([
   "failed",
   "cancelled",
 ]);
-const SubmitResponse = z
+const RolloutBatchSummary = z
   .object({
-    batch_id: z.string().uuid(),
-    sample_ids: z.array(z.string().uuid()),
-    status: RolloutStatus.optional(),
+    batchId: z.string().uuid(),
+    sampleIds: z.array(z.string().uuid()),
+    status: RolloutStatus,
+    experimentId: z.union([z.string(), z.null()]).optional(),
+    samplerInvocationId: z.union([z.string(), z.null()]).optional(),
   })
   .passthrough();
 const Trajectory = z
@@ -757,100 +741,11 @@ const PollResponse = z
     failures: z.array(EpisodeFailure).optional(),
   })
   .passthrough();
-const RolloutBatchSummary = z
-  .object({
-    batch_id: z.string().uuid(),
-    sample_ids: z.array(z.string().uuid()),
-    status: RolloutStatus,
-    experiment_id: z.union([z.string(), z.null()]).optional(),
-    sampler_invocation_id: z.union([z.string(), z.null()]).optional(),
-  })
-  .passthrough();
 const WeightSyncRequest = z
   .object({ checkpoint_path: z.string(), model_name: z.string() })
   .passthrough();
 const WeightSyncResponse = z
   .object({ success: z.boolean(), vllm_model_loaded: z.string() })
-  .passthrough();
-const TestGraphNodeDto = z
-  .object({
-    id: z.string().uuid(),
-    task_slug: z.string(),
-    level: z.number().int(),
-    status: z.string(),
-    parent_task_id: z.union([z.string(), z.null()]),
-    parent_task_slug: z.union([z.string(), z.null()]),
-  })
-  .passthrough();
-const TestSampleRuntimeEventDto = z
-  .object({
-    table: z.string(),
-    event_type: z.string(),
-    target_id: z.union([z.string(), z.null()]),
-    payload: z.object({}).partial().passthrough(),
-  })
-  .passthrough();
-const TestEvaluationDto = z
-  .object({
-    task_id: z.string().uuid(),
-    task_slug: z.union([z.string(), z.null()]),
-    score: z.number(),
-    reason: z.string(),
-  })
-  .passthrough();
-const TestExecutionDto = z
-  .object({
-    task_slug: z.union([z.string(), z.null()]),
-    status: z.string(),
-    error: z.union([z.string(), z.null()]),
-  })
-  .passthrough();
-const TestSampleStateDto = z
-  .object({
-    sample_id: z.string().uuid(),
-    status: z.string(),
-    graph_nodes: z.array(TestGraphNodeDto),
-    events: z.array(TestSampleRuntimeEventDto),
-    evaluations: z.array(TestEvaluationDto),
-    executions: z.array(TestExecutionDto),
-    execution_count: z.number().int(),
-    event_count: z.number().int(),
-    resource_count: z.number().int(),
-    thread_count: z.number().int(),
-    context_event_count: z.number().int(),
-  })
-  .passthrough();
-const TestExperimentSampleDto = z
-  .object({ sample_id: z.string().uuid(), status: z.string() })
-  .passthrough();
-const SeedSampleRequest = z
-  .object({
-    experiment_id: z.string().uuid(),
-    benchmark_type: z.string().optional().default("test-harness"),
-    instance_key: z.string().optional().default("seeded"),
-    worker_team: z.object({}).partial().passthrough().optional(),
-    experiment: z.string().optional().default("_test_"),
-    status: z.string().optional().default("completed"),
-    task_slugs: z.array(z.string()).optional().default([]),
-  })
-  .passthrough();
-const ResetRequest = z.object({ experiment_prefix: z.string() }).passthrough();
-const ExperimentSampleSlotRequest = z
-  .object({ worker_slug: z.string(), evaluator_slug: z.string() })
-  .passthrough();
-const SubmitExperimentSamplesRequest = z
-  .object({
-    benchmark_slug: z.string(),
-    slots: z.array(ExperimentSampleSlotRequest),
-    experiment: z.string(),
-    sandbox_slug: z.union([z.string(), z.null()]).optional(),
-    dependency_extras: z.array(z.string()).optional().default(["none"]),
-    model: z.string().optional().default("openai:gpt-4o"),
-    limit: z.number().int().optional().default(1),
-  })
-  .passthrough();
-const SubmitExperimentSamplesResponse = z
-  .object({ sample_ids: z.array(z.string().uuid()) })
   .passthrough();
 
 export const schemas = {
@@ -911,27 +806,12 @@ export const schemas = {
   ExperimentListView,
   ExperimentSamplesView,
   SamplerInvocationsView,
-  ExperimentRunRequest,
-  submit_experiment_experiments__experiment_id__run_post_Body,
-  ExperimentRunResult,
-  SubmitRequest,
+  TrainingRolloutRequest,
   RolloutStatus,
-  SubmitResponse,
+  RolloutBatchSummary,
   Trajectory,
   EpisodeFailure,
   PollResponse,
-  RolloutBatchSummary,
   WeightSyncRequest,
   WeightSyncResponse,
-  TestGraphNodeDto,
-  TestSampleRuntimeEventDto,
-  TestEvaluationDto,
-  TestExecutionDto,
-  TestSampleStateDto,
-  TestExperimentSampleDto,
-  SeedSampleRequest,
-  ResetRequest,
-  ExperimentSampleSlotRequest,
-  SubmitExperimentSamplesRequest,
-  SubmitExperimentSamplesResponse,
 };

@@ -165,6 +165,11 @@ def test_list_runs_filters_offsets_and_projects_index_summary(monkeypatch, sessi
     assert summary.model_target == "openai:gpt-4.1"
     assert summary.metrics == {"pass_rate": 0.9}
 
+    snapshot = SampleSnapshotReadService().build_snapshot(matching_run_id)
+
+    assert snapshot is not None
+    assert snapshot.experiment_id == experiment_id
+
 
 def test_failed_run_snapshot_preserves_persisted_final_score(monkeypatch, session_factory) -> None:
     now = datetime(2026, 5, 20, 12, 0, tzinfo=UTC)

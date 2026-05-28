@@ -198,6 +198,7 @@ class SampleSnapshotMetricsDto(CamelModel):
 
 class SampleSnapshotDto(CamelModel):
     id: str
+    experiment_id: UUID | None = None
     name: str
     status: str
     tasks: dict[str, SampleTaskDto] = Field(default_factory=dict)

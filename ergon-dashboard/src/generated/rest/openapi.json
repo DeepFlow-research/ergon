@@ -42,23 +42,6 @@
             }
           },
           {
-            "name": "experiment_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Definition Id"
-            }
-          },
-          {
             "name": "experiment",
             "in": "query",
             "required": false,
@@ -513,13 +496,14 @@
         }
       }
     },
-    "/experiments/{experiment_id}/run": {
+    "/rollouts/experiments/{experiment_id}/rollout-batches": {
       "post": {
         "tags": [
-          "experiments"
+          "rollouts"
         ],
-        "summary": "Run Experiment",
-        "operationId": "submit_experiment_experiments__experiment_id__run_post",
+        "summary": "Submit Experiment Rollout Batch",
+        "description": "Start a trainer batch from a persisted experiment candidate pool.",
+        "operationId": "submit_experiment_rollout_batch_rollouts_experiments__experiment_id__rollout_batches_post",
         "parameters": [
           {
             "name": "experiment_id",
@@ -528,23 +512,16 @@
             "schema": {
               "type": "string",
               "format": "uuid",
-              "title": "Definition Id"
+              "title": "Experiment Id"
             }
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/ExperimentRunRequest"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Request"
+                "$ref": "#/components/schemas/TrainingRolloutRequest"
               }
             }
           }
@@ -555,49 +532,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ExperimentRunResult"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/rollouts/submit": {
-      "post": {
-        "tags": [
-          "rollouts"
-        ],
-        "summary": "Submit Rollout",
-        "description": "Start a batch of episodes. Returns immediately with batch_id.",
-        "operationId": "submit_rollout_rollouts_submit_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SubmitRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SubmitResponse"
+                  "$ref": "#/components/schemas/RolloutBatchSummary"
                 }
               }
             }
@@ -795,215 +730,6 @@
                   },
                   "type": "object",
                   "title": "Response Health Health Get"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/__danger__/test-harness/read/samples/{sample_id}/state": {
-      "get": {
-        "tags": [
-          "danger-test-harness"
-        ],
-        "summary": "Read Run State",
-        "operationId": "read_run_state_api___danger___test_harness_read_samples__sample_id__state_get",
-        "parameters": [
-          {
-            "name": "sample_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Sample Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TestSampleStateDto"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/__danger__/test-harness/read/experiment/{experiment}/samples": {
-      "get": {
-        "tags": [
-          "danger-test-harness"
-        ],
-        "summary": "Read Experiment Samples",
-        "description": "List all runs attached to a v2 experiment grouping tag.",
-        "operationId": "read_experiment_samples_api___danger___test_harness_read_experiment__experiment__samples_get",
-        "parameters": [
-          {
-            "name": "experiment",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Experiment"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TestExperimentSampleDto"
-                  },
-                  "title": "Response Read Experiment Samples Api   Danger   Test Harness Read Experiment  Experiment  Samples Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/__danger__/test-harness/write/samples/seed": {
-      "post": {
-        "tags": [
-          "danger-test-harness"
-        ],
-        "summary": "Seed Run",
-        "operationId": "seed_run_api___danger___test_harness_write_samples_seed_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SeedSampleRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Seed Run Api   Danger   Test Harness Write Samples Seed Post"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/__danger__/test-harness/write/reset": {
-      "post": {
-        "tags": [
-          "danger-test-harness"
-        ],
-        "summary": "Reset Test Rows",
-        "operationId": "reset_test_rows_api___danger___test_harness_write_reset_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResetRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/__danger__/test-harness/write/experiment-samples": {
-      "post": {
-        "tags": [
-          "danger-test-harness"
-        ],
-        "summary": "Submit Experiment Samples",
-        "description": "Build + persist + dispatch N samples under one experiment tag.\n\nPer-slot flow builds sample DAGs through the experiment/environment authoring path and submits them sequentially for deterministic smoke coverage.",
-        "operationId": "submit_experiment_samples_api___danger___test_harness_write_experiment_samples_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SubmitExperimentSamplesRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SubmitExperimentSamplesResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1366,85 +1092,6 @@
         "type": "object",
         "title": "ExperimentListView"
       },
-      "ExperimentRunRequest": {
-        "properties": {
-          "experiment_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Definition Id"
-          },
-          "timeout_seconds": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Timeout Seconds"
-          },
-          "wait": {
-            "type": "boolean",
-            "title": "Wait",
-            "default": true
-          }
-        },
-        "type": "object",
-        "required": [
-          "experiment_id"
-        ],
-        "title": "ExperimentRunRequest"
-      },
-      "ExperimentRunResult": {
-        "properties": {
-          "experiment_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Definition Id"
-          },
-          "sample_ids": {
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "type": "array",
-            "title": "Sample Ids"
-          },
-          "experiment_ids": {
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "type": "array",
-            "title": "Definition Ids"
-          }
-        },
-        "type": "object",
-        "required": [
-          "experiment_id",
-          "sample_ids"
-        ],
-        "title": "ExperimentRunResult"
-      },
-      "ExperimentSampleSlotRequest": {
-        "properties": {
-          "worker_slug": {
-            "type": "string",
-            "title": "Worker Slug"
-          },
-          "evaluator_slug": {
-            "type": "string",
-            "title": "Evaluator Slug"
-          }
-        },
-        "type": "object",
-        "required": [
-          "worker_slug",
-          "evaluator_slug"
-        ],
-        "title": "ExperimentSampleSlotRequest"
-      },
       "ExperimentSampleSummaryView": {
         "properties": {
           "sampleId": {
@@ -1718,38 +1365,25 @@
         "title": "ProviderTokenUsage",
         "description": "Provider-reported token and cost usage for one generation boundary."
       },
-      "ResetRequest": {
-        "properties": {
-          "experiment_prefix": {
-            "type": "string",
-            "title": "Experiment Prefix"
-          }
-        },
-        "type": "object",
-        "required": [
-          "experiment_prefix"
-        ],
-        "title": "ResetRequest"
-      },
       "RolloutBatchSummary": {
         "properties": {
-          "batch_id": {
+          "batchId": {
             "type": "string",
             "format": "uuid",
-            "title": "Batch Id"
+            "title": "Batchid"
           },
-          "sample_ids": {
+          "sampleIds": {
             "items": {
               "type": "string",
               "format": "uuid"
             },
             "type": "array",
-            "title": "Sample Ids"
+            "title": "Sampleids"
           },
           "status": {
             "$ref": "#/components/schemas/RolloutStatus"
           },
-          "experiment_id": {
+          "experimentId": {
             "anyOf": [
               {
                 "type": "string",
@@ -1759,9 +1393,9 @@
                 "type": "null"
               }
             ],
-            "title": "Experiment Id"
+            "title": "Experimentid"
           },
-          "sampler_invocation_id": {
+          "samplerInvocationId": {
             "anyOf": [
               {
                 "type": "string",
@@ -1771,13 +1405,13 @@
                 "type": "null"
               }
             ],
-            "title": "Sampler Invocation Id"
+            "title": "Samplerinvocationid"
           }
         },
         "type": "object",
         "required": [
-          "batch_id",
-          "sample_ids",
+          "batchId",
+          "sampleIds",
           "status"
         ],
         "title": "RolloutBatchSummary",
@@ -1994,7 +1628,7 @@
                 "type": "null"
               }
             ],
-            "title": "Taskexecutionid"
+            "title": "Taskattemptid"
           },
           "fromAgentId": {
             "type": "string",
@@ -2123,7 +1757,7 @@
           "taskAttemptId": {
             "type": "string",
             "format": "uuid",
-            "title": "Taskexecutionid"
+            "title": "Taskattemptid"
           },
           "taskId": {
             "type": "string",
@@ -3191,7 +2825,7 @@
           },
           "taskAttemptId": {
             "type": "string",
-            "title": "Taskexecutionid"
+            "title": "Taskattemptid"
           },
           "name": {
             "type": "string",
@@ -3532,13 +3166,14 @@
           "experimentId": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "format": "uuid"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Definitionid"
+            "title": "Experimentid"
           },
           "name": {
             "type": "string",
@@ -3940,18 +3575,7 @@
                 "type": "null"
               }
             ],
-            "title": "Definition Id"
-          },
-          "experiment_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Definition Name"
+            "title": "Experiment Id"
           },
           "experiment": {
             "anyOf": [
@@ -4747,198 +4371,6 @@
         "type": "object",
         "title": "SamplerInvocationsView"
       },
-      "SeedSampleRequest": {
-        "properties": {
-          "experiment_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Definition Id"
-          },
-          "benchmark_type": {
-            "type": "string",
-            "title": "Benchmark Type",
-            "default": "test-harness"
-          },
-          "instance_key": {
-            "type": "string",
-            "title": "Instance Key",
-            "default": "seeded"
-          },
-          "worker_team": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Worker Team"
-          },
-          "experiment": {
-            "type": "string",
-            "title": "Experiment",
-            "default": "_test_"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status",
-            "default": "completed"
-          },
-          "task_slugs": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Task Slugs",
-            "default": []
-          }
-        },
-        "type": "object",
-        "required": [
-          "experiment_id"
-        ],
-        "title": "SeedSampleRequest"
-      },
-      "SubmitExperimentSamplesRequest": {
-        "properties": {
-          "benchmark_slug": {
-            "type": "string",
-            "title": "Benchmark Slug"
-          },
-          "slots": {
-            "items": {
-              "$ref": "#/components/schemas/ExperimentSampleSlotRequest"
-            },
-            "type": "array",
-            "title": "Slots"
-          },
-          "experiment": {
-            "type": "string",
-            "title": "Experiment"
-          },
-          "sandbox_slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sandbox Slug"
-          },
-          "dependency_extras": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Dependency Extras",
-            "default": [
-              "none"
-            ]
-          },
-          "model": {
-            "type": "string",
-            "title": "Model",
-            "default": "openai:gpt-4o"
-          },
-          "limit": {
-            "type": "integer",
-            "title": "Limit",
-            "default": 1
-          }
-        },
-        "type": "object",
-        "required": [
-          "benchmark_slug",
-          "slots",
-          "experiment"
-        ],
-        "title": "SubmitExperimentSamplesRequest"
-      },
-      "SubmitExperimentSamplesResponse": {
-        "properties": {
-          "sample_ids": {
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "type": "array",
-            "title": "Sample Ids"
-          }
-        },
-        "type": "object",
-        "required": [
-          "sample_ids"
-        ],
-        "title": "SubmitExperimentSamplesResponse"
-      },
-      "SubmitRequest": {
-        "properties": {
-          "experiment_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Definition Id"
-          },
-          "num_episodes": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Num Episodes"
-          },
-          "policy_version": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Policy Version"
-          },
-          "model_target_override": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model Target Override"
-          }
-        },
-        "type": "object",
-        "required": [
-          "experiment_id",
-          "num_episodes"
-        ],
-        "title": "SubmitRequest",
-        "description": "Trainer \u2192 Ergon: start a batch of episodes."
-      },
-      "SubmitResponse": {
-        "properties": {
-          "batch_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Batch Id"
-          },
-          "sample_ids": {
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "type": "array",
-            "title": "Sample Ids"
-          },
-          "status": {
-            "$ref": "#/components/schemas/RolloutStatus",
-            "default": "pending"
-          }
-        },
-        "type": "object",
-        "required": [
-          "batch_id",
-          "sample_ids"
-        ],
-        "title": "SubmitResponse",
-        "description": "Ergon \u2192 Trainer: batch accepted."
-      },
       "SystemPromptPart": {
         "properties": {
           "part_kind": {
@@ -4959,265 +4391,6 @@
           "content"
         ],
         "title": "SystemPromptPart"
-      },
-      "TestEvaluationDto": {
-        "properties": {
-          "task_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Task Id"
-          },
-          "task_slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Task Slug"
-          },
-          "score": {
-            "type": "number",
-            "title": "Score"
-          },
-          "reason": {
-            "type": "string",
-            "title": "Reason"
-          }
-        },
-        "type": "object",
-        "required": [
-          "task_id",
-          "task_slug",
-          "score",
-          "reason"
-        ],
-        "title": "TestEvaluationDto"
-      },
-      "TestExecutionDto": {
-        "properties": {
-          "task_slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Task Slug"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
-          }
-        },
-        "type": "object",
-        "required": [
-          "task_slug",
-          "status",
-          "error"
-        ],
-        "title": "TestExecutionDto"
-      },
-      "TestExperimentSampleDto": {
-        "properties": {
-          "sample_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Sample Id"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          }
-        },
-        "type": "object",
-        "required": [
-          "sample_id",
-          "status"
-        ],
-        "title": "TestExperimentSampleDto"
-      },
-      "TestGraphNodeDto": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
-          },
-          "task_slug": {
-            "type": "string",
-            "title": "Task Slug"
-          },
-          "level": {
-            "type": "integer",
-            "title": "Level"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "parent_task_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent Task Id"
-          },
-          "parent_task_slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent Task Slug"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "task_slug",
-          "level",
-          "status",
-          "parent_task_id",
-          "parent_task_slug"
-        ],
-        "title": "TestGraphNodeDto"
-      },
-      "TestSampleStateDto": {
-        "properties": {
-          "sample_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Sample Id"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "graph_nodes": {
-            "items": {
-              "$ref": "#/components/schemas/TestGraphNodeDto"
-            },
-            "type": "array",
-            "title": "Graph Nodes"
-          },
-          "events": {
-            "items": {
-              "$ref": "#/components/schemas/TestSampleRuntimeEventDto"
-            },
-            "type": "array",
-            "title": "Events"
-          },
-          "evaluations": {
-            "items": {
-              "$ref": "#/components/schemas/TestEvaluationDto"
-            },
-            "type": "array",
-            "title": "Evaluations"
-          },
-          "executions": {
-            "items": {
-              "$ref": "#/components/schemas/TestExecutionDto"
-            },
-            "type": "array",
-            "title": "Executions"
-          },
-          "execution_count": {
-            "type": "integer",
-            "title": "Execution Count"
-          },
-          "event_count": {
-            "type": "integer",
-            "title": "Event Count"
-          },
-          "resource_count": {
-            "type": "integer",
-            "title": "Resource Count"
-          },
-          "thread_count": {
-            "type": "integer",
-            "title": "Thread Count"
-          },
-          "context_event_count": {
-            "type": "integer",
-            "title": "Context Event Count"
-          }
-        },
-        "type": "object",
-        "required": [
-          "sample_id",
-          "status",
-          "graph_nodes",
-          "events",
-          "evaluations",
-          "executions",
-          "execution_count",
-          "event_count",
-          "resource_count",
-          "thread_count",
-          "context_event_count"
-        ],
-        "title": "TestSampleStateDto"
-      },
-      "TestSampleRuntimeEventDto": {
-        "properties": {
-          "table": {
-            "type": "string",
-            "title": "Table"
-          },
-          "event_type": {
-            "type": "string",
-            "title": "Event Type"
-          },
-          "target_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Target Id"
-          },
-          "payload": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Payload"
-          }
-        },
-        "type": "object",
-        "required": [
-          "table",
-          "event_type",
-          "target_id",
-          "payload"
-        ],
-        "title": "TestSampleRuntimeEventDto"
       },
       "ThinkingPart": {
         "properties": {
@@ -5341,6 +4514,48 @@
           "content"
         ],
         "title": "ToolResultPart"
+      },
+      "TrainingRolloutRequest": {
+        "properties": {
+          "experimentId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Experimentid"
+          },
+          "k": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "K"
+          },
+          "sampler": {
+            "type": "string",
+            "title": "Sampler",
+            "default": "random"
+          },
+          "samplerConfig": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Samplerconfig"
+          },
+          "candidatePoolSize": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidatepoolsize"
+          }
+        },
+        "type": "object",
+        "required": [
+          "experimentId",
+          "k"
+        ],
+        "title": "TrainingRolloutRequest",
+        "description": "Trainer \u2192 Ergon: select and launch samples from a persisted experiment."
       },
       "Trajectory": {
         "properties": {
