@@ -1,4 +1,4 @@
-"""Public benchmark-owned task type."""
+"""Public executable task type."""
 
 import logging
 from collections.abc import Callable
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class EmptyTaskPayload(BaseModel):
-    """Default payload for benchmarks that do not need task-specific data."""
+    """Default payload for tasks that do not need task-specific data."""
 
     model_config = {"extra": "forbid", "frozen": True}
 

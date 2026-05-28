@@ -10,7 +10,6 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
     public_api = importlib.import_module("ergon_core.api")
 
     expected = {
-        "Benchmark",
         "Task",
         "EmptyTaskPayload",
         "Environment",
@@ -53,6 +52,7 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
     }
     retired = {
         "BenchmarkTask",
+        "Benchmark",
         "BenchmarkDeps",
         "EvaluationContext",
         "CriterionResult",
@@ -83,16 +83,13 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
 
 
 def test_semantic_api_clusters_are_importable() -> None:
-    benchmark = importlib.import_module("ergon_core.api.benchmark")
+    task = importlib.import_module("ergon_core.api.task")
     worker = importlib.import_module("ergon_core.api.worker")
     criterion = importlib.import_module("ergon_core.api.criterion")
     rubric = importlib.import_module("ergon_core.api.rubric")
 
-    assert benchmark.__all__ == [
-        "Benchmark",
-        "Task",
-        "EmptyTaskPayload",
-    ]
+    assert task.Task.__module__ == "ergon_core.api.task"
+    assert task.EmptyTaskPayload.__module__ == "ergon_core.api.task"
     # PR 9 Task 1 added ``SpawnedTaskHandle`` to the worker cluster as
     # the return type of ``WorkerContext.spawn_task`` and
     # ``WorkerContext.restart_task``.

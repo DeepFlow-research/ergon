@@ -3,7 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 
-class BenchmarkCommand(BaseModel):
+class EnvironmentCommand(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     action: Literal["list", "setup"]

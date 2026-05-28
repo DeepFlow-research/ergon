@@ -37,7 +37,7 @@ from ergon_core.core.application.runtime.errors import (
     EdgeNotFoundError,
     NodeNotFoundError,
 )
-from ergon_core.api.benchmark import Task
+from ergon_core.api.task import Task
 from ergon_core.core.application.runtime.models import (
     GraphEdgeDto,
     GraphNodeDto,

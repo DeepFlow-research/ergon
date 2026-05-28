@@ -23,7 +23,7 @@ class RubricCriterion(BaseModel):
 
 
 class ResearchRubricsTaskPayload(BaseModel):
-    """Structured payload carried inside ``BenchmarkTask.task_payload``."""
+    """Structured payload carried inside ``Task.task_payload``."""
 
     sample_id: str = Field(description="Unique identifier from HuggingFace dataset")
     domain: str = Field(

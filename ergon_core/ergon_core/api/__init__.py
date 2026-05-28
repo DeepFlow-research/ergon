@@ -1,10 +1,6 @@
 """Beginner-facing Ergon authoring API surface."""
 
-from ergon_core.api.benchmark import (
-    Benchmark,
-    EmptyTaskPayload,
-    Task,
-)
+from ergon_core.api.task import EmptyTaskPayload, Task
 from ergon_core.api.criterion import (
     Criterion,
     CriterionContext,
@@ -53,7 +49,6 @@ from ergon_core.api.worker import (
 Task.model_rebuild()
 
 __all__ = [
-    "Benchmark",
     "AwaitCompletionNotSupportedError",
     "ContainmentViolation",
     "Criterion",

@@ -10,7 +10,7 @@ serialization cost).
 
 from uuid import UUID
 
-from ergon_core.api.benchmark import Task
+from ergon_core.api.task import Task
 from ergon_core.core.application.runtime.status import NodeStatus
 from ergon_core.core.persistence.shared.types import (
     EdgeId,

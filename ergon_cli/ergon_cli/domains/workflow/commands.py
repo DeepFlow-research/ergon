@@ -31,7 +31,7 @@ async def handle_workflow(args: argparse.Namespace) -> int:
             task_id=args.task_id,
             execution_id=args.execution_id,
             sandbox_task_key=args.sandbox_task_key,
-            benchmark_type=args.benchmark_type,
+            benchmark_type=args.environment_type,
         ),
         session_factory=get_session,
         service=WorkflowService(),

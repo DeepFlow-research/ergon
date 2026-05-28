@@ -1,6 +1,6 @@
 from collections.abc import AsyncGenerator
 
-from ergon_core.api.benchmark import Task
+from ergon_core.api.task import Task
 from ergon_core.api.worker import Worker, WorkerContext, WorkerOutput
 from ergon_core.api.worker.worker import WorkerStreamItem
 

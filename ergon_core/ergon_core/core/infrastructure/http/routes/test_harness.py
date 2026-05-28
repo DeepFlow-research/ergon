@@ -24,10 +24,10 @@ from ergon_core.core.persistence.shared.db import get_session
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from tests.fixtures.smoke_components.benchmarks import (
-    GDPEvalSmokeBenchmark,
-    MiniF2FSmokeBenchmark,
-    ResearchRubricsSmokeBenchmark,
-    SweBenchSmokeBenchmark,
+    GDPEvalSmokeEnvironment,
+    MiniF2FSmokeEnvironment,
+    ResearchRubricsSmokeEnvironment,
+    SweBenchSmokeEnvironment,
 )
 
 router = APIRouter(
@@ -36,13 +36,13 @@ router = APIRouter(
     include_in_schema=False,
 )
 
-_SMOKE_BENCHMARKS = {
-    benchmark.type_slug: benchmark
-    for benchmark in (
-        GDPEvalSmokeBenchmark,
-        MiniF2FSmokeBenchmark,
-        ResearchRubricsSmokeBenchmark,
-        SweBenchSmokeBenchmark,
+_SMOKE_ENVIRONMENTS = {
+    environment.environment_slug: environment
+    for environment in (
+        GDPEvalSmokeEnvironment,
+        MiniF2FSmokeEnvironment,
+        ResearchRubricsSmokeEnvironment,
+        SweBenchSmokeEnvironment,
     )
 }
 
@@ -143,7 +143,7 @@ def read_experiment_samples(
 
 
 class SeedSampleRequest(BaseModel):
-    benchmark_type: str = "test-harness"
+    environment_type: str = "test-harness"
     instance_key: str = "seeded"
     worker_team: dict = Field(default_factory=lambda: {"primary": "test-harness-worker"})
     experiment: str = "_test_"
@@ -161,7 +161,7 @@ def seed_sample(
 ) -> dict:
     try:
         sample_id = _seed_sample(
-            benchmark_type=body.benchmark_type,
+            benchmark_type=body.environment_type,
             instance_key=body.instance_key,
             worker_team=body.worker_team,
             experiment=body.experiment,
@@ -202,7 +202,7 @@ class ExperimentSampleSlotRequest(BaseModel):
 
 
 class SubmitExperimentSamplesRequest(BaseModel):
-    benchmark_slug: str
+    environment_slug: str
     slots: list[ExperimentSampleSlotRequest]
     experiment: str
     sandbox_slug: str | None = None
@@ -234,52 +234,37 @@ async def submit_experiment_samples(
     sample_ids: list[UUID] = []
     for slot in body.slots:
         try:
-            benchmark_cls = _SMOKE_BENCHMARKS[body.benchmark_slug]
+            environment_cls = _SMOKE_ENVIRONMENTS[body.environment_slug]
         except KeyError:
-            known = ", ".join(sorted(_SMOKE_BENCHMARKS))
+            known = ", ".join(sorted(_SMOKE_ENVIRONMENTS))
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unknown smoke benchmark {body.benchmark_slug!r}; known: {known}",
+                detail=f"Unknown smoke environment {body.environment_slug!r}; known: {known}",
             ) from None
-        benchmark_source = benchmark_cls(
+        environment = environment_cls(
             metadata={
-                "benchmark_slug": body.benchmark_slug,
+                "environment_slug": body.environment_slug,
                 "source": "test-harness",
                 "experiment": body.experiment,
                 "default_worker_team": {"primary": slot.worker_slug},
                 "default_evaluator_slug": slot.evaluator_slug,
                 "default_model_target": body.model,
-                "sandbox_slug": body.sandbox_slug or body.benchmark_slug,
+                "sandbox_slug": body.sandbox_slug or body.environment_slug,
                 "dependency_extras": list(body.dependency_extras),
             },
-            created_by="test-harness",
-        )
-        setattr(benchmark_source, "worker_slug", slot.worker_slug)
-        setattr(benchmark_source, "model", body.model)
-        authored_samples: list[Sample] = []
-        for instance_key, tasks in benchmark_source.build_instances().items():
-            authored_samples.append(
-                Sample.from_tasks(
-                    name=f"{body.benchmark_slug}:{instance_key}",
-                    sample_key=instance_key,
-                    environment_name=body.benchmark_slug,
-                    tasks=tasks,
-                    sample_ref={"instance_key": instance_key},
-                    metadata={
-                        "experiment": body.experiment,
-                        "worker_slug": slot.worker_slug,
-                        "evaluator_slug": slot.evaluator_slug,
-                    },
-                )
-            )
-        environment = _HarnessEnvironment(
-            name=body.benchmark_slug,
-            samples=authored_samples[: body.limit],
-            metadata={"source": "test-harness"},
+            name=body.environment_slug,
+            worker_slug=slot.worker_slug,
+            model=body.model,
         )
         experiment = Experiment(
             name=body.experiment,
-            environments=[environment],
+            environments=[
+                _HarnessEnvironment(
+                    name=body.environment_slug,
+                    samples=list(environment.iter_samples())[: body.limit],
+                    metadata={"source": "test-harness"},
+                )
+            ],
             metadata={"source": "test-harness"},
         )
         with get_session() as session:

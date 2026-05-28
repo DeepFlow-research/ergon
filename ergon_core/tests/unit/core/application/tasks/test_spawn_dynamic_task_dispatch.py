@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
+from ergon_core.api.task import EmptyTaskPayload, Task
 from ergon_core.core.application.runtime.task_management import TaskManagementService
 from ergon_core.test_support.task_factory import TestSandbox, TestWorker
 

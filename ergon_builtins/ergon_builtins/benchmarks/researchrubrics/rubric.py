@@ -14,7 +14,7 @@ from typing import ClassVar
 
 from pydantic import model_validator
 
-from ergon_core.api.benchmark import Task
+from ergon_core.api.task import Task
 from ergon_core.api.criterion import Criterion, CriterionOutcome
 from ergon_core.api.rubric import Rubric, TaskEvaluationResult
 

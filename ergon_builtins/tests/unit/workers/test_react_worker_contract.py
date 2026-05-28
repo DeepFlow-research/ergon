@@ -7,7 +7,7 @@ import ergon_builtins.agents.react.worker as react_worker_module
 import pytest
 from ergon_builtins.agents.react.output import worker_output_from_chunks
 from ergon_builtins.agents.react.worker import ReActWorker
-from ergon_core.api.benchmark import EmptyTaskPayload, Task
+from ergon_core.api.task import EmptyTaskPayload, Task
 from ergon_core.api.worker import WorkerContext, WorkerOutput
 from ergon_core.test_support.task_factory import task_with_id
 from ergon_core.core.shared.context_parts import (

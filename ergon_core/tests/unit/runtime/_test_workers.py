@@ -10,7 +10,7 @@ from ergon_core.api.sandbox.sandbox import Sandbox
 from ergon_core.api.worker.worker import Worker, WorkerStreamItem
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import WorkerOutput
-from ergon_core.api.benchmark.task import Task
+from ergon_core.api.task import Task
 
 
 class EchoSandbox(Sandbox):

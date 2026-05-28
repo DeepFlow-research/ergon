@@ -1,13 +1,7 @@
-"""Builtin sample-producing environments."""
+"""Builtin environment metadata.
 
-from ergon_builtins.environments.gdpeval import GDPEvalEnvironment
-from ergon_builtins.environments.minif2f import MiniF2FEnvironment
-from ergon_builtins.environments.researchrubrics import ResearchRubricsEnvironment
-from ergon_builtins.environments.swebench_verified import SweBenchVerifiedEnvironment
+Builtin sample authoring uses ``ergon_core.api.Environment.from_dataset`` with
+benchmark source/sample helpers rather than bespoke environment subclasses.
+"""
 
-__all__ = [
-    "GDPEvalEnvironment",
-    "MiniF2FEnvironment",
-    "ResearchRubricsEnvironment",
-    "SweBenchVerifiedEnvironment",
-]
+__all__: list[str] = []

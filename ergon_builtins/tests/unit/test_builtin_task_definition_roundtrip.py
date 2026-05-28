@@ -5,44 +5,82 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_builtins.benchmarks.gdpeval.benchmark import GDPEvalBenchmark
+from ergon_builtins.agents.react.worker import ReActWorker
+from ergon_builtins.benchmarks.gdpeval.prompts import GDPEVAL_SYSTEM_PROMPT
+from ergon_builtins.benchmarks.gdpeval.rubric import StagedRubric
+from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandbox
+from ergon_builtins.benchmarks.gdpeval.sample import make_gdpeval_sample
 from ergon_builtins.benchmarks.gdpeval.task_schemas import GDPTaskConfig
-from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
+from ergon_builtins.benchmarks.gdpeval.toolkit import GDPEvalToolkit
+from ergon_builtins.benchmarks.minif2f.prompts import MINIF2F_SYSTEM_PROMPT
+from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
+from ergon_builtins.benchmarks.minif2f.sandbox import LeanSandbox
+from ergon_builtins.benchmarks.minif2f.sample import make_minif2f_sample
 from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FProblem
-from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
+from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
+from ergon_builtins.benchmarks.researchrubrics.prompts import RESEARCH_SYSTEM_PROMPT
+from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
+from ergon_builtins.benchmarks.researchrubrics.sandbox import ResearchE2BSandbox
+from ergon_builtins.benchmarks.researchrubrics.sample import make_researchrubrics_sample
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
     ResearchRubricsTaskPayload,
     RubricCriterion,
 )
-from ergon_builtins.benchmarks.swebench_verified.benchmark import SweBenchVerifiedBenchmark
+from ergon_builtins.benchmarks.researchrubrics.toolkit import ResearchRubricsToolkit
+from ergon_builtins.benchmarks.swebench_verified.prompts import SWEBENCH_SYSTEM_PROMPT
+from ergon_builtins.benchmarks.swebench_verified.rubric import SWEBenchRubric
+from ergon_builtins.benchmarks.swebench_verified.sandbox import SWEBenchSandbox
+from ergon_builtins.benchmarks.swebench_verified.sample import make_swebench_sample
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchInstance
-from ergon_core.api.benchmark.task import Task
+from ergon_builtins.benchmarks.swebench_verified.toolkit import SWEBenchToolkit
+from ergon_core.api.task import Task
 from ergon_core.api.rubric import Rubric
 
 
-def _only_task(benchmark) -> Task:
-    instances = benchmark.build_instances()
-    return list(instances.values())[0][0]
-
-
 @pytest.fixture
-def builtin_tasks(monkeypatch: pytest.MonkeyPatch) -> Sequence[Task]:
-    monkeypatch.setattr(
-        MiniF2FBenchmark,
-        "_load_problems",
-        lambda self: [
+def builtin_tasks() -> Sequence[Task]:
+    mini_worker = ReActWorker(
+        name="mini-proof-solver",
+        model="test:none",
+        system_prompt=MINIF2F_SYSTEM_PROMPT,
+        max_iterations=30,
+        toolkit=MiniF2FToolkit(),
+    )
+    swe_worker = ReActWorker(
+        name="swebench-solver",
+        model="test:none",
+        system_prompt=SWEBENCH_SYSTEM_PROMPT,
+        max_iterations=50,
+        toolkit=SWEBenchToolkit(),
+    )
+    research_worker = ReActWorker(
+        name="research-runner",
+        model="test:none",
+        system_prompt=RESEARCH_SYSTEM_PROMPT,
+        max_iterations=16,
+        toolkit=ResearchRubricsToolkit(),
+    )
+    gdp_worker = ReActWorker(
+        name="gdpeval-runner",
+        model="test:none",
+        system_prompt=GDPEVAL_SYSTEM_PROMPT,
+        max_iterations=40,
+        toolkit=GDPEvalToolkit(),
+    )
+    return (
+        make_minif2f_sample(
             MiniF2FProblem(
                 name="mini-sample",
                 informal_statement="Prove that one equals one.",
                 formal_statement="theorem mini_sample : 1 = 1 := by",
                 header="import Mathlib\n",
-            )
-        ],
-    )
-
-    monkeypatch.setattr(
-        "ergon_builtins.benchmarks.swebench_verified.benchmark._load_rows",
-        lambda *, limit=None: [
+            ),
+            environment_name="minif2f",
+            worker=mini_worker,
+            evaluators=[MiniF2FRubric(name="minif2f-rubric")],
+            sandbox=LeanSandbox(),
+        ).tasks[0],
+        make_swebench_sample(
             SWEBenchInstance(
                 instance_id="repo__sample-1",
                 repo="org/repo",
@@ -53,14 +91,13 @@ def builtin_tasks(monkeypatch: pytest.MonkeyPatch) -> Sequence[Task]:
                 pass_to_pass=[],
                 environment_setup_commit="abcdef123456",
                 test_patch="diff --git a/tests/test_parser.py b/tests/test_parser.py\n",
-            )
-        ],
-    )
-
-    monkeypatch.setattr(
-        ResearchRubricsBenchmark,
-        "_load_rows",
-        lambda self: [
+            ),
+            environment_name="swebench-verified",
+            worker=swe_worker,
+            evaluators=[SWEBenchRubric(name="swebench-rubric")],
+            sandbox=SWEBenchSandbox(),
+        ).tasks[0],
+        make_researchrubrics_sample(
             ResearchRubricsTaskPayload(
                 sample_id="rr-sample-1",
                 domain="quality",
@@ -72,31 +109,30 @@ def builtin_tasks(monkeypatch: pytest.MonkeyPatch) -> Sequence[Task]:
                         weight=2.0,
                     )
                 ],
-            )
-        ],
-    )
-
-    monkeypatch.setattr(
-        GDPEvalBenchmark,
-        "_load_task_configs",
-        lambda self: [
+            ),
+            environment_name="researchrubrics",
+            worker=research_worker,
+            evaluators=[ResearchRubricsRubric(name="researchrubrics-rubric")],
+            sandbox=ResearchE2BSandbox(),
+        ).tasks[0],
+        make_gdpeval_sample(
             GDPTaskConfig(
                 task_id="gdp-sample-1",
                 workflow_type="document_processing",
                 reference_files=["/tmp/reference.pdf"],
-            )
-        ],
-    )
-    monkeypatch.setattr(
-        "ergon_builtins.benchmarks.gdpeval.benchmark.extract_task_description",
-        lambda task_id, *, repo_id: "Create a summary document.",
-    )
-
-    return (
-        _only_task(MiniF2FBenchmark(limit=1)),
-        _only_task(SweBenchVerifiedBenchmark(limit=1)),
-        _only_task(ResearchRubricsBenchmark(limit=1)),
-        _only_task(GDPEvalBenchmark(limit=1)),
+            ),
+            environment_name="gdpeval",
+            worker=gdp_worker,
+            evaluators=[
+                StagedRubric(
+                    name="gdpeval-staged-rubric",
+                    category_name="default",
+                    max_total_score=1.0,
+                )
+            ],
+            sandbox=GDPEvalSandbox(),
+            task_description=lambda _row: "Create a summary document.",
+        ).tasks[0],
     )
 
 

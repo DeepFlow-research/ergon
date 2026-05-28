@@ -12,7 +12,7 @@ from typing import Any
 from uuid import UUID
 
 from ergon_core.api.sandbox.sandbox import Sandbox
-from ergon_core.api.benchmark.task import Task
+from ergon_core.api.task import Task
 from ergon_core.api.worker.worker import Worker
 from ergon_core.api.worker.results import WorkerOutput
 

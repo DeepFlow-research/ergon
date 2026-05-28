@@ -35,7 +35,7 @@ _FORBIDDEN_CONTEXT_FLAGS = {
     "--execution-id",
     "--sandbox-id",
     "--sandbox-task-key",
-    "--benchmark-type",
+    "--environment-type",
 }
 
 

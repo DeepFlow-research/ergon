@@ -6,7 +6,7 @@ import pytest
 
 from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.api.worker.results import WorkerOutput
-from ergon_core.core.jobs.task.worker_execute.contract import WorkerExecuteJobRequest
+from ergon_core.core.jobs.task.worker_execute.contract import WorkerExecuteRequest
 from ergon_core.core.jobs.task.worker_execute.job import run_worker_execute_job
 
 
@@ -71,7 +71,7 @@ async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch) -> 
     )
 
     result = await run_worker_execute_job(
-        WorkerExecuteJobRequest(
+        WorkerExecuteRequest(
             sample_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
@@ -113,7 +113,7 @@ async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
 
     with pytest.raises(Exception, match="live sandbox"):
         await run_worker_execute_job(
-            WorkerExecuteJobRequest(
+            WorkerExecuteRequest(
                 sample_id=uuid4(),
                 task_id=uuid4(),
                 execution_id=uuid4(),

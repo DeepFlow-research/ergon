@@ -7,7 +7,7 @@ from ergon_cli.domains.onboarding.profile import (
     GPUProvider,
     LLMProvider,
     OnboardProfile,
-    available_benchmark_slugs,
+    available_environment_slugs,
 )
 from ergon_cli.domains.onboarding.prompts import ask_secret, confirm, select_multiple, select_one
 
@@ -17,9 +17,9 @@ def handle_onboard(args: Namespace) -> int:
     print("\nWelcome to Ergon!  Let's get your environment set up.\n")
 
     profile = OnboardProfile()
-    profile.benchmarks = select_multiple(
-        "Which benchmarks do you want to run?",
-        [(slug, slug) for slug in available_benchmark_slugs()],
+    profile.environments = select_multiple(
+        "Which environments do you want to run?",
+        [(slug, slug) for slug in available_environment_slugs()],
     )
     profile.llm_providers = [
         LLMProvider(value)

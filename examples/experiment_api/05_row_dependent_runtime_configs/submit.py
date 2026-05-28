@@ -4,44 +4,52 @@ from __future__ import annotations
 
 import asyncio
 
-from ergon_builtins.benchmarks.swebench_verified.benchmark import _default_swebench_sandbox
+from ergon_builtins.agents.react.worker import ReActWorker
+from ergon_builtins.benchmarks.swebench_verified.dataset import iter_swebench_rows
+from ergon_builtins.benchmarks.swebench_verified.prompts import SWEBENCH_SYSTEM_PROMPT
+from ergon_builtins.benchmarks.swebench_verified.rubric import SWEBenchRubric
 from ergon_builtins.benchmarks.swebench_verified.sandbox import SWEBenchSandbox
+from ergon_builtins.benchmarks.swebench_verified.sample import make_swebench_sample
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchInstance
-from ergon_builtins.benchmarks.swebench_verified.worker_factory import (
-    make_swebench_rubric,
-    make_swebench_worker,
-)
-from ergon_builtins.environments import SweBenchVerifiedEnvironment
-from ergon_core.api import Evaluator, Experiment, RandomSampler, Sandbox, Worker
+from ergon_builtins.benchmarks.swebench_verified.toolkit import SWEBenchToolkit
+from ergon_core.api import Environment, Evaluator, Experiment, RandomSampler, Sandbox, Worker
 from experiment_api._shared import experiment_submission_service
 
 
 def worker_for_row(row: SWEBenchInstance) -> Worker:
-    if row.repo.startswith("django/"):
-        return make_swebench_worker(model="openai:gpt-4o")
-    return make_swebench_worker(model="openai:gpt-4o-mini")
+    model = "openai:gpt-4o" if row.repo.startswith("django/") else "openai:gpt-4o-mini"
+    return ReActWorker(
+        name="swebench-solver",
+        model=model,
+        system_prompt=SWEBENCH_SYSTEM_PROMPT,
+        max_iterations=50,
+        toolkit=SWEBenchToolkit(),
+    )
 
 
 def evaluators_for_row(row: SWEBenchInstance) -> list[Evaluator]:
     del row
-    return [make_swebench_rubric()]
+    return [SWEBenchRubric(name="swebench-rubric")]
 
 
 def sandbox_for_row(row: SWEBenchInstance) -> Sandbox:
-    if row.repo.startswith("django/"):
-        return SWEBenchSandbox()
-    return _default_swebench_sandbox()
+    del row
+    return SWEBenchSandbox()
 
 
 async def main() -> None:
-    env = SweBenchVerifiedEnvironment(
+    env = Environment.from_dataset(
         name="swebench-row-dependent",
-        split="train",
-        streaming=True,
-        limit=100,
-        worker=worker_for_row,
-        evaluators=evaluators_for_row,
-        sandbox=sandbox_for_row,
+        dataset=iter_swebench_rows(split="train", streaming=True, limit=100),
+        source_mode="streaming",
+        make_sample=lambda row: make_swebench_sample(
+            row,
+            environment_name="swebench-row-dependent",
+            split="train",
+            worker=worker_for_row(row),
+            evaluators=evaluators_for_row(row),
+            sandbox=sandbox_for_row(row),
+        ),
     )
     experiment = Experiment(name="row-dependent-runtime-configs", environments=[env])
     result = await experiment.submit(

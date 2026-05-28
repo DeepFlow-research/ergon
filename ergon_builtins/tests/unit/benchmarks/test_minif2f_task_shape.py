@@ -1,11 +1,22 @@
 """MiniF2F v2 authoring shape: toolkit round-trip and task JSON assertions."""
 
-from ergon_builtins.benchmarks.minif2f.worker_factory import (
-    make_minif2f_rubric,
-    make_minif2f_worker,
-)
+from ergon_builtins.agents.react.worker import ReActWorker
+from ergon_builtins.benchmarks.minif2f.prompts import MINIF2F_SYSTEM_PROMPT
+from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
 from ergon_builtins.benchmarks.minif2f.sandbox import LeanSandbox
+from ergon_builtins.benchmarks.minif2f.sample import make_minif2f_sample
+from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FProblem
 from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
+
+
+def _mini_worker() -> ReActWorker:
+    return ReActWorker(
+        name="mini-proof-solver",
+        model="test:none",
+        system_prompt=MINIF2F_SYSTEM_PROMPT,
+        max_iterations=30,
+        toolkit=MiniF2FToolkit(),
+    )
 
 
 def test_minif2f_toolkit_round_trips_through_json() -> None:
@@ -22,8 +33,8 @@ def test_lean_sandbox_serializes_with_type_discriminator() -> None:
     assert serialized["_type"].endswith(":LeanSandbox")
 
 
-def test_make_minif2f_worker_serializes_with_nested_toolkit_type() -> None:
-    worker = make_minif2f_worker()
+def test_minif2f_worker_serializes_with_nested_toolkit_type() -> None:
+    worker = _mini_worker()
     serialized = worker.model_dump(mode="json")
     assert serialized["_type"].endswith(":ReActWorker"), serialized["_type"]
     toolkit_json = serialized.get("toolkit")
@@ -31,15 +42,15 @@ def test_make_minif2f_worker_serializes_with_nested_toolkit_type() -> None:
     assert toolkit_json["_type"].endswith(":MiniF2FToolkit"), toolkit_json["_type"]
 
 
-def test_make_minif2f_rubric_serializes_with_type_discriminator() -> None:
-    rubric = make_minif2f_rubric()
+def test_minif2f_rubric_serializes_with_type_discriminator() -> None:
+    rubric = MiniF2FRubric(name="minif2f-rubric")
     serialized = rubric.model_dump(mode="json")
     assert serialized["_type"].endswith(":MiniF2FRubric"), serialized["_type"]
 
 
 def test_minif2f_task_json_has_correct_shape() -> None:
     """A MiniF2F Task serializes to the v2 object-bound shape."""
-    from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FTask
+    from ergon_builtins.benchmarks.minif2f.task import MiniF2FTask
     from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FTaskPayload
 
     task = MiniF2FTask(
@@ -52,9 +63,9 @@ def test_minif2f_task_json_has_correct_shape() -> None:
             formal_statement="theorem sample_1 : 1 + 1 = 2 := by",
             header="import Mathlib\n",
         ),
-        worker=make_minif2f_worker(),
+        worker=_mini_worker(),
         sandbox=LeanSandbox(),
-        evaluators=(make_minif2f_rubric(),),
+        evaluators=(MiniF2FRubric(name="minif2f-rubric"),),
     )
     task_json = task.model_dump(mode="json")
 
@@ -70,39 +81,26 @@ def test_minif2f_task_json_has_correct_shape() -> None:
     )
 
 
-def test_minif2f_benchmark_accepts_custom_worker_factory(monkeypatch) -> None:
-    """The benchmark uses the worker_factory passed to its constructor.
+def test_make_minif2f_sample_accepts_custom_worker() -> None:
+    """The sample helper binds the worker passed to it.
 
-    Load-bearing assertion: factories are *called*, not stored as a class
-    attribute that defaults to them.  Without this test, a future refactor
-    could accidentally revert to hardcoding the default and the test suite
-    would still pass.
+    Load-bearing assertion: author-provided runtime components are used
+    directly when rows are converted into samples.
     """
-    from unittest.mock import MagicMock
 
-    from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
-    from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FProblem
-
-    sentinel_worker = make_minif2f_worker()
+    sentinel_worker = _mini_worker()
     sentinel_worker.name = "sentinel"
-    factory = MagicMock(return_value=sentinel_worker)
-
-    # Stub out HF download so the test stays hermetic.
-    monkeypatch.setattr(
-        MiniF2FBenchmark,
-        "_load_problems",
-        lambda self: [
-            MiniF2FProblem(
-                name="x",
-                informal_statement="i",
-                formal_statement="theorem x : True := by",
-                header="import Mathlib\n",
-            )
-        ],
+    sample = make_minif2f_sample(
+        MiniF2FProblem(
+            name="x",
+            informal_statement="i",
+            formal_statement="theorem x : True := by",
+            header="import Mathlib\n",
+        ),
+        environment_name="mini",
+        worker=sentinel_worker,
+        evaluators=[MiniF2FRubric(name="minif2f-rubric")],
+        sandbox=LeanSandbox(),
     )
 
-    benchmark = MiniF2FBenchmark(worker_factory=factory, limit=1)
-    tasks = list(benchmark.build_instances().values())[0]
-
-    assert tasks[0].worker is sentinel_worker
-    factory.assert_called_once()
+    assert sample.tasks[0].worker is sentinel_worker

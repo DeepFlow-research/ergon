@@ -1091,6 +1091,19 @@
           "title": "Id",
           "type": "string"
         },
+        "experimentId": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Experimentid"
+        },
         "name": {
           "title": "Name",
           "type": "string"

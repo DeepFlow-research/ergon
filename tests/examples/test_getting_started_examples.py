@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import importlib.util
 import json
-from collections.abc import Iterator
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
-from pydantic import ConfigDict
 
-from ergon_core.api import Environment, ExperimentSubmitResult, Sample
+from ergon_core.api import Environment, Evaluator, ExperimentSubmitResult, Sample, Sandbox, Worker
+from ergon_core.api.worker.results import WorkerOutput
 from ergon_core.test_support.task_factory import task_with_id
 
 _SUBMIT_PATH = (
@@ -33,20 +33,8 @@ def _load_submit_module():
 
 
 class FakeEnvironment(Environment):
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
-
-    def iter_samples(self) -> Iterator[Sample]:
-        yield Sample.from_tasks(
-            name="mini-validation:sample-1",
-            sample_key="sample-1",
-            environment_name=self.name,
-            tasks=[
-                task_with_id(
-                    UUID("00000000-0000-0000-0000-000000000011"),
-                    description="Solve sample 1",
-                )
-            ],
-        )
+    def iter_samples(self):
+        return iter(())
 
 
 class FakeSubmissionService:
@@ -61,13 +49,53 @@ class FakeSubmissionService:
     ) -> ExperimentSubmitResult:
         del experiment, sampler, candidate_pool_size, policy_version
         return ExperimentSubmitResult(
-            experiment_ref_id=UUID("11111111-1111-1111-1111-111111111111"),
+            experiment_id=UUID("11111111-1111-1111-1111-111111111111"),
             sampler_invocation_id=UUID("22222222-2222-2222-2222-222222222222"),
             requested_k=k,
             candidate_pool_size=k,
             selected_count=k,
             sample_ids=[UUID("33333333-3333-3333-3333-333333333333")],
         )
+
+
+class FakeWorker(Worker):
+    type_slug = "fake-worker"
+
+    max_iterations: int | None = None
+    system_prompt: str | None = None
+    toolkit: object | None = None
+
+    async def execute(self, task, *, context):
+        del task, context
+        if False:
+            yield WorkerOutput(output="ok")
+
+
+class FakeSandbox(Sandbox):
+    async def provision(self) -> None:
+        return None
+
+    async def _bind_runtime(self, sandbox_id: str) -> None:
+        del sandbox_id
+        return None
+
+
+class FakeEvaluator(Evaluator):
+    type_slug = "fake-evaluator"
+
+    def criteria_for(self, task):
+        del task
+        return []
+
+    def aggregate_task(self, task, criterion_results):
+        del task, criterion_results
+        raise NotImplementedError
+
+
+class FakeComponent:
+    def __init__(self, *args, **kwargs) -> None:
+        self.args = args
+        self.kwargs = kwargs
 
 
 @pytest.mark.asyncio
@@ -79,21 +107,54 @@ async def test_getting_started_submit_uses_experiment_api(monkeypatch, capsys) -
         observed["preflight_base_url"] = base_url
         return object()
 
-    def fake_make_worker(*, model: str, max_iterations: int) -> object:
-        observed["worker_model"] = model
-        observed["worker_max_iterations"] = max_iterations
-        return object()
+    def fake_load_rows(*, split: str, limit: int) -> list[SimpleNamespace]:
+        observed["load_rows"] = {"split": split, "limit": limit}
+        return [SimpleNamespace(name="sample-1")]
 
-    class CapturingEnvironment(FakeEnvironment):
-        def __init__(self, **kwargs) -> None:
+    def fake_make_sample(
+        row, *, environment_name: str, worker, evaluators, sandbox, **kwargs
+    ) -> Sample:
+        observed["sample_kwargs"] = {
+            "row": row,
+            "environment_name": environment_name,
+            "worker": worker,
+            "evaluators": evaluators,
+            "sandbox": sandbox,
+            **kwargs,
+        }
+        return Sample.from_tasks(
+            name=f"{environment_name}:{row.name}",
+            sample_key=row.name,
+            environment_name=environment_name,
+            tasks=[
+                task_with_id(
+                    UUID("00000000-0000-0000-0000-000000000011"),
+                    task_slug="solve",
+                    instance_key=row.name,
+                    description="Solve sample 1",
+                    worker=worker,
+                    evaluators=tuple(evaluators),
+                    sandbox=sandbox,
+                )
+            ],
+        )
+
+    class CapturingEnvironment:
+        @classmethod
+        def from_records(cls, **kwargs) -> FakeEnvironment:
             observed["environment_kwargs"] = kwargs
-            super().__init__(**kwargs)
+            samples = [kwargs["make_sample"](row) for row in kwargs["records"]]
+            observed["samples"] = samples
+            return FakeEnvironment(name=kwargs["name"])
 
     monkeypatch.setattr(module, "preflight_llamacpp_and_e2b", fake_preflight)
-    monkeypatch.setattr(module, "MiniF2FEnvironment", CapturingEnvironment)
-    monkeypatch.setattr(module, "make_minif2f_worker", fake_make_worker)
-    monkeypatch.setattr(module, "make_minif2f_rubric", lambda: object())
-    monkeypatch.setattr(module, "LeanSandbox", lambda: object())
+    monkeypatch.setattr(module, "Environment", CapturingEnvironment)
+    monkeypatch.setattr(module, "ReActWorker", FakeWorker)
+    monkeypatch.setattr(module, "MiniF2FToolkit", FakeComponent)
+    monkeypatch.setattr(module, "MiniF2FRubric", FakeEvaluator)
+    monkeypatch.setattr(module, "LeanSandbox", FakeSandbox)
+    monkeypatch.setattr(module, "load_minif2f_rows", fake_load_rows)
+    monkeypatch.setattr(module, "make_minif2f_sample", fake_make_sample)
     monkeypatch.setattr(module, "experiment_submission_service", lambda: FakeSubmissionService())
 
     exit_code = await module.async_main(
@@ -112,12 +173,18 @@ async def test_getting_started_submit_uses_experiment_api(monkeypatch, capsys) -
 
     assert exit_code == 0
     assert observed["preflight_base_url"] == "http://localhost:8080"
-    assert observed["worker_model"] == "llamacpp:http://localhost:8080#local-proof-model"
-    assert observed["worker_max_iterations"] == 4
-    assert observed["environment_kwargs"]["limit"] == 2
+    assert observed["load_rows"] == {"split": "validation", "limit": 2}
+    assert (
+        observed["sample_kwargs"]["worker"].model
+        == "llamacpp:http://localhost:8080#local-proof-model"
+    )
+    assert observed["sample_kwargs"]["worker"].max_iterations == 4
+    assert observed["environment_kwargs"]["name"] == "mini-validation"
     output = json.loads(capsys.readouterr().out)
     assert output == {
         "experiment_id": "11111111-1111-1111-1111-111111111111",
+        "sampler_invocation_id": "22222222-2222-2222-2222-222222222222",
+        "batch_id": None,
         "sample_ids": ["33333333-3333-3333-3333-333333333333"],
     }
 

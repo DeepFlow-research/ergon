@@ -2,7 +2,7 @@ from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict
 
-from ergon_core.api.benchmark import Task
+from ergon_core.api.task import Task
 
 
 class DynamicTaskFactory(Protocol):

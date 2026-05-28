@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsTask
+from ergon_builtins.benchmarks.researchrubrics.task import ResearchRubricsTask
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import ResearchRubricsTaskPayload
 from ergon_core.api import Sample
 

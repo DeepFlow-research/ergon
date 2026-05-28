@@ -75,6 +75,3 @@ def cancel_sample(sample_id: UUID) -> SampleRecord:
 
     logger.info("Cancelled sample %s and dispatched cleanup", sample_id)
     return sample
-
-
-cancel_run = cancel_sample

@@ -1,20 +1,17 @@
-"""Test-owned benchmarks for canonical E2E smoke runs.
+"""Test-owned environments for canonical E2E smoke runs.
 
 The smoke matrix validates Ergon runtime topology, sandbox resource
 publication, evaluation, and dashboard rendering. It should not depend on
 network access or private Hugging Face credentials to materialize the root
-task, so these fixtures replace the production benchmark loaders only when
+task, so these fixtures replace the production environment loaders only when
 ``tests.fixtures.smoke_components`` is imported by the test harness.
 """
 
-from collections.abc import Mapping, Sequence
-from typing import ClassVar
+from collections.abc import Iterator, Sequence
+from typing import ClassVar, Literal
 
-from ergon_core.api.benchmark import (
-    Benchmark,
-    EmptyTaskPayload,
-    Task,
-)
+from ergon_core.api import Environment, Sample
+from ergon_core.api.task import Task
 from ergon_core.api.worker import Worker
 from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel
@@ -104,21 +101,18 @@ class GDPEvalTaskPayload(BaseModel):
     reference_files: list[str]
 
 
-class _SingleTaskSmokeBenchmark(Benchmark):
-    """Base class for smoke benchmarks that expose one deterministic task.
+class _SingleTaskSmokeEnvironment(Environment):
+    """Base class for smoke environments that expose one deterministic sample."""
 
-    PR 10c: every subclass now overrides ``build_instances`` to return
-    a concrete ``Task[...]`` with inline ``evaluators``.  The base
-    method previously returned a ``object-bound Task``-shaped payload; with all
-    four benchmark subclasses (MiniF2F, SWE-Bench, ResearchRubrics,
-    GDPEval) owning their builds, the default is gone and the import
-    of ``object-bound Task`` no longer fans out from this module.
-    """
+    name: str
+    source_mode: Literal["materialized"] = "materialized"
+    worker_slug: str | None = None
+    model: str = "openai:gpt-4o"
 
+    environment_slug: ClassVar[str]
     task_slug: ClassVar[str]
     task_description: ClassVar[str]
     task_payload: ClassVar[JsonObject] = {}
-    task_payload_model = EmptyTaskPayload
     default_worker_slug: ClassVar[str]
 
     def __init__(
@@ -128,20 +122,37 @@ class _SingleTaskSmokeBenchmark(Benchmark):
         model: str = "openai:gpt-4o",
         **kwargs,
     ) -> None:
+        kwargs.setdefault("name", self.environment_slug)
         super().__init__(**kwargs)
         self.worker_slug = worker_slug or self.default_worker_slug
         self.model = model
 
-    def evaluator_requirements(self) -> Sequence[str]:
-        return ("default", "post-root")
-
     def _make_worker(self) -> Worker:
+        slug = self.worker_slug or self.default_worker_slug
         try:
-            worker_cls = _SMOKE_WORKERS[self.worker_slug]
+            worker_cls = _SMOKE_WORKERS[slug]
         except KeyError:
             known = ", ".join(sorted(_SMOKE_WORKERS))
             raise ValueError(f"Unknown smoke worker slug {self.worker_slug!r}; known: {known}")
-        return worker_cls(name=self.worker_slug, model=self.model)
+        return worker_cls(name=slug, model=self.model)
+
+    def iter_samples(self) -> Iterator[Sample]:
+        yield from self.all_samples()
+
+    def all_samples(self) -> Sequence[Sample]:
+        return [
+            Sample.from_tasks(
+                name=f"{self.name}:default",
+                sample_key="default",
+                environment_name=self.name,
+                tasks=self._tasks(),
+                sample_ref={"instance_key": "default"},
+                metadata=dict(self.metadata),
+            )
+        ]
+
+    def _tasks(self) -> Sequence[Task]:
+        raise NotImplementedError
 
 
 class ResearchRubricsSmokeTask(Task[ResearchRubricsTaskPayload]):
@@ -154,21 +165,19 @@ class ResearchRubricsSmokeTask(Task[ResearchRubricsTaskPayload]):
     """
 
 
-class ResearchRubricsSmokeBenchmark(_SingleTaskSmokeBenchmark):
-    """ResearchRubrics smoke benchmark (PR 10b: object-bound Task).
+class ResearchRubricsSmokeEnvironment(_SingleTaskSmokeEnvironment):
+    """ResearchRubrics smoke environment.
 
-    Overrides ``build_instances`` to return a concrete
-    ``ResearchRubricsSmokeTask`` with inline ``evaluators``, so the smoke
+    Returns a concrete ``ResearchRubricsSmokeTask`` with inline ``evaluators``, so the smoke
     fixture exercises the v2 object-bound path that the production
-    ResearchRubrics benchmark now uses. ``sandbox`` uses the test-owned
+    ResearchRubrics environment now uses. ``sandbox`` uses the test-owned
     public wrapper over ``SmokeSandboxManager`` so eval-side
     ``Task.from_definition(..., sandbox_id=...)`` can attach a live
     runtime without reaching E2B.
     """
 
-    type_slug: ClassVar[str] = "researchrubrics"
+    environment_slug: ClassVar[str] = "researchrubrics"
     default_worker_slug: ClassVar[str] = "researchrubrics-smoke-worker"
-    task_payload_model = ResearchRubricsTaskPayload
     task_slug: ClassVar[str] = "smoke-001"
     task_description: ClassVar[str] = "Write a short smoke-test research report."
     task_payload: ClassVar[JsonObject] = {
@@ -184,7 +193,7 @@ class ResearchRubricsSmokeBenchmark(_SingleTaskSmokeBenchmark):
         ],
     }
 
-    def build_instances(self) -> Mapping[str, Sequence[Task[ResearchRubricsTaskPayload]]]:
+    def _tasks(self) -> Sequence[Task[ResearchRubricsTaskPayload]]:
         # Import smoke rubrics lazily so the production import graph of
         # `tests.fixtures.smoke_components.benchmarks` (used by anything that
         # references the smoke payload model) doesn't fan out into the full
@@ -213,7 +222,7 @@ class ResearchRubricsSmokeBenchmark(_SingleTaskSmokeBenchmark):
                 SmokePostRootTimingRubric(name="post-root"),
             ),
         )
-        return {"default": [task]}
+        return [task]
 
 
 class MiniF2FSmokeTask(Task[MiniF2FTaskPayload]):
@@ -226,21 +235,19 @@ class MiniF2FSmokeTask(Task[MiniF2FTaskPayload]):
     """
 
 
-class MiniF2FSmokeBenchmark(_SingleTaskSmokeBenchmark):
-    """MiniF2F smoke benchmark (PR 10c: object-bound Task).
+class MiniF2FSmokeEnvironment(_SingleTaskSmokeEnvironment):
+    """MiniF2F smoke environment.
 
-    Overrides ``build_instances`` to return a concrete ``MiniF2FSmokeTask``
-    with inline ``evaluators``, so the smoke fixture exercises the v2
-    object-bound path that the production MiniF2F benchmark now uses.
+    Returns a concrete ``MiniF2FSmokeTask`` with inline ``evaluators``, so the smoke fixture exercises the v2
+    object-bound path that the production MiniF2F environment now uses.
     ``sandbox`` uses the test-owned public wrapper over
     ``SmokeSandboxManager`` so eval-side
     ``Task.from_definition(..., sandbox_id=...)`` can attach a live
     runtime without reaching E2B.
     """
 
-    type_slug: ClassVar[str] = "minif2f"
+    environment_slug: ClassVar[str] = "minif2f"
     default_worker_slug: ClassVar[str] = "minif2f-smoke-worker"
-    task_payload_model = MiniF2FTaskPayload
     task_slug: ClassVar[str] = "mathd_algebra_478"
     task_description: ClassVar[str] = "Prove the smoke_trivial theorem in Lean."
     task_payload: ClassVar[JsonObject] = {
@@ -250,8 +257,8 @@ class MiniF2FSmokeBenchmark(_SingleTaskSmokeBenchmark):
         "header": "",
     }
 
-    def build_instances(self) -> Mapping[str, Sequence[Task[MiniF2FTaskPayload]]]:
-        # See ResearchRubricsSmokeBenchmark for the lazy-import rationale.
+    def _tasks(self) -> Sequence[Task[MiniF2FTaskPayload]]:
+        # See ResearchRubricsSmokeEnvironment for the lazy-import rationale.
         # reason: circular import — `criteria.smoke_rubrics` transitively
         # imports `tests.fixtures.smoke_components.smoke_base.criterion_base`,
         # which imports back into the smoke-components package while it is
@@ -276,7 +283,7 @@ class MiniF2FSmokeBenchmark(_SingleTaskSmokeBenchmark):
                 SmokePostRootTimingRubric(name="post-root"),
             ),
         )
-        return {"default": [task]}
+        return [task]
 
 
 class SweBenchSmokeTask(Task[SWEBenchTaskPayload]):
@@ -289,21 +296,19 @@ class SweBenchSmokeTask(Task[SWEBenchTaskPayload]):
     """
 
 
-class SweBenchSmokeBenchmark(_SingleTaskSmokeBenchmark):
-    """SWE-Bench smoke benchmark (PR 10a: object-bound Task).
+class SweBenchSmokeEnvironment(_SingleTaskSmokeEnvironment):
+    """SWE-Bench smoke environment.
 
-    Overrides ``build_instances`` to return a concrete ``SweBenchSmokeTask``
-    with inline ``evaluators``, so the smoke fixture exercises the v2
-    object-bound path that the production SWE-Bench benchmark now uses.
+    Returns a concrete ``SweBenchSmokeTask`` with inline ``evaluators``, so the smoke fixture exercises the v2
+    object-bound path that the production SWE-Bench environment now uses.
     ``sandbox`` uses the test-owned public wrapper over
     ``SmokeSandboxManager`` so eval-side
     ``Task.from_definition(..., sandbox_id=...)`` can attach a live
     runtime without reaching E2B.
     """
 
-    type_slug: ClassVar[str] = "swebench-verified"
+    environment_slug: ClassVar[str] = "swebench-verified"
     default_worker_slug: ClassVar[str] = "swebench-smoke-worker"
-    task_payload_model = SWEBenchTaskPayload
     task_slug: ClassVar[str] = "astropy__astropy-12907"
     task_description: ClassVar[str] = "Create the simple Python add() patch used by smoke tests."
     task_payload: ClassVar[JsonObject] = {
@@ -319,8 +324,8 @@ class SweBenchSmokeBenchmark(_SingleTaskSmokeBenchmark):
         "test_patch": "",
     }
 
-    def build_instances(self) -> Mapping[str, Sequence[Task[SWEBenchTaskPayload]]]:
-        # See ResearchRubricsSmokeBenchmark for the lazy-import rationale.
+    def _tasks(self) -> Sequence[Task[SWEBenchTaskPayload]]:
+        # See ResearchRubricsSmokeEnvironment for the lazy-import rationale.
         # reason: circular import — `criteria.smoke_rubrics` transitively
         # imports `tests.fixtures.smoke_components.smoke_base.criterion_base`,
         # which imports back into the smoke-components package while it is
@@ -345,7 +350,7 @@ class SweBenchSmokeBenchmark(_SingleTaskSmokeBenchmark):
                 SmokePostRootTimingRubric(name="post-root"),
             ),
         )
-        return {"default": [task]}
+        return [task]
 
 
 class GDPEvalSmokeTask(Task[GDPEvalTaskPayload]):
@@ -358,21 +363,19 @@ class GDPEvalSmokeTask(Task[GDPEvalTaskPayload]):
     """
 
 
-class GDPEvalSmokeBenchmark(_SingleTaskSmokeBenchmark):
-    """GDPEval smoke benchmark (PR 10c: object-bound Task).
+class GDPEvalSmokeEnvironment(_SingleTaskSmokeEnvironment):
+    """GDPEval smoke environment.
 
-    Overrides ``build_instances`` to return a concrete ``GDPEvalSmokeTask``
-    with inline ``evaluators``, so the smoke fixture exercises the v2
-    object-bound path that the production GDPEval benchmark now uses.
+    Returns a concrete ``GDPEvalSmokeTask`` with inline ``evaluators``, so the smoke fixture exercises the v2
+    object-bound path that the production GDPEval environment now uses.
     The GDPEval slot did not exist before PR 10c — this is the first
-    smoke fixture row for the benchmark.  The post-root timing rubric is
+    smoke fixture row for the environment.  The post-root timing rubric is
     the only evaluator wired here; per-criterion smoke checks for
     GDPEval can land in a follow-up.
     """
 
-    type_slug: ClassVar[str] = "gdpeval"
+    environment_slug: ClassVar[str] = "gdpeval"
     default_worker_slug: ClassVar[str] = "gdpeval-smoke-worker"
-    task_payload_model = GDPEvalTaskPayload
     task_slug: ClassVar[str] = "gdpeval-smoke-001"
     task_description: ClassVar[str] = "Process the reference documents and write outputs."
     task_payload: ClassVar[JsonObject] = {
@@ -381,8 +384,8 @@ class GDPEvalSmokeBenchmark(_SingleTaskSmokeBenchmark):
         "reference_files": [],
     }
 
-    def build_instances(self) -> Mapping[str, Sequence[Task[GDPEvalTaskPayload]]]:
-        # See ResearchRubricsSmokeBenchmark for the lazy-import rationale.
+    def _tasks(self) -> Sequence[Task[GDPEvalTaskPayload]]:
+        # See ResearchRubricsSmokeEnvironment for the lazy-import rationale.
         # reason: circular import — `criteria.timing` transitively
         # imports `tests.fixtures.smoke_components.smoke_base.criterion_base`,
         # which imports back into the smoke-components package while it is
@@ -401,4 +404,4 @@ class GDPEvalSmokeBenchmark(_SingleTaskSmokeBenchmark):
             sandbox=SmokePublicSandbox(),
             evaluators=(SmokePostRootTimingRubric(name="post-root"),),
         )
-        return {"default": [task]}
+        return [task]

@@ -7,7 +7,7 @@ def _train_args(**overrides: object) -> Namespace:
     data = {
         "train_action": "local",
         "ergon_url": "http://localhost:9000/api",
-        "benchmark": "bench",
+        "environment": "env",
         "evaluator": "stub-rubric",
         "limit": None,
         "experiment_id": None,

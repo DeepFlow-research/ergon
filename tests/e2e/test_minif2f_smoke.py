@@ -62,7 +62,7 @@ async def test_smoke_experiment_group(tmp_path: pathlib.Path) -> None:
     smoke_slots = _smoke_slots(EXPERIMENT_GROUP_SIZE)
 
     sample_ids = await submit_experiment_samples(
-        benchmark_slug=ENV,
+        environment_slug=ENV,
         slots=[(worker, criterion) for _, worker, criterion in smoke_slots],
         experiment=experiment,
         sandbox_slug=ENV,

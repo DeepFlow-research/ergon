@@ -22,7 +22,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
 import pytest
-from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
+from ergon_core.api.task import EmptyTaskPayload, Task
 from ergon_core.api.errors import ContainmentViolation
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import SpawnedTaskHandle

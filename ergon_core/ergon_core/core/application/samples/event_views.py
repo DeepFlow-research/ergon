@@ -253,7 +253,6 @@ SampleRuntimeEventView = Annotated[
     | SampleAnnotationDeletedEventView,
     Field(discriminator="event_type"),
 ]
-VIEW_EVENT_TYPES = ALL_SAMPLE_RUNTIME_EVENT_TYPES
 
 
 SampleRuntimeEventRow = (

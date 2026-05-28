@@ -77,7 +77,7 @@ def status_sample_command(args: Namespace) -> int:
     lines = [
         f"sample_id:              {sample.id}",
         f"status:                 {sample.status}",
-        f"benchmark_type:         {sample.benchmark_type}",
+        f"environment_type:       {sample.benchmark_type}",
         f"instance_key:           {sample.instance_key}",
     ]
     if sample.evaluator_slug is not None:

@@ -8,7 +8,6 @@ within the same process (or across processes) hit the local cache for free.
 import functools
 import json
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 from huggingface_hub import hf_hub_download, snapshot_download
@@ -36,7 +35,7 @@ def _rubric_filename(split: str) -> str:
 
 
 @functools.lru_cache(maxsize=4)
-def _load_parquet(repo_id: str) -> Any:  # slopcop: ignore[no-typing-any]
+def _load_parquet(repo_id: str) -> pd.DataFrame:
     """Download gdpeval.parquet from HF and cache the DataFrame in-process."""
     path = hf_hub_download(
         repo_id=repo_id,

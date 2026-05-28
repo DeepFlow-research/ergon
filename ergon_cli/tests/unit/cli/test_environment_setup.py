@@ -1,20 +1,20 @@
-"""Tests for ``ergon benchmark setup <slug>`` CLI command."""
+"""Tests for ``ergon environment setup <slug>`` CLI command."""
 
 import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import e2b
-import ergon_cli.domains.benchmarks.service as _bench_service
+import ergon_cli.domains.environments.service as _env_service
 import pytest
-from ergon_cli.domains.benchmarks.templates import sandbox_template_for
-from ergon_cli.domains.benchmarks.commands import setup_benchmark_service
-from ergon_cli.domains.benchmarks.models import BenchmarkCommand
+from ergon_cli.domains.environments.templates import sandbox_template_for
+from ergon_cli.domains.environments.commands import setup_environment_service
+from ergon_cli.domains.environments.models import EnvironmentCommand
 from ergon_core.core.shared.settings import settings
 
 
-def _setup_command(slug: str = "minif2f", *, force: bool = False) -> BenchmarkCommand:
-    return BenchmarkCommand(action="setup", slug=slug, force=force)
+def _setup_command(slug: str = "minif2f", *, force: bool = False) -> EnvironmentCommand:
+    return EnvironmentCommand(action="setup", slug=slug, force=force)
 
 
 class _FakeBuildInfo:
@@ -34,7 +34,7 @@ def _patch_sdk(
     build_info: _FakeBuildInfo | None = None,
     raise_on_build: Exception | None = None,
 ) -> MagicMock:
-    """Patch ``e2b.Template`` so ``setup_benchmark`` never hits the network."""
+    """Patch ``e2b.Template`` so ``setup_environment`` never hits the network."""
 
     # Builder returned from from_dockerfile()/set_start_cmd() — chainable MagicMock.
     builder = MagicMock()
@@ -50,8 +50,8 @@ def _patch_sdk(
         fake_template_cls.build.return_value = build_info or _FakeBuildInfo()
 
     monkeypatch.setattr(e2b, "Template", fake_template_cls)
-    # Also patch the already-imported name in the benchmark domain service.
-    monkeypatch.setattr(_bench_service, "Template", fake_template_cls)
+    # Also patch the already-imported name in the environment domain service.
+    monkeypatch.setattr(_env_service, "Template", fake_template_cls)
     return fake_template_cls
 
 
@@ -88,7 +88,7 @@ def test_error_scenarios(
     else:
         monkeypatch.setenv("E2B_API_KEY", "test-key")
 
-    rc = setup_benchmark_service(_setup_command(**args_kwargs))
+    rc = setup_environment_service(_setup_command(**args_kwargs))
     assert rc != 0
 
     if expected_message is not None:
@@ -115,7 +115,7 @@ def test_idempotent_skip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
         json.dumps({"minif2f": {"template_id": "abc123", "template_name": "ergon-minif2f-v1"}})
     )
 
-    rc = setup_benchmark_service(_setup_command())
+    rc = setup_environment_service(_setup_command())
     assert rc == 0
     fake.build.assert_not_called()
 
@@ -131,7 +131,7 @@ def test_happy_path_creates_registry(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     monkeypatch.setattr(settings, "e2b_api_key", "test-key")
     fake = _patch_sdk(monkeypatch)
 
-    rc = setup_benchmark_service(_setup_command())
+    rc = setup_environment_service(_setup_command())
     assert rc == 0
 
     fake.build.assert_called_once()
@@ -151,19 +151,19 @@ def test_success_message_does_not_include_run_hint(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """``ergon benchmark run`` was removed in PR 6.5 Phase 2 — success message must not
+    """``ergon environment run`` was removed in PR 6.5 Phase 2 — success message must not
     suggest it."""
     monkeypatch.setenv("E2B_API_KEY", "test-key")
     monkeypatch.setenv("ERGON_CONFIG_DIR", str(tmp_path))
     monkeypatch.setattr(settings, "e2b_api_key", "test-key")
     _patch_sdk(monkeypatch)
 
-    rc = setup_benchmark_service(_setup_command())
+    rc = setup_environment_service(_setup_command())
 
     assert rc == 0
     out = capsys.readouterr().out
-    # The "ergon benchmark run" hint was removed when the authoring route was deleted.
-    assert "ergon benchmark run" not in out
+    # The "ergon environment run" hint was removed when the authoring route was deleted.
+    assert "ergon environment run" not in out
     assert "Success! Template ID:" in out
 
 
@@ -179,7 +179,7 @@ def test_force_rebuild_overwrites(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
         json.dumps({"minif2f": {"template_id": "old_id", "template_name": "ergon-minif2f-v1"}})
     )
 
-    rc = setup_benchmark_service(_setup_command(force=True))
+    rc = setup_environment_service(_setup_command(force=True))
     assert rc == 0
 
     data = json.loads(registry.read_text())
@@ -197,7 +197,7 @@ def test_build_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings, "e2b_api_key", "test-key")
     _patch_sdk(monkeypatch, raise_on_build=RuntimeError("simulated build failure"))
 
-    rc = setup_benchmark_service(_setup_command())
+    rc = setup_environment_service(_setup_command())
     assert rc != 0
 
 
@@ -210,4 +210,4 @@ def test_sandbox_template_for_known_slug_returns_template_path() -> None:
 
 def test_sandbox_template_for_unknown_slug_raises_key_error() -> None:
     with pytest.raises(KeyError):
-        sandbox_template_for("not-a-benchmark")
+        sandbox_template_for("not-a-environment")

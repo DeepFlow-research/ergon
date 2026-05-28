@@ -61,10 +61,10 @@ def test_cli_production_code_does_not_import_deleted_compatibility_paths() -> No
         assert offenders == [], f"{path}: {offenders}"
 
 
-def test_generic_cli_code_does_not_hardcode_benchmark_metadata() -> None:
+def test_generic_cli_code_does_not_hardcode_environment_metadata() -> None:
     allowed = {
-        CLI_ROOT / "domains" / "benchmarks" / "templates.py",
-        CLI_ROOT / "domains" / "benchmarks" / "service.py",
+        CLI_ROOT / "domains" / "environments" / "templates.py",
+        CLI_ROOT / "domains" / "environments" / "service.py",
     }
     forbidden_fragments = (
         "sandbox_template",

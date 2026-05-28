@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from ergon_builtins.benchmarks.gdpeval.benchmark import GDPEvalTask
+from ergon_builtins.benchmarks.gdpeval.task import GDPEvalTask
 from ergon_builtins.benchmarks.gdpeval.task_schemas import GDPTaskConfig
 from ergon_core.api import Sample
 

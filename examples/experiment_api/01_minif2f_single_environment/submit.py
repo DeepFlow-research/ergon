@@ -4,25 +4,37 @@ from __future__ import annotations
 
 import asyncio
 
+from ergon_builtins.agents.react.worker import ReActWorker
+from ergon_builtins.benchmarks.minif2f.dataset import load_minif2f_rows
+from ergon_builtins.benchmarks.minif2f.prompts import MINIF2F_SYSTEM_PROMPT
+from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
 from ergon_builtins.benchmarks.minif2f.sandbox import LeanSandbox
-from ergon_builtins.benchmarks.minif2f.worker_factory import (
-    make_minif2f_rubric,
-    make_minif2f_worker,
-)
-from ergon_builtins.environments import MiniF2FEnvironment
-from ergon_core.api import Experiment, RandomSampler
+from ergon_builtins.benchmarks.minif2f.sample import make_minif2f_sample
+from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
+from ergon_core.api import Environment, Experiment, RandomSampler
 from experiment_api._shared import experiment_submission_service
 
 
 async def main() -> None:
-    worker = make_minif2f_worker(model="openai:gpt-4o")
-    env = MiniF2FEnvironment(
+    worker = ReActWorker(
+        name="mini-proof-solver",
+        model="openai:gpt-4o",
+        system_prompt=MINIF2F_SYSTEM_PROMPT,
+        max_iterations=30,
+        toolkit=MiniF2FToolkit(),
+    )
+    env = Environment.from_records(
         name="mini-validation",
-        split="validation",
-        limit=10,
-        worker=worker,
-        evaluators=[make_minif2f_rubric()],
-        sandbox=LeanSandbox(),
+        records=load_minif2f_rows(split="validation", limit=10),
+        source_metadata={"provider": "ergon-builtin:minif2f", "split": "validation"},
+        make_sample=lambda row: make_minif2f_sample(
+            row,
+            environment_name="mini-validation",
+            split="validation",
+            worker=worker,
+            evaluators=[MiniF2FRubric(name="minif2f-proof")],
+            sandbox=LeanSandbox(),
+        ),
     )
     experiment = Experiment(name="mini-validation-smoke", environments=[env])
     result = await experiment.submit(

@@ -102,7 +102,7 @@ BUDGET = SuppressionCounts(
     # `no-typing-any` (same kwargs reason). `benchmark.py`'s metadata
     # kwarg is typed `Mapping[str, Any]` matching the SWE-Bench /
     # ResearchRubrics constructor surface — but net total includes a
-    # corresponding reduction in `worker_factory.py` (deleted) so the
+    # corresponding reduction in deleted worker factory modules so the
     # arithmetic balances at +5. `noqa: C901` on `build_tools` is the
     # same structural-complexity exemption as the prior two verticals.
     # PR 10d-f net +20 slopcop_ignore. The late PR 10 stack adds the

@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
 
-from ergon_core.api.benchmark.task import Task
+from ergon_core.api.task import Task
 from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
 from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.jobs._events import send_job_step_event
@@ -28,8 +28,8 @@ from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.application.context.service import ContextEventService
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.persistence.context.models import SampleContextEvent
-from .contract import WorkerExecuteJobRequest
-from .contract import WorkerExecuteJobResult
+from .contract import WorkerExecuteRequest
+from .contract import WorkerExecuteResult
 from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     get_trace_sink,
@@ -44,10 +44,10 @@ logger = logging.getLogger(__name__)
 
 
 async def run_worker_execute_job(
-    payload: WorkerExecuteJobRequest,
+    payload: WorkerExecuteRequest,
     *,
     ctx: object | None = None,
-) -> WorkerExecuteJobResult:
+) -> WorkerExecuteResult:
     logger.info(
         "worker-execute sample_id=%s task_id=%s worker_type=%s",
         payload.sample_id,
@@ -128,7 +128,7 @@ async def run_worker_execute_job(
             chunk_count,
             error_msg,
         )
-        return WorkerExecuteJobResult(
+        return WorkerExecuteResult(
             success=False,
             error=error_msg,
             error_json={
@@ -190,7 +190,7 @@ async def run_worker_execute_job(
         )
     )
 
-    return WorkerExecuteJobResult(
+    return WorkerExecuteResult(
         success=output.success,
         final_assistant_message=output.output,
         error=None if output.success else output.output,
@@ -332,7 +332,7 @@ async def _consume_worker_stream(
 
 async def _persist_context_events(
     context_event_repo: ContextEventService,
-    payload: WorkerExecuteJobRequest,
+    payload: WorkerExecuteRequest,
     chunk: ContextPartChunk,
     chunk_count: int,
 ) -> None:

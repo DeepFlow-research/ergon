@@ -9,7 +9,7 @@ list_subtasks, get_subtask, and sandboxed bash.
 from collections.abc import Awaitable, Callable
 from uuid import UUID
 
-from ergon_core.api.benchmark import Task
+from ergon_core.api.task import Task
 from ergon_core.api.worker import WorkerContext
 from ergon_core.core.persistence.shared.types import (
     NodeId,

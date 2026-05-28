@@ -7,24 +7,24 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from e2b import Template
-from ergon_builtins.benchmarks.catalog import benchmark_cli_metadata
-from ergon_cli.domains.benchmarks.models import BenchmarkCommand
-from ergon_cli.domains.benchmarks.templates import sandbox_template_for, setup_benchmark_slugs
+from ergon_builtins.environments.catalog import environment_cli_metadata
+from ergon_cli.domains.environments.models import EnvironmentCommand
+from ergon_cli.domains.environments.templates import sandbox_template_for, setup_environment_slugs
 from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.shared.settings import settings
 from pydantic import BaseModel, ConfigDict
 
 
-def list_benchmark_rows() -> list[list[str]]:
+def list_environment_rows() -> list[list[str]]:
     return [
         [metadata.slug, metadata.name, metadata.description]
-        for metadata in sorted(benchmark_cli_metadata().values(), key=lambda item: item.slug)
+        for metadata in sorted(environment_cli_metadata().values(), key=lambda item: item.slug)
     ]
 
 
-def setup_benchmark(command: BenchmarkCommand) -> int:
+def setup_environment(command: EnvironmentCommand) -> int:
     if command.slug is None:
-        return _fail("Usage: ergon benchmark setup <slug>")
+        return _fail("Usage: ergon environment setup <slug>")
 
     slug = command.slug
     force = command.force
@@ -39,8 +39,8 @@ def setup_benchmark(command: BenchmarkCommand) -> int:
 
     template_dir = _template_dir_for(slug)
     if template_dir is None:
-        available = ", ".join(setup_benchmark_slugs()) or "(none)"
-        return _fail(f"Error: unknown benchmark slug '{slug}'.\nAvailable slugs: {available}")
+        available = ", ".join(setup_environment_slugs()) or "(none)"
+        return _fail(f"Error: unknown environment slug '{slug}'.\nAvailable slugs: {available}")
 
     template_spec = _load_template_spec(template_dir)
     if isinstance(template_spec, str):

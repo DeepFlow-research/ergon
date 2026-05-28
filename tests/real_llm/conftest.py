@@ -8,7 +8,7 @@ Gates:
     developer to have the stack running (pnpm dev:test + postgres + inngest
     + fastapi).
 
-Session fixtures (docker stack, OpenRouter budget) live here; per-benchmark
+Session fixtures (docker stack, OpenRouter budget) live here; per-environment
 fixtures live inside each test module.
 """
 

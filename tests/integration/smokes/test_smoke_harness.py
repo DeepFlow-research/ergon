@@ -103,7 +103,7 @@ def test_seed_sample_then_read_then_reset_roundtrip() -> None:
             seed_resp = client.post(
                 f"{API}/api/__danger__/test-harness/write/samples/seed",
                 json={
-                    "benchmark_type": "ci-smoke-harness",
+                    "environment_type": "ci-smoke-harness",
                     "instance_key": "ci-smoke-harness",
                     "experiment": _EXPERIMENT,
                     "status": "completed",
@@ -163,7 +163,7 @@ def test_write_experiment_samples_accepts_explicit_runtime_choices() -> None:
         response = client.post(
             f"{API}/api/__danger__/test-harness/write/experiment-samples",
             json={
-                "benchmark_slug": "minif2f",
+                "environment_slug": "minif2f",
                 "slots": [
                     {
                         "worker_slug": "minif2f-smoke-worker",

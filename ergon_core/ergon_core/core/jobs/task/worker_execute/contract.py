@@ -29,7 +29,3 @@ class WorkerExecuteResult(BaseModel):
     final_assistant_message: str | None = None
     error: str | None = None
     error_json: JsonObject | None = None
-
-
-WorkerExecuteJobRequest = WorkerExecuteRequest
-WorkerExecuteJobResult = WorkerExecuteResult

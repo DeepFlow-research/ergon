@@ -130,7 +130,7 @@ E2B account. They cover argument parsing, preflight failures, model-target
 construction, and launch wiring with monkeypatched Ergon APIs.
 
 When running against real services, these are expected setup or integration
-failures rather than successful benchmark launches:
+failures rather than successful environment launches:
 
 - Missing `E2B_API_KEY`: add it to Ergon's `.env` file or process environment.
 - Hugging Face download failure: check the `--base-model` repo/file ref, network
@@ -138,7 +138,7 @@ failures rather than successful benchmark launches:
 - Unreachable llama.cpp server: start `llama-server` and verify
   `GET http://localhost:8080/v1/models` returns a model id.
 - Missing MiniF2F Lean template or E2B provisioning failure: build/pin the
-  template with `uv run ergon benchmark setup minif2f`, then retry.
+  template with `uv run ergon environment setup minif2f`, then retry.
 - Model tool-call incompatibility: try a model and prompt configuration that can
   use OpenAI-compatible tool calls, or inspect the sample artifacts for the failed
   attempts.

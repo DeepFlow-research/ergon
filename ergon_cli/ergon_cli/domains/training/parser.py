@@ -14,7 +14,7 @@ def register_train_parser(subparsers: argparse._SubParsersAction) -> None:
         default="http://localhost:9000/api",
         help="Ergon API URL (default: http://localhost:9000/api)",
     )
-    train_local.add_argument("--benchmark", required=True, help="Benchmark slug")
+    train_local.add_argument("--environment", required=True, help="Environment slug")
     train_local.add_argument("--evaluator", default="stub-rubric", help="Evaluator slug")
     train_local.add_argument("--limit", type=int, default=None, help="Max tasks per episode")
     train_local.add_argument("--experiment-id", default=None, help="Experiment UUID")

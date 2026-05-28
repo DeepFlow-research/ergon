@@ -5,7 +5,7 @@ from typing import Any, ClassVar
 
 from pydantic import Field, field_serializer, field_validator
 
-from ergon_core.api.benchmark.task import Task
+from ergon_core.api.task import Task
 from ergon_core.api.criterion.criterion import Criterion
 from ergon_core.api.criterion.outcome import CriterionOutcome
 from ergon_core.api.rubric.evaluator import Evaluator

@@ -53,7 +53,7 @@ class SWEBenchInstance(BaseModel):
 
 
 class SWEBenchTaskPayload(BaseModel):
-    """Payload attached to each ``BenchmarkTask``.
+    """Payload attached to each ``Task``.
 
     Includes ``test_patch`` because the evaluator needs it, but
     ``build_worker_description`` omits it so the worker cannot see the

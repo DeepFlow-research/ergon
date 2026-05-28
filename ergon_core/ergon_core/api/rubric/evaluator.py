@@ -11,7 +11,7 @@ from ergon_core.api._serialization import (
     import_component_subclass,
     inject_type_discriminator,
 )
-from ergon_core.api.benchmark.task import Task
+from ergon_core.api.task import Task
 from ergon_core.api.criterion.criterion import Criterion
 from ergon_core.api.criterion.outcome import CriterionOutcome
 from ergon_core.api.errors import DependencyError

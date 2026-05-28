@@ -13,7 +13,7 @@ import logging
 from uuid import UUID
 
 import inngest
-from ergon_core.api.benchmark.task import Task
+from ergon_core.api.task import Task
 from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.application.ports import DashboardEventPublisher

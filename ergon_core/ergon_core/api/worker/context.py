@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import AfterValidator, BaseModel, Field
 
-from ergon_core.api.benchmark.task import Task
+from ergon_core.api.task import Task
 from ergon_core.api.errors import ContainmentViolation
 from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.application.resources.models import SampleResourceView

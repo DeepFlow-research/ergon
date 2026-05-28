@@ -20,7 +20,7 @@ from ergon_core.core.persistence.telemetry.models import SampleRecord
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
-from ergon_core.api.benchmark import Task
+from ergon_core.api.task import Task
 from ergon_core.test_support.task_factory import TestSandbox, TestWorker
 
 
@@ -167,7 +167,7 @@ async def test_add_node_can_write_dynamic_task_json() -> None:
 
     repo = RuntimeGraphRepository()
     payload = {
-        "_type": "ergon_core.api.benchmark.task:Task",
+        "_type": "ergon_core.api.task:Task",
         "task_slug": "child",
         "description": "child task",
     }

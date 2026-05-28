@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
+from ergon_core.api.task import EmptyTaskPayload, Task
 from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.api.criterion.criterion import Criterion
 from ergon_core.api.criterion import CriterionOutcome
@@ -129,7 +129,7 @@ def test_criterion_from_definition_requires_type_discriminator() -> None:
 
 def test_criterion_from_definition_rejects_non_criterion_type() -> None:
     with pytest.raises(TypeError, match="Criterion _type.*Criterion subclass"):
-        Criterion.from_definition({"_type": "ergon_core.api.benchmark.task:Task", "slug": "wrong"})
+        Criterion.from_definition({"_type": "ergon_core.api.task:Task", "slug": "wrong"})
 
 
 def test_parametrized_generic_task_type_is_rejected_when_persisting() -> None:

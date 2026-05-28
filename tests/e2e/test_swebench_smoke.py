@@ -33,9 +33,9 @@ from tests.e2e._asserts import (
 )
 from tests.e2e._submit import submit_experiment_samples
 
-# Benchmark slug is 'swebench-verified' (matches BENCHMARKS registry);
+# Environment slug is 'swebench-verified';
 # worker + criterion slugs use 'swebench' (shorter).  The per-env
-# Playwright spec file uses the benchmark slug so the CI matrix env id
+# Playwright spec file uses the environment slug so the CI matrix env id
 # maps 1:1 to the spec filename.
 ENV = "swebench-verified"
 WORKER_PREFIX = "swebench"
@@ -67,7 +67,7 @@ async def test_smoke_experiment_group(tmp_path: pathlib.Path) -> None:
     smoke_slots = _smoke_slots(EXPERIMENT_GROUP_SIZE)
 
     sample_ids = await submit_experiment_samples(
-        benchmark_slug=ENV,
+        environment_slug=ENV,
         slots=[(worker, criterion) for _, worker, criterion in smoke_slots],
         experiment=experiment,
         sandbox_slug=ENV,

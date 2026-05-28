@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from ergon_core.api import Sample
-from ergon_core.api.benchmark.task import Task
+from ergon_core.api.task import Task
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.core.application.runtime import inspection as inspection_module
 from ergon_core.core.application.runtime import management as management_module

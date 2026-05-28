@@ -13,7 +13,7 @@ from ergon_builtins.benchmarks.swebench_verified.criteria.test_resolution import
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.worker import WorkerOutput
-from ergon_core.api.benchmark import Task
+from ergon_core.api.task import Task
 from ergon_core.api.sandbox.runtime import CommandResult
 from ergon_core.test_support.task_factory import task_with_id
 

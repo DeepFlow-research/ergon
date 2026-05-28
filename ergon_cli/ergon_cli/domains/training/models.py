@@ -8,7 +8,7 @@ class TrainingCommand(BaseModel):
 
     action: Literal["local"]
     ergon_url: str
-    benchmark: str
+    environment: str
     evaluator: str
     limit: int | None
     experiment_id: str | None

@@ -9,6 +9,3 @@ def register_smoke_fixtures() -> None:
     """Compatibility no-op for older smoke harness entrypoints."""
 
     return None
-
-
-register_smoke_components = register_smoke_fixtures

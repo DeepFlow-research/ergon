@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FTask
+from ergon_builtins.benchmarks.minif2f.task import MiniF2FTask
 from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FTaskPayload
 from ergon_core.api import Sample
 

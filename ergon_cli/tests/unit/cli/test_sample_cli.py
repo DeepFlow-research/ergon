@@ -92,6 +92,8 @@ def test_sample_status_prints_status_fields(monkeypatch, capsys) -> None:
     assert "sample-1" in out
     assert "started_at:" in out
     assert "completed_at:" in out
+    assert "environment_type:" in out
+    assert "benchmark_type:" not in out
 
 
 def test_sample_status_reports_invalid_uuid(capsys) -> None:

@@ -37,12 +37,12 @@ def test_worker_execute_prefers_task_worker_over_payload_bridge() -> None:
     """PR 5 makes ``task.worker`` the canonical source.
 
     The body must read the worker off ``task.worker`` first. A narrow
-    compatibility fallback used to live in a sibling module and only
-    fired when ``task.worker is None`` — i.e. when an unmigrated
-    TaskSpec-returning benchmark reached this path. The body must NOT import
+    bridge used to live in a sibling module and only fired when
+    ``task.worker is None`` — i.e. when an unmigrated TaskSpec-returning
+    fixture reached this path. The body must NOT import
     ``ComponentCatalogService`` directly or define an in-body
     ``_worker_from_payload_bridge`` function; both belong in the
-    sibling. PR 11 (after PR 10c migrates the last benchmark) deletes
+    sibling. PR 11 (after PR 10c migrates the last environment) deletes
     the sibling module and the ``if worker is None:`` branch.
     """
 

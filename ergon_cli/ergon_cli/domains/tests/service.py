@@ -6,11 +6,11 @@ from ergon_cli.domains.tests.catalog import (
     BACKEND_E2E,
     BACKEND_INTEGRATION,
     BACKEND_SMOKE,
-    BENCHMARK_SMOKE_ALL,
-    BENCHMARK_SMOKE_COMMANDS,
     DASHBOARD_CONTRACTS,
     DASHBOARD_SMOKE,
     DASHBOARD_UNIT,
+    ENVIRONMENT_SMOKE_ALL,
+    ENVIRONMENT_SMOKE_COMMANDS,
     PYTHON_UNIT_ALL,
     PYTHON_UNIT_COMMANDS,
     REAL_LLM,
@@ -24,7 +24,7 @@ def resolve_test_command(command: TestCommand) -> ResolvedTestCommand:
     if command.suite == "list":
         return ResolvedTestCommand(label="Available test suites", commands=())
     if command.domain == "smoke":
-        commands = _benchmark_smoke_commands(command.suite)
+        commands = _environment_smoke_commands(command.suite)
     elif command.suite == "unit":
         commands = _unit_commands(command.domain)
     elif command.suite == "integration":
@@ -108,12 +108,12 @@ def _smoke_commands(domain: str) -> tuple[tuple[str, ...], ...]:
     raise ValueError(f"smoke tests do not support domain {domain!r}")
 
 
-def _benchmark_smoke_commands(target: str) -> tuple[tuple[str, ...], ...]:
+def _environment_smoke_commands(target: str) -> tuple[tuple[str, ...], ...]:
     if target == "full":
-        return (BENCHMARK_SMOKE_ALL,)
-    if target in BENCHMARK_SMOKE_COMMANDS:
-        return (BENCHMARK_SMOKE_COMMANDS[target],)
-    raise ValueError(f"benchmark smoke tests do not support target {target!r}")
+        return (ENVIRONMENT_SMOKE_ALL,)
+    if target in ENVIRONMENT_SMOKE_COMMANDS:
+        return (ENVIRONMENT_SMOKE_COMMANDS[target],)
+    raise ValueError(f"environment smoke tests do not support target {target!r}")
 
 
 def _require_domain(command: TestCommand, expected: str) -> None:

@@ -14,7 +14,7 @@ from ergon_builtins.benchmarks.minif2f.criteria.proof_verification import (
 )
 from ergon_core.api import WorkerOutput
 from ergon_core.api.criterion import CriterionContext
-from ergon_core.api.benchmark import EmptyTaskPayload, Task
+from ergon_core.api.task import EmptyTaskPayload, Task
 from ergon_core.api.sandbox.runtime import CommandResult
 from ergon_core.test_support.task_factory import task_with_id
 

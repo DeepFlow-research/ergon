@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
-from ergon_core.api.benchmark import Task
+from ergon_core.api.task import Task
 
 
 class Sample(BaseModel):

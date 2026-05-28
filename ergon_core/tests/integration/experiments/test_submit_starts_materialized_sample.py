@@ -6,7 +6,7 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from ergon_core.api import Sample
-from ergon_core.api.benchmark import Task
+from ergon_core.api.task import Task
 from ergon_core.api.criterion.outcome import CriterionOutcome
 from ergon_core.api.rubric.evaluator import Evaluator
 from ergon_core.api.rubric.results import TaskEvaluationResult

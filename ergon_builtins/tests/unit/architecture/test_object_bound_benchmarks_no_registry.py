@@ -102,10 +102,10 @@ def test_benchmark_tools_use_owned_tools_packages() -> None:
 
 
 @pytest.mark.parametrize("slug", _MIGRATED_BENCHMARKS)
-def test_benchmark_worker_factories_use_canonical_module(slug: str) -> None:
+def test_benchmark_worker_factories_are_removed(slug: str) -> None:
     benchmark_pkg = SOURCE_ROOT / "benchmarks" / slug
 
-    assert (benchmark_pkg / "worker_factory.py").exists()
+    assert not (benchmark_pkg / "worker_factory.py").exists()
     assert not (benchmark_pkg / "workers.py").exists()
 
 

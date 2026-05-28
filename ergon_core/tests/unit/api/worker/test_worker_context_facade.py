@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
-from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
+from ergon_core.api.task import EmptyTaskPayload, Task
 from ergon_core.api.errors import ContainmentViolation
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import AwaitCompletionNotSupportedError, SpawnedTaskHandle

@@ -28,9 +28,8 @@ class MiniF2FToolkit(Toolkit):
 
     def tools(self, sandbox: Sandbox, task: Task[Any]) -> list[Tool]:
         """Build live pydantic_ai Tool instances bound to the v2 sandbox."""
-        # reason: circular import — benchmarks/minif2f/toolkit.py → benchmarks/minif2f/tools/tool_builder.py →
-        # benchmarks/minif2f/constants.py → benchmarks/minif2f/__init__.py →
-        # benchmark.py → worker_factory.py → benchmarks/minif2f/toolkit.py
+        # reason: circular import — importing the tool builder at module load
+        # time pulls benchmark package exports back through this toolkit module.
         from ergon_builtins.benchmarks.minif2f.tools.tool_builder import build_tools
 
         return build_tools(self, sandbox=sandbox, task=task)

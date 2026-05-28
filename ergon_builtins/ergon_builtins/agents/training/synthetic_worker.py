@@ -14,7 +14,7 @@ from collections.abc import AsyncGenerator
 from hashlib import sha256
 from typing import ClassVar
 
-from ergon_core.api.benchmark.task import Task
+from ergon_core.api.task import Task
 from ergon_core.api.worker import WorkerOutput
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.worker import Worker

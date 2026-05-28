@@ -62,8 +62,8 @@ from ergon_core.core.jobs.sandbox.setup.contract import SandboxReadyResult, Sand
 from ergon_core.core.jobs.task.evaluate.contract import TaskEvaluateRequest
 from ergon_core.core.jobs.task.propagate.contract import TaskCompletedEvent, TaskFailedEvent
 from ergon_core.core.jobs.task.worker_execute.contract import (
-    WorkerExecuteJobRequest,
-    WorkerExecuteJobResult,
+    WorkerExecuteRequest,
+    WorkerExecuteResult,
 )
 from ergon_core.core.application.runtime.task_execution import TaskExecutionService
 from ergon_core.core.application.runtime.orchestration import (
@@ -136,7 +136,7 @@ async def _invoke_worker_execute(
     prepared: PreparedTaskExecution,
     sandbox_result: SandboxReadyResult,
     worker_execute_function: Any,
-) -> WorkerExecuteJobResult:
+) -> WorkerExecuteResult:
     if prepared.assigned_worker_slug is None or prepared.worker_type is None:
         raise ContractViolationError(
             "prepared task execution is missing worker identity",
@@ -146,7 +146,7 @@ async def _invoke_worker_execute(
     return await ctx.step.invoke(
         "worker-execute",
         function=worker_execute_function,
-        data=WorkerExecuteJobRequest(
+        data=WorkerExecuteRequest(
             sample_id=payload.sample_id,
             task_id=payload.task_id,
             execution_id=prepared.execution_id,

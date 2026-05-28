@@ -1,4 +1,4 @@
-"""Builtins-owned benchmark metadata for CLI setup/onboarding."""
+"""Builtins-owned environment metadata for CLI setup/onboarding."""
 
 from collections.abc import Mapping
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 
 
-class BenchmarkCliMetadata(BaseModel):
+class EnvironmentCliMetadata(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     slug: str
@@ -18,42 +18,42 @@ class BenchmarkCliMetadata(BaseModel):
     supports_setup: bool = False
 
 
-_BENCHMARK_ROOT = Path(__file__).parent
+_ENVIRONMENT_TEMPLATE_ROOT = Path(__file__).parents[1] / "benchmarks"
 
-_METADATA: dict[str, BenchmarkCliMetadata] = {
-    "gdpeval": BenchmarkCliMetadata(
+_METADATA: dict[str, EnvironmentCliMetadata] = {
+    "gdpeval": EnvironmentCliMetadata(
         slug="gdpeval",
         name="gdpeval",
-        description="Benchmark for GDP document-processing evaluation tasks.",
+        description="Environment for GDP document-processing evaluation tasks.",
         required_packages=("ergon-builtins[data]",),
         env_keys=("E2B_API_KEY",),
     ),
-    "minif2f": BenchmarkCliMetadata(
+    "minif2f": EnvironmentCliMetadata(
         slug="minif2f",
         name="minif2f",
-        description="Benchmark backed by MiniF2F theorem-proving tasks.",
-        sandbox_template=_BENCHMARK_ROOT / "minif2f" / "sandbox_template",
+        description="Environment backed by MiniF2F theorem-proving tasks.",
+        sandbox_template=_ENVIRONMENT_TEMPLATE_ROOT / "minif2f" / "sandbox_template",
         env_keys=("E2B_API_KEY",),
         supports_setup=True,
     ),
-    "researchrubrics": BenchmarkCliMetadata(
+    "researchrubrics": EnvironmentCliMetadata(
         slug="researchrubrics",
         name="researchrubrics",
-        description="Benchmark backed by ScaleAI ResearchRubrics samples.",
+        description="Environment backed by ScaleAI ResearchRubrics samples.",
         required_packages=("ergon-builtins[data]",),
         env_keys=("EXA_API_KEY",),
     ),
-    "researchrubrics-vanilla": BenchmarkCliMetadata(
+    "researchrubrics-vanilla": EnvironmentCliMetadata(
         slug="researchrubrics-vanilla",
         name="researchrubrics-vanilla",
-        description="Vanilla ResearchRubrics baseline benchmark.",
+        description="Vanilla ResearchRubrics baseline environment.",
         required_packages=("ergon-builtins[data]",),
     ),
-    "swebench-verified": BenchmarkCliMetadata(
+    "swebench-verified": EnvironmentCliMetadata(
         slug="swebench-verified",
         name="swebench-verified",
-        description="Benchmark backed by SWE-Bench Verified.",
-        sandbox_template=_BENCHMARK_ROOT / "swebench_verified" / "sandbox_template",
+        description="Environment backed by SWE-Bench Verified.",
+        sandbox_template=_ENVIRONMENT_TEMPLATE_ROOT / "swebench_verified" / "sandbox_template",
         required_packages=("ergon-builtins[data]",),
         env_keys=("E2B_API_KEY",),
         supports_setup=True,
@@ -61,5 +61,5 @@ _METADATA: dict[str, BenchmarkCliMetadata] = {
 }
 
 
-def benchmark_cli_metadata() -> Mapping[str, BenchmarkCliMetadata]:
+def environment_cli_metadata() -> Mapping[str, EnvironmentCliMetadata]:
     return dict(_METADATA)

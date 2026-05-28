@@ -4,24 +4,37 @@ from __future__ import annotations
 
 import asyncio
 
-from ergon_builtins.benchmarks.swebench_verified.benchmark import _default_swebench_sandbox
-from ergon_builtins.benchmarks.swebench_verified.worker_factory import (
-    make_swebench_rubric,
-    make_swebench_worker,
-)
-from ergon_builtins.environments import SweBenchVerifiedEnvironment
-from ergon_core.api import Experiment, RandomSampler
+from ergon_builtins.agents.react.worker import ReActWorker
+from ergon_builtins.benchmarks.swebench_verified.dataset import iter_swebench_rows
+from ergon_builtins.benchmarks.swebench_verified.prompts import SWEBENCH_SYSTEM_PROMPT
+from ergon_builtins.benchmarks.swebench_verified.rubric import SWEBenchRubric
+from ergon_builtins.benchmarks.swebench_verified.sandbox import SWEBenchSandbox
+from ergon_builtins.benchmarks.swebench_verified.sample import make_swebench_sample
+from ergon_builtins.benchmarks.swebench_verified.toolkit import SWEBenchToolkit
+from ergon_core.api import Environment, Experiment, RandomSampler
 from experiment_api._shared import experiment_submission_service
 
 
 async def main() -> None:
-    env = SweBenchVerifiedEnvironment(
+    worker = ReActWorker(
+        name="swebench-solver",
+        model="openai:gpt-4o",
+        system_prompt=SWEBENCH_SYSTEM_PROMPT,
+        max_iterations=50,
+        toolkit=SWEBenchToolkit(),
+    )
+    env = Environment.from_dataset(
         name="swebench-train",
-        split="train",
-        streaming=True,
-        worker=make_swebench_worker(model="openai:gpt-4o"),
-        evaluators=[make_swebench_rubric()],
-        sandbox=_default_swebench_sandbox(),
+        dataset=iter_swebench_rows(split="train", streaming=True),
+        source_mode="streaming",
+        make_sample=lambda row: make_swebench_sample(
+            row,
+            environment_name="swebench-train",
+            split="train",
+            worker=worker,
+            evaluators=[SWEBenchRubric(name="swebench-rubric")],
+            sandbox=SWEBenchSandbox(),
+        ),
     )
     experiment = Experiment(name="swebench-streaming-buffer", environments=[env])
     result = await experiment.submit(

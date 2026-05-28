@@ -17,7 +17,7 @@ def handle_train(args: Namespace) -> int:
     command = TrainingCommand(
         action=args.train_action,
         ergon_url=args.ergon_url,
-        benchmark=args.benchmark,
+        environment=args.environment,
         evaluator=args.evaluator,
         limit=args.limit,
         experiment_id=args.experiment_id,

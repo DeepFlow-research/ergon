@@ -41,7 +41,7 @@ def _api_base() -> str:
 
 def build_experiment_payload(
     *,
-    benchmark_slug: str,
+    environment_slug: str,
     slots: list[tuple[str, str]],
     experiment: str,
     sandbox_slug: str,
@@ -49,7 +49,7 @@ def build_experiment_payload(
     model: str = "openai:gpt-4o",
 ) -> dict:
     return {
-        "benchmark_slug": benchmark_slug,
+        "environment_slug": environment_slug,
         "slots": [
             {"worker_slug": worker, "evaluator_slug": criterion} for worker, criterion in slots
         ],
@@ -62,7 +62,7 @@ def build_experiment_payload(
 
 async def submit_experiment_samples(
     *,
-    benchmark_slug: str,
+    environment_slug: str,
     slots: list[tuple[str, str]],
     experiment: str,
     sandbox_slug: str,
@@ -73,7 +73,7 @@ async def submit_experiment_samples(
     """Submit one sample per slot under ``experiment``; return sample_ids in order.
 
     Args:
-        benchmark_slug:  e.g. ``"researchrubrics"``
+        environment_slug: e.g. ``"researchrubrics"``
         slots:           list of ``(worker_slug, criterion_slug)`` tuples
         experiment:      shared experiment tag (all runs group under this)
         sandbox_slug:    explicit sandbox manager slug for the run
@@ -84,7 +84,7 @@ async def submit_experiment_samples(
                          client-side timeout to propagate.
     """
     payload = build_experiment_payload(
-        benchmark_slug=benchmark_slug,
+        environment_slug=environment_slug,
         slots=slots,
         experiment=experiment,
         sandbox_slug=sandbox_slug,

@@ -8,7 +8,6 @@ from pydantic import TypeAdapter
 from ergon_core.core.application.samples.event_views import (
     ALL_SAMPLE_RUNTIME_EVENT_TYPES,
     ROW_MODEL_EVENT_TYPES,
-    VIEW_EVENT_TYPES,
     SampleRuntimeEventView,
 )
 from ergon_core.core.persistence.experiments.models import ExperimentEnvironmentRow, ExperimentRow
@@ -297,7 +296,6 @@ def test_sample_runtime_event_view_union_covers_every_typed_wal_event() -> None:
     }
 
     assert ROW_MODEL_EVENT_TYPES == ALL_SAMPLE_RUNTIME_EVENT_TYPES
-    assert VIEW_EVENT_TYPES == ALL_SAMPLE_RUNTIME_EVENT_TYPES
     assert union_event_types == ALL_SAMPLE_RUNTIME_EVENT_TYPES
 
 

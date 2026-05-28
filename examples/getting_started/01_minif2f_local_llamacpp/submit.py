@@ -8,14 +8,14 @@ import sys
 from collections.abc import Sequence
 from uuid import UUID
 
+from ergon_builtins.agents.react.worker import ReActWorker
+from ergon_builtins.benchmarks.minif2f.dataset import load_minif2f_rows
+from ergon_builtins.benchmarks.minif2f.prompts import MINIF2F_SYSTEM_PROMPT
+from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
 from ergon_builtins.benchmarks.minif2f.sandbox import LeanSandbox
-from ergon_builtins.benchmarks.minif2f.worker_factory import (
-    make_minif2f_rubric,
-    make_minif2f_worker,
-)
-from ergon_builtins.environments import MiniF2FEnvironment
-from ergon_core.api import Experiment, RandomSampler
-from ergon_core.api.worker import Worker
+from ergon_builtins.benchmarks.minif2f.sample import make_minif2f_sample
+from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
+from ergon_core.api import Environment, Experiment, RandomSampler
 from ergon_core.core.application.experiments.submission import ExperimentSubmissionService
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from getting_started._shared.env import (
@@ -181,20 +181,25 @@ async def async_main(argv: Sequence[str] | None = None) -> int:
         print(f"Setup error: {exc}", file=sys.stderr)
         return 2
 
-    def make_worker() -> Worker:
-        return make_minif2f_worker(
-            model=model_target,
-            max_iterations=args.max_iterations,
-        )
-
     try:
-        env = MiniF2FEnvironment(
+        worker = ReActWorker(
+            name="mini-proof-solver",
+            model=model_target,
+            system_prompt=MINIF2F_SYSTEM_PROMPT,
+            max_iterations=args.max_iterations,
+            toolkit=MiniF2FToolkit(),
+        )
+        env = Environment.from_records(
             name="mini-validation",
-            split="validation",
-            limit=args.limit,
-            worker=make_worker(),
-            evaluators=[make_minif2f_rubric()],
-            sandbox=LeanSandbox(),
+            records=load_minif2f_rows(split="validation", limit=args.limit),
+            make_sample=lambda row: make_minif2f_sample(
+                row,
+                environment_name="mini-validation",
+                split="validation",
+                worker=worker,
+                evaluators=[MiniF2FRubric(name="minif2f-proof")],
+                sandbox=LeanSandbox(),
+            ),
         )
         experiment = Experiment(name="minif2f-local-llamacpp", environments=[env])
         result = await experiment.submit(

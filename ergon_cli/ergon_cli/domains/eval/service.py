@@ -9,7 +9,7 @@ async def run_eval(command: EvalCommand) -> int:
             raise CliUsageError("Usage: ergon eval watch --checkpoint-dir <path>")
         await watch_and_evaluate(
             checkpoint_dir=command.checkpoint_dir,
-            benchmark_type=command.benchmark,
+            benchmark_type=command.environment,
             evaluator_type=command.evaluator,
             model_base=command.model_base,
             poll_interval_s=command.poll_interval,
@@ -22,7 +22,7 @@ async def run_eval(command: EvalCommand) -> int:
         raise CliUsageError("Usage: ergon eval checkpoint --checkpoint <path>")
     return await evaluate_checkpoint(
         checkpoint_path=command.checkpoint,
-        benchmark_type=command.benchmark,
+        benchmark_type=command.environment,
         evaluator_type=command.evaluator,
         model_base=command.model_base,
         eval_limit=command.eval_limit,

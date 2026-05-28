@@ -145,7 +145,7 @@ async def test_workflow_command_rejects_unknown_dependency_without_partial_write
         "--execution-id",
         "--sandbox-id",
         "--sandbox-task-key",
-        "--benchmark-type",
+        "--environment-type",
     ],
 )
 async def test_context_escape_flags_are_rejected(

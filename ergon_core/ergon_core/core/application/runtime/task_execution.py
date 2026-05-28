@@ -3,7 +3,7 @@
 import logging
 from uuid import UUID
 
-from ergon_core.api.benchmark import Task
+from ergon_core.api.task import Task
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.application.runtime import status as graph_status
 from ergon_core.core.persistence.graph.models import SampleGraphNode

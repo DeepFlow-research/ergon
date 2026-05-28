@@ -6,12 +6,14 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from types import TracebackType
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
-from pydantic import ConfigDict
 
-from ergon_core.api import Environment, ExperimentSubmitResult
+from ergon_core.api import Environment, Evaluator, ExperimentSubmitResult, Sample, Sandbox, Worker
+from ergon_core.api.worker.results import WorkerOutput
+from ergon_core.test_support.task_factory import task_with_id
 from getting_started._shared import llamacpp
 from getting_started._shared import model_cache
 from getting_started._shared import env
@@ -42,7 +44,10 @@ def test_example_uses_packaged_imports_without_repo_root_sys_path_hack() -> None
     assert "MiniF2FBenchmark" not in source
     assert "persist_benchmark" not in source
     assert "launch_run" not in source
-    assert "from ergon_builtins.environments import MiniF2FEnvironment" in source
+    assert "from ergon_core.api import Environment, Experiment, RandomSampler" in source
+    assert "from ergon_builtins.benchmarks.minif2f.dataset import load_minif2f_rows" in source
+    assert "from ergon_builtins.benchmarks.minif2f.sample import make_minif2f_sample" in source
+    assert "MiniF2FEnvironment" not in source
     assert "from getting_started._shared.env import" in source
 
 
@@ -92,18 +97,81 @@ class _ManagedServerStub:
         self._observed["server_closed_keep_running"] = keep_running
 
 
-class _ObservedWorker:
-    def __init__(self, *, model: str, max_iterations: int) -> None:
-        self.model = model
-        self.max_iterations = max_iterations
+class _ObservedWorker(Worker):
+    type_slug = "observed-worker"
+
+    max_iterations: int | None = None
+    system_prompt: str | None = None
+    toolkit: object | None = None
+
+    async def execute(self, task, *, context):
+        del task, context
+        if False:
+            yield WorkerOutput(output="ok")
 
 
-class _ObservedBenchmark:
-    observed: dict[str, object]
+class _ObservedSandbox(Sandbox):
+    async def provision(self) -> None:
+        return None
 
-    def __init__(self, *, limit: int, worker_factory) -> None:
-        self.observed["benchmark_limit"] = limit
-        self.worker = worker_factory()
+    async def _bind_runtime(self, sandbox_id: str) -> None:
+        del sandbox_id
+        return None
+
+
+class _ObservedEvaluator(Evaluator):
+    type_slug = "observed-evaluator"
+
+    def criteria_for(self, task):
+        del task
+        return []
+
+    def aggregate_task(self, task, criterion_results):
+        del task, criterion_results
+        raise NotImplementedError
+
+
+class _ObservedComponent:
+    def __init__(self, *args, **kwargs) -> None:
+        self.args = args
+        self.kwargs = kwargs
+
+
+class _ObservedEnvironment(Environment):
+    def iter_samples(self):
+        return iter(())
+
+
+def _fake_minif2f_rows(*, split: str, limit: int) -> list[SimpleNamespace]:
+    return [SimpleNamespace(name=f"sample-{index}", split=split) for index in range(limit)]
+
+
+def _fake_minif2f_sample(
+    row,
+    *,
+    environment_name: str,
+    worker,
+    evaluators,
+    sandbox,
+    **kwargs,
+) -> Sample:
+    del kwargs
+    return Sample.from_tasks(
+        name=f"{environment_name}:{row.name}",
+        sample_key=row.name,
+        environment_name=environment_name,
+        tasks=[
+            task_with_id(
+                UUID("00000000-0000-0000-0000-000000000099"),
+                task_slug="solve",
+                instance_key=row.name,
+                description=f"Solve {row.name}",
+                worker=worker,
+                evaluators=tuple(evaluators),
+                sandbox=sandbox,
+            )
+        ],
+    )
 
 
 def test_parser_uses_getting_started_defaults(monkeypatch) -> None:
@@ -336,22 +404,12 @@ async def test_main_submits_minif2f_with_local_worker(monkeypatch, capsys) -> No
         observed["preflight_base_url"] = base_url
         return object()
 
-    class FakeWorker:
-        def __init__(self, *, model: str, max_iterations: int) -> None:
-            self.model = model
-            self.max_iterations = max_iterations
-
-    def fake_make_worker(*, model: str, max_iterations: int) -> FakeWorker:
-        observed["worker_model"] = model
-        observed["worker_max_iterations"] = max_iterations
-        return FakeWorker(model=model, max_iterations=max_iterations)
-
-    class FakeEnvironment(Environment):
-        model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
-
-        def __init__(self, **kwargs) -> None:
+    class CapturingEnvironment:
+        @classmethod
+        def from_records(cls, **kwargs) -> _ObservedEnvironment:
             observed["environment_kwargs"] = kwargs
-            super().__init__(**kwargs)
+            observed["samples"] = [kwargs["make_sample"](row) for row in kwargs["records"]]
+            return _ObservedEnvironment(name=kwargs["name"])
 
     class FakeService:
         async def submit(
@@ -369,7 +427,7 @@ async def test_main_submits_minif2f_with_local_worker(monkeypatch, capsys) -> No
             observed["candidate_pool_size"] = candidate_pool_size
             observed["policy_version"] = policy_version
             return ExperimentSubmitResult(
-                experiment_ref_id=experiment_id,
+                experiment_id=experiment_id,
                 requested_k=k,
                 candidate_pool_size=k,
                 selected_count=1,
@@ -377,10 +435,13 @@ async def test_main_submits_minif2f_with_local_worker(monkeypatch, capsys) -> No
             )
 
     monkeypatch.setattr(module, "preflight_llamacpp_and_e2b", fake_preflight)
-    monkeypatch.setattr(module, "MiniF2FEnvironment", FakeEnvironment)
-    monkeypatch.setattr(module, "make_minif2f_worker", fake_make_worker)
-    monkeypatch.setattr(module, "make_minif2f_rubric", lambda: object())
-    monkeypatch.setattr(module, "LeanSandbox", lambda: object())
+    monkeypatch.setattr(module, "Environment", CapturingEnvironment)
+    monkeypatch.setattr(module, "ReActWorker", _ObservedWorker)
+    monkeypatch.setattr(module, "MiniF2FToolkit", _ObservedComponent)
+    monkeypatch.setattr(module, "MiniF2FRubric", _ObservedEvaluator)
+    monkeypatch.setattr(module, "LeanSandbox", _ObservedSandbox)
+    monkeypatch.setattr(module, "load_minif2f_rows", _fake_minif2f_rows)
+    monkeypatch.setattr(module, "make_minif2f_sample", _fake_minif2f_sample)
     monkeypatch.setattr(module, "experiment_submission_service", lambda: FakeService())
     monkeypatch.setenv("ERGON_DASHBOARD_URL", "http://localhost:3000")
 
@@ -399,14 +460,14 @@ async def test_main_submits_minif2f_with_local_worker(monkeypatch, capsys) -> No
 
     assert exit_code == 0
     assert observed["preflight_base_url"] == "http://localhost:8080"
-    assert observed["worker_model"] == "llamacpp:http://localhost:8080#local-proof-model"
-    assert observed["worker_max_iterations"] == 4
     environment_kwargs = observed["environment_kwargs"]
     assert environment_kwargs["name"] == "mini-validation"
-    assert environment_kwargs["split"] == "validation"
-    assert environment_kwargs["limit"] == 2
-    assert isinstance(environment_kwargs["worker"], FakeWorker)
-    assert len(environment_kwargs["evaluators"]) == 1
+    assert len(observed["samples"]) == 2
+    worker = observed["samples"][0].tasks[0].worker
+    assert isinstance(worker, _ObservedWorker)
+    assert worker.model == "llamacpp:http://localhost:8080#local-proof-model"
+    assert worker.max_iterations == 4
+    assert len(observed["samples"][0].tasks[0].evaluators) == 1
     assert observed["experiment_name"] == "minif2f-local-llamacpp"
     assert observed["k"] == 2
     assert observed["sampler_name"] == "random"
@@ -445,17 +506,12 @@ async def test_main_resolves_base_model_starts_llamacpp_and_cleans_up(
         observed["preflight_base_url"] = base_url
         return object()
 
-    def fake_make_worker(*, model: str, max_iterations: int) -> _ObservedWorker:
-        observed["worker_model"] = model
-        observed["worker_max_iterations"] = max_iterations
-        return _ObservedWorker(model=model, max_iterations=max_iterations)
-
-    class FakeEnvironment(Environment):
-        model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
-
-        def __init__(self, **kwargs) -> None:
+    class CapturingEnvironment:
+        @classmethod
+        def from_records(cls, **kwargs) -> _ObservedEnvironment:
             observed["environment_kwargs"] = kwargs
-            super().__init__(**kwargs)
+            observed["samples"] = [kwargs["make_sample"](row) for row in kwargs["records"]]
+            return _ObservedEnvironment(name=kwargs["name"])
 
     class FakeService:
         async def submit(
@@ -473,7 +529,7 @@ async def test_main_resolves_base_model_starts_llamacpp_and_cleans_up(
             observed["candidate_pool_size"] = candidate_pool_size
             observed["policy_version"] = policy_version
             return ExperimentSubmitResult(
-                experiment_ref_id=experiment_id,
+                experiment_id=experiment_id,
                 requested_k=k,
                 candidate_pool_size=k,
                 selected_count=1,
@@ -483,10 +539,13 @@ async def test_main_resolves_base_model_starts_llamacpp_and_cleans_up(
     monkeypatch.setattr(module, "resolve_base_model", fake_resolve)
     monkeypatch.setattr(module, "start_llama_server", fake_start)
     monkeypatch.setattr(module, "preflight_llamacpp_and_e2b", fake_preflight)
-    monkeypatch.setattr(module, "MiniF2FEnvironment", FakeEnvironment)
-    monkeypatch.setattr(module, "make_minif2f_worker", fake_make_worker)
-    monkeypatch.setattr(module, "make_minif2f_rubric", lambda: object())
-    monkeypatch.setattr(module, "LeanSandbox", lambda: object())
+    monkeypatch.setattr(module, "Environment", CapturingEnvironment)
+    monkeypatch.setattr(module, "ReActWorker", _ObservedWorker)
+    monkeypatch.setattr(module, "MiniF2FToolkit", _ObservedComponent)
+    monkeypatch.setattr(module, "MiniF2FRubric", _ObservedEvaluator)
+    monkeypatch.setattr(module, "LeanSandbox", _ObservedSandbox)
+    monkeypatch.setattr(module, "load_minif2f_rows", _fake_minif2f_rows)
+    monkeypatch.setattr(module, "make_minif2f_sample", _fake_minif2f_sample)
     monkeypatch.setattr(module, "experiment_submission_service", lambda: FakeService())
 
     exit_code = await module.async_main(
@@ -521,16 +580,12 @@ async def test_main_resolves_base_model_starts_llamacpp_and_cleans_up(
             "startup_timeout": 15,
         },
         "preflight_base_url": "http://127.0.0.1:8123",
-        "worker_model": "llamacpp:http://127.0.0.1:8123#mini-proof-local",
-        "worker_max_iterations": 12,
         "environment_kwargs": {
             "name": "mini-validation",
-            "split": "validation",
-            "limit": 3,
-            "worker": observed["environment_kwargs"]["worker"],
-            "evaluators": observed["environment_kwargs"]["evaluators"],
-            "sandbox": observed["environment_kwargs"]["sandbox"],
+            "records": observed["environment_kwargs"]["records"],
+            "make_sample": observed["environment_kwargs"]["make_sample"],
         },
+        "samples": observed["samples"],
         "experiment_name": "minif2f-local-llamacpp",
         "k": 3,
         "sampler_name": "random",
@@ -538,3 +593,7 @@ async def test_main_resolves_base_model_starts_llamacpp_and_cleans_up(
         "policy_version": None,
         "server_closed_keep_running": True,
     }
+    worker = observed["samples"][0].tasks[0].worker
+    assert isinstance(worker, _ObservedWorker)
+    assert worker.model == "llamacpp:http://127.0.0.1:8123#mini-proof-local"
+    assert worker.max_iterations == 12

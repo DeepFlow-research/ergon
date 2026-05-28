@@ -8,7 +8,7 @@ from ergon_cli.main import build_parser
 @pytest.mark.parametrize(
     ("argv", "expected"),
     [
-        (["benchmark", "list"], {"command": "benchmark", "bench_action": "list"}),
+        (["environment", "list"], {"command": "environment", "env_action": "list"}),
         (
             ["experiment", "show", "00000000-0000-0000-0000-000000000000"],
             {"command": "experiment", "experiment_action": "show"},
@@ -46,7 +46,7 @@ def test_experimental_domains_are_not_public_top_level_commands(command: str) ->
     assert exc_info.value.code == 2
 
 
-def test_benchmark_setup_is_not_a_public_subcommand() -> None:
+def test_benchmark_command_is_not_public() -> None:
     parser = build_parser()
 
     with pytest.raises(SystemExit) as exc_info:

@@ -6,8 +6,8 @@ from uuid import UUID, uuid4
 from pydantic import JsonValue
 from sqlmodel import Session
 
-from ergon_core.api.benchmark import Task
-from ergon_core.api.benchmark.task import EmptyTaskPayload
+from ergon_core.api.task import Task
+from ergon_core.api.task import EmptyTaskPayload
 from ergon_core.api.experiment.experiment import Experiment, ExperimentRef
 from ergon_core.api.experiment.sample import Sample
 from ergon_core.core.application.experiments.repository import (

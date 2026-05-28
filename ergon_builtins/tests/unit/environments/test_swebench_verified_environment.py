@@ -5,7 +5,7 @@ from itertools import islice
 
 import pytest
 
-from ergon_builtins.benchmarks.swebench_verified.benchmark import SweBenchTask
+from ergon_builtins.benchmarks.swebench_verified.task import SweBenchTask
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import (
     SWEBenchInstance,
     SWEBenchTaskPayload,
