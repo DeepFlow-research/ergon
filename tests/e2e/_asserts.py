@@ -23,6 +23,8 @@ from typing import Literal
 from uuid import UUID
 
 import httpx
+from ergon_core.core.views.rl.episode import RlEpisodeReadService
+from ergon_core.core.views.rl.projections import RlProjectionService
 from ergon_core.core.views.samples.models import SampleTaskDto
 from ergon_core.test_support.e2e_read_helpers import (
     ObservedSampleRuntimeEvent,
@@ -37,7 +39,26 @@ from ergon_core.test_support.e2e_read_helpers import (
     read_sample_runtime_event_stream,
     read_resource_bytes,
 )
-from tests.fixtures.smoke_components.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
+from tests.fixtures.smoke_components.smoke_base.constants import (
+    ARTIFACT_SUMMARY_SLUG,
+    ENV_PROBE_SLUG,
+    EXPECTED_RESOURCE_HANDOFF,
+    EXPECTED_SMOKE_LOGPROBS,
+    EXPECTED_SMOKE_TOKEN_IDS,
+    EXPECTED_SUBTASK_SLUGS,
+    EXPECTED_SUBAGENT_INTERNAL_MARKER,
+    EXPECTED_PARENT_VISIBLE_CHILD_RESULT,
+    HANDOFF_RESOURCE_NAME,
+    HANDOFF_VERIFY_SLUG,
+    METADATA_REVIEW_SLUG,
+    METADATA_VALIDATE_SLUG,
+    NESTED_INSPECT_SLUG,
+    NESTED_LINE_SLUGS,
+    NESTED_VERIFY_SLUG,
+    PRIMARY_ARTIFACT_SLUG,
+    SEEDED_SOURCE_DOC_NAME,
+    SOURCE_REVIEW_SLUG,
+)
 
 from tests.e2e._read_contracts import require_run_snapshot
 
@@ -45,7 +66,6 @@ TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
 BLOCKED = "blocked"
 COMPLETED = "completed"
 FAILED = "failed"
-NESTED_LINE_SLUGS = ("l_2_a", "l_2_b")
 SMOKE_PARENT_TURN_COUNT = 3
 SMOKE_RECURSIVE_TURN_COUNT = 3
 SMOKE_LEAF_TURN_COUNT = 2
@@ -73,9 +93,9 @@ def _assert_sample_graph(sample_id: UUID) -> None:
         EXPECTED_SUBTASK_SLUGS,
     )
     assert sorted(task.name for task in tasks if task.level == 2) == sorted(NESTED_LINE_SLUGS)
-    assert by_slug["l_2"].is_leaf is False
-    assert by_slug["l_2_a"].parent_id == by_slug["l_2"].id
-    assert by_slug["l_2_b"].parent_id == by_slug["l_2"].id
+    assert by_slug[ENV_PROBE_SLUG].is_leaf is False
+    assert by_slug[NESTED_INSPECT_SLUG].parent_id == by_slug[ENV_PROBE_SLUG].id
+    assert by_slug[NESTED_VERIFY_SLUG].parent_id == by_slug[ENV_PROBE_SLUG].id
     non_completed = [(task.name, task.status) for task in tasks if task.status != COMPLETED]
     assert not non_completed, f"non-completed nodes: {non_completed}"
 
@@ -92,20 +112,20 @@ def _assert_dag_edges(leaves: list[SampleTaskDto]) -> None:
         if parent_id in by_id
     }
     expected_pairs = {
-        ("d_root", "d_left"),
-        ("d_root", "d_right"),
-        ("d_left", "d_join"),
-        ("d_right", "d_join"),
-        ("l_1", "l_2"),
-        ("l_2", "l_3"),
-        ("l_2_a", "l_2_b"),
+        (SOURCE_REVIEW_SLUG, HANDOFF_VERIFY_SLUG),
+        (SOURCE_REVIEW_SLUG, PRIMARY_ARTIFACT_SLUG),
+        (HANDOFF_VERIFY_SLUG, ARTIFACT_SUMMARY_SLUG),
+        (PRIMARY_ARTIFACT_SLUG, ARTIFACT_SUMMARY_SLUG),
+        (METADATA_REVIEW_SLUG, ENV_PROBE_SLUG),
+        (ENV_PROBE_SLUG, METADATA_VALIDATE_SLUG),
+        (NESTED_INSPECT_SLUG, NESTED_VERIFY_SLUG),
     }
     missing = expected_pairs - actual_pairs
     assert not missing, f"missing DAG edges: {missing}"
 
 
 def _assert_sample_resources(sample_id: UUID) -> None:
-    """Exactly 20 task resources: 10 benchmark artifacts + 10 probe_*.json."""
+    """Expected task resources include artifacts, probes, toolkit probes, and handoff files."""
     snapshot = require_run_snapshot(sample_id)
     resources = [
         resource
@@ -122,13 +142,25 @@ def _assert_sample_resources(sample_id: UUID) -> None:
     assert not worker_outputs, (
         "worker final assistant messages must stay on executions, not resources"
     )
-    assert len(resources) == 20, (
-        f"expected 20 task artifact resources (10 outputs + 10 probes), got {len(resources)}"
+    toolkit_probes = [
+        resource
+        for resource in resources
+        if resource.name.startswith("toolkit_probe_") and resource.name.endswith(".json")
+    ]
+    assert len(toolkit_probes) == 10, (
+        f"expected 10 toolkit_probe_*.json resources, got {len(toolkit_probes)}"
+    )
+    names = {resource.name for resource in resources}
+    assert SEEDED_SOURCE_DOC_NAME in names
+    assert HANDOFF_RESOURCE_NAME in names
+    assert len(resources) == 32, (
+        f"expected 32 task artifact resources "
+        f"(10 outputs + 10 probes + 10 toolkit probes + source/handoff), got {len(resources)}"
     )
 
 
 def _assert_run_turn_counts(sample_id: UUID) -> None:
-    """Parent + recursive ``l_2`` + artifact leaves emit fixed chunk counts.
+    """Parent + recursive ``environment-probe`` + artifact leaves emit fixed chunk counts.
 
     Each smoke context chunk contains one assistant text part, so persistence
     emits exactly one ``SampleContextEvent`` per chunk.
@@ -196,6 +228,66 @@ def _assert_run_evaluation(sample_id: UUID) -> None:
             assert criterion.contribution >= 0
 
 
+def _assert_handoff_task_evaluation(sample_id: UUID) -> None:
+    deadline = time.monotonic() + 30
+    evaluation = None
+    consumer = None
+    while time.monotonic() < deadline:
+        snapshot = require_run_snapshot(sample_id)
+        consumer = next(
+            (task for task in snapshot.tasks.values() if task.name == HANDOFF_VERIFY_SLUG),
+            None,
+        )
+        if consumer is not None:
+            evaluation = snapshot.evaluations_by_task.get(consumer.id)
+            if evaluation is not None:
+                break
+        time.sleep(2)
+
+    assert consumer is not None, f"expected {HANDOFF_VERIFY_SLUG} task in snapshot"
+    assert evaluation is not None, f"expected evaluation for {HANDOFF_VERIFY_SLUG}"
+    assert evaluation.normalized_score == 1.0
+    criterion_slugs = {criterion.criterion_slug for criterion in evaluation.criterion_results}
+    assert criterion_slugs == {"smoke-resource-handoff"}
+
+
+def _assert_rl_episode_view(sample_id: UUID) -> None:
+    episode = RlEpisodeReadService().get_episode(sample_id)
+    assert episode.sample_id == sample_id
+    assert episode.normalized_reward == 1.0
+    assert len(episode.root_tasks) == 1
+
+    tasks = _walk_rl_tasks(episode.root_tasks)
+    by_slug = {task.task_slug: task for task in tasks}
+    assert set(EXPECTED_SUBTASK_SLUGS) <= set(by_slug)
+    assert by_slug[ENV_PROBE_SLUG].children
+    assert {child.task_slug for child in by_slug[ENV_PROBE_SLUG].children} == set(NESTED_LINE_SLUGS)
+    assert by_slug[HANDOFF_VERIFY_SLUG].actor is not None
+    assert (
+        by_slug[HANDOFF_VERIFY_SLUG].actor.parent_task_id
+        == by_slug[SOURCE_REVIEW_SLUG].parent_task_id
+    )
+
+    projection = RlProjectionService()
+    trajectories = list(projection.iter_task_attempt_trajectories(episode))
+    assert {trajectory.task_slug for trajectory in trajectories} >= set(EXPECTED_SUBTASK_SLUGS)
+    joint_timeline = projection.get_joint_timeline(episode)
+    token_steps = [step for step in joint_timeline.records if step.token_metadata is not None]
+    assert token_steps, "expected RL joint timeline to expose synthetic logprobs"
+    first = token_steps[0].token_metadata
+    assert first is not None
+    assert first.token_ids == EXPECTED_SMOKE_TOKEN_IDS
+    assert [item.logprob for item in first.logprobs or []] == EXPECTED_SMOKE_LOGPROBS
+
+
+def _walk_rl_tasks(tasks) -> list:
+    result = []
+    for task in tasks:
+        result.append(task)
+        result.extend(_walk_rl_tasks(task.children))
+    return result
+
+
 # =============================================================================
 # Observability helpers (run-level)
 # =============================================================================
@@ -205,8 +297,8 @@ def _assert_sandbox_command_wal(sample_id: UUID) -> None:
     """Bash commands land as WAL rows via ``PostgresSandboxEventSink``."""
     entries = list_sandbox_command_wal(sample_id)
     probes = [e for e in entries if "wc" in e.command or "probe" in e.command]
-    # Canonical sad-path smokes block l_3 before it starts, so the eight
-    # executed leaves should emit probe commands while l_3 emits none.
+    # Canonical sad-path smokes block metadata-validate before it starts, so
+    # executed leaves should emit probe commands while the blocked node emits none.
     assert len(probes) >= 8, f"expected ≥8 probe WAL entries, got {len(probes)}"
 
 
@@ -264,6 +356,40 @@ def _assert_blob_roundtrip(sample_id: UUID) -> None:
     assert bytes_a == bytes_b, "blob read non-deterministic"
     parsed = json.loads(bytes_a)
     assert "exit_code" in parsed, f"probe JSON missing exit_code: {parsed!r}"
+
+
+def _assert_toolkit_probe_resources(
+    sample_id: UUID,
+    *,
+    expected_toolkit_suffix: str,
+) -> None:
+    resources = _require_named_resources(
+        sample_id,
+        prefix="toolkit_probe_",
+        suffix=".json",
+        expected_count=10,
+    )
+    for resource in resources:
+        payload = json.loads(read_resource_bytes(resource))
+        assert payload["ok"] is True, f"{resource.name} toolkit probe failed: {payload!r}"
+        assert payload["toolkit"].endswith(expected_toolkit_suffix)
+        assert payload["synthetic_token_ids"] == EXPECTED_SMOKE_TOKEN_IDS
+        assert payload["synthetic_logprobs"] == EXPECTED_SMOKE_LOGPROBS
+        assert payload["internal_marker"] == EXPECTED_SUBAGENT_INTERNAL_MARKER
+        assert payload["parent_visible_marker"] == EXPECTED_PARENT_VISIBLE_CHILD_RESULT
+
+
+def _assert_source_handoff_resource(sample_id: UUID) -> None:
+    resources = _require_named_resources(
+        sample_id,
+        prefix=HANDOFF_RESOURCE_NAME,
+        suffix="",
+        expected_count=1,
+    )
+    payload = json.loads(read_resource_bytes(resources[0]))
+    assert payload["producer_slug"] == EXPECTED_RESOURCE_HANDOFF.producer_slug
+    assert payload["consumer_slug"] == EXPECTED_RESOURCE_HANDOFF.consumer_slug
+    assert payload["source_doc"] == SEEDED_SOURCE_DOC_NAME
 
 
 def _assert_minif2f_artifacts(sample_id: UUID) -> None:
@@ -330,22 +456,22 @@ def _assert_temporal_ordering(sample_id: UUID) -> None:
                 f"{p}.completed_at ({p_exec.completed_at})"
             )
 
-    _after("d_join", ["d_left", "d_right"])
-    _after("d_left", ["d_root"])
-    _after("d_right", ["d_root"])
-    _after("l_2", ["l_1"])
-    _after("l_3", ["l_2"])
+    _after(ARTIFACT_SUMMARY_SLUG, [HANDOFF_VERIFY_SLUG, PRIMARY_ARTIFACT_SLUG])
+    _after(HANDOFF_VERIFY_SLUG, [SOURCE_REVIEW_SLUG])
+    _after(PRIMARY_ARTIFACT_SLUG, [SOURCE_REVIEW_SLUG])
+    _after(ENV_PROBE_SLUG, [METADATA_REVIEW_SLUG])
+    _after(METADATA_VALIDATE_SLUG, [ENV_PROBE_SLUG])
 
 
 SMOKE_DIRECT_EDGES = (
-    ("d_root", "d_left"),
-    ("d_root", "d_right"),
-    ("d_left", "d_join"),
-    ("d_right", "d_join"),
-    ("l_1", "l_2"),
-    ("l_2", "l_3"),
+    (SOURCE_REVIEW_SLUG, HANDOFF_VERIFY_SLUG),
+    (SOURCE_REVIEW_SLUG, PRIMARY_ARTIFACT_SLUG),
+    (HANDOFF_VERIFY_SLUG, ARTIFACT_SUMMARY_SLUG),
+    (PRIMARY_ARTIFACT_SLUG, ARTIFACT_SUMMARY_SLUG),
+    (METADATA_REVIEW_SLUG, ENV_PROBE_SLUG),
+    (ENV_PROBE_SLUG, METADATA_VALIDATE_SLUG),
 )
-SMOKE_NESTED_EDGES = (("l_2_a", "l_2_b"),)
+SMOKE_NESTED_EDGES = ((NESTED_INSPECT_SLUG, NESTED_VERIFY_SLUG),)
 
 
 def _assert_sample_runtime_event_stream(
@@ -374,32 +500,35 @@ def _assert_sample_runtime_event_stream(
     )
     expected_terminal_status_by_slug = {slug: "completed" for slug in expected_task_slugs}
     if profile == "sad":
-        expected_terminal_status_by_slug["l_2"] = "failed"
-        expected_terminal_status_by_slug["l_3"] = "blocked"
+        expected_terminal_status_by_slug[ENV_PROBE_SLUG] = "failed"
+        expected_terminal_status_by_slug[METADATA_VALIDATE_SLUG] = "blocked"
 
     expected_workers = {slug: f"{worker_prefix}-smoke-leaf" for slug in expected_task_slugs}
     expected_workers[root_slug] = root_worker_slug
     if profile == "happy":
-        expected_workers["l_2"] = f"{worker_prefix}-smoke-recursive-worker"
-        expected_workers["l_2_a"] = f"{worker_prefix}-smoke-leaf"
-        expected_workers["l_2_b"] = f"{worker_prefix}-smoke-leaf"
+        expected_workers[ENV_PROBE_SLUG] = f"{worker_prefix}-smoke-recursive-worker"
+        expected_workers[NESTED_INSPECT_SLUG] = f"{worker_prefix}-smoke-leaf"
+        expected_workers[NESTED_VERIFY_SLUG] = f"{worker_prefix}-smoke-leaf"
     else:
-        expected_workers["l_2"] = f"{worker_prefix}-smoke-leaf-failing"
+        expected_workers[ENV_PROBE_SLUG] = f"{worker_prefix}-smoke-leaf-failing"
 
     assert snapshot.status_sequence == expected_status_sequence
     assert snapshot.task_added_slugs == expected_task_slugs
     assert snapshot.edge_added_pairs == expected_edge_pairs
     assert snapshot.worker_added_by_task_slug == expected_workers
     assert set(snapshot.sandbox_added_by_task_slug) == set(expected_task_slugs)
-    assert set(snapshot.evaluator_added_by_task_slug) == {root_slug}
+    assert set(snapshot.evaluator_added_by_task_slug) == {root_slug, HANDOFF_VERIFY_SLUG}
     assert set(snapshot.evaluator_added_by_task_slug[root_slug]) == {"default", "post-root"}
+    assert set(snapshot.evaluator_added_by_task_slug[HANDOFF_VERIFY_SLUG]) == {
+        "smoke-resource-handoff"
+    }
     assert snapshot.task_terminal_status_by_slug == expected_terminal_status_by_slug
     if profile == "happy":
-        assert "l_2_a" in snapshot.task_added_slugs
-        assert "l_2_b" in snapshot.task_added_slugs
+        assert NESTED_INSPECT_SLUG in snapshot.task_added_slugs
+        assert NESTED_VERIFY_SLUG in snapshot.task_added_slugs
     else:
-        assert "l_2_a" not in snapshot.task_added_slugs
-        assert "l_2_b" not in snapshot.task_added_slugs
+        assert NESTED_INSPECT_SLUG not in snapshot.task_added_slugs
+        assert NESTED_VERIFY_SLUG not in snapshot.task_added_slugs
 
     _assert_sample_runtime_event_order(snapshot, root_slug=root_slug)
 
@@ -502,7 +631,7 @@ def _assert_experiment_membership(experiment: str, sample_ids: list[UUID]) -> No
 
 
 def _assert_sadpath_graph_cascade(sample_id: UUID) -> None:
-    """Canonical sad path: parent plans, l_2 fails, l_3 blocks, independent leaves complete."""
+    """Canonical sad path: parent plans, environment-probe fails, metadata-validate blocks."""
     snapshot = require_run_snapshot(sample_id)
     tasks = list(snapshot.tasks.values())
     leaves = [task for task in tasks if task.level > 0]
@@ -513,13 +642,17 @@ def _assert_sadpath_graph_cascade(sample_id: UUID) -> None:
         "parent task should complete after planning; child failure is represented "
         f"on the failing child and run terminal status, got {root_tasks[0].status}"
     )
-    assert by_slug["l_2"].status == FAILED, f"l_2 expected FAILED, got {by_slug['l_2'].status}"
-    assert by_slug["l_3"].status == BLOCKED, f"l_3 expected BLOCKED, got {by_slug['l_3'].status}"
-    assert by_slug["l_3"].started_at is None, "blocked l_3 should never start"
-    assert not snapshot.executions_by_task.get(by_slug["l_3"].id), (
-        "blocked l_3 should not have execution attempts"
+    failed = by_slug[ENV_PROBE_SLUG]
+    blocked = by_slug[METADATA_VALIDATE_SLUG]
+    assert failed.status == FAILED, f"{ENV_PROBE_SLUG} expected FAILED, got {failed.status}"
+    assert blocked.status == BLOCKED, (
+        f"{METADATA_VALIDATE_SLUG} expected BLOCKED, got {blocked.status}"
     )
-    for slug in set(EXPECTED_SUBTASK_SLUGS) - {"l_2", "l_3"}:
+    assert blocked.started_at is None, f"blocked {METADATA_VALIDATE_SLUG} should never start"
+    assert not snapshot.executions_by_task.get(blocked.id), (
+        f"blocked {METADATA_VALIDATE_SLUG} should not have execution attempts"
+    )
+    for slug in set(EXPECTED_SUBTASK_SLUGS) - {ENV_PROBE_SLUG, METADATA_VALIDATE_SLUG}:
         assert by_slug[slug].status == COMPLETED, (
             f"{slug} expected COMPLETED, got {by_slug[slug].status}"
         )
@@ -536,7 +669,7 @@ def _assert_sadpath_partial_artifact(sample_id: UUID) -> None:
             break
         time.sleep(2)
     assert len(partials) == 1, (
-        f"expected 1 partial artifact from l_2 (partial work must persist on "
+        f"expected 1 partial artifact from {ENV_PROBE_SLUG} (partial work must persist on "
         f"FAILED leaf), got {len(partials)}"
     )
     r = partials[0]
@@ -570,16 +703,20 @@ def _assert_sadpath_thread_messages(sample_id: UUID) -> None:
     assert thread is not None, "no smoke-completion thread created"
     msgs = sorted(thread.messages, key=lambda msg: msg.sequence_num)
     assert len(msgs) == 7, (
-        f"expected 7 completion messages (l_2 failed, l_3 blocked), got {len(msgs)}"
+        f"expected 7 completion messages ({ENV_PROBE_SLUG} failed, "
+        f"{METADATA_VALIDATE_SLUG} blocked), got {len(msgs)}"
     )
     from_slugs = {m.from_agent_id.removeprefix("leaf-") for m in msgs}
-    assert "l_2" not in from_slugs, (
-        f"l_2 sent a completion message despite suppression: {from_slugs}"
+    assert ENV_PROBE_SLUG not in from_slugs, (
+        f"{ENV_PROBE_SLUG} sent a completion message despite suppression: {from_slugs}"
     )
-    assert "l_3" not in from_slugs, (
-        f"l_3 sent a completion message despite being blocked: {from_slugs}"
+    assert METADATA_VALIDATE_SLUG not in from_slugs, (
+        f"{METADATA_VALIDATE_SLUG} sent a completion message despite being blocked: {from_slugs}"
     )
-    assert from_slugs == set(EXPECTED_SUBTASK_SLUGS) - {"l_2", "l_3"}
+    assert from_slugs == set(EXPECTED_SUBTASK_SLUGS) - {
+        ENV_PROBE_SLUG,
+        METADATA_VALIDATE_SLUG,
+    }
 
 
 def _assert_sadpath_evaluation(sample_id: UUID) -> None:

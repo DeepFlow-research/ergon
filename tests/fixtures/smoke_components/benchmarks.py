@@ -10,12 +10,15 @@ task, so these fixtures replace the production environment loaders only when
 from collections.abc import Iterator, Sequence
 from typing import ClassVar, Literal
 
+from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandbox
+from ergon_builtins.benchmarks.minif2f.sandbox import LeanSandbox
+from ergon_builtins.benchmarks.researchrubrics.sandbox import ResearchE2BSandbox
+from ergon_builtins.benchmarks.swebench_verified.sandbox import SWEBenchSandbox
 from ergon_core.api import Environment, Sample
 from ergon_core.api.task import Task
 from ergon_core.api.worker import Worker
 from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel
-from tests.fixtures.smoke_components.sandbox import SmokePublicSandbox
 from tests.fixtures.smoke_components.workers.minif2f_smoke import (
     MiniF2FFailingLeafWorker,
     MiniF2FRecursiveSmokeWorker,
@@ -170,20 +173,21 @@ class ResearchRubricsSmokeEnvironment(_SingleTaskSmokeEnvironment):
 
     Returns a concrete ``ResearchRubricsSmokeTask`` with inline ``evaluators``, so the smoke
     fixture exercises the v2 object-bound path that the production
-    ResearchRubrics environment now uses. ``sandbox`` uses the test-owned
-    public wrapper over ``SmokeSandboxManager`` so eval-side
-    ``Task.from_definition(..., sandbox_id=...)`` can attach a live
-    runtime without reaching E2B.
+    ResearchRubrics environment now uses. ``sandbox`` uses the real
+    benchmark sandbox class so the smoke fixture mirrors production
+    posture while the test harness controls the runtime manager.
     """
 
     environment_slug: ClassVar[str] = "researchrubrics"
     default_worker_slug: ClassVar[str] = "researchrubrics-smoke-worker"
     task_slug: ClassVar[str] = "smoke-001"
-    task_description: ClassVar[str] = "Write a short smoke-test research report."
+    task_description: ClassVar[str] = (
+        "Review the supplied research notes and produce a concise evidence-backed report."
+    )
     task_payload: ClassVar[JsonObject] = {
         "sample_id": "smoke-001",
         "domain": "smoke",
-        "prompt": "Write a short smoke-test research report.",
+        "prompt": "Review the supplied research notes and produce a concise evidence-backed report.",
         "rubrics": [
             {
                 "criterion": "Report contains the expected smoke-test marker.",
@@ -216,7 +220,7 @@ class ResearchRubricsSmokeEnvironment(_SingleTaskSmokeEnvironment):
             description=self.task_description,
             task_payload=payload,
             worker=self._make_worker(),
-            sandbox=SmokePublicSandbox(),
+            sandbox=ResearchE2BSandbox(),
             evaluators=(
                 ResearchRubricsSmokeRubric(name="default"),
                 SmokePostRootTimingRubric(name="post-root"),
@@ -240,16 +244,15 @@ class MiniF2FSmokeEnvironment(_SingleTaskSmokeEnvironment):
 
     Returns a concrete ``MiniF2FSmokeTask`` with inline ``evaluators``, so the smoke fixture exercises the v2
     object-bound path that the production MiniF2F environment now uses.
-    ``sandbox`` uses the test-owned public wrapper over
-    ``SmokeSandboxManager`` so eval-side
-    ``Task.from_definition(..., sandbox_id=...)`` can attach a live
-    runtime without reaching E2B.
+    ``sandbox`` uses the real benchmark sandbox class so the smoke fixture
+    mirrors production posture while the test harness controls the runtime
+    manager.
     """
 
     environment_slug: ClassVar[str] = "minif2f"
     default_worker_slug: ClassVar[str] = "minif2f-smoke-worker"
     task_slug: ClassVar[str] = "mathd_algebra_478"
-    task_description: ClassVar[str] = "Prove the smoke_trivial theorem in Lean."
+    task_description: ClassVar[str] = "Verify the supplied Lean theorem and record proof evidence."
     task_payload: ClassVar[JsonObject] = {
         "name": "mathd_algebra_478",
         "informal_statement": "Smoke theorem used by the canonical E2E fixture.",
@@ -277,7 +280,7 @@ class MiniF2FSmokeEnvironment(_SingleTaskSmokeEnvironment):
             description=self.task_description,
             task_payload=payload,
             worker=self._make_worker(),
-            sandbox=SmokePublicSandbox(),
+            sandbox=LeanSandbox(),
             evaluators=(
                 MiniF2FSmokeRubric(name="default"),
                 SmokePostRootTimingRubric(name="post-root"),
@@ -301,16 +304,17 @@ class SweBenchSmokeEnvironment(_SingleTaskSmokeEnvironment):
 
     Returns a concrete ``SweBenchSmokeTask`` with inline ``evaluators``, so the smoke fixture exercises the v2
     object-bound path that the production SWE-Bench environment now uses.
-    ``sandbox`` uses the test-owned public wrapper over
-    ``SmokeSandboxManager`` so eval-side
-    ``Task.from_definition(..., sandbox_id=...)`` can attach a live
-    runtime without reaching E2B.
+    ``sandbox`` uses the real benchmark sandbox class so the smoke fixture
+    mirrors production posture while the test harness controls the runtime
+    manager.
     """
 
     environment_slug: ClassVar[str] = "swebench-verified"
     default_worker_slug: ClassVar[str] = "swebench-smoke-worker"
     task_slug: ClassVar[str] = "astropy__astropy-12907"
-    task_description: ClassVar[str] = "Create the simple Python add() patch used by smoke tests."
+    task_description: ClassVar[str] = (
+        "Inspect the Python issue and produce a minimal source patch with evidence."
+    )
     task_payload: ClassVar[JsonObject] = {
         "instance_id": "astropy__astropy-12907",
         "repo": "smoke/repo",
@@ -344,7 +348,7 @@ class SweBenchSmokeEnvironment(_SingleTaskSmokeEnvironment):
             description=self.task_description,
             task_payload=payload,
             worker=self._make_worker(),
-            sandbox=SmokePublicSandbox(),
+            sandbox=SWEBenchSandbox(),
             evaluators=(
                 SweBenchSmokeRubric(name="default"),
                 SmokePostRootTimingRubric(name="post-root"),
@@ -377,7 +381,9 @@ class GDPEvalSmokeEnvironment(_SingleTaskSmokeEnvironment):
     environment_slug: ClassVar[str] = "gdpeval"
     default_worker_slug: ClassVar[str] = "gdpeval-smoke-worker"
     task_slug: ClassVar[str] = "gdpeval-smoke-001"
-    task_description: ClassVar[str] = "Process the reference documents and write outputs."
+    task_description: ClassVar[str] = (
+        "Process the reference documents and write a structured output bundle."
+    )
     task_payload: ClassVar[JsonObject] = {
         "task_id": "gdpeval-smoke-001",
         "workflow_type": "document_processing",
@@ -401,7 +407,7 @@ class GDPEvalSmokeEnvironment(_SingleTaskSmokeEnvironment):
             description=self.task_description,
             task_payload=payload,
             worker=self._make_worker(),
-            sandbox=SmokePublicSandbox(),
+            sandbox=GDPEvalSandbox(),
             evaluators=(SmokePostRootTimingRubric(name="post-root"),),
         )
         return [task]

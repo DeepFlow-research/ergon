@@ -26,6 +26,7 @@ from ergon_core.core.persistence.shared.types import (
 from tests.fixtures.smoke_components.smoke_base.constants import SUBTASK_GRAPH
 from tests.fixtures.smoke_components.smoke_base.dynamic_tasks import (
     SmokeChildTaskSpec,
+    smoke_evaluators_for_slug,
     smoke_task_from_spec,
 )
 from tests.fixtures.smoke_components.smoke_base.metrics import smoke_assistant_chunk
@@ -118,7 +119,7 @@ class SmokeWorkerBase(Worker):
         """Overridable per-slug → (assigned_worker_slug, deps) mapping.
 
         Default routes every slug to ``self.leaf_slug``.  Sad-path
-        subclasses override this to route specific slugs (e.g. ``l_2``)
+        subclasses override this to route specific slugs (e.g. ``environment-probe``)
         to a failing leaf while keeping the 9-subtask topology identical.
         ``execute`` stays ``@final`` so topology is never changed; only
         the leaf binding is.
@@ -128,4 +129,5 @@ class SmokeWorkerBase(Worker):
             description=desc,
             assigned_worker_slug=AssignedWorkerSlug(self.leaf_slug),
             depends_on=[TaskSlug(d) for d in deps],
+            evaluators=smoke_evaluators_for_slug(slug),
         )

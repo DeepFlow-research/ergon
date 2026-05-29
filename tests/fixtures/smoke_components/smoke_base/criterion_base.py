@@ -174,8 +174,8 @@ class SmokeCriterionBase(Criterion):
     ) -> list[SampleGraphNode]:
         """Return leaf descendants that should publish probe/artifact resources.
 
-        The happy smoke path routes direct child ``l_2`` to a recursive worker.
-        ``l_2`` is still part of the direct-child topology check, but its
+        The happy smoke path routes direct child ``environment-probe`` to a recursive worker.
+        ``environment-probe`` is still part of the direct-child topology check, but its
         nested children are the artifact-producing leaves.
         """
         with get_session() as session:

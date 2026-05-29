@@ -18,6 +18,7 @@ import json
 from typing import ClassVar
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
+from tests.fixtures.smoke_components.smoke_base.constants import SMOKE_OUTPUT_DIR
 from tests.fixtures.smoke_components.smoke_base.leaf_base import BaseSmokeLeafWorker
 from tests.fixtures.smoke_components.smoke_base.recursive import (
     RecursiveSmokeWorkerBase,
@@ -43,7 +44,7 @@ class ResearchRubricsSmokeWorker(RecursiveSmokeWorkerMixin, SmokeWorkerBase):
 class ResearchRubricsSubworker:
     """Writes a deterministic markdown report + runs ``wc -l`` as the probe.
 
-    Artifacts written to ``/workspace/final_output/`` so the runtime's
+        Artifacts written to the smoke output directory so the runtime's
     persist step produces SampleResource rows:
 
     - ``report_<node>.md``    — markdown content (content check target)
@@ -51,7 +52,7 @@ class ResearchRubricsSubworker:
     """
 
     async def work(self, task_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
-        report_path = f"/workspace/final_output/report_{task_id}.md"
+        report_path = f"{SMOKE_OUTPUT_DIR}/report_{task_id}.md"
         contents = (
             f"# Research report {task_id}\n\n"
             "Deterministic smoke output. Non-empty body required by criterion.\n"
@@ -60,7 +61,7 @@ class ResearchRubricsSubworker:
 
         probe = await sandbox.commands.run(f"wc -l {report_path}", timeout=10)
         probe_stdout = ("" if probe.stdout is None else probe.stdout).strip()
-        probe_path = f"/workspace/final_output/probe_{task_id}.json"
+        probe_path = f"{SMOKE_OUTPUT_DIR}/probe_{task_id}.json"
         await sandbox.files.write(
             probe_path,
             json.dumps({"exit_code": probe.exit_code, "stdout": probe_stdout}),
@@ -76,11 +77,14 @@ class ResearchRubricsSmokeLeafWorker(BaseSmokeLeafWorker):
     """Registered leaf that delegates to ``ResearchRubricsSubworker``."""
 
     type_slug: ClassVar[str] = "researchrubrics-smoke-leaf"
+    toolkit_type: ClassVar[str] = (
+        "ergon_builtins.benchmarks.researchrubrics.toolkit:ResearchRubricsToolkit"
+    )
     subworker_cls: ClassVar[type] = ResearchRubricsSubworker
 
 
 class ResearchRubricsRecursiveSmokeWorker(RecursiveSmokeWorkerBase):
-    """Nested ``l_2`` worker that delegates nested leaves to ResearchRubrics."""
+    """Nested ``environment-probe`` worker that delegates nested leaves to ResearchRubrics."""
 
     type_slug: ClassVar[str] = "researchrubrics-smoke-recursive-worker"
     leaf_slug: ClassVar[str] = "researchrubrics-smoke-leaf"
@@ -94,7 +98,7 @@ class ResearchRubricsFailingLeafWorker(FailingSmokeLeafMixin, BaseSmokeLeafWorke
 
 
 class ResearchRubricsSadPathSmokeWorker(SadPathSmokeWorkerMixin, SmokeWorkerBase):
-    """Parent that routes ``l_2`` to the failing leaf."""
+    """Parent that routes ``environment-probe`` to the failing leaf."""
 
     type_slug: ClassVar[str] = "researchrubrics-sadpath-smoke-worker"
     leaf_slug: ClassVar[str] = "researchrubrics-smoke-leaf"

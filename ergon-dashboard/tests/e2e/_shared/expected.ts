@@ -7,15 +7,18 @@
  */
 
 export const EXPECTED_SUBTASK_SLUGS = [
-  "d_root",
-  "d_left",
-  "d_right",
-  "d_join",
-  "l_1",
-  "l_2",
-  "l_3",
-  "s_a",
-  "s_b",
+  "source-review",
+  "handoff-verify",
+  "primary-artifact",
+  "artifact-summary",
+  "metadata-review",
+  "environment-probe",
+  "metadata-validate",
+  "evidence-artifact",
+  "completion-marker",
 ] as const;
 
-export const EXPECTED_NESTED_SUBTASK_SLUGS = ["l_2_a", "l_2_b"] as const;
+export const EXPECTED_NESTED_SUBTASK_SLUGS = [
+  "nested-input-review",
+  "nested-verification",
+] as const;

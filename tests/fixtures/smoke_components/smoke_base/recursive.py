@@ -1,9 +1,9 @@
 """Recursive smoke worker used by happy-path E2E runs.
 
-This worker is assigned to the top-level ``l_2`` node.  It plans two
+This worker is assigned to the top-level ``environment-probe`` node.  It plans two
 nested leaf subtasks under itself, waits for them to complete, then sends
 the same completion-thread message shape as a normal leaf.  The top-level
-``l_3`` dependency therefore waits on a non-leaf dynamic task.
+``metadata-validate`` dependency therefore waits on a non-leaf dynamic task.
 """
 
 from collections.abc import AsyncGenerator
@@ -17,22 +17,32 @@ from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
 from ergon_core.core.application.communication.models import CreateMessageRequest
 from ergon_core.core.application.communication.service import communication_service
+from tests.fixtures.smoke_components.smoke_base.constants import (
+    ENV_PROBE_SLUG,
+    NESTED_INSPECT_SLUG,
+    NESTED_LINE_SLUGS,
+    NESTED_VERIFY_SLUG,
+)
 from tests.fixtures.smoke_components.smoke_base.dynamic_tasks import (
     SmokeChildTaskSpec,
+    smoke_evaluators_for_slug,
     smoke_task_from_spec,
 )
 from tests.fixtures.smoke_components.smoke_base.metrics import smoke_assistant_chunk
 from sqlmodel import select
 
-NESTED_LINE_SLUGS: tuple[str, ...] = ("l_2_a", "l_2_b")
 NESTED_SUBTASK_GRAPH: tuple[tuple[str, tuple[str, ...], str], ...] = (
-    ("l_2_a", (), "Nested line node 2a"),
-    ("l_2_b", ("l_2_a",), "Nested line node 2b"),
+    (NESTED_INSPECT_SLUG, (), "Nested input review for environment probe"),
+    (
+        NESTED_VERIFY_SLUG,
+        (NESTED_INSPECT_SLUG,),
+        "Nested verification using nested input review",
+    ),
 )
 
 
 class RecursiveSmokeWorkerBase(Worker):
-    """Plan and wait for a two-node nested line under ``l_2``."""
+    """Plan and wait for a two-node nested line under ``environment-probe``."""
 
     leaf_slug: ClassVar[str]
     RECURSIVE_TURN_COUNT: ClassVar[int] = 3
@@ -125,9 +135,9 @@ class RecursiveSmokeWorkerBase(Worker):
 
 
 class RecursiveSmokeWorkerMixin:
-    """Route top-level ``l_2`` to an env-specific recursive worker."""
+    """Route top-level ``environment-probe`` to an env-specific recursive worker."""
 
-    RECURSIVE_SLUGS: ClassVar[frozenset[str]] = frozenset({"l_2"})
+    RECURSIVE_SLUGS: ClassVar[frozenset[str]] = frozenset({ENV_PROBE_SLUG})
     RECURSIVE_WORKER_SLUG: ClassVar[str]
     leaf_slug: ClassVar[str]
 
@@ -138,4 +148,5 @@ class RecursiveSmokeWorkerMixin:
             description=desc,
             assigned_worker_slug=AssignedWorkerSlug(worker_slug),
             depends_on=[TaskSlug(d) for d in deps],
+            evaluators=smoke_evaluators_for_slug(slug),
         )

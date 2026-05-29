@@ -1,8 +1,9 @@
 """Shared smoke sad-path helpers.
 
-The canonical sad path routes ``l_2`` to a failing leaf. ``l_3`` depends
-on ``l_2``, so runtime propagation should leave ``l_3`` blocked and never
-started while independent branches continue normally.
+The canonical sad path routes ``environment-probe`` to a failing leaf.
+``metadata-validate`` depends on it, so runtime propagation should leave
+``metadata-validate`` blocked and never started while independent branches
+continue normally.
 """
 
 from typing import ClassVar
@@ -10,7 +11,11 @@ from typing import ClassVar
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 from ergon_core.api import WorkerContext
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
-from tests.fixtures.smoke_components.smoke_base.dynamic_tasks import SmokeChildTaskSpec
+from tests.fixtures.smoke_components.smoke_base.constants import ENV_PROBE_SLUG, SMOKE_OUTPUT_DIR
+from tests.fixtures.smoke_components.smoke_base.dynamic_tasks import (
+    SmokeChildTaskSpec,
+    smoke_evaluators_for_slug,
+)
 from tests.fixtures.smoke_components.smoke_base.subworker import SubworkerResult
 
 
@@ -18,7 +23,7 @@ class AlwaysFailSubworker:
     """Writes partial work and runs a probe before returning failure."""
 
     async def work(self, task_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
-        partial_path = f"/workspace/final_output/partial_{task_id}.md"
+        partial_path = f"{SMOKE_OUTPUT_DIR}/partial_{task_id}.md"
         await sandbox.files.write(
             partial_path,
             (
@@ -52,9 +57,9 @@ class AlwaysFailSubworker:
 
 
 class SadPathSmokeWorkerMixin:
-    """Route ``l_2`` to a failing leaf without changing smoke topology."""
+    """Route ``environment-probe`` to a failing leaf without changing smoke topology."""
 
-    FAILING_SLUGS: ClassVar[frozenset[str]] = frozenset({"l_2"})
+    FAILING_SLUGS: ClassVar[frozenset[str]] = frozenset({ENV_PROBE_SLUG})
     FAILING_LEAF_SLUG: ClassVar[str]
     leaf_slug: ClassVar[str]
 
@@ -65,6 +70,7 @@ class SadPathSmokeWorkerMixin:
             description=desc,
             assigned_worker_slug=AssignedWorkerSlug(leaf_slug),
             depends_on=[TaskSlug(d) for d in deps],
+            evaluators=smoke_evaluators_for_slug(slug),
         )
 
 

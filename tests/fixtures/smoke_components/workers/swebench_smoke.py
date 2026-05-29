@@ -9,6 +9,7 @@ import json
 from typing import ClassVar
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
+from tests.fixtures.smoke_components.smoke_base.constants import SMOKE_OUTPUT_DIR
 from tests.fixtures.smoke_components.smoke_base.leaf_base import BaseSmokeLeafWorker
 from tests.fixtures.smoke_components.smoke_base.recursive import (
     RecursiveSmokeWorkerBase,
@@ -44,7 +45,7 @@ class SweBenchSubworker:
     """Writes a trivial .py file + compiles + executes as the probe."""
 
     async def work(self, task_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
-        patch_path = f"/workspace/final_output/patch_{task_id}.py"
+        patch_path = f"{SMOKE_OUTPUT_DIR}/patch_{task_id}.py"
         await sandbox.files.write(patch_path, PY_SOURCE)
 
         probe = await sandbox.commands.run(
@@ -52,7 +53,7 @@ class SweBenchSubworker:
             timeout=20,
         )
         probe_stdout = ("" if probe.stdout is None else probe.stdout).strip()[:4096]
-        probe_path = f"/workspace/final_output/probe_{task_id}.json"
+        probe_path = f"{SMOKE_OUTPUT_DIR}/probe_{task_id}.json"
         await sandbox.files.write(
             probe_path,
             json.dumps({"exit_code": probe.exit_code, "stdout": probe_stdout}),
@@ -68,11 +69,14 @@ class SweBenchSmokeLeafWorker(BaseSmokeLeafWorker):
     """Registered leaf that delegates to ``SweBenchSubworker``."""
 
     type_slug: ClassVar[str] = "swebench-smoke-leaf"
+    toolkit_type: ClassVar[str] = (
+        "ergon_builtins.benchmarks.swebench_verified.toolkit:SWEBenchToolkit"
+    )
     subworker_cls: ClassVar[type] = SweBenchSubworker
 
 
 class SweBenchRecursiveSmokeWorker(RecursiveSmokeWorkerBase):
-    """Nested ``l_2`` worker that delegates nested leaves to SWE-Bench."""
+    """Nested ``environment-probe`` worker that delegates nested leaves to SWE-Bench."""
 
     type_slug: ClassVar[str] = "swebench-smoke-recursive-worker"
     leaf_slug: ClassVar[str] = "swebench-smoke-leaf"
@@ -86,7 +90,7 @@ class SweBenchFailingLeafWorker(FailingSmokeLeafMixin, BaseSmokeLeafWorker):
 
 
 class SweBenchSadPathSmokeWorker(SadPathSmokeWorkerMixin, SmokeWorkerBase):
-    """Parent that routes ``l_2`` to the failing leaf."""
+    """Parent that routes ``environment-probe`` to the failing leaf."""
 
     type_slug: ClassVar[str] = "swebench-sadpath-smoke-worker"
     leaf_slug: ClassVar[str] = "swebench-smoke-leaf"

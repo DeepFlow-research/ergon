@@ -79,7 +79,7 @@ async function selectRenderedGraphTask(
   evaluatedTaskIds: Set<string>,
 ): Promise<BackendSampleState["graph_nodes"][number]> {
   const candidates = [
-    ...state.graph_nodes.filter((node) => node.level > 0 && node.task_slug === "d_root"),
+    ...state.graph_nodes.filter((node) => node.level > 0 && node.task_slug === "source-review"),
     ...state.graph_nodes.filter((node) => node.level > 0 && evaluatedTaskIds.has(node.id)),
     ...state.graph_nodes.filter((node) => node.level > 0),
   ];
@@ -272,7 +272,7 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
           return;
         }
 
-        // Canonical sad path: l_2 fails, l_3 blocks, independent leaves complete.
+        // Canonical sad path: environment-probe fails, metadata-validate blocks.
         expect(state.status).toBe("failed");
         expect(state.resource_count).toBeGreaterThanOrEqual(15);
         expect(state.executions.length).toBe(state.execution_count);
@@ -282,11 +282,11 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
         const statusBySlug = new Map(
           state.graph_nodes.filter((n) => n.level > 0).map((n) => [n.task_slug, n.status]),
         );
-        for (const slug of EXPECTED_SUBTASK_SLUGS.filter((s) => !["l_2", "l_3"].includes(s))) {
+        for (const slug of EXPECTED_SUBTASK_SLUGS.filter((s) => !["environment-probe", "metadata-validate"].includes(s))) {
           expect(statusBySlug.get(slug)).toBe("completed");
         }
-        expect(statusBySlug.get("l_2")).toBe("failed");
-        expect(statusBySlug.get("l_3")).toBe("blocked");
+        expect(statusBySlug.get("environment-probe")).toBe("failed");
+        expect(statusBySlug.get("metadata-validate")).toBe("blocked");
 
         await page.goto(`/samples/${sample_id}`);
         await assertRunWorkspace(page, state, sample_id);
