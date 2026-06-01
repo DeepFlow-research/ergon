@@ -1581,3 +1581,93 @@ Expected: CI passes. If CI provider resources are missing, treat that as infrast
 - Spec coverage: The plan changes canonical smoke posture from fake local sandbox to real environment sandbox classes, improves smoke task names/descriptions to cover realistic task rendering and sandbox-runtime behaviors, exercises production builtin toolkits from deterministic smoke workers, adds seeded document/resource/message semantics, asserts RL logprobs and root/intermediate evaluation ordering, adds exactly one dynamic-subtask evaluator for intermediary terminal-state coverage, adds deterministic mutation coverage, guards against fake/test sandboxes, updates comments, and verifies with both a fast contract test and `ergon test smoke`.
 - Placeholder scan: No TBD/TODO placeholders remain. Each task has files, code snippets, commands, and expected outcomes.
 - Type consistency: Test imports use existing environment class names; sandbox type strings match existing `_type` discriminator format observed in task snapshots; branch base matches the current top-of-stack PR branch.
+
+---
+
+## Follow-Up Fix Plan For Current Live Smoke XFails
+
+The real-sandbox posture PR intentionally xfails the live smoke tests when tightening the suite exposes platform bugs. Do not soften the smoke assertions to make these pass. Fix the ownership boundaries below, then remove the relevant xfail reason only after the targeted unit/integration coverage is green.
+
+### Fix 1: Sandbox Template Provisioning Belongs To Experiment Preflight
+
+**Current symptom:** real E2B-backed smoke runs can fail before worker logic executes because private or locally built sandbox templates are unavailable.
+
+**Ownership decision:** smoke tests should not build templates, and pure experiment persistence should not perform network/build side effects. The right owner is the experiment submission/preflight path immediately before experiment materialization/execution. That boundary already knows which environments/sandboxes the run will use and can fail early with an actionable setup error before samples are launched.
+
+**Architecture:**
+- Add a template requirement/resolution service that reads environment catalog metadata and the local sandbox template registry.
+- Run that resolver during experiment submission/preflight.
+- Persist the resolved template reference into task/runtime snapshots.
+- Keep worker/tool authors unaware of RL reconstruction or sandbox template provisioning concerns.
+
+**Files to inspect/modify:**
+- `ergon_builtins/ergon_builtins/environments/catalog.py`
+- `ergon_cli/domains/environments/templates.py`
+- `ergon_builtins/ergon_builtins/benchmarks/minif2f/sandbox_template/utils.py`
+- `ergon_builtins/ergon_builtins/benchmarks/minif2f/sandbox.py`
+- experiment submission/preflight entrypoints in `ergon_core/ergon_core/core/jobs/` and CLI submit code
+
+**Implementation steps:**
+- [ ] Write a unit test proving a known environment exposes a required sandbox template requirement.
+- [ ] Write a unit test proving the resolver prefers a pinned local registry `template_id` over a friendly template name.
+- [ ] Write a unit test proving missing templates raise a typed, actionable preflight error before samples are submitted.
+- [ ] Implement the resolver with no smoke-specific logic.
+- [ ] Wire the resolver into experiment submission/preflight, not into the smoke fixture.
+- [ ] Update the real smoke xfail reason to remove template provisioning only after a real sandbox smoke can pass that phase locally/CI with provisioned templates.
+
+**Recommendation:** make auto-build opt-in, not implicit. Default behavior should be a fast preflight failure with a command or setup instruction. Template building can be expensive, require credentials, and should not surprise users during normal experiment persistence.
+
+### Fix 2: Public Sandbox Runtime Calls Must Emit Command WAL
+
+**Current symptom:** deterministic smoke workers use the public `Task.sandbox` API and production builtin toolkits, but those calls do not necessarily emit the same command/file WAL rows as the older instrumented sandbox path.
+
+**Ownership decision:** instrumentation belongs at the sandbox runtime boundary, not in smoke workers or individual toolkits. The public sandbox API should be observable by default when attached to a running sample/task context.
+
+**Architecture:**
+- Add an `InstrumentedSandboxRuntime` wrapper around the `SandboxRuntime` protocol.
+- Wrap real runtimes when task/evaluator jobs attach or provision a sandbox.
+- Emit sandbox WAL entries for `run_command`, `write_file`, `read_file`, and `list_files`.
+- Delegate lifecycle methods such as `close()` and `close_local()` to the wrapped runtime.
+
+**Files to inspect/modify:**
+- `ergon_core/ergon_core/api/sandbox/sandbox.py`
+- `ergon_core/ergon_core/api/sandbox/runtime.py`
+- `ergon_builtins/ergon_builtins/sandbox/e2b_runtime.py`
+- `ergon_core/ergon_core/core/infrastructure/sandbox/instrumentation.py`
+- task worker/evaluator job files under `ergon_core/ergon_core/core/jobs/task/`
+- smoke assertions in `tests/e2e/_asserts.py`
+
+**Implementation steps:**
+- [ ] Write a unit test with a fake `SandboxRuntime` proving `run_command` delegates and emits exactly one command WAL event with sample/task/execution/sandbox identity.
+- [ ] Write equivalent unit tests for `write_file`, `read_file`, and `list_files`.
+- [ ] Implement `InstrumentedSandboxRuntime`.
+- [ ] Wire runtime instrumentation into worker execution and evaluator execution attachment points.
+- [ ] Add an integration or smoke assertion that builtin toolkit activity produces sandbox command/file WAL rows.
+- [ ] Remove only the WAL-related xfail reason after the live smoke assertion passes without synthetic event shims.
+
+**Recommendation:** instrument the public runtime layer even if the old `InstrumentedSandbox` remains for compatibility. That makes object-bound `task.sandbox` calls, builtin toolkit calls, and future runtime implementations share one observability contract.
+
+### Fix 3: E2B Local Detach Has No SDK Close Method
+
+**Current symptom:** the current E2B runtime contains a local detach path that calls `self._sandbox.close()`, but the installed E2B SDK exposes no `close`, `disconnect`, or `shutdown` method on `AsyncSandbox`.
+
+**SDK fact checked locally:**
+- `AsyncSandbox.kill()` exists and terminates the remote sandbox.
+- `AsyncSandbox.pause()` exists and changes remote lifecycle.
+- `AsyncSandbox.close()` does not exist.
+- There is no SDK method that means "drop this local Python handle while leaving the remote sandbox running."
+
+**Ownership decision:** model local detach honestly in the runtime adapter. For E2B, detach is a no-op because the SDK object is a lightweight API client/handle, not a local stream that needs closing.
+
+**Files to inspect/modify:**
+- `ergon_builtins/ergon_builtins/sandbox/e2b_runtime.py`
+- unit tests for E2B runtime lifecycle behavior
+
+**Implementation steps:**
+- [ ] Write a unit test proving `E2BSandboxRuntime.close()` calls `kill()`.
+- [ ] Write a unit test proving `E2BSandboxRuntime.close_local()` does not call `kill()` or `pause()`.
+- [ ] Replace `close_local()` with a documented no-op explaining the SDK has no local-only close primitive.
+- [ ] Run the E2B runtime lifecycle tests.
+- [ ] Remove only the detach-related xfail reason after the live smoke no longer fails on missing `close()`.
+
+**Recommendation:** do not use `pause()` as a substitute for detach. Pausing mutates remote sandbox lifecycle and is not equivalent to dropping the local handle.
