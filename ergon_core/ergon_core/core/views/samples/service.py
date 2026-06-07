@@ -17,8 +17,11 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.persistence.graph.models import (
     SampleGraphEdge,
-    SampleGraphMutation,
     SampleGraphNode,
+)
+from ergon_core.core.application.samples.events import (
+    SampleRuntimeEventReadService,
+    SampleRuntimeEventView,
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import SampleStatus
@@ -34,7 +37,6 @@ from ergon_core.core.application.evaluation.service import (
     EvaluationScoreSummary,
     EvaluationService,
 )
-from ergon_core.core.application.runtime.models import GraphMutationRecordDto
 from ergon_core.core.views.samples.snapshot import (
     _build_communication_threads,
     _build_task_map,
@@ -46,7 +48,6 @@ from ergon_core.core.views.samples.snapshot import (
     _task_timestamps,
 )
 from ergon_core.core.views.resources import require_viewable_resource_size
-from ergon_core.core.views.dashboard_events.graph_mutations import graph_mutation_record_from_row
 from ergon_core.core.views.samples.metrics import aggregate_run_metrics, observed_cost_from_summary
 from pydantic import BaseModel
 from sqlmodel import Session, col, select
@@ -252,20 +253,12 @@ class SampleSnapshotReadService:
             error=run.error_message,
         )
 
-    def list_mutations(self, sample_id: UUID) -> list[GraphMutationRecordDto] | None:
+    def list_events(self, sample_id: UUID) -> list[SampleRuntimeEventView] | None:
         with get_session() as session:
             run = session.get(SampleRecord, sample_id)
             if run is None:
                 return None
-            mutations = list(
-                session.exec(
-                    select(SampleGraphMutation)
-                    .where(SampleGraphMutation.sample_id == sample_id)
-                    .order_by(col(SampleGraphMutation.sequence))
-                ).all()
-            )
-
-        return [graph_mutation_record_from_row(m) for m in mutations]
+            return SampleRuntimeEventReadService().list_events(session, sample_id)
 
     def get_resource_blob(self, sample_id: UUID, resource_id: UUID) -> SampleResourceBlob | None:
         with get_session() as session:

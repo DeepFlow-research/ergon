@@ -1,8 +1,8 @@
 """Workflow propagation service helpers.
 
-All state is stored in the graph layer (SampleGraphNode, SampleGraphEdge,
-SampleGraphMutation). The graph mutation WAL is the single source of truth
-for DAG execution state.
+Projection state is stored in the graph layer (SampleGraphNode, SampleGraphEdge).
+The typed sample runtime WAL is the single source of truth for DAG execution
+state.
 """
 
 from uuid import UUID

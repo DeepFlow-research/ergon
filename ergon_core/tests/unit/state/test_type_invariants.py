@@ -10,10 +10,7 @@ is empty as a result; see the inline comment for details.
 from uuid import uuid4
 
 import pytest
-from ergon_core.core.persistence.graph.models import (
-    SampleGraphAnnotation,
-    SampleGraphMutation,
-)
+from ergon_core.core.persistence.samples.models import SampleAnnotationEventRow, SampleTaskEventRow
 from ergon_core.core.persistence.shared.enums import (
     SampleStatus,
     TaskExecutionStatus,
@@ -68,41 +65,38 @@ from pydantic import ValidationError
             "output",
         ),
         (
-            lambda: SampleGraphMutation(
+            lambda: SampleTaskEventRow(
                 sample_id=uuid4(),
-                sequence=0,
-                mutation_type="node.added",
-                target_type="node",
-                target_id=uuid4(),
+                task_id=uuid4(),
+                event_type="task.added",
+                task_slug="root",
+                status="pending",
                 actor="system:test",
-                new_value={"status": "pending"},
             ),
-            "mutation_type",
-            "node.added",
+            "event_type",
+            "task.added",
         ),
         (
-            lambda: SampleGraphMutation(
+            lambda: SampleTaskEventRow(
                 sample_id=uuid4(),
-                sequence=0,
-                mutation_type="edge.added",
-                target_type="edge",
-                target_id=uuid4(),
+                task_id=uuid4(),
+                event_type="task.status_changed",
+                status="completed",
                 actor="system:test",
-                new_value={},
             ),
-            "target_type",
-            "edge",
+            "status",
+            "completed",
         ),
         (
-            lambda: SampleGraphAnnotation(
+            lambda: SampleAnnotationEventRow(
                 sample_id=uuid4(),
-                target_type="node",
+                target_type="task",
                 target_id=uuid4(),
-                namespace="payload",
-                sequence=0,
+                key="payload",
+                event_type="annotation.set",
             ),
             "target_type",
-            "node",
+            "task",
         ),
     ],
 )

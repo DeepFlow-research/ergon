@@ -30,6 +30,7 @@ from tests.e2e._asserts import (
     _assert_sample_graph,
     _assert_sample_resources,
     _assert_run_turn_counts,
+    _assert_sample_runtime_event_stream,
     _assert_sadpath_evaluation,
     _assert_sadpath_graph_cascade,
     _assert_sadpath_partial_artifact,
@@ -119,6 +120,12 @@ async def test_smoke_experiment_group(tmp_path: pathlib.Path) -> None:
 
 def _assert_happy_run(rid) -> None:
     _assert_sample_graph(rid)
+    _assert_sample_runtime_event_stream(
+        rid,
+        profile="happy",
+        worker_prefix=ENV,
+        root_worker_slug=HAPPY_WORKER,
+    )
     _assert_sample_resources(rid)
     _assert_run_turn_counts(rid)
     _assert_thread_messages_ordered(rid)
@@ -131,6 +138,12 @@ def _assert_happy_run(rid) -> None:
 
 def _assert_sad_run(rid) -> None:
     _assert_sadpath_graph_cascade(rid)
+    _assert_sample_runtime_event_stream(
+        rid,
+        profile="sad",
+        worker_prefix=ENV,
+        root_worker_slug=SAD_WORKER,
+    )
     _assert_sadpath_partial_artifact(rid)
     _assert_sadpath_partial_wal(rid)
     _assert_sadpath_thread_messages(rid)

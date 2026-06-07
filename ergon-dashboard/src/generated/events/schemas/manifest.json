@@ -45,9 +45,9 @@
     "schemaFile": "DashboardTaskEvaluationUpdatedEvent.schema.json"
   },
   {
-    "eventName": "dashboard/graph.mutation",
-    "modelName": "DashboardGraphMutationEvent",
-    "schemaFile": "DashboardGraphMutationEvent.schema.json"
+    "eventName": "dashboard/sample.runtime_event",
+    "modelName": "DashboardSampleRuntimeEvent",
+    "schemaFile": "DashboardSampleRuntimeEvent.schema.json"
   },
   {
     "eventName": "dashboard/context.event",

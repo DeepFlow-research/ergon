@@ -3,22 +3,16 @@
 from uuid import UUID
 
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import (
-    SampleGraphEdge,
-    SampleGraphMutation,
-    SampleGraphNode,
-)
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import SampleRecord
 from sqlmodel import select
+from tests.integration.propagation._helpers import delete_typed_sample_wal
 
 
 def cleanup_run(sample_id: UUID, defn_id: UUID) -> None:
     with get_session() as session:
-        for mut in session.exec(
-            select(SampleGraphMutation).where(SampleGraphMutation.sample_id == sample_id)
-        ).all():
-            session.delete(mut)
+        delete_typed_sample_wal(session, sample_id)
         for edge in session.exec(
             select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)
         ).all():

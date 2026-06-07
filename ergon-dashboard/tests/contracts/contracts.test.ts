@@ -144,7 +144,7 @@ test("workflow started event parser validates run snapshots", () => {
 });
 
 test("generated dashboard event schemas cover graph and context live events", () => {
-  assert.ok(dashboardEventSchemas["dashboard/graph.mutation"]);
+  assert.ok(dashboardEventSchemas["dashboard/sample.runtime_event"]);
   assert.ok(dashboardEventSchemas["dashboard/context.event"]);
 });
 

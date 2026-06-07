@@ -26,7 +26,8 @@ PUBLIC_CROSS_DOMAIN_MODULES_BY_DOMAIN = {
         "task_execution",
         "task_inspection",
         "task_management",
-    }
+    },
+    "samples": {"events", "state"},
 }
 APPROVED_DOMAIN_FILES = {
     "__init__.py",
@@ -71,6 +72,7 @@ LAYOUT_FILE_EXCEPTIONS = {
         "workflow_errors.py",
         "workflow_models.py",
     },
+    "samples": {"events.py", "state.py"},
     "testing": {"suppression_budget.py", "test_harness_service.py"},
 }
 LAYOUT_DIR_EXCEPTIONS: dict[str, set[str]] = {}

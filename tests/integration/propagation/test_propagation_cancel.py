@@ -10,11 +10,7 @@ it would need xfail; but the simple node-level cancel works today.
 
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import (
-    SampleGraphEdge,
-    SampleGraphMutation,
-    SampleGraphNode,
-)
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.application.runtime.status import CANCELLED
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
@@ -25,6 +21,7 @@ from sqlmodel import select
 
 from tests.integration.propagation._helpers import (
     assert_cross_cutting_invariants,
+    delete_typed_sample_wal,
     assert_wal_has_status,
     get_node_status,
     make_experiment_definition,
@@ -41,10 +38,7 @@ pytestmark = pytest.mark.integration
 
 def _cleanup_run(sample_id, defn_id) -> None:  # type: ignore[no-untyped-def]
     with get_session() as session:
-        for mut in session.exec(
-            select(SampleGraphMutation).where(SampleGraphMutation.sample_id == sample_id)
-        ).all():
-            session.delete(mut)
+        delete_typed_sample_wal(session, sample_id)
         for edge in session.exec(
             select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)
         ).all():
