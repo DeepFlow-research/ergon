@@ -3,19 +3,19 @@
 from collections import deque
 from uuid import UUID
 
-from ergon_core.core.persistence.graph.models import RunGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphNode
 from sqlmodel import Session, select
 
 
 def descendants(
     session: Session,
     *,
-    run_id: UUID,
+    sample_id: UUID,
     root_task_id: UUID,
     max_depth: int | None = None,
-) -> list[RunGraphNode]:
+) -> list[SampleGraphNode]:
     """Return containment descendants under root_task_id in breadth-first order."""
-    result: list[RunGraphNode] = []
+    result: list[SampleGraphNode] = []
     queue: deque[tuple[UUID, int]] = deque([(root_task_id, 0)])
 
     while queue:
@@ -25,9 +25,9 @@ def descendants(
 
         children = list(
             session.exec(
-                select(RunGraphNode).where(
-                    RunGraphNode.run_id == run_id,
-                    RunGraphNode.parent_task_id == parent_id,
+                select(SampleGraphNode).where(
+                    SampleGraphNode.sample_id == sample_id,
+                    SampleGraphNode.parent_task_id == parent_id,
                 )
             ).all()
         )
@@ -41,7 +41,7 @@ def descendants(
 def descendant_ids(
     session: Session,
     *,
-    run_id: UUID,
+    sample_id: UUID,
     root_task_id: UUID,
     max_depth: int | None = None,
 ) -> set[UUID]:
@@ -50,7 +50,7 @@ def descendant_ids(
         node.task_id
         for node in descendants(
             session,
-            run_id=run_id,
+            sample_id=sample_id,
             root_task_id=root_task_id,
             max_depth=max_depth,
         )

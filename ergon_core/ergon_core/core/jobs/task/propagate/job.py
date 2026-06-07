@@ -11,7 +11,7 @@ from ergon_core.core.application.runtime.orchestration import (
     PropagateTaskCompletionCommand,
     WorkflowTerminalState,
 )
-from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
+from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
 from ergon_core.core.jobs._events import JobEvent, send_job_events
 from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.core.jobs.workflow.complete.contract import WorkflowCompletedEvent
@@ -26,13 +26,13 @@ logger = logging.getLogger(__name__)
 
 
 async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateResult:
-    logger.info("task-propagate run_id=%s task_id=%s", payload.run_id, payload.task_id)
+    logger.info("task-propagate sample_id=%s task_id=%s", payload.sample_id, payload.task_id)
     span_start = datetime.now(UTC)
 
     svc = WorkflowService()
     propagation = await svc.propagate(
         PropagateTaskCompletionCommand(
-            run_id=payload.run_id,
+            sample_id=payload.sample_id,
             definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=payload.execution_id,
@@ -43,7 +43,7 @@ async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateRe
         (
             TaskReadyEvent.name,
             TaskReadyEvent(
-                run_id=payload.run_id,
+                sample_id=payload.sample_id,
                 definition_id=payload.definition_id,
                 task_id=td.task_id,
             ).model_dump(mode="json"),
@@ -56,7 +56,7 @@ async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateRe
             (
                 WorkflowCompletedEvent.name,
                 WorkflowCompletedEvent(
-                    run_id=payload.run_id,
+                    sample_id=payload.sample_id,
                     definition_id=payload.definition_id,
                 ).model_dump(mode="json"),
             )
@@ -66,7 +66,7 @@ async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateRe
             (
                 WorkflowFailedEvent.name,
                 WorkflowFailedEvent(
-                    run_id=payload.run_id,
+                    sample_id=payload.sample_id,
                     definition_id=payload.definition_id,
                     error="Workflow failed during task propagation",
                 ).model_dump(mode="json"),
@@ -76,7 +76,7 @@ async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateRe
     await send_job_events(events)
 
     result = TaskPropagateResult(
-        run_id=payload.run_id,
+        sample_id=payload.sample_id,
         task_id=payload.task_id,
         newly_ready_tasks=len(propagation.ready_tasks),
         workflow_complete=(propagation.workflow_terminal_state == WorkflowTerminalState.COMPLETED),
@@ -86,11 +86,11 @@ async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateRe
     get_trace_sink().emit_span(
         CompletedSpan(
             name="task.propagate",
-            context=task_propagate_context(payload.run_id, payload.task_id),
+            context=task_propagate_context(payload.sample_id, payload.task_id),
             start_time=span_start,
             end_time=datetime.now(UTC),
             attributes={
-                "run_id": str(payload.run_id),
+                "sample_id": str(payload.sample_id),
                 "task_id": str(payload.task_id),
                 "newly_ready_tasks": len(propagation.ready_tasks),
                 "workflow_terminal": str(propagation.workflow_terminal_state),
@@ -103,8 +103,8 @@ async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateRe
 
 async def run_propagate_task_failure_job(payload: TaskFailedEvent) -> TaskPropagateResult:
     logger.info(
-        "task-failure-propagate run_id=%s task_id=%s error=%s",
-        payload.run_id,
+        "task-failure-propagate sample_id=%s task_id=%s error=%s",
+        payload.sample_id,
         payload.task_id,
         payload.error,
     )
@@ -112,7 +112,7 @@ async def run_propagate_task_failure_job(payload: TaskFailedEvent) -> TaskPropag
     svc = WorkflowService()
     propagation = await svc.propagate_failure(
         PropagateTaskCompletionCommand(
-            run_id=payload.run_id,
+            sample_id=payload.sample_id,
             definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=payload.execution_id,
@@ -127,7 +127,7 @@ async def run_propagate_task_failure_job(payload: TaskFailedEvent) -> TaskPropag
             (
                 WorkflowFailedEvent.name,
                 WorkflowFailedEvent(
-                    run_id=payload.run_id,
+                    sample_id=payload.sample_id,
                     definition_id=payload.definition_id,
                     error=payload.error,
                 ).model_dump(mode="json"),
@@ -137,7 +137,7 @@ async def run_propagate_task_failure_job(payload: TaskFailedEvent) -> TaskPropag
     await send_job_events(failure_events)
 
     result = TaskPropagateResult(
-        run_id=payload.run_id,
+        sample_id=payload.sample_id,
         task_id=payload.task_id,
         newly_ready_tasks=0,
         workflow_complete=False,

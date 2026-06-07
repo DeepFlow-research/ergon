@@ -2,7 +2,7 @@
 
 Unlike stub-worker (which returns a plain string with no turns), this
 worker generates fake token-level data that exercises the full trajectory
-extraction pipeline: RunContextEvent persistence, logprob storage,
+extraction pipeline: SampleContextEvent persistence, logprob storage,
 and rollout_func return formatting.
 
 Use with ``--worker training-stub`` for CPU-only integration tests of

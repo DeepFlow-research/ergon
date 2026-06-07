@@ -57,11 +57,11 @@ def handle_experiment_show(args: Namespace) -> int:
     if detail.sample_selection:
         lines.append(f"SAMPLE_SELECTION={detail.sample_selection}")
     if detail.runs:
-        lines.append("RUNS")
+        lines.append("SAMPLES")
         lines.extend(
             "\t".join(
                 [
-                    str(run.run_id),
+                    str(run.sample_id),
                     run.instance_key,
                     run.status,
                     "" if run.model_target is None else run.model_target,
@@ -78,7 +78,7 @@ def handle_experiment_list(args: Namespace) -> int:
     if not experiments:
         print("No experiments found.")
         return exit_codes.OK
-    lines = ["DEFINITION_ID\tNAME\tBENCHMARK\tSTATUS\tSAMPLES\tRUNS\tMODEL"]
+    lines = ["DEFINITION_ID\tNAME\tBENCHMARK\tSTATUS\tSAMPLES\tATTEMPTS\tMODEL"]
     lines.extend(
         "\t".join(
             [

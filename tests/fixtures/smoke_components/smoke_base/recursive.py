@@ -12,7 +12,7 @@ from uuid import UUID
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
 from ergon_core.api.worker import WorkerOutput
-from ergon_core.core.persistence.graph.models import RunGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
 from ergon_core.core.application.communication.models import CreateMessageRequest
@@ -104,7 +104,7 @@ class RecursiveSmokeWorkerBase(Worker):
         task_slug = self._lookup_task_slug(context.task_id)
         await communication_service.save_message(
             CreateMessageRequest(
-                run_id=context.run_id,
+                sample_id=context.sample_id,
                 task_execution_id=context.execution_id,
                 from_agent_id=f"leaf-{task_slug}",
                 to_agent_id="parent",
@@ -118,7 +118,9 @@ class RecursiveSmokeWorkerBase(Worker):
         if task_id is None:
             return "unknown"
         with get_session() as session:
-            node = session.exec(select(RunGraphNode).where(RunGraphNode.task_id == task_id)).first()
+            node = session.exec(
+                select(SampleGraphNode).where(SampleGraphNode.task_id == task_id)
+            ).first()
         return node.task_slug if node is not None else f"node-{task_id.hex[:8]}"
 
 

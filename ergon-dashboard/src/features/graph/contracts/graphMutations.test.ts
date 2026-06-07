@@ -10,12 +10,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { EdgeAddedValueSchema, MutationTypeSchema } from "./graphMutations";
 import { applyGraphMutation, createReplayInitialState, replayToSequence } from "../state/graphMutationReducer";
-import type { WorkflowRunState } from "@/lib/types";
+import type { SampleWorkspaceState } from "@/lib/types";
 import { TaskStatus } from "@/lib/types";
 import type { DashboardGraphMutationData } from "@/lib/contracts/events";
 import type { GraphMutationDto } from "./graphMutations";
 
-function emptyState(): WorkflowRunState {
+function emptyState(): SampleWorkspaceState {
   return {
     id: "run-test",
     definitionId: "00000000-0000-0000-0000-000000000000",
@@ -98,7 +98,7 @@ function syntheticMutation(
 
   return {
     id: "77777777-7777-4777-8777-777777777777",
-    run_id: "00000000-0000-0000-0000-000000000000",
+    sample_id: "00000000-0000-0000-0000-000000000000",
     sequence: 1,
     mutation_type: mutationType as DashboardGraphMutationData["mutation_type"],
     target_type: "node",
@@ -151,7 +151,7 @@ test("edge.added accepts backend source_task_id and target_task_id payloads", ()
 
   const next = applyGraphMutation(state, {
     id: "77777777-7777-4777-8777-777777777778",
-    run_id: "00000000-0000-0000-0000-000000000000",
+    sample_id: "00000000-0000-0000-0000-000000000000",
     sequence: 3,
     mutation_type: "edge.added",
     target_type: "edge",
@@ -253,7 +253,7 @@ test("replay base preserves snapshot hierarchy while dependency edges remain dep
     graphNodeAdded(2, "33333333-3333-4333-8333-333333333333", "dependent"),
     {
       id: "44444444-4444-4444-8444-444444444444",
-      run_id: "00000000-0000-0000-0000-000000000000",
+      sample_id: "00000000-0000-0000-0000-000000000000",
       sequence: 3,
       mutation_type: "edge.added",
       target_type: "edge",
@@ -350,7 +350,7 @@ test("replay base does not leak future dependency edges or node field changes", 
     graphNodeAdded(2, "33333333-3333-4333-8333-333333333333", "target"),
     {
       id: "66666666-6666-4666-8666-666666666666",
-      run_id: "00000000-0000-0000-0000-000000000000",
+      sample_id: "00000000-0000-0000-0000-000000000000",
       sequence: 3,
       mutation_type: "node.field_changed",
       target_type: "node",
@@ -363,7 +363,7 @@ test("replay base does not leak future dependency edges or node field changes", 
     },
     {
       id: "77777777-7777-4777-8777-777777777777",
-      run_id: "00000000-0000-0000-0000-000000000000",
+      sample_id: "00000000-0000-0000-0000-000000000000",
       sequence: 4,
       mutation_type: "edge.added",
       target_type: "edge",
@@ -439,7 +439,7 @@ test("dependency edges between root-level tasks do not become containment", () =
     graphNodeAdded(1, "33333333-3333-4333-8333-333333333333", "target"),
     {
       id: "88888888-8888-4888-8888-888888888888",
-      run_id: "00000000-0000-0000-0000-000000000000",
+      sample_id: "00000000-0000-0000-0000-000000000000",
       sequence: 2,
       mutation_type: "edge.added",
       target_type: "edge",
@@ -474,7 +474,7 @@ function graphNodeAdded(
 ): GraphMutationDto {
   return {
     id: `55555555-5555-4555-8555-55555555555${sequence}`,
-    run_id: "00000000-0000-0000-0000-000000000000",
+    sample_id: "00000000-0000-0000-0000-000000000000",
     sequence,
     mutation_type: "node.added",
     target_type: "node",

@@ -30,18 +30,18 @@ class RuntimeEventDispatcher:
     async def dispatch_task_ready(
         self,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         definition_id: UUID,
         task_id: UUID,
     ) -> None:
         """Emit the canonical ``task/ready`` event for a committed task state."""
         if self._task_ready_dispatcher is not None:
-            await self._task_ready_dispatcher(run_id, definition_id, task_id)
+            await self._task_ready_dispatcher(sample_id, definition_id, task_id)
             logger.info("dispatch_task_ready: fired custom dispatcher for task %s", task_id)
             return
 
         event = TaskReadyEvent(
-            run_id=run_id,
+            sample_id=sample_id,
             definition_id=definition_id,
             task_id=task_id,
         )

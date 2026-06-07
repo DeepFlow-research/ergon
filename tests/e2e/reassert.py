@@ -1,4 +1,4 @@
-"""Re-run smoke assertions against an already-completed run_id.
+"""Re-run smoke assertions against an already-completed sample_id.
 
 Lets you iterate on assertion logic (or debug a failing assertion) without
 re-submitting the whole experiment through E2B — a 60s sandbox run becomes a
@@ -43,8 +43,8 @@ register_smoke_fixtures()
 from tests.e2e._asserts import (
     _assert_blob_roundtrip,
     _assert_run_evaluation,
-    _assert_run_graph,
-    _assert_run_resources,
+    _assert_sample_graph,
+    _assert_sample_resources,
     _assert_run_turn_counts,
     _assert_sadpath_evaluation,
     _assert_sadpath_graph_cascade,
@@ -58,8 +58,8 @@ from tests.e2e._asserts import (
 )
 
 HAPPY_ASSERTS = [
-    ("graph", _assert_run_graph),
-    ("resources", _assert_run_resources),
+    ("graph", _assert_sample_graph),
+    ("resources", _assert_sample_resources),
     ("turn_counts", _assert_run_turn_counts),
     ("sandbox_command_wal", _assert_sandbox_command_wal),
     ("sandbox_lifecycle_events", _assert_sandbox_lifecycle_events),
@@ -108,12 +108,12 @@ def main() -> int:
     failed: list[tuple[str, BaseException]] = []
 
     print(
-        f"[smoke_reassert] run_id={args.run_id} env={args.env} kind={args.kind} "
+        f"[smoke_reassert] sample_id={args.sample_id} env={args.env} kind={args.kind} "
         f"→ {len(asserts)} checks",
     )
     for name, fn in asserts:
         try:
-            fn(args.run_id)
+            fn(args.sample_id)
         except BaseException as exc:
             failed.append((name, exc))
             print(f"  ✗ {name}: {type(exc).__name__}: {exc}")

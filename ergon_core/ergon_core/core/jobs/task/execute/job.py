@@ -75,7 +75,7 @@ from ergon_core.core.application.runtime.orchestration import (
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError, NonRetriableError
 from ergon_core.core.jobs._events import send_job_event
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     get_trace_sink,
@@ -95,7 +95,7 @@ async def _prepare_execution(
     async def _prepare() -> PreparedTaskExecution:
         return await svc.prepare(
             PrepareTaskExecutionCommand(
-                run_id=payload.run_id,
+                sample_id=payload.sample_id,
                 definition_id=payload.definition_id,
                 task_id=payload.task_id,
             )
@@ -114,19 +114,19 @@ async def _invoke_sandbox_setup(
         "sandbox-setup",
         function=sandbox_setup_function,
         data=SandboxSetupRequest(
-            run_id=payload.run_id,
+            sample_id=payload.sample_id,
             definition_id=payload.definition_id,
             task_id=payload.task_id,
             benchmark_type=prepared.benchmark_type,
-            sandbox_slug=_load_sandbox_slug(payload.run_id),
+            sandbox_slug=_load_sandbox_slug(payload.sample_id),
         ).model_dump(),
     )
 
 
-def _load_sandbox_slug(run_id: UUID) -> str | None:
+def _load_sandbox_slug(sample_id: UUID) -> str | None:
     session = get_session()
     try:
-        run = session.get(RunRecord, run_id)
+        run = session.get(SampleRecord, sample_id)
         return None if run is None else run.sandbox_slug
     finally:
         session.close()
@@ -142,14 +142,14 @@ async def _invoke_worker_execute(
     if prepared.assigned_worker_slug is None or prepared.worker_type is None:
         raise ContractViolationError(
             "prepared task execution is missing worker identity",
-            run_id=payload.run_id,
+            sample_id=payload.sample_id,
             task_id=payload.task_id,
         )
     return await ctx.step.invoke(
         "worker-execute",
         function=worker_execute_function,
         data=WorkerExecuteJobRequest(
-            run_id=payload.run_id,
+            sample_id=payload.sample_id,
             definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=prepared.execution_id,
@@ -195,7 +195,7 @@ async def _fan_out_evaluators(
     with get_session() as session:
         view = await svc.load_task_view(
             session,
-            run_id=payload.run_id,
+            sample_id=payload.sample_id,
             task_id=payload.task_id,
         )
     if not view.task.evaluators:
@@ -208,7 +208,7 @@ async def _fan_out_evaluators(
                 f"eval-{i}",
                 function=evaluate_task_run_function,
                 data=TaskEvaluateRequest(
-                    run_id=payload.run_id,
+                    sample_id=payload.sample_id,
                     task_id=payload.task_id,
                     execution_id=prepared.execution_id,
                     evaluator_index=i,
@@ -230,14 +230,14 @@ async def _invoke_persist_outputs(
         "persist-outputs",
         function=persist_outputs_function,
         data=PersistOutputsRequest(
-            run_id=payload.run_id,
+            sample_id=payload.sample_id,
             definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=prepared.execution_id,
             sandbox_id=sandbox_result.sandbox_id,
             output_dir=sandbox_result.output_dir,
             benchmark_type=prepared.benchmark_type,
-            sandbox_slug=_load_sandbox_slug(payload.run_id),
+            sandbox_slug=_load_sandbox_slug(payload.sample_id),
         ).model_dump(),
     )
 
@@ -250,7 +250,7 @@ async def _emit_task_completed(
     await send_job_event(
         TaskCompletedEvent.name,
         TaskCompletedEvent(
-            run_id=payload.run_id,
+            sample_id=payload.sample_id,
             definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=prepared.execution_id,
@@ -268,7 +268,7 @@ async def _emit_task_failed(
     await send_job_event(
         TaskFailedEvent.name,
         TaskFailedEvent(
-            run_id=payload.run_id,
+            sample_id=payload.sample_id,
             definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=prepared.execution_id,
@@ -290,7 +290,7 @@ async def run_execute_task_job(
     persist_outputs_function: Any,
     evaluate_task_run_function: Any,
 ) -> TaskExecuteResult:
-    logger.info("task-execute run_id=%s task_id=%s", payload.run_id, payload.task_id)
+    logger.info("task-execute sample_id=%s task_id=%s", payload.sample_id, payload.task_id)
     span_start = datetime.now(UTC)
 
     svc = TaskExecutionService()
@@ -311,7 +311,7 @@ async def run_execute_task_job(
             raise ContractViolationError(
                 "Skipped task execution cannot emit task/completed without a real sandbox_id. "
                 "Introduce a first-class task/skipped event before supporting skipped tasks.",
-                run_id=payload.run_id,
+                sample_id=payload.sample_id,
                 task_id=payload.task_id,
             )
 
@@ -319,7 +319,7 @@ async def run_execute_task_job(
         if not sandbox_result.sandbox_id:
             raise ContractViolationError(
                 "sandbox-setup returned empty sandbox_id",
-                run_id=payload.run_id,
+                sample_id=payload.sample_id,
                 task_id=payload.task_id,
             )
         task_sandbox_id = sandbox_result.sandbox_id
@@ -336,7 +336,7 @@ async def run_execute_task_job(
             await svc.finalize_failure(
                 FailTaskExecutionCommand(
                     execution_id=prepared.execution_id,
-                    run_id=payload.run_id,
+                    sample_id=payload.sample_id,
                     task_id=payload.task_id,
                     error_message=error_msg,
                     error_json=worker_result.error_json,
@@ -344,7 +344,7 @@ async def run_execute_task_job(
             )
             await _emit_task_failed(payload, prepared, error_msg, task_sandbox_id)
             return TaskExecuteResult(
-                run_id=payload.run_id,
+                sample_id=payload.sample_id,
                 task_id=payload.task_id,
                 execution_id=prepared.execution_id,
                 success=False,
@@ -376,7 +376,7 @@ async def run_execute_task_job(
         if task_sandbox_id is None:
             raise ContractViolationError(
                 "task_sandbox_id is None after sandbox-setup completed",
-                run_id=payload.run_id,
+                sample_id=payload.sample_id,
                 task_id=payload.task_id,
             )
         await _emit_task_completed(payload, prepared, task_sandbox_id)
@@ -384,11 +384,11 @@ async def run_execute_task_job(
         get_trace_sink().emit_span(
             CompletedSpan(
                 name="task.execute",
-                context=task_execute_context(payload.run_id, prepared.task_id),
+                context=task_execute_context(payload.sample_id, prepared.task_id),
                 start_time=span_start,
                 end_time=datetime.now(UTC),
                 attributes={
-                    "run_id": str(payload.run_id),
+                    "sample_id": str(payload.sample_id),
                     "definition_id": str(payload.definition_id),
                     "task_id": str(prepared.task_id),
                     "execution_id": str(prepared.execution_id),
@@ -404,7 +404,7 @@ async def run_execute_task_job(
         )
 
         return TaskExecuteResult(
-            run_id=payload.run_id,
+            sample_id=payload.sample_id,
             task_id=payload.task_id,
             execution_id=prepared.execution_id,
             success=True,
@@ -421,7 +421,7 @@ async def run_execute_task_job(
             await svc.finalize_failure(
                 FailTaskExecutionCommand(
                     execution_id=prepared.execution_id,
-                    run_id=payload.run_id,
+                    sample_id=payload.sample_id,
                     task_id=payload.task_id,
                     error_message=error_msg,
                     error_json={
@@ -448,13 +448,13 @@ async def run_execute_task_job(
             get_trace_sink().emit_span(
                 CompletedSpan(
                     name="task.execute",
-                    context=task_execute_context(payload.run_id, prepared.task_id),
+                    context=task_execute_context(payload.sample_id, prepared.task_id),
                     start_time=span_start,
                     end_time=datetime.now(UTC),
                     status_code="error",
                     status_message=truncate_text(error_msg),
                     attributes={
-                        "run_id": str(payload.run_id),
+                        "sample_id": str(payload.sample_id),
                         "definition_id": str(payload.definition_id),
                         "task_id": str(prepared.task_id),
                         "execution_id": str(prepared.execution_id),

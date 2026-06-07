@@ -19,8 +19,8 @@ from ergon_core.core.persistence.definitions.models import ExperimentDefinitionE
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.ids import new_id
 from ergon_core.core.persistence.telemetry.models import (
-    RunRecord,
-    RunTaskEvaluation,
+    SampleRecord,
+    SampleTaskEvaluation,
 )
 from pydantic import BaseModel
 from sqlmodel import Session, select
@@ -42,7 +42,7 @@ class PersistedEvaluation(BaseModel):
 
     summary: EvaluationSummary
     evaluation_id: UUID
-    run_id: UUID
+    sample_id: UUID
     task_id: UUID
     total_score: float
     created_at: datetime
@@ -103,7 +103,7 @@ class EvaluationService:
     async def persist_success(
         self,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         task_execution_id: UUID,
         task_id: UUID,
         binding_key: str,
@@ -114,10 +114,10 @@ class EvaluationService:
         result = service_result.result
         session = get_session()
         try:
-            evaluator_id = self.lookup_evaluator_id(session, run_id, binding_key)
+            evaluator_id = self.lookup_evaluator_id(session, sample_id, binding_key)
             evaluation = await _create_task_evaluation(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_execution_id=task_execution_id,
                 task_id=task_id,
                 definition_evaluator_id=evaluator_id,
@@ -126,13 +126,13 @@ class EvaluationService:
                 feedback=result.feedback,
                 summary_json=summary.model_dump(mode="json"),
             )
-            self._refresh_run_evaluation_summary(session, run_id)
+            self._refresh_run_evaluation_summary(session, sample_id)
             session.commit()
             session.refresh(evaluation)
             return PersistedEvaluation(
                 summary=summary,
                 evaluation_id=evaluation.id,
-                run_id=evaluation.run_id,
+                sample_id=evaluation.sample_id,
                 task_id=evaluation.task_id,
                 total_score=0.0 if evaluation.score is None else evaluation.score,
                 created_at=evaluation.created_at,
@@ -143,7 +143,7 @@ class EvaluationService:
     async def persist_failure(
         self,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         task_execution_id: UUID,
         task_id: UUID,
         binding_key: str,
@@ -160,10 +160,10 @@ class EvaluationService:
         )
         session = get_session()
         try:
-            evaluator_id = self.lookup_evaluator_id(session, run_id, binding_key)
+            evaluator_id = self.lookup_evaluator_id(session, sample_id, binding_key)
             await _create_task_evaluation(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_execution_id=task_execution_id,
                 task_id=task_id,
                 definition_evaluator_id=evaluator_id,
@@ -172,7 +172,7 @@ class EvaluationService:
                 feedback=f"{error_type}: {exc}",
                 summary_json=summary.model_dump(mode="json"),
             )
-            self._refresh_run_evaluation_summary(session, run_id)
+            self._refresh_run_evaluation_summary(session, sample_id)
             session.commit()
         finally:
             session.close()
@@ -180,7 +180,7 @@ class EvaluationService:
     def lookup_evaluator_id(
         self,
         session: Session,
-        run_id: UUID,
+        sample_id: UUID,
         binding_key: str,
         *,
         evaluator_type: str | None = None,
@@ -192,17 +192,17 @@ class EvaluationService:
         inline ``task.evaluators[i]`` object and passes only its
         ``evaluator.name``. The persistence layer needs the normalized
         evaluator id for the FK on
-        ``run_task_evaluations.definition_evaluator_id``.
+        ``sample_task_evaluations.definition_evaluator_id``.
 
         The normalized evaluator row remains the persistence/read-model
         target for evaluation summaries, even though runtime dispatch
         executes the inline evaluator from ``task.evaluators``.
         """
 
-        run = session.get(RunRecord, run_id)
+        run = session.get(SampleRecord, sample_id)
         if run is None:
             raise ContractViolationError(
-                f"RunRecord {run_id} not found while resolving evaluator id"
+                f"SampleRecord {sample_id} not found while resolving evaluator id"
             )
         evaluator_def = session.exec(
             select(ExperimentDefinitionEvaluator).where(
@@ -222,11 +222,11 @@ class EvaluationService:
             session.flush()
         return evaluator_def.id
 
-    def _refresh_run_evaluation_summary(self, session: Session, run_id: UUID) -> None:
-        run = session.get(RunRecord, run_id)
+    def _refresh_run_evaluation_summary(self, session: Session, sample_id: UUID) -> None:
+        run = session.get(SampleRecord, sample_id)
         if run is None:
             return
-        evaluations = _list_task_evaluations(session, run_id)
+        evaluations = _list_task_evaluations(session, sample_id)
         score_summary = self.summarize_scores(evaluations)
         existing_summary = dict({} if run.summary_json is None else run.summary_json)
         existing_summary.update(
@@ -241,15 +241,15 @@ class EvaluationService:
         session.flush()
 
 
-def _list_task_evaluations(session: Session, run_id: UUID) -> list[RunTaskEvaluation]:
-    stmt = select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)
+def _list_task_evaluations(session: Session, sample_id: UUID) -> list[SampleTaskEvaluation]:
+    stmt = select(SampleTaskEvaluation).where(SampleTaskEvaluation.sample_id == sample_id)
     return list(session.exec(stmt).all())
 
 
 async def _create_task_evaluation(
     session: Session,
     *,
-    run_id: UUID,
+    sample_id: UUID,
     task_execution_id: UUID,
     task_id: UUID,
     definition_evaluator_id: UUID,
@@ -257,10 +257,10 @@ async def _create_task_evaluation(
     passed: bool | None = None,
     feedback: str | None = None,
     summary_json: dict | None = None,
-) -> RunTaskEvaluation:
-    evaluation = RunTaskEvaluation(
+) -> SampleTaskEvaluation:
+    evaluation = SampleTaskEvaluation(
         id=new_id(),
-        run_id=run_id,
+        sample_id=sample_id,
         task_execution_id=task_execution_id,
         task_id=task_id,
         definition_evaluator_id=definition_evaluator_id,

@@ -7,10 +7,10 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
 )
-from ergon_core.core.persistence.context.models import RunContextEvent
-from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.context.models import SampleContextEvent
+from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.shared.enums import SampleStatus
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.core.shared.context_parts import (
     AssistantTextPart,
     ContextPartChunkLog,
@@ -28,8 +28,8 @@ def session_factory():
     _ = ExperimentDefinition
     _ = ExperimentDefinitionInstance
     _ = ExperimentDefinitionTask
-    _ = RunContextEvent
-    _ = RunGraphNode
+    _ = SampleContextEvent
+    _ = SampleGraphNode
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -72,14 +72,14 @@ def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory
                     instance_key=instance_key,
                 )
             )
-        for run_id, instance_key, status, started, completed, score, cost in [
-            (run_a_id, "a", RunStatus.COMPLETED, now, now + timedelta(seconds=10), 1.0, 0.2),
-            (run_b_id, "b", RunStatus.FAILED, now, now + timedelta(seconds=20), 0.0, 0.3),
-            (run_c_id, "c", RunStatus.EXECUTING, now, None, None, None),
+        for sample_id, instance_key, status, started, completed, score, cost in [
+            (run_a_id, "a", SampleStatus.COMPLETED, now, now + timedelta(seconds=10), 1.0, 0.2),
+            (run_b_id, "b", SampleStatus.FAILED, now, now + timedelta(seconds=20), 0.0, 0.3),
+            (run_c_id, "c", SampleStatus.EXECUTING, now, None, None, None),
         ]:
             session.add(
-                RunRecord(
-                    id=run_id,
+                SampleRecord(
+                    id=sample_id,
                     definition_id=definition_id,
                     benchmark_type="ci-benchmark",
                     instance_key=instance_key,
@@ -102,8 +102,8 @@ def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory
             )
             for index in range(2):
                 session.add(
-                    RunGraphNode(
-                        run_id=run_id,
+                    SampleGraphNode(
+                        sample_id=sample_id,
                         instance_key=instance_key,
                         task_slug=f"{instance_key}-{index}",
                         description="Task",
@@ -134,7 +134,7 @@ def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory
 def test_experiment_run_rows_project_nested_metrics(monkeypatch, session_factory) -> None:
     now = datetime(2026, 4, 27, 12, 0, tzinfo=UTC)
     definition_id = uuid4()
-    run_id = uuid4()
+    sample_id = uuid4()
     execution_id = uuid4()
 
     with session_factory() as session:
@@ -148,8 +148,8 @@ def test_experiment_run_rows_project_nested_metrics(monkeypatch, session_factory
             )
         )
         session.add(
-            RunRecord(
-                id=run_id,
+            SampleRecord(
+                id=sample_id,
                 definition_id=definition_id,
                 benchmark_type="metric-benchmark",
                 instance_key="sample-1",
@@ -157,7 +157,7 @@ def test_experiment_run_rows_project_nested_metrics(monkeypatch, session_factory
                 worker_team_json={"primary": "ci-worker"},
                 evaluator_slug="metric-evaluator",
                 model_target="openai:gpt-4o",
-                status=RunStatus.COMPLETED,
+                status=SampleStatus.COMPLETED,
                 started_at=now,
                 completed_at=now + timedelta(seconds=3),
                 summary_json={
@@ -168,8 +168,8 @@ def test_experiment_run_rows_project_nested_metrics(monkeypatch, session_factory
             )
         )
         session.add(
-            RunGraphNode(
-                run_id=run_id,
+            SampleGraphNode(
+                sample_id=sample_id,
                 instance_key="sample-1",
                 task_slug="root",
                 description="Task",
@@ -179,8 +179,8 @@ def test_experiment_run_rows_project_nested_metrics(monkeypatch, session_factory
             )
         )
         session.add(
-            RunContextEvent(
-                run_id=run_id,
+            SampleContextEvent(
+                sample_id=sample_id,
                 task_execution_id=execution_id,
                 worker_binding_key="ci-worker",
                 sequence=0,
@@ -194,8 +194,8 @@ def test_experiment_run_rows_project_nested_metrics(monkeypatch, session_factory
             )
         )
         session.add(
-            RunContextEvent(
-                run_id=run_id,
+            SampleContextEvent(
+                sample_id=sample_id,
                 task_execution_id=execution_id,
                 worker_binding_key="ci-worker",
                 sequence=1,
@@ -222,7 +222,7 @@ def test_experiment_run_rows_project_nested_metrics(monkeypatch, session_factory
     row = detail.runs[0]
     assert row.running_time_ms == 3_000
     assert row.total_cost_usd is None
-    assert row.metrics.run_id == run_id
+    assert row.metrics.sample_id == sample_id
     assert row.metrics.run_name == "sample label"
     assert row.metrics.status == "completed"
     assert row.metrics.sample_label == "sample label"
@@ -266,20 +266,20 @@ def test_experiment_detail_groups_runs_by_experiment_tag(monkeypatch, session_fa
                 metadata_json={"experiment": "group-alpha"},
             )
         )
-        for run_id, definition_id, experiment in (
+        for sample_id, definition_id, experiment in (
             (grouped_run_a, definition_a, "group-alpha"),
             (grouped_run_b, definition_b, "group-alpha"),
             (ungrouped_run, definition_a, "other-group"),
         ):
             session.add(
-                RunRecord(
-                    id=run_id,
+                SampleRecord(
+                    id=sample_id,
                     definition_id=definition_id,
                     benchmark_type="ci-benchmark",
-                    instance_key=str(run_id),
+                    instance_key=str(sample_id),
                     worker_team_json={},
                     experiment=experiment,
-                    status=RunStatus.COMPLETED,
+                    status=SampleStatus.COMPLETED,
                 )
             )
         session.commit()
@@ -289,7 +289,7 @@ def test_experiment_detail_groups_runs_by_experiment_tag(monkeypatch, session_fa
     detail = ExperimentReadService().get_experiment(definition_a)
 
     assert detail is not None
-    assert {run.run_id for run in detail.runs} == {grouped_run_a, grouped_run_b}
+    assert {run.sample_id for run in detail.runs} == {grouped_run_a, grouped_run_b}
     assert detail.experiment.run_count == 2
     assert detail.analytics.total_runs == 2
 
@@ -365,10 +365,10 @@ def test_list_experiments_projects_aggregate_lifecycle_status(monkeypatch, sessi
             )
         )
         for index, status in enumerate(
-            (RunStatus.COMPLETED, RunStatus.COMPLETED, RunStatus.FAILED)
+            (SampleStatus.COMPLETED, SampleStatus.COMPLETED, SampleStatus.FAILED)
         ):
             session.add(
-                RunRecord(
+                SampleRecord(
                     definition_id=definition_id,
                     benchmark_type="ci-benchmark",
                     instance_key=f"sample-{index}",

@@ -15,7 +15,7 @@ from ergon_core.core.application.runtime.orchestration import (
 @pytest.mark.asyncio
 async def test_failed_task_propagation_does_not_terminate_sandbox_directly() -> None:
     payload = TaskFailedEvent(
-        run_id=uuid4(),
+        sample_id=uuid4(),
         definition_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
@@ -23,7 +23,7 @@ async def test_failed_task_propagation_does_not_terminate_sandbox_directly() -> 
         sandbox_id="sandbox-real",
     )
     propagation = PropagationResult(
-        run_id=payload.run_id,
+        sample_id=payload.sample_id,
         definition_id=payload.definition_id,
         completed_task_id=payload.task_id,
         ready_tasks=[],

@@ -249,7 +249,7 @@ def _resources(
 
 
 def _source_run_id(record: Record, *, fallback_id: str) -> str:
-    value = record.get("trajectory_id") or record.get("source_run_id") or record.get("run_id")
+    value = record.get("trajectory_id") or record.get("source_run_id") or record.get("sample_id")
     return fallback_id if value is None else str(value)
 
 

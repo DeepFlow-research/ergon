@@ -37,7 +37,7 @@ def _write_minimal_rollout(
     (root / "manifest.json").write_text(
         json.dumps(
             {
-                "run_id": str(uuid4()),
+                "sample_id": str(uuid4()),
                 "benchmark": "researchrubrics",
                 "worker": "researchrubrics-researcher",
                 "evaluator": "research-rubric",
@@ -47,16 +47,16 @@ def _write_minimal_rollout(
                 "wall_clock": {"duration_seconds": 1.0},
                 "screenshots": {},
                 "db_row_counts": {
-                    "run_task_executions": task_count,
-                    "run_task_evaluations": len(evaluation_rows or []),
-                    "run_resources": len(resources),
-                    "run_graph_nodes": task_count,
+                    "sample_task_attempts": task_count,
+                    "sample_task_evaluations": len(evaluation_rows or []),
+                    "sample_resources": len(resources),
+                    "sample_graph_nodes": task_count,
                 },
             }
         )
     )
     _write_jsonl(
-        db / "run_task_executions.jsonl",
+        db / "sample_task_attempts.jsonl",
         [
             {
                 "id": execution_ids[idx],
@@ -67,7 +67,7 @@ def _write_minimal_rollout(
         ],
     )
     _write_jsonl(
-        db / "run_graph_nodes.jsonl",
+        db / "sample_graph_nodes.jsonl",
         [
             {
                 "id": str(uuid4()),
@@ -79,8 +79,8 @@ def _write_minimal_rollout(
             for idx in range(task_count)
         ],
     )
-    _write_jsonl(db / "run_resources.jsonl", resources)
-    _write_jsonl(db / "run_task_evaluations.jsonl", evaluation_rows or [])
+    _write_jsonl(db / "sample_resources.jsonl", resources)
+    _write_jsonl(db / "sample_task_evaluations.jsonl", evaluation_rows or [])
 
 
 def test_artifact_health_fails_when_completed_tasks_lack_evaluations(tmp_path: Path) -> None:

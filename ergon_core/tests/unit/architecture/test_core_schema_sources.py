@@ -51,7 +51,7 @@ def test_eval_criterion_status_literal_is_defined_only_in_evaluation_summary() -
 
 
 def test_run_task_dto_does_not_label_worker_slug_as_name() -> None:
-    path = ROOT / "ergon_core/ergon_core/core/views/runs/models.py"
+    path = ROOT / "ergon_core/ergon_core/core/views/samples/models.py"
     text = path.read_text()
     assert "assigned_worker_name" not in text
     assert "assigned_worker_slug" in text
@@ -86,7 +86,7 @@ def test_cancel_cause_literals_live_in_application_event_contracts() -> None:
 
 def test_core_schema_source_imports_are_directional() -> None:
     forbidden_pairs = {
-        "ergon_core.core.views.runs.models": (
+        "ergon_core.core.views.samples.models": (
             "EvalCriterionStatus = Literal",
             "GraphMutationValue =",
         ),
@@ -418,7 +418,7 @@ def test_runtime_services_do_not_import_api_schema_modules() -> None:
         text = path.read_text()
         if (
             "ergon_core.core.infrastructure.http.routes.schemas" in text
-            or "ergon_core.core.infrastructure.http.routes.runs" in text
+            or "ergon_core.core.infrastructure.http.routes.samples" in text
         ):
             offenders.append(str(path.relative_to(ROOT)))
 
@@ -521,7 +521,7 @@ def test_runtime_and_builtins_do_not_use_task_execution_query_bag_for_domain_rea
 
 
 def test_resource_viewer_limits_live_with_read_model_resources() -> None:
-    api_path = ROOT / "ergon_core/ergon_core/core/infrastructure/http/routes/runs.py"
+    api_path = ROOT / "ergon_core/ergon_core/core/infrastructure/http/routes/samples.py"
     resource_path = ROOT / "ergon_core/ergon_core/core/views/resources.py"
 
     assert "_RESOURCE_CONTENT_MAX_BYTES" not in api_path.read_text()
@@ -573,7 +573,7 @@ def test_workflow_lifecycle_has_one_front_door_service() -> None:
             spec = None
         assert spec is None
 
-    workflow_service = ROOT / "ergon_core/ergon_core/core/application/runtime/run_lifecycle.py"
+    workflow_service = ROOT / "ergon_core/ergon_core/core/application/runtime/sample_lifecycle.py"
     text = workflow_service.read_text()
     for method_name in ("initialize", "propagate", "propagate_failure", "finalize"):
         assert f"def {method_name}(" in text

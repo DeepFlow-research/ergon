@@ -202,10 +202,10 @@ class SmokePublicSandbox(Sandbox):
         SmokeSandboxManager.set_event_sink(DefaultSandboxManager._event_sink)
         manager = SmokeSandboxManager()
         sandbox_key = uuid4()
-        run_id = uuid4()
+        sample_id = uuid4()
         await manager.create(
             sandbox_key=sandbox_key,
-            run_id=run_id,
+            sample_id=sample_id,
             timeout_minutes=(self.timeout_seconds or 1800) // 60,
             envs=self.env if self.env else None,
             display_task_id=sandbox_key,
@@ -237,7 +237,7 @@ class SmokeSandboxManager(BaseSandboxManager):
     async def create(
         self,
         sandbox_key: UUID,
-        run_id: UUID,
+        sample_id: UUID,
         timeout_minutes: int = 30,
         envs: dict[str, str] | None = None,
         display_task_id: UUID | None = None,
@@ -257,12 +257,12 @@ class SmokeSandboxManager(BaseSandboxManager):
         self._sandbox_ids[sandbox_id] = sandbox_key
         self._tempdirs[sandbox_key] = tempdir
         self._ensure_registries(sandbox_key)
-        self._run_ids[sandbox_key] = run_id
+        self._sample_ids[sandbox_key] = sample_id
         self._display_task_ids[sandbox_key] = display_task_id
         self._sandbox_manager_classes[sandbox_key] = type(self)
 
         await self._event_sink.sandbox_created(
-            run_id=run_id,
+            sample_id=sample_id,
             task_id=display_task_id,
             sandbox_id=sandbox_id,
             timeout_minutes=timeout_minutes,
@@ -294,22 +294,22 @@ class SmokeSandboxManager(BaseSandboxManager):
             sandbox.sandbox_id if sandbox is not None else f"{_SMOKE_SANDBOX_PREFIX}{task_id}"
         )
         display_task_id = self._get_display_task_id(task_id)
-        run_id = self._run_ids.get(task_id)
+        sample_id = self._sample_ids.get(task_id)
         self._sandbox_ids.pop(sandbox_id, None)
         self._file_registries.pop(task_id, None)
         self._created_files_registry.pop(task_id, None)
-        self._run_ids.pop(task_id, None)
+        self._sample_ids.pop(task_id, None)
         self._display_task_ids.pop(task_id, None)
         self._sandbox_manager_classes.pop(task_id, None)
         tempdir = self._tempdirs.pop(task_id, None)
         if tempdir is not None:
             tempdir.cleanup()
-        if run_id is not None:
+        if sample_id is not None:
             await self._event_sink.sandbox_closed(
                 task_id=display_task_id,
                 sandbox_id=sandbox_id,
                 reason=reason,
-                run_id=run_id,
+                sample_id=sample_id,
             )
 
 

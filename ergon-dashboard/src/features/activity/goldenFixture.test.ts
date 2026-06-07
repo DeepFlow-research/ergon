@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import fixture from "../../../tests/fixtures/mas-runs/concurrent-mas-run.json";
+import fixture from "../../../tests/fixtures/mas-samples/concurrent-mas-run.json";
 import { parseGraphMutationDtoArray } from "@/features/graph/contracts/graphMutations";
 import { replayToSequence } from "@/features/graph/state/graphMutationReducer";
-import { buildRunEvents } from "@/lib/runEvents";
-import { deserializeRunState } from "@/lib/runState";
-import type { WorkflowRunState } from "@/lib/types";
+import { buildRunEvents } from "@/lib/sampleEvents";
+import { deserializeRunState } from "@/lib/sampleState";
+import type { SampleWorkspaceState } from "@/lib/types";
 import { buildRunActivities } from "./buildRunActivities";
 import { stackActivities } from "./stackLayout";
 
-function emptyRunStateFrom(runState: WorkflowRunState): WorkflowRunState {
+function emptyRunStateFrom(runState: SampleWorkspaceState): SampleWorkspaceState {
   return {
     ...runState,
     tasks: new Map(),

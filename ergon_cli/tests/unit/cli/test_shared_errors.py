@@ -16,4 +16,4 @@ def test_parse_uuid_returns_uuid_or_usage_error() -> None:
         "00000000-0000-0000-0000-000000000000"
     )
     with pytest.raises(CliUsageError):
-        parse_uuid("not-a-uuid", field_name="run_id")
+        parse_uuid("not-a-uuid", field_name="sample_id")

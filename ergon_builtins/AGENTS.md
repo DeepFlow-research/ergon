@@ -31,10 +31,10 @@ Which worker emits what.  `—` = not applicable, `✗` = nothing emitted.
 | Worker | GENERATIONS | OUTPUTS | SANDBOX | COMMUNICATION |
 |---|---|---|---|---|
 | `training-stub` | ✓ (multi-turn synthetic w/ logprobs) | ✗ | ✗ | ✗ |
-| `canonical-smoke` | ✓ | ✓ (per-env leaf RunResource) | ✓ (via per-env leaf) | ✗ |
+| `canonical-smoke` | ✓ | ✓ (per-env leaf SampleResource) | ✓ (via per-env leaf) | ✗ |
 | `react-v1` | ✓ | ✗ | ✗ | ✓ (system/user/assistant/thinking/tool calls) |
 | `minif2f-react` | ✓ | ✓ (proof artifact) | ✓ (Lean files) | ✓ |
-| `researchrubrics-researcher` | ✓ | ✓ (RunResource kind=REPORT) | ✓ (writes `final_output/report.md`) | ✗ |
+| `researchrubrics-researcher` | ✓ | ✓ (SampleResource kind=REPORT) | ✓ (writes `final_output/report.md`) | ✗ |
 
 EVALUATION is populated by whichever **evaluator** you pass with
 `--evaluator`; see table below.
@@ -49,7 +49,7 @@ EVALUATION is populated by whichever **evaluator** you pass with
 | `canonical-smoke` | `workers/stubs/canonical_smoke_worker.py` | per-env leaf + its sandbox | Dispatches to a per-benchmark smoke leaf (`SweBenchSmokeRubric`, `ResearchRubricsSmokeRubric`, `MiniF2FSmokeRubric`) — the RFC 2026-04-21 canonical smoke path. |
 | `react-v1` | `workers/baselines/react_worker.py` | LLM | Generic ReAct-style worker built on pydantic-ai.  Used by most real benchmarks. |
 | `minif2f-react` | `workers/baselines/minif2f_react_worker.py` | LLM + Lean 4 sandbox | ReAct pre-wired with `write_lean_file`, `check_lean_file`, `verify_lean_proof`.  Produces a proof artifact in `WorkerOutput`. |
-| `researchrubrics-researcher` | `workers/research_rubrics/researcher_worker.py` | LLM + E2B sandbox (`ResearchRubricsSandboxManager`) | Writes a research report to `/workspace/final_output/report.md` and publishes it as a RunResource. |
+| `researchrubrics-researcher` | `workers/research_rubrics/researcher_worker.py` | LLM + E2B sandbox (`ResearchRubricsSandboxManager`) | Writes a research report to `/workspace/final_output/report.md` and publishes it as a SampleResource. |
 
 ---
 
@@ -73,7 +73,7 @@ EVALUATION is populated by whichever **evaluator** you pass with
 | `minif2f-rubric` | `benchmarks/minif2f/rubric.py` | Lean 4 sandbox | Compiles the final `.lean` in the sandbox; awards partial credit for syntactically-valid-but-unproved proofs. |
 | `minif2f-smoke-rubric` | `benchmarks/minif2f/smoke_rubric.py` | Lean sandbox | Canonical-smoke leaf for the MiniF2F env. |
 | `staged-rubric` | `benchmarks/gdpeval/rubric.py` | LLM (embedded `llm-judge` criteria) | Sequential-gate multi-stage evaluator used by GDPEval. |
-| `researchrubrics-smoke-rubric` | `benchmarks/researchrubrics/smoke_rubric.py` | none (reads local RunResource) | Asserts a `REPORT` RunResource exists with required headers (`# Findings`, `## Sources`). |
+| `researchrubrics-smoke-rubric` | `benchmarks/researchrubrics/smoke_rubric.py` | none (reads local SampleResource) | Asserts a `REPORT` SampleResource exists with required headers (`# Findings`, `## Sources`). |
 | `swebench-smoke-rubric` | `benchmarks/swebench_verified/smoke_rubric.py` | SWE-Bench sandbox | Canonical-smoke leaf for the SWE-Bench env. |
 | `swebench-rubric` | `evaluators/rubrics/swebench_rubric.py` | SWE-Bench sandbox | Real SWE-Bench patch evaluation. |
 
@@ -86,7 +86,7 @@ EVALUATION is populated by whichever **evaluator** you pass with
 | `stub-criterion` | `evaluators/criteria/stub_criterion.py` | none |
 | `varied-stub-criterion` | `evaluators/criteria/varied_stub_criterion.py` | none |
 | `sandbox-file-check` | `evaluators/criteria/sandbox_file_check.py` | E2B sandbox |
-| `stub-report-exists` | `evaluators/criteria/stub_report_exists.py` | reads RunResource blobs on disk |
+| `stub-report-exists` | `evaluators/criteria/stub_report_exists.py` | reads SampleResource blobs on disk |
 | `llm-judge` | `evaluators/criteria/llm_judge.py` | LLM |
 | `file-check` | `evaluators/criteria/file_check.py` | none |
 | `code-check` | `evaluators/criteria/code_check.py` | none (lightweight path) |

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { TaskEvaluationState, TaskState, WorkflowRunState } from "@/lib/types";
+import type { TaskEvaluationState, TaskState, SampleWorkspaceState } from "@/lib/types";
 import { TaskStatus } from "@/lib/types";
 import {
   buildContainerEvaluationRollup,
@@ -34,7 +34,7 @@ function task(id: string, childIds: string[] = []): TaskState {
 function evaluation(taskId: string, statuses: Array<"passed" | "failed" | "errored" | "skipped">): TaskEvaluationState {
   return {
     id: `evaluation-${taskId}`,
-    runId: "run-1",
+    sampleId: "run-1",
     taskId,
     evaluatorName: "rubric",
     aggregationRule: "weighted_sum",
@@ -71,7 +71,7 @@ function evaluation(taskId: string, statuses: Array<"passed" | "failed" | "error
   };
 }
 
-function state(evaluationsByTask: Map<string, TaskEvaluationState>): WorkflowRunState {
+function state(evaluationsByTask: Map<string, TaskEvaluationState>): SampleWorkspaceState {
   return {
     id: "run-1",
     definitionId: "experiment-1",

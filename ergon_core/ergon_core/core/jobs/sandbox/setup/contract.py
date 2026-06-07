@@ -9,7 +9,7 @@ class SandboxSetupRequest(InngestEventContract):
     model_config = {"extra": "allow"}
     name: ClassVar[str] = "task/sandbox-setup"
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
     task_id: UUID
     benchmark_type: str

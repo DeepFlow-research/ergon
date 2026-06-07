@@ -11,14 +11,14 @@ from ergon_core.core.shared.context_parts import (
     ToolResultPart,
     UserMessagePart,
 )
-from ergon_core.core.persistence.context.models import RunContextEvent
+from ergon_core.core.persistence.context.models import SampleContextEvent
 from ergon_core.core.application.context.service import ContextEventService
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
+from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
-    RunRecord,
-    RunTaskExecution,
+    SampleRecord,
+    SampleTaskAttempt,
 )
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
@@ -36,11 +36,11 @@ def _session() -> Session:
 
 
 def _execution_fixture(session: Session) -> tuple:
-    run_id = uuid4()
+    sample_id = uuid4()
     definition_id = uuid4()
     task_id = uuid4()
-    node = RunGraphNode(
-        run_id=run_id,
+    node = SampleGraphNode(
+        sample_id=sample_id,
         task_id=task_id,
         instance_key="instance",
         task_slug="task",
@@ -57,25 +57,25 @@ def _execution_fixture(session: Session) -> tuple:
         )
     )
     session.add(
-        RunRecord(
-            id=run_id,
+        SampleRecord(
+            id=sample_id,
             definition_id=definition_id,
             benchmark_type="unit",
             instance_key="instance",
-            status=RunStatus.EXECUTING,
+            status=SampleStatus.EXECUTING,
         )
     )
     session.add(node)
     session.flush()
-    execution = RunTaskExecution(
-        run_id=run_id,
+    execution = SampleTaskAttempt(
+        sample_id=sample_id,
         task_id=node.task_id,
         node_id=node.task_id,
         status=TaskExecutionStatus.RUNNING,
     )
     session.add(execution)
     session.commit()
-    return run_id, execution.id
+    return sample_id, execution.id
 
 
 def test_run_context_event_parsed_payload_is_context_part_chunk_log() -> None:
@@ -85,8 +85,8 @@ def test_run_context_event_parsed_payload_is_context_part_chunk_log() -> None:
         worker_binding_key="worker-a",
         turn_id="turn-1",
     )
-    event = RunContextEvent(
-        run_id=uuid4(),
+    event = SampleContextEvent(
+        sample_id=uuid4(),
         task_execution_id=uuid4(),
         worker_binding_key="worker-a",
         sequence=3,
@@ -103,26 +103,26 @@ def test_run_context_event_parsed_payload_is_context_part_chunk_log() -> None:
 @pytest.mark.asyncio
 async def test_persist_chunk_records_prompt_and_model_output_in_order() -> None:
     session = _session()
-    run_id, execution_id = _execution_fixture(session)
+    sample_id, execution_id = _execution_fixture(session)
     repo = ContextEventService()
 
     await repo.persist_chunk(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         execution_id=execution_id,
         worker_binding_key="worker",
         chunk=ContextPartChunk(part=UserMessagePart(content="question")),
     )
     await repo.persist_chunk(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         execution_id=execution_id,
         worker_binding_key="worker",
         chunk=ContextPartChunk(part=ThinkingPart(content="think")),
     )
     await repo.persist_chunk(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         execution_id=execution_id,
         worker_binding_key="worker",
         chunk=ContextPartChunk(part=AssistantTextPart(content="answer")),
@@ -142,12 +142,12 @@ async def test_persist_chunk_records_prompt_and_model_output_in_order() -> None:
 @pytest.mark.asyncio
 async def test_persist_chunk_records_provider_usage() -> None:
     session = _session()
-    run_id, execution_id = _execution_fixture(session)
+    sample_id, execution_id = _execution_fixture(session)
     repo = ContextEventService()
 
     await repo.persist_chunk(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         execution_id=execution_id,
         worker_binding_key="worker",
         chunk=ContextPartChunk(
@@ -184,12 +184,12 @@ async def test_persist_chunk_records_provider_usage() -> None:
 @pytest.mark.asyncio
 async def test_persist_chunk_tool_result_closes_current_turn() -> None:
     session = _session()
-    run_id, execution_id = _execution_fixture(session)
+    sample_id, execution_id = _execution_fixture(session)
     repo = ContextEventService()
 
     await repo.persist_chunk(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         execution_id=execution_id,
         worker_binding_key="worker",
         chunk=ContextPartChunk(
@@ -198,7 +198,7 @@ async def test_persist_chunk_tool_result_closes_current_turn() -> None:
     )
     await repo.persist_chunk(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         execution_id=execution_id,
         worker_binding_key="worker",
         chunk=ContextPartChunk(

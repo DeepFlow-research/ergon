@@ -21,18 +21,18 @@ import {
   SandboxState,
   SandboxCommandState,
   TaskEvaluationState,
-  WorkflowRunState,
+  SampleWorkspaceState,
 } from "../types";
 import { applyGraphMutation as reduceGraphMutation } from "@/features/graph/state/graphMutationReducer";
 import type { DashboardGraphMutationData } from "@/lib/contracts/events";
 import type { RunSnapshot } from "@/lib/contracts/rest";
-import { hydrateRunSnapshot } from "@/lib/run-state/hydrate";
+import { hydrateRunSnapshot } from "@/lib/sample-state/hydrate";
 import {
   applySandboxClosed,
   applySandboxCommand,
   applySandboxCreated,
   applyTaskStatusChanged,
-} from "@/lib/run-state/reducers";
+} from "@/lib/sample-state/reducers";
 
 // Extend global to store DashboardStore instance across module loads
 declare global {
@@ -41,7 +41,7 @@ declare global {
 }
 
 class DashboardStore {
-  private runs: Map<string, WorkflowRunState> = new Map();
+  private runs: Map<string, SampleWorkspaceState> = new Map();
   private pendingSandboxCommands: Map<string, Map<string, SandboxCommandState[]>> =
     new Map();
 
@@ -49,42 +49,42 @@ class DashboardStore {
   // Queries
   // ==========================================================================
 
-  getRun(runId: string): WorkflowRunState | undefined {
-    return this.runs.get(runId);
+  getRun(sampleId: string): SampleWorkspaceState | undefined {
+    return this.runs.get(sampleId);
   }
 
-  getAllRuns(): WorkflowRunState[] {
+  getAllRuns(): SampleWorkspaceState[] {
     return Array.from(this.runs.values());
   }
 
-  getActiveRuns(): WorkflowRunState[] {
+  getActiveRuns(): SampleWorkspaceState[] {
     return this.getAllRuns().filter(
       (r) => r.status === "pending" || r.status === "executing" || r.status === "evaluating",
     );
   }
 
-  getRecentRuns(limit: number = 10): WorkflowRunState[] {
+  getRecentRuns(limit: number = 10): SampleWorkspaceState[] {
     return this.getAllRuns()
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
       .slice(0, limit);
   }
 
-  getTask(runId: string, taskId: string): TaskState | undefined {
-    return this.runs.get(runId)?.tasks.get(taskId);
+  getTask(sampleId: string, taskId: string): TaskState | undefined {
+    return this.runs.get(sampleId)?.tasks.get(taskId);
   }
 
-  getTasksAtLevel(runId: string, level: number): TaskState[] {
-    const run = this.runs.get(runId);
+  getTasksAtLevel(sampleId: string, level: number): TaskState[] {
+    const run = this.runs.get(sampleId);
     if (!run) return [];
     return Array.from(run.tasks.values()).filter((t) => t.level === level);
   }
 
-  getResourcesForTask(runId: string, taskId: string): ResourceState[] {
-    return this.runs.get(runId)?.resourcesByTask.get(taskId) ?? [];
+  getResourcesForTask(sampleId: string, taskId: string): ResourceState[] {
+    return this.runs.get(sampleId)?.resourcesByTask.get(taskId) ?? [];
   }
 
-  getSandboxForTask(runId: string, taskId: string): SandboxState | undefined {
-    return this.runs.get(runId)?.sandboxesByTask.get(taskId);
+  getSandboxForTask(sampleId: string, taskId: string): SandboxState | undefined {
+    return this.runs.get(sampleId)?.sandboxesByTask.get(taskId);
   }
 
   reset(): void {
@@ -92,7 +92,7 @@ class DashboardStore {
     this.pendingSandboxCommands.clear();
   }
 
-  seedRun(run: WorkflowRunState): void {
+  seedRun(run: SampleWorkspaceState): void {
     this.runs.set(run.id, run);
   }
 
@@ -104,17 +104,17 @@ class DashboardStore {
    * Initialize a new workflow run from a workflow.started event.
    */
   initializeRun(
-    runId: string,
+    sampleId: string,
     definitionId: string,
     name: string,
     snapshot: RunSnapshot,
     startedAt: string,
     totalTasks: number,
     totalLeafTasks: number
-  ): WorkflowRunState {
+  ): SampleWorkspaceState {
     const hydrated = hydrateRunSnapshot({
       ...snapshot,
-      id: runId,
+      id: sampleId,
       definitionId,
       name,
       status: "executing",
@@ -122,7 +122,7 @@ class DashboardStore {
       totalTasks,
       totalLeafTasks,
     });
-    const run: WorkflowRunState = {
+    const run: SampleWorkspaceState = {
       ...hydrated,
       status: "executing",
       completedAt: null,
@@ -131,7 +131,7 @@ class DashboardStore {
       error: null,
     };
 
-    this.runs.set(runId, run);
+    this.runs.set(sampleId, run);
     return run;
   }
 
@@ -139,14 +139,14 @@ class DashboardStore {
    * Mark a workflow run as completed or failed.
    */
   completeRun(
-    runId: string,
+    sampleId: string,
     status: "completed" | "failed",
     completedAt: string,
     durationSeconds: number,
     finalScore: number | null,
     error: string | null
   ): void {
-    const run = this.runs.get(runId);
+    const run = this.runs.get(sampleId);
     if (!run) return;
 
     run.status = status;
@@ -160,20 +160,20 @@ class DashboardStore {
    * Update a task's status from a task.status_changed event.
    */
   updateTaskStatus(
-    runId: string,
+    sampleId: string,
     taskId: string,
     newStatus: TaskStatus,
     timestamp: string,
     assignedWorkerId?: string | null,
     assignedWorkerSlug?: string | null
   ): void {
-    const run = this.runs.get(runId);
+    const run = this.runs.get(sampleId);
     if (!run) return;
 
     this.runs.set(
-      runId,
+      sampleId,
       applyTaskStatusChanged(run, {
-        runId,
+        sampleId,
         taskId,
         status: newStatus,
         timestamp,
@@ -186,8 +186,8 @@ class DashboardStore {
   /**
    * Add a resource from a resource.published event.
    */
-  addResource(runId: string, resource: ResourceState): void {
-    const run = this.runs.get(runId);
+  addResource(sampleId: string, resource: ResourceState): void {
+    const run = this.runs.get(sampleId);
     if (!run) return;
 
     const taskResources = run.resourcesByTask.get(resource.taskId) ?? [];
@@ -195,8 +195,8 @@ class DashboardStore {
     run.resourcesByTask.set(resource.taskId, taskResources);
   }
 
-  upsertThread(runId: string, thread: CommunicationThreadState): void {
-    const run = this.runs.get(runId);
+  upsertThread(sampleId: string, thread: CommunicationThreadState): void {
+    const run = this.runs.get(sampleId);
     if (!run) return;
 
     const existingIndex = run.threads.findIndex((candidate) => candidate.id === thread.id);
@@ -207,8 +207,8 @@ class DashboardStore {
     }
   }
 
-  addContextEvent(runId: string, taskId: string, event: ContextEventState): void {
-    const run = this.runs.get(runId);
+  addContextEvent(sampleId: string, taskId: string, event: ContextEventState): void {
+    const run = this.runs.get(sampleId);
     if (!run) return;
     const existing = run.contextEventsByTask.get(taskId) ?? [];
     if (existing.some((e) => e.id === event.id)) return; // deduplicate
@@ -218,8 +218,8 @@ class DashboardStore {
     );
   }
 
-  upsertEvaluation(runId: string, taskId: string | null, evaluation: TaskEvaluationState): void {
-    const run = this.runs.get(runId);
+  upsertEvaluation(sampleId: string, taskId: string | null, evaluation: TaskEvaluationState): void {
+    const run = this.runs.get(sampleId);
     if (!run) return;
 
     run.evaluationsByTask.set(taskId ?? "__run__", evaluation);
@@ -229,18 +229,18 @@ class DashboardStore {
    * Create or update a sandbox from sandbox.created event.
    */
   createSandbox(
-    runId: string,
+    sampleId: string,
     taskId: string,
     sandboxId: string,
     template: string | null,
     timeoutMinutes: number,
     timestamp: string
   ): void {
-    const run = this.runs.get(runId);
+    const run = this.runs.get(sampleId);
     if (!run) return;
 
     const pendingCommands =
-      this.pendingSandboxCommands.get(runId)?.get(taskId) ?? [];
+      this.pendingSandboxCommands.get(sampleId)?.get(taskId) ?? [];
 
     const sandbox: SandboxState = {
       sandboxId,
@@ -254,13 +254,13 @@ class DashboardStore {
       commands: pendingCommands,
     };
 
-    this.runs.set(runId, applySandboxCreated(run, sandbox));
+    this.runs.set(sampleId, applySandboxCreated(run, sandbox));
 
-    const pendingByTask = this.pendingSandboxCommands.get(runId);
+    const pendingByTask = this.pendingSandboxCommands.get(sampleId);
     if (pendingByTask) {
       pendingByTask.delete(taskId);
       if (pendingByTask.size === 0) {
-        this.pendingSandboxCommands.delete(runId);
+        this.pendingSandboxCommands.delete(sampleId);
       }
     }
   }
@@ -269,54 +269,54 @@ class DashboardStore {
    * Add a command to a sandbox from sandbox.command event.
    */
   addSandboxCommand(
-    runId: string,
+    sampleId: string,
     taskId: string,
     command: SandboxCommandState
   ): void {
-    const run = this.runs.get(runId);
+    const run = this.runs.get(sampleId);
     const sandbox = run?.sandboxesByTask.get(taskId);
     if (!run) return;
 
     if (!sandbox) {
       const pendingByTask =
-        this.pendingSandboxCommands.get(runId) ?? new Map();
+        this.pendingSandboxCommands.get(sampleId) ?? new Map();
       const pendingCommands = pendingByTask.get(taskId) ?? [];
       pendingCommands.push(command);
       pendingByTask.set(taskId, pendingCommands);
-      this.pendingSandboxCommands.set(runId, pendingByTask);
+      this.pendingSandboxCommands.set(sampleId, pendingByTask);
       return;
     }
 
-    this.runs.set(runId, applySandboxCommand(run, taskId, command));
+    this.runs.set(sampleId, applySandboxCommand(run, taskId, command));
   }
 
   /**
    * Close a sandbox from sandbox.closed event.
    */
   closeSandbox(
-    runId: string,
+    sampleId: string,
     taskId: string,
     reason: string,
     timestamp: string
   ): void {
-    const run = this.runs.get(runId);
+    const run = this.runs.get(sampleId);
     if (!run) return;
 
-    this.runs.set(runId, applySandboxClosed(run, taskId, reason, timestamp));
+    this.runs.set(sampleId, applySandboxClosed(run, taskId, reason, timestamp));
   }
 
-  applyGraphMutation(runId: string, mutation: DashboardGraphMutationData): void {
-    const run = this.runs.get(runId);
+  applyGraphMutation(sampleId: string, mutation: DashboardGraphMutationData): void {
+    const run = this.runs.get(sampleId);
     if (!run) return;
     const updated = reduceGraphMutation(run, mutation);
-    this.runs.set(runId, updated);
+    this.runs.set(sampleId, updated);
   }
 
   /**
    * Remove old completed runs to prevent memory growth.
    * Keeps the most recent N runs.
    */
-  pruneOldRuns(keepCount: number = config.maxRunsToKeep): void {
+  pruneOldSamples(keepCount: number = config.maxSamplesToKeep): void {
     const runs = this.getAllRuns();
     if (runs.length <= keepCount) return;
 

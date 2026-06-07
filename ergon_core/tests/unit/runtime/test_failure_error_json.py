@@ -12,11 +12,11 @@ async def test_finalize_failure_preserves_structured_error_json(monkeypatch) -> 
     from ergon_core.core.application.runtime.task_execution import TaskExecutionService
 
     execution_id = uuid4()
-    run_id = uuid4()
+    sample_id = uuid4()
     task_id = uuid4()
     execution = SimpleNamespace(
         id=execution_id,
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=task_id,
     )
 
@@ -56,7 +56,7 @@ async def test_finalize_failure_preserves_structured_error_json(monkeypatch) -> 
     await TaskExecutionService().finalize_failure(
         FailTaskExecutionCommand(
             execution_id=execution_id,
-            run_id=run_id,
+            sample_id=sample_id,
             task_id=None,
             error_message="provider returned malformed response",
             error_json=structured_error,

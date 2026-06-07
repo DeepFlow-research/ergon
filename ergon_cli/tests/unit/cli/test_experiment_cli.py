@@ -91,7 +91,7 @@ def test_experiment_list_prints_rows(monkeypatch, capsys):
 
 
 def test_experiment_show_prints_detail(monkeypatch, capsys):
-    run_id = uuid4()
+    sample_id = uuid4()
 
     class FakeReadService:
         def get_experiment(self, definition_id):
@@ -99,14 +99,14 @@ def test_experiment_show_prints_detail(monkeypatch, capsys):
                 experiment=_summary(definition_id=definition_id),
                 runs=[
                     ExperimentRunRowDto(
-                        run_id=run_id,
+                        sample_id=sample_id,
                         definition_id=uuid4(),
                         benchmark_type="ci-benchmark",
                         instance_key="sample-a",
                         status="completed",
                         created_at="2026-04-27T12:00:00Z",
                         metrics=ExperimentRunMetricsDto(
-                            run_id=run_id,
+                            sample_id=sample_id,
                             status="completed",
                             instance_key="sample-a",
                         ),
@@ -123,7 +123,7 @@ def test_experiment_show_prints_detail(monkeypatch, capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert str(definition_id) in out
-    assert str(run_id) in out
+    assert str(sample_id) in out
     assert "sample-a" in out
 
 

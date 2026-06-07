@@ -27,7 +27,7 @@ from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.application.runtime.orchestration import PropagateTaskCompletionCommand
 from ergon_core.core.application.runtime.task_models import RestartTaskCommand
 from ergon_core.core.application.runtime.task_management import TaskManagementService
-from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
+from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
 
 from tests.integration.propagation._helpers import (
     get_node_status,
@@ -101,7 +101,7 @@ async def test_diamond_restart_invalidates_fanin_and_reactivates_on_recompletion
             target_task_id=task_c.task_id,
             status="satisfied",
         )
-        run_id = run.id
+        sample_id = run.id
         defn_id = defn.id
         task_a_id = task_a.task_id
         task_b_id = task_b.task_id
@@ -123,7 +123,7 @@ async def test_diamond_restart_invalidates_fanin_and_reactivates_on_recompletion
             with get_session() as session:
                 result = await svc.restart_task(
                     session,
-                    RestartTaskCommand(run_id=run_id, task_id=task_a_id),
+                    RestartTaskCommand(sample_id=sample_id, task_id=task_a_id),
                 )
 
         assert result.old_status == TaskExecutionStatus.COMPLETED
@@ -144,10 +144,10 @@ async def test_diamond_restart_invalidates_fanin_and_reactivates_on_recompletion
             assert get_node_status(session, task_b_id) == TaskExecutionStatus.COMPLETED, (
                 "task_b must remain COMPLETED — it is not downstream of task_a"
             )
-            assert get_edge_status(session, run_id, task_a_id, task_c_id) == EDGE_PENDING, (
+            assert get_edge_status(session, sample_id, task_a_id, task_c_id) == EDGE_PENDING, (
                 "task_a→task_c edge must be reset to EDGE_PENDING"
             )
-            assert get_edge_status(session, run_id, task_b_id, task_c_id) == EDGE_PENDING, (
+            assert get_edge_status(session, sample_id, task_b_id, task_c_id) == EDGE_PENDING, (
                 "task_b→task_c edge must be reset to EDGE_PENDING (task_c's incoming reset)"
             )
 
@@ -158,7 +158,7 @@ async def test_diamond_restart_invalidates_fanin_and_reactivates_on_recompletion
         prop_svc = WorkflowService()
         await prop_svc.propagate(
             PropagateTaskCompletionCommand(
-                run_id=run_id,
+                sample_id=sample_id,
                 definition_id=defn_id,
                 task_id=task_a_id,
                 execution_id=task_a_id,
@@ -175,4 +175,4 @@ async def test_diamond_restart_invalidates_fanin_and_reactivates_on_recompletion
             )
 
     finally:
-        cleanup_run(run_id, defn_id)
+        cleanup_run(sample_id, defn_id)

@@ -8,6 +8,6 @@ from pydantic import BaseModel
 class WorkflowFailedResult(BaseModel):
     model_config = {"frozen": True}
 
-    run_id: UUID
+    sample_id: UUID
     status: Literal["failed"] = "failed"
     error: str | None = None

@@ -44,7 +44,7 @@ class ResearchRubricsSubworker:
     """Writes a deterministic markdown report + runs ``wc -l`` as the probe.
 
     Artifacts written to ``/workspace/final_output/`` so the runtime's
-    persist step produces RunResource rows:
+    persist step produces SampleResource rows:
 
     - ``report_<node>.md``    — markdown content (content check target)
     - ``probe_<node>.json``   — ``{exit_code, stdout}`` from ``wc -l``

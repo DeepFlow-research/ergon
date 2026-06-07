@@ -6,7 +6,7 @@ from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.telemetry.models import (
     RolloutBatch,
     RolloutBatchRun,
-    RunRecord,
+    SampleRecord,
 )
 from ergon_core.core.rl.rollout_service import RolloutService
 from ergon_core.core.rl.rollout_types import SubmitRequest
@@ -25,7 +25,7 @@ def session_factory():
         engine,
         tables=[
             ExperimentDefinition.__table__,
-            RunRecord.__table__,
+            SampleRecord.__table__,
             RolloutBatch.__table__,
             RolloutBatchRun.__table__,
         ],
@@ -69,7 +69,7 @@ def test_rollout_submit_uses_rollout_batch_and_run_definition_without_legacy_rec
 
     with session_factory() as session:
         batch = session.get(RolloutBatch, response.batch_id)
-        runs = list(session.exec(select(RunRecord)).all())
+        runs = list(session.exec(select(SampleRecord)).all())
 
     assert batch is not None
     assert batch.definition_id == definition_id

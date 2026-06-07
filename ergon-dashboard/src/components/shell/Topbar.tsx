@@ -5,15 +5,15 @@ import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
   { label: "Experiments", href: "/experiments" },
-  { label: "Runs", href: "/runs" },
+  { label: "Runs", href: "/samples" },
 ] as const;
 
 function isActive(href: string, pathname: string): boolean {
   if (href === "/experiments") {
     return pathname === "/" || pathname.startsWith("/experiments");
   }
-  if (href === "/runs") {
-    return pathname.startsWith("/run/") || pathname.startsWith("/runs");
+  if (href === "/samples") {
+    return pathname.startsWith("/samples/") || pathname.startsWith("/samples");
   }
   return pathname.startsWith(href);
 }

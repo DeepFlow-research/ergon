@@ -23,7 +23,7 @@ EXPECTED_FUNCTION_TRIGGERS = {
     "block-descendants-on-failed": "task/failed",
     "cancel-orphans-on-cancelled": "task/cancelled",
     "cleanup-cancelled-task": "task/cancelled",
-    "run-cleanup": "run/cleanup",
+    "run-cleanup": "sample/cleanup",
     "sandbox-cleanup-on-completed": "task/completed",
     "sandbox-cleanup-on-failed": "task/failed",
 }
@@ -47,7 +47,7 @@ EXPECTED_FUNCTION_ORDER = [
     "sandbox-cleanup-on-failed",
 ]
 
-RUN_CANCEL = (("run/cancelled", "event.data.run_id == async.data.run_id"),)
+RUN_CANCEL = (("sample/cancelled", "event.data.sample_id == async.data.sample_id"),)
 TASK_CANCEL = (("task/cancelled", "event.data.task_id == async.data.task_id"),)
 
 EXPECTED_FUNCTION_METADATA = {
@@ -133,7 +133,7 @@ EXPECTED_FUNCTION_METADATA = {
         "retries": 0,
         "cancel": (),
         "concurrency": (),
-        "output": "RunCleanupResult",
+        "output": "SampleCleanupResult",
     },
     "sandbox-cleanup-on-completed": {
         "retries": 1,

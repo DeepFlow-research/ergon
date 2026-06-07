@@ -1,14 +1,14 @@
-"""Unit tests for latest_run_for_definition."""
+"""Unit tests for latest_sample_for_definition."""
 
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from ergon_core.core.application.runtime import runs as runs_module
-from ergon_core.core.application.runtime.run_records import latest_run_for_definition
+from ergon_core.core.application.runtime import samples as runs_module
+from ergon_core.core.application.runtime.sample_records import latest_sample_for_definition
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.shared.enums import SampleStatus
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -33,19 +33,19 @@ def _run(
     *,
     definition_id: object,
     created_at: datetime | None = None,
-) -> RunRecord:
-    return RunRecord(
+) -> SampleRecord:
+    return SampleRecord(
         id=uuid4(),
         definition_id=definition_id,
         benchmark_type="ci-benchmark",
         instance_key="k",
         worker_team_json={},
-        status=RunStatus.PENDING,
+        status=SampleStatus.PENDING,
         created_at=created_at or datetime(2026, 1, 1, tzinfo=UTC),
     )
 
 
-def test_latest_run_for_definition_returns_most_recent(monkeypatch, session_factory) -> None:
+def test_latest_sample_for_definition_returns_most_recent(monkeypatch, session_factory) -> None:
     definition_id = uuid4()
 
     now = datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
@@ -74,13 +74,15 @@ def test_latest_run_for_definition_returns_most_recent(monkeypatch, session_fact
 
     monkeypatch.setattr(runs_module, "get_session", session_factory)
 
-    result = latest_run_for_definition(definition_id)
+    result = latest_sample_for_definition(definition_id)
 
     assert result is not None
     assert result.id == newest_id
 
 
-def test_latest_run_for_definition_ignores_other_definitions(monkeypatch, session_factory) -> None:
+def test_latest_sample_for_definition_ignores_other_definitions(
+    monkeypatch, session_factory
+) -> None:
     def_a = uuid4()
     def_b = uuid4()
     now = datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
@@ -114,17 +116,19 @@ def test_latest_run_for_definition_ignores_other_definitions(monkeypatch, sessio
 
     monkeypatch.setattr(runs_module, "get_session", session_factory)
 
-    result = latest_run_for_definition(def_a)
+    result = latest_sample_for_definition(def_a)
 
     assert result is not None
     assert result.id == run_a_id
 
 
-def test_latest_run_for_definition_returns_none_when_no_runs(monkeypatch, session_factory) -> None:
+def test_latest_sample_for_definition_returns_none_when_no_runs(
+    monkeypatch, session_factory
+) -> None:
     definition_id = uuid4()
 
     monkeypatch.setattr(runs_module, "get_session", session_factory)
 
-    result = latest_run_for_definition(definition_id)
+    result = latest_sample_for_definition(definition_id)
 
     assert result is None

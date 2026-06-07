@@ -13,7 +13,7 @@ import {
   parseTaskStatusSocketData,
 } from "../../src/lib/contracts/events";
 import { parseRunSnapshot } from "../../src/lib/contracts/rest";
-import { deserializeRunState } from "../../src/lib/runState";
+import { deserializeRunState } from "../../src/lib/sampleState";
 import { store } from "../../src/lib/state/store";
 import {
   getHarnessRun,
@@ -29,7 +29,7 @@ test("run snapshot parser accepts object-map transport", () => {
   assert.ok(run);
   const parsed = parseRunSnapshot(run);
 
-  assert.equal(parsed.id, FIXTURE_IDS.runId);
+  assert.equal(parsed.id, FIXTURE_IDS.sampleId);
   assert.deepEqual(Object.keys(parsed.tasks ?? {}).sort(), [
     FIXTURE_IDS.exploreTaskId,
     FIXTURE_IDS.rootTaskId,
@@ -118,9 +118,9 @@ test("dashboard harness only serves explicitly seeded runs", () => {
 
   seedDashboardHarness({ runs: [run] });
 
-  const seededRun = getHarnessRun(FIXTURE_IDS.runId);
-  assert.equal(seededRun?.id, FIXTURE_IDS.runId);
-  assert.equal(deserializeRunState(seededRun).id, FIXTURE_IDS.runId);
+  const seededRun = getHarnessRun(FIXTURE_IDS.sampleId);
+  assert.equal(seededRun?.id, FIXTURE_IDS.sampleId);
+  assert.equal(deserializeRunState(seededRun).id, FIXTURE_IDS.sampleId);
 });
 
 test("workflow started event parser validates run snapshots", () => {
@@ -129,7 +129,7 @@ test("workflow started event parser validates run snapshots", () => {
   assert.ok(run);
 
   const payload = {
-    run_id: FIXTURE_IDS.runId,
+    sample_id: FIXTURE_IDS.sampleId,
     definition_id: FIXTURE_IDS.definitionId,
     workflow_name: "parallel",
     started_at: "2026-03-18T12:00:00.000Z",
@@ -168,10 +168,10 @@ test("dashboard nested DTO event parser accepts backend snake-case payloads", ()
   assert.ok(evaluation);
 
   const parsedThread = parseDashboardThreadMessageCreatedData({
-    run_id: FIXTURE_IDS.runId,
+    sample_id: FIXTURE_IDS.sampleId,
     thread: {
       id: thread.id,
-      run_id: thread.runId,
+      sample_id: thread.sampleId,
       task_id: thread.taskId,
       topic: thread.topic,
       summary: "Leaf workers report completion artifacts and probe exit status.",
@@ -185,7 +185,7 @@ test("dashboard nested DTO event parser accepts backend snake-case payloads", ()
       id: message.id,
       thread_id: message.threadId,
       thread_topic: message.threadTopic,
-      run_id: message.runId,
+      sample_id: message.sampleId,
       task_id: message.taskId,
       from_agent_id: message.fromAgentId,
       to_agent_id: message.toAgentId,
@@ -201,11 +201,11 @@ test("dashboard nested DTO event parser accepts backend snake-case payloads", ()
   );
 
   const parsedEvaluation = parseDashboardTaskEvaluationUpdatedData({
-    run_id: FIXTURE_IDS.runId,
+    sample_id: FIXTURE_IDS.sampleId,
     task_id: FIXTURE_IDS.solveTaskNodeUuid,
     evaluation: {
       id: evaluation.id,
-      run_id: evaluation.runId,
+      sample_id: evaluation.sampleId,
       task_id: evaluation.taskId,
       evaluator_name: evaluation.evaluatorName,
       aggregation_rule: evaluation.aggregationRule,
@@ -228,7 +228,7 @@ test("dashboard graph mutation parser accepts backend wrapped mutation event", (
   const parsed = parseDashboardGraphMutationData({
     mutation: {
       id: "77777777-7777-4777-8777-777777777777",
-      run_id: FIXTURE_IDS.runId,
+      sample_id: FIXTURE_IDS.sampleId,
       sequence: 4,
       mutation_type: "node.added",
       target_type: "node",
@@ -244,7 +244,7 @@ test("dashboard graph mutation parser accepts backend wrapped mutation event", (
     },
   });
 
-  assert.equal(parsed.run_id, FIXTURE_IDS.runId);
+  assert.equal(parsed.sample_id, FIXTURE_IDS.sampleId);
   assert.equal(parsed.sequence, 4);
   assert.equal(parsed.target_id, FIXTURE_IDS.solveTaskNodeUuid);
   assert.equal(parsed.created_at, "2026-03-18T12:00:14.000000Z");
@@ -254,7 +254,7 @@ test("dashboard graph mutation parser preserves canonical edge task ids", () => 
   const parsed = parseDashboardGraphMutationData({
     mutation: {
       id: "77777777-7777-4777-8777-777777777777",
-      run_id: FIXTURE_IDS.runId,
+      sample_id: FIXTURE_IDS.sampleId,
       sequence: 5,
       mutation_type: "edge.added",
       target_type: "edge",
@@ -281,7 +281,7 @@ test("dashboard graph mutation parser preserves canonical edge task ids", () => 
 test("dashboard context event parser accepts backend context part payloads", () => {
   const parsed = parseDashboardContextEventData({
     id: "88888888-8888-4888-8888-888888888888",
-    run_id: FIXTURE_IDS.runId,
+    sample_id: FIXTURE_IDS.sampleId,
     task_execution_id: "99999999-9999-4999-8999-999999999999",
     task_id: FIXTURE_IDS.solveTaskNodeUuid,
     worker_binding_key: "swebench-smoke-worker",
@@ -318,7 +318,7 @@ test("dashboard context event parser accepts backend context part payloads", () 
 test("socket task status parser rejects malformed payloads", () => {
   assert.throws(() =>
     parseTaskStatusSocketData({
-      runId: FIXTURE_IDS.runId,
+      sampleId: FIXTURE_IDS.sampleId,
       taskId: FIXTURE_IDS.solveTaskId,
       timestamp: "2026-03-18T12:00:14.000Z",
       assignedWorkerId: FIXTURE_IDS.workerId,

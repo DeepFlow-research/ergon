@@ -28,7 +28,7 @@ logging.basicConfig(
 import inngest.fast_api
 from ergon_core.core.infrastructure.http.routes.experiments import router as experiments_router
 from ergon_core.core.infrastructure.http.routes.rollouts import router as rollouts_router
-from ergon_core.core.infrastructure.http.routes.runs import router as runs_router
+from ergon_core.core.infrastructure.http.routes.samples import router as samples_router
 from ergon_core.core.infrastructure.http.routes.test_harness import router as _test_harness_router
 from ergon_core.core.infrastructure.dashboard.provider import (
     init_dashboard_emitter,
@@ -89,7 +89,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.include_router(runs_router)
+app.include_router(samples_router)
 app.include_router(experiments_router)
 app.include_router(rollouts_router)
 

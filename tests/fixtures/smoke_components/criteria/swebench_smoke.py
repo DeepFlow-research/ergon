@@ -17,7 +17,7 @@ from pathlib import Path
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.errors import CriterionCheckError
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import RunResource, RunTaskExecution
+from ergon_core.core.persistence.telemetry.models import SampleResource, SampleTaskAttempt
 from tests.fixtures.smoke_components.smoke_base.criterion_base import SmokeCriterionBase
 from sqlmodel import col, desc, select
 
@@ -37,29 +37,29 @@ class SweBenchSmokeCriterion(SmokeCriterionBase):
                 exec_ids = [
                     row.id
                     for row in session.exec(
-                        select(RunTaskExecution).where(RunTaskExecution.task_id == child.task_id),
+                        select(SampleTaskAttempt).where(SampleTaskAttempt.task_id == child.task_id),
                     ).all()
                 ]
                 if not exec_ids:
                     raise CriterionCheckError(
-                        f"{child.task_slug}: no RunTaskExecution rows",
+                        f"{child.task_slug}: no SampleTaskAttempt rows",
                     )
                 resource = session.exec(
-                    select(RunResource)
+                    select(SampleResource)
                     .where(
-                        col(RunResource.task_execution_id).in_(exec_ids),
+                        col(SampleResource.task_execution_id).in_(exec_ids),
                     )
                     .where(
-                        col(RunResource.name).like("patch_%.py"),
+                        col(SampleResource.name).like("patch_%.py"),
                     )
                     .order_by(
-                        desc(RunResource.created_at),
+                        desc(SampleResource.created_at),
                     )
                     .limit(1),
                 ).first()
                 if resource is None:
                     raise CriterionCheckError(
-                        f"{child.task_slug}: no patch_*.py RunResource",
+                        f"{child.task_slug}: no patch_*.py SampleResource",
                     )
                 source = Path(resource.file_path).read_bytes().decode("utf-8")
                 try:

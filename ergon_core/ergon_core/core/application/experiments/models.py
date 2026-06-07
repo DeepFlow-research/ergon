@@ -33,7 +33,7 @@ class ExperimentRunRequest(BaseModel):
 
 class ExperimentRunResult(BaseModel):
     definition_id: UUID
-    run_ids: list[UUID]
+    sample_ids: list[UUID]
     definition_ids: list[UUID] = Field(default_factory=list)
 
 

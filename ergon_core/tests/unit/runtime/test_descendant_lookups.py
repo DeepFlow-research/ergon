@@ -3,7 +3,7 @@
 from uuid import UUID, uuid4
 
 import pytest
-from ergon_core.core.persistence.graph.models import RunGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.application.runtime import inspection as inspection_module
 from ergon_core.core.application.runtime.graph_traversal import descendants
 from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
@@ -29,13 +29,13 @@ def _make_session() -> Session:
 def _node(
     session: Session,
     *,
-    run_id: UUID,
+    sample_id: UUID,
     slug: str,
     parent_task_id: UUID | None = None,
     status: str = "PENDING",
-) -> RunGraphNode:
-    node = RunGraphNode(
-        run_id=run_id,
+) -> SampleGraphNode:
+    node = SampleGraphNode(
+        sample_id=sample_id,
         instance_key="sample-1",
         task_slug=slug,
         description=f"Task {slug}",
@@ -57,15 +57,17 @@ class TestContainmentDescendants:
     def test_returns_direct_and_transitive_children(self) -> None:
         """root → child1, root → child2, child1 → grandchild: 3 rows returned."""
         session = _make_session()
-        run_id = uuid4()
+        sample_id = uuid4()
 
-        root = _node(session, run_id=run_id, slug="root")
-        child1 = _node(session, run_id=run_id, slug="child1", parent_task_id=root.task_id)
-        child2 = _node(session, run_id=run_id, slug="child2", parent_task_id=root.task_id)
-        grandchild = _node(session, run_id=run_id, slug="grandchild", parent_task_id=child1.task_id)
+        root = _node(session, sample_id=sample_id, slug="root")
+        child1 = _node(session, sample_id=sample_id, slug="child1", parent_task_id=root.task_id)
+        child2 = _node(session, sample_id=sample_id, slug="child2", parent_task_id=root.task_id)
+        grandchild = _node(
+            session, sample_id=sample_id, slug="grandchild", parent_task_id=child1.task_id
+        )
         session.commit()
 
-        rows = descendants(session, run_id=run_id, root_task_id=root.task_id)
+        rows = descendants(session, sample_id=sample_id, root_task_id=root.task_id)
         result_ids = {row.task_id for row in rows}
 
         assert result_ids == {child1.task_id, child2.task_id, grandchild.task_id}
@@ -73,14 +75,14 @@ class TestContainmentDescendants:
     def test_does_not_include_root_or_sibling(self) -> None:
         """root and an unrelated sibling at run root level are excluded."""
         session = _make_session()
-        run_id = uuid4()
+        sample_id = uuid4()
 
-        root = _node(session, run_id=run_id, slug="root")
-        child1 = _node(session, run_id=run_id, slug="child1", parent_task_id=root.task_id)
-        sibling = _node(session, run_id=run_id, slug="sibling")  # no parent_task_id
+        root = _node(session, sample_id=sample_id, slug="root")
+        child1 = _node(session, sample_id=sample_id, slug="child1", parent_task_id=root.task_id)
+        sibling = _node(session, sample_id=sample_id, slug="sibling")  # no parent_task_id
         session.commit()
 
-        rows = descendants(session, run_id=run_id, root_task_id=root.task_id)
+        rows = descendants(session, sample_id=sample_id, root_task_id=root.task_id)
         result_ids = {row.task_id for row in rows}
 
         assert root.task_id not in result_ids
@@ -90,44 +92,44 @@ class TestContainmentDescendants:
     def test_returns_empty_when_root_has_no_children(self) -> None:
         """A leaf node returns ()."""
         session = _make_session()
-        run_id = uuid4()
+        sample_id = uuid4()
 
-        leaf = _node(session, run_id=run_id, slug="leaf")
+        leaf = _node(session, sample_id=sample_id, slug="leaf")
         session.commit()
 
-        rows = descendants(session, run_id=run_id, root_task_id=leaf.task_id)
+        rows = descendants(session, sample_id=sample_id, root_task_id=leaf.task_id)
         assert rows == []
 
     def test_depth_greater_than_two(self) -> None:
         """Recursion works past depth 2: root → A → B → C → D."""
         session = _make_session()
-        run_id = uuid4()
+        sample_id = uuid4()
 
-        root = _node(session, run_id=run_id, slug="root")
-        a = _node(session, run_id=run_id, slug="a", parent_task_id=root.task_id)
-        b = _node(session, run_id=run_id, slug="b", parent_task_id=a.task_id)
-        c = _node(session, run_id=run_id, slug="c", parent_task_id=b.task_id)
-        d = _node(session, run_id=run_id, slug="d", parent_task_id=c.task_id)
+        root = _node(session, sample_id=sample_id, slug="root")
+        a = _node(session, sample_id=sample_id, slug="a", parent_task_id=root.task_id)
+        b = _node(session, sample_id=sample_id, slug="b", parent_task_id=a.task_id)
+        c = _node(session, sample_id=sample_id, slug="c", parent_task_id=b.task_id)
+        d = _node(session, sample_id=sample_id, slug="d", parent_task_id=c.task_id)
         session.commit()
 
-        rows = descendants(session, run_id=run_id, root_task_id=root.task_id)
+        rows = descendants(session, sample_id=sample_id, root_task_id=root.task_id)
         result_ids = {row.task_id for row in rows}
 
         assert result_ids == {a.task_id, b.task_id, c.task_id, d.task_id}
 
     def test_cross_run_isolation(self) -> None:
-        """Nodes from a different run_id are not included."""
+        """Nodes from a different sample_id are not included."""
         session = _make_session()
-        run_id = uuid4()
+        sample_id = uuid4()
         other_run_id = uuid4()
 
-        root = _node(session, run_id=run_id, slug="root")
-        child = _node(session, run_id=run_id, slug="child", parent_task_id=root.task_id)
+        root = _node(session, sample_id=sample_id, slug="root")
+        child = _node(session, sample_id=sample_id, slug="child", parent_task_id=root.task_id)
         # A node in another run that happens to point at root.task_id as parent
-        other = _node(session, run_id=other_run_id, slug="other", parent_task_id=root.task_id)
+        other = _node(session, sample_id=other_run_id, slug="other", parent_task_id=root.task_id)
         session.commit()
 
-        rows = descendants(session, run_id=run_id, root_task_id=root.task_id)
+        rows = descendants(session, sample_id=sample_id, root_task_id=root.task_id)
         result_ids = {row.task_id for row in rows}
 
         assert result_ids == {child.task_id}
@@ -143,12 +145,14 @@ class TestTaskInspectionServiceDescendantIds:
     async def test_returns_same_set_as_repository(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """descendant_ids returns a frozenset matching runtime traversal."""
         session = _make_session()
-        run_id = uuid4()
+        sample_id = uuid4()
 
-        root = _node(session, run_id=run_id, slug="root")
-        child1 = _node(session, run_id=run_id, slug="child1", parent_task_id=root.task_id)
-        child2 = _node(session, run_id=run_id, slug="child2", parent_task_id=root.task_id)
-        grandchild = _node(session, run_id=run_id, slug="grandchild", parent_task_id=child1.task_id)
+        root = _node(session, sample_id=sample_id, slug="root")
+        child1 = _node(session, sample_id=sample_id, slug="child1", parent_task_id=root.task_id)
+        child2 = _node(session, sample_id=sample_id, slug="child2", parent_task_id=root.task_id)
+        grandchild = _node(
+            session, sample_id=sample_id, slug="grandchild", parent_task_id=child1.task_id
+        )
         session.commit()
 
         # Patch get_session in the inspection module to return the test session
@@ -156,7 +160,7 @@ class TestTaskInspectionServiceDescendantIds:
 
         svc = TaskInspectionService()
 
-        result = await svc.descendant_ids(run_id=run_id, root_task_id=root.task_id)
+        result = await svc.descendant_ids(sample_id=sample_id, root_task_id=root.task_id)
 
         assert isinstance(result, frozenset)
         assert result == frozenset({child1.task_id, child2.task_id, grandchild.task_id})
@@ -166,34 +170,34 @@ class TestTaskInspectionServiceDescendantIds:
     ) -> None:
         """Returns frozenset() when root has no children."""
         session = _make_session()
-        run_id = uuid4()
+        sample_id = uuid4()
 
-        leaf = _node(session, run_id=run_id, slug="leaf")
+        leaf = _node(session, sample_id=sample_id, slug="leaf")
         session.commit()
 
         monkeypatch.setattr(inspection_module, "get_session", lambda: session)
 
         svc = TaskInspectionService()
 
-        result = await svc.descendant_ids(run_id=run_id, root_task_id=leaf.task_id)
+        result = await svc.descendant_ids(sample_id=sample_id, root_task_id=leaf.task_id)
 
         assert result == frozenset()
 
     async def test_depth_greater_than_two(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """descendant_ids resolves all nodes in a chain of depth > 2."""
         session = _make_session()
-        run_id = uuid4()
+        sample_id = uuid4()
 
-        root = _node(session, run_id=run_id, slug="root")
-        a = _node(session, run_id=run_id, slug="a", parent_task_id=root.task_id)
-        b = _node(session, run_id=run_id, slug="b", parent_task_id=a.task_id)
-        c = _node(session, run_id=run_id, slug="c", parent_task_id=b.task_id)
+        root = _node(session, sample_id=sample_id, slug="root")
+        a = _node(session, sample_id=sample_id, slug="a", parent_task_id=root.task_id)
+        b = _node(session, sample_id=sample_id, slug="b", parent_task_id=a.task_id)
+        c = _node(session, sample_id=sample_id, slug="c", parent_task_id=b.task_id)
         session.commit()
 
         monkeypatch.setattr(inspection_module, "get_session", lambda: session)
 
         svc = TaskInspectionService()
 
-        result = await svc.descendant_ids(run_id=run_id, root_task_id=root.task_id)
+        result = await svc.descendant_ids(sample_id=sample_id, root_task_id=root.task_id)
 
         assert result == frozenset({a.task_id, b.task_id, c.task_id})

@@ -7,7 +7,7 @@ The toolkit can inject it without granting write access.
 import logging
 from uuid import UUID
 
-from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.application.runtime.graph_traversal import descendants
 from ergon_core.core.application.runtime.status import COMPLETED, FAILED
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
@@ -36,7 +36,7 @@ class TaskInspectionService:
         self,
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         parent_task_id: UUID,
     ) -> list[SubtaskInfo]:
         """Direct children of parent_task_id, ordered by task_slug.
@@ -45,12 +45,12 @@ class TaskInspectionService:
         position across turns without task_id confusion.
         """
         nodes = session.exec(
-            select(RunGraphNode)
+            select(SampleGraphNode)
             .where(
-                RunGraphNode.run_id == run_id,
-                RunGraphNode.parent_task_id == parent_task_id,
+                SampleGraphNode.sample_id == sample_id,
+                SampleGraphNode.parent_task_id == parent_task_id,
             )
-            .order_by(RunGraphNode.task_slug, RunGraphNode.task_id)
+            .order_by(SampleGraphNode.task_slug, SampleGraphNode.task_id)
         ).all()
         return [self._hydrate(session, n) for n in nodes]
 
@@ -58,14 +58,14 @@ class TaskInspectionService:
         self,
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
     ) -> SubtaskInfo:
         """Single subtask snapshot by task_id."""
         node = session.exec(
-            select(RunGraphNode).where(
-                RunGraphNode.run_id == run_id,
-                RunGraphNode.task_id == task_id,
+            select(SampleGraphNode).where(
+                SampleGraphNode.sample_id == sample_id,
+                SampleGraphNode.task_id == task_id,
             )
         ).one()
         return self._hydrate(session, node)
@@ -73,22 +73,22 @@ class TaskInspectionService:
     async def descendant_ids(
         self,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         root_task_id: UUID,
     ) -> frozenset[UUID]:
         """Return all task_ids reachable as children/grandchildren of root_task_id."""
 
         with get_session() as session:
-            rows = descendants(session, run_id=run_id, root_task_id=root_task_id)
+            rows = descendants(session, sample_id=sample_id, root_task_id=root_task_id)
             # Collect IDs inside the session scope to avoid DetachedInstanceError.
             return frozenset(row.task_id for row in rows)
 
-    def _hydrate(self, session: Session, node: RunGraphNode) -> SubtaskInfo:
-        """Build a SubtaskInfo from a RunGraphNode, attaching deps and output/error."""
+    def _hydrate(self, session: Session, node: SampleGraphNode) -> SubtaskInfo:
+        """Build a SubtaskInfo from a SampleGraphNode, attaching deps and output/error."""
         deps = session.exec(
-            select(RunGraphEdge.source_task_id).where(
-                RunGraphEdge.target_task_id == node.task_id,
-                RunGraphEdge.run_id == node.run_id,
+            select(SampleGraphEdge.source_task_id).where(
+                SampleGraphEdge.target_task_id == node.task_id,
+                SampleGraphEdge.sample_id == node.sample_id,
             )
         ).all()
 

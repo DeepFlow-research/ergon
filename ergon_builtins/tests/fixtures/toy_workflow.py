@@ -12,9 +12,9 @@ from ergon_core.core.application.runtime import management as management_module
 from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
 from ergon_core.core.application.runtime.task_management import TaskManagementService
 from ergon_core.core.persistence.definitions.models import ExperimentDefinitionTask
-from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
-from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
+from ergon_core.core.persistence.shared.enums import SampleStatus
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 
 
 class ToySandbox(Sandbox):
@@ -61,14 +61,14 @@ class _DashboardEmitter:
         return None
 
 
-async def _dispatch_task_ready(run_id: UUID, definition_id: UUID, task_id: UUID) -> None:
+async def _dispatch_task_ready(sample_id: UUID, definition_id: UUID, task_id: UUID) -> None:
     return None
 
 
 class ToyWorkflowHarness(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
 
-    run_id: UUID
+    sample_id: UUID
     parent_task_id: UUID
     parent_task: Task
     context: WorkerContext
@@ -85,18 +85,20 @@ class ToyWorkflowHarness(BaseModel):
             deep=True,
         )
 
-    def nodes(self) -> list[RunGraphNode]:
+    def nodes(self) -> list[SampleGraphNode]:
         return list(
             self.session.exec(
-                select(RunGraphNode)
-                .where(RunGraphNode.run_id == self.run_id)
-                .order_by(RunGraphNode.task_slug)
+                select(SampleGraphNode)
+                .where(SampleGraphNode.sample_id == self.sample_id)
+                .order_by(SampleGraphNode.task_slug)
             ).all()
         )
 
-    def edges(self) -> list[RunGraphEdge]:
+    def edges(self) -> list[SampleGraphEdge]:
         return list(
-            self.session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == self.run_id)).all()
+            self.session.exec(
+                select(SampleGraphEdge).where(SampleGraphEdge.sample_id == self.sample_id)
+            ).all()
         )
 
     def definition_tasks(self) -> list[ExperimentDefinitionTask]:
@@ -117,7 +119,7 @@ def make_toy_workflow_harness(monkeypatch: pytest.MonkeyPatch) -> ToyWorkflowHar
         lambda: _SessionContext(session),
     )
 
-    run_id = uuid4()
+    sample_id = uuid4()
     definition_id = uuid4()
     parent_task = Task(
         task_slug="parent",
@@ -128,17 +130,17 @@ def make_toy_workflow_harness(monkeypatch: pytest.MonkeyPatch) -> ToyWorkflowHar
         evaluators=(),
     )
     session.add(
-        RunRecord(
-            id=run_id,
+        SampleRecord(
+            id=sample_id,
             definition_id=definition_id,
             benchmark_type="toy",
             instance_key="sample-1",
             worker_team_json={},
-            status=RunStatus.EXECUTING,
+            status=SampleStatus.EXECUTING,
         )
     )
-    parent = RunGraphNode(
-        run_id=run_id,
+    parent = SampleGraphNode(
+        sample_id=sample_id,
         instance_key="sample-1",
         task_slug=parent_task.task_slug,
         description=parent_task.description,
@@ -149,8 +151,8 @@ def make_toy_workflow_harness(monkeypatch: pytest.MonkeyPatch) -> ToyWorkflowHar
         parent_task_id=None,
         level=0,
     )
-    dependency = RunGraphNode(
-        run_id=run_id,
+    dependency = SampleGraphNode(
+        sample_id=sample_id,
         instance_key="sample-1",
         task_slug="dependency",
         description="Dependency task",
@@ -169,7 +171,7 @@ def make_toy_workflow_harness(monkeypatch: pytest.MonkeyPatch) -> ToyWorkflowHar
     session.commit()
 
     context = WorkerContext(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=parent.task_id,
         execution_id=uuid4(),
         definition_id=definition_id,
@@ -183,7 +185,7 @@ def make_toy_workflow_harness(monkeypatch: pytest.MonkeyPatch) -> ToyWorkflowHar
         session_factory=lambda: _SessionContext(session),
     )
     return ToyWorkflowHarness(
-        run_id=run_id,
+        sample_id=sample_id,
         parent_task_id=parent.task_id,
         parent_task=parent_task,
         context=context,

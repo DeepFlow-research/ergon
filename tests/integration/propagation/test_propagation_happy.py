@@ -1,21 +1,25 @@
 """Test 1 — single-task happy path.
 
 A single-node run completes successfully. The graph node must reach
-COMPLETED status and the RunRecord must stay non-failed.
+COMPLETED status and the SampleRecord must stay non-failed.
 
 Expected to PASS with current production code (no xfail).
 """
 
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
+from ergon_core.core.persistence.graph.models import (
+    SampleGraphEdge,
+    SampleGraphMutation,
+    SampleGraphNode,
+)
 from ergon_core.core.persistence.shared.db import get_engine, get_session
-from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.core.application.runtime.models import MutationMeta
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from ergon_core.core.application.runtime.orchestration import PropagateTaskCompletionCommand
-from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
+from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlmodel import select
@@ -58,18 +62,22 @@ def _skip_if_db_unreachable() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _cleanup_run(run_id, defn_id) -> None:  # type: ignore[no-untyped-def]
+def _cleanup_run(sample_id, defn_id) -> None:  # type: ignore[no-untyped-def]
     """Remove all rows created by a test, in FK-safe order."""
     with get_session() as session:
         for mut in session.exec(
-            select(RunGraphMutation).where(RunGraphMutation.run_id == run_id)
+            select(SampleGraphMutation).where(SampleGraphMutation.sample_id == sample_id)
         ).all():
             session.delete(mut)
-        for edge in session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all():
+        for edge in session.exec(
+            select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)
+        ).all():
             session.delete(edge)
-        for nd in session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all():
+        for nd in session.exec(
+            select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)
+        ).all():
             session.delete(nd)
-        run_row = session.get(RunRecord, run_id)
+        run_row = session.get(SampleRecord, sample_id)
         if run_row is not None:
             session.delete(run_row)
         defn_row = session.get(ExperimentDefinition, defn_id)
@@ -94,7 +102,7 @@ async def test_1_single_task_happy_path() -> None:
         defn = make_experiment_definition(session)
         run = make_run(session, defn.id)
         node_a = make_node(session, run.id, task_slug="task-a", status="running")
-        run_id = run.id
+        sample_id = run.id
         defn_id = defn.id
         node_a_id = node_a.task_id
         session.commit()
@@ -105,7 +113,7 @@ async def test_1_single_task_happy_path() -> None:
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=node_a_id,
                 new_status=TaskExecutionStatus.RUNNING,
                 meta=MutationMeta(actor="test:setup", reason="test setup: running"),
@@ -116,7 +124,7 @@ async def test_1_single_task_happy_path() -> None:
         svc = WorkflowService()
         await svc.propagate(
             PropagateTaskCompletionCommand(
-                run_id=run_id,
+                sample_id=sample_id,
                 definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
@@ -131,15 +139,15 @@ async def test_1_single_task_happy_path() -> None:
             )
             assert_wal_has_status(session, node_a_id, "completed")
 
-        # RunRecord must not be FAILED after single-task happy-path completion.
+        # SampleRecord must not be FAILED after single-task happy-path completion.
         with get_session() as session:
-            run_row = session.get(RunRecord, run_id)
+            run_row = session.get(SampleRecord, sample_id)
             assert run_row is not None
-            assert run_row.status != RunStatus.FAILED, (
-                f"RunRecord should not be FAILED; got {run_row.status!r}"
+            assert run_row.status != SampleStatus.FAILED, (
+                f"SampleRecord should not be FAILED; got {run_row.status!r}"
             )
 
         with get_session() as session:
-            assert_cross_cutting_invariants(session, run_id)
+            assert_cross_cutting_invariants(session, sample_id)
     finally:
-        _cleanup_run(run_id, defn_id)
+        _cleanup_run(sample_id, defn_id)

@@ -9,7 +9,7 @@ import type {
   RunLifecycleStatus as RestRunLifecycleStatus,
   RunSnapshot,
   RunSnapshotMetrics,
-  RunTaskEvaluation as RestRunTaskEvaluation,
+  SampleTaskEvaluation as RestSampleTaskEvaluation,
 } from "@/lib/contracts/rest";
 import type {
   DashboardGraphMutationData as GeneratedDashboardGraphMutationData,
@@ -92,8 +92,8 @@ export type DashboardSandboxCommandData = GeneratedDashboardSandboxCommandData;
 export type DashboardSandboxClosedData = GeneratedDashboardSandboxClosedData;
 export type CommunicationMessageState = RestRunCommunicationMessage;
 export type CommunicationThreadState = RestRunCommunicationThread;
-export type EvaluationCriterionState = NonNullable<RestRunTaskEvaluation["criterionResults"]>[number];
-export type TaskEvaluationState = RestRunTaskEvaluation;
+export type EvaluationCriterionState = NonNullable<RestSampleTaskEvaluation["criterionResults"]>[number];
+export type TaskEvaluationState = RestSampleTaskEvaluation;
 export type DashboardThreadMessageCreatedData = GeneratedDashboardThreadMessageCreatedData;
 export type DashboardTaskEvaluationUpdatedData = GeneratedDashboardTaskEvaluationUpdatedData;
 
@@ -290,7 +290,7 @@ export interface UnhandledMutationRecord {
  * Complete workflow run state.
  * This is the top-level state object held in the DashboardStore.
  */
-export interface WorkflowRunState {
+export interface SampleWorkspaceState {
   id: string;
   definitionId: string;
   name: string;
@@ -354,7 +354,7 @@ export interface WorkflowRunState {
  * Events sent from server to client via Socket.io.
  */
 export interface ServerToClientEvents {
-  "run:started": (data: { runId: string; name: string }) => void;
+  "run:started": (data: { sampleId: string; name: string }) => void;
   "run:completed": (data: RunCompletedSocketData) => void;
   "task:status": (data: TaskStatusSocketData) => void;
   "resource:new": (data: ResourceSocketData) => void;
@@ -364,24 +364,24 @@ export interface ServerToClientEvents {
   "thread:message": (data: DashboardThreadMessageCreatedData) => void;
   "task:evaluation": (data: DashboardTaskEvaluationUpdatedData) => void;
   "graph:mutation": (data: GraphMutationSocketData) => void;
-  "context:event": (data: { runId: string; taskId: string; event: ContextEventState }) => void;
+  "context:event": (data: { sampleId: string; taskId: string; event: ContextEventState }) => void;
   // Sync event - sends all current runs to a client on request
   "sync:runs": (runs: RunListEntry[]) => void;
   // Sync event - sends full state for a specific run
-  "sync:run": (run: SerializedWorkflowRunState | null) => void;
+  "sync:run": (run: SerializedSampleWorkspaceState | null) => void;
 }
 
 /**
  * Validated run snapshot payload used over REST and Socket.io sync.
  */
-export type SerializedWorkflowRunState = RunSnapshot;
+export type SerializedSampleWorkspaceState = RunSnapshot;
 
 /**
  * Events sent from client to server via Socket.io.
  */
 export interface ClientToServerEvents {
-  subscribe: (runId: string) => void;
-  unsubscribe: (runId: string) => void;
+  subscribe: (sampleId: string) => void;
+  unsubscribe: (sampleId: string) => void;
   "request:runs": () => void;
-  "request:run": (runId: string) => void;
+  "request:run": (sampleId: string) => void;
 }

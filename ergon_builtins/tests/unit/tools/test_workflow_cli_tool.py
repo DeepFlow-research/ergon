@@ -33,7 +33,7 @@ class _ResourceService:
 
 def _worker_context() -> WorkerContext:
     return WorkerContext(
-        run_id=uuid4(),
+        sample_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
         sandbox_id="sandbox",
@@ -96,7 +96,7 @@ async def test_workflow_tool_injects_worker_context() -> None:
 
     assert await workflow("inspect task-tree") == "ok"
     assert seen["command"] == "inspect task-tree"
-    assert seen["context"].run_id == context.run_id
+    assert seen["context"].sample_id == context.sample_id
     assert seen["context"].task_id == context.task_id
     assert seen["context"].execution_id == context.execution_id
     assert seen["context"].sandbox_task_key == context.task_id
@@ -145,15 +145,15 @@ async def test_workflow_adapter_add_subtask_spawns_object_bound_child() -> None:
     spawned = {}
 
     class TaskManagement:
-        async def spawn_dynamic_task(self, *, run_id, parent_task_id, task, depends_on=()):
-            spawned["run_id"] = run_id
+        async def spawn_dynamic_task(self, *, sample_id, parent_task_id, task, depends_on=()):
+            spawned["sample_id"] = sample_id
             spawned["parent_task_id"] = parent_task_id
             spawned["task"] = task
             spawned["depends_on"] = depends_on
             return SpawnedTaskHandle(task_id=uuid4())
 
     worker_context = WorkerContext(
-        run_id=uuid4(),
+        sample_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
         sandbox_id="sandbox",
@@ -180,7 +180,7 @@ async def test_workflow_adapter_add_subtask_spawns_object_bound_child() -> None:
     output = await execute_workflow_command(
         "manage add-subtask --task-slug child --description 'Child task' --format json",
         context=WorkflowCommandContext(
-            run_id=worker_context.run_id,
+            sample_id=worker_context.sample_id,
             task_id=worker_context.task_id,
             execution_id=worker_context.execution_id,
             sandbox_task_key=worker_context.task_id,
@@ -192,7 +192,7 @@ async def test_workflow_adapter_add_subtask_spawns_object_bound_child() -> None:
 
     assert output.exit_code == 0
     assert "child" in output.stdout
-    assert spawned["run_id"] == worker_context.run_id
+    assert spawned["sample_id"] == worker_context.sample_id
     assert spawned["parent_task_id"] == worker_context.task_id
     assert spawned["task"].task_slug == "child"
     assert spawned["task"].description == "Child task"
@@ -210,7 +210,7 @@ async def test_workflow_adapter_preserves_task_tree_wait_seconds() -> None:
         def __init__(self) -> None:
             self.wait_observed = False
 
-        def list_tasks(self, session, *, run_id, parent_task_id=None):
+        def list_tasks(self, session, *, sample_id, parent_task_id=None):
             self.wait_observed = True
             return [
                 GraphTaskRef(
@@ -228,7 +228,7 @@ async def test_workflow_adapter_preserves_task_tree_wait_seconds() -> None:
     output = await execute_workflow_command(
         "inspect task-tree --wait-seconds 0.1 --format json",
         context=WorkflowCommandContext(
-            run_id=worker_context.run_id,
+            sample_id=worker_context.sample_id,
             task_id=worker_context.task_id,
             execution_id=worker_context.execution_id,
             sandbox_task_key=worker_context.task_id,

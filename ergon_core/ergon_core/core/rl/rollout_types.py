@@ -23,7 +23,7 @@ class SubmitResponse(BaseModel):
     """Ergon → Trainer: batch accepted."""
 
     batch_id: UUID
-    run_ids: list[UUID]
+    sample_ids: list[UUID]
     status: BatchStatus = BatchStatus.PENDING
 
 
@@ -33,7 +33,7 @@ class Trajectory(BaseModel):
     Maps 1:1 to AgentTrajectory from extraction.py, plus metadata.
     """
 
-    run_id: UUID
+    sample_id: UUID
     agent_id: str
     prompt_ids: list[int]
     completion_ids: list[int]
@@ -46,7 +46,7 @@ class Trajectory(BaseModel):
 class EpisodeFailure(BaseModel):
     """An episode that didn't complete successfully."""
 
-    run_id: UUID
+    sample_id: UUID
     error: str
 
 

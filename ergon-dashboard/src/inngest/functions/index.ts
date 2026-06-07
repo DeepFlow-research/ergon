@@ -50,7 +50,7 @@ const onWorkflowStarted = inngest.createFunction(
   async ({ event }) => {
     const payload = parseDashboardWorkflowStartedData(event.data);
     const {
-      run_id,
+      sample_id,
       definition_id,
       workflow_name,
       snapshot,
@@ -60,14 +60,14 @@ const onWorkflowStarted = inngest.createFunction(
     } = payload;
 
     console.log("[Dashboard] Workflow started - INNGEST FUNCTION TRIGGERED:", {
-      run_id,
+      sample_id,
       workflow_name,
       total_tasks,
     });
 
     // Update store
     store.initializeRun(
-      run_id,
+      sample_id,
       definition_id,
       workflow_name,
       snapshot,
@@ -82,11 +82,11 @@ const onWorkflowStarted = inngest.createFunction(
 
     // Broadcast to all clients (new run appeared)
     console.log("[Dashboard] About to call broadcastRunStarted...");
-    broadcastRunStarted(run_id, workflow_name);
+    broadcastRunStarted(sample_id, workflow_name);
     console.log("[Dashboard] broadcastRunStarted completed");
 
     // Prune old runs to prevent memory growth
-    store.pruneOldRuns();
+    store.pruneOldSamples();
 
     return { success: true };
   }
@@ -98,7 +98,7 @@ const onWorkflowCompleted = inngest.createFunction(
   async ({ event }) => {
     const payload = DashboardWorkflowCompletedEventSchema.parse(event.data);
     const {
-      run_id,
+      sample_id,
       status,
       completed_at,
       duration_seconds,
@@ -110,14 +110,14 @@ const onWorkflowCompleted = inngest.createFunction(
     const narrowedStatus = status as "completed" | "failed";
 
     console.log("[Dashboard] Workflow completed:", {
-      run_id,
+      sample_id,
       status,
       duration_seconds,
     });
 
     // Update store
     store.completeRun(
-      run_id,
+      sample_id,
       narrowedStatus,
       completed_at,
       duration_seconds,
@@ -127,7 +127,7 @@ const onWorkflowCompleted = inngest.createFunction(
 
     // Broadcast to run subscribers
     broadcastRunCompleted(
-      run_id,
+      sample_id,
       narrowedStatus,
       completed_at,
       duration_seconds,
@@ -144,7 +144,7 @@ const onThreadMessageCreated = inngest.createFunction(
   { event: "dashboard/thread.message_created" },
   async ({ event }) => {
     const payload = parseDashboardThreadMessageCreatedData(event.data);
-    store.upsertThread(payload.run_id, payload.thread);
+    store.upsertThread(payload.sample_id, payload.thread);
     broadcastThreadMessage(payload);
     return { success: true };
   },
@@ -155,7 +155,7 @@ const onTaskEvaluationUpdated = inngest.createFunction(
   { event: "dashboard/task.evaluation_updated" },
   async ({ event }) => {
     const payload = parseDashboardTaskEvaluationUpdatedData(event.data);
-    store.upsertEvaluation(payload.run_id, payload.task_id, payload.evaluation);
+    store.upsertEvaluation(payload.sample_id, payload.task_id, payload.evaluation);
     broadcastTaskEvaluation(payload);
     return { success: true };
   },
@@ -171,7 +171,7 @@ const onTaskStatusChanged = inngest.createFunction(
   async ({ event }) => {
     const payload = DashboardTaskStatusChangedEventSchema.parse(event.data);
     const {
-      run_id,
+      sample_id,
       task_id,
       task_name,
       new_status,
@@ -181,7 +181,7 @@ const onTaskStatusChanged = inngest.createFunction(
     } = payload;
 
     console.log("[Dashboard] Task status changed:", {
-      run_id,
+      sample_id,
       task_id,
       task_name,
       new_status,
@@ -189,7 +189,7 @@ const onTaskStatusChanged = inngest.createFunction(
 
     // Update store
     store.updateTaskStatus(
-      run_id,
+      sample_id,
       task_id,
       new_status as TaskStatus,
       timestamp,
@@ -199,7 +199,7 @@ const onTaskStatusChanged = inngest.createFunction(
 
     // Broadcast to run subscribers
     broadcastTaskStatus(
-      run_id,
+      sample_id,
       task_id,
       new_status as TaskStatus,
       timestamp,
@@ -221,7 +221,7 @@ const onResourcePublished = inngest.createFunction(
   async ({ event }) => {
     const payload = DashboardResourcePublishedEventSchema.parse(event.data);
     const {
-      run_id,
+      sample_id,
       task_id,
       task_execution_id,
       resource_id,
@@ -233,7 +233,7 @@ const onResourcePublished = inngest.createFunction(
     } = payload;
 
     console.log("[Dashboard] Resource published:", {
-      run_id,
+      sample_id,
       task_id,
       resource_name,
       mime_type,
@@ -253,10 +253,10 @@ const onResourcePublished = inngest.createFunction(
     };
 
     // Update store
-    store.addResource(run_id, resource);
+    store.addResource(sample_id, resource);
 
     // Broadcast to run subscribers
-    broadcastResourceNew(run_id, resource);
+    broadcastResourceNew(sample_id, resource);
 
     return { success: true };
   }
@@ -271,21 +271,21 @@ const onSandboxCreated = inngest.createFunction(
   { event: "dashboard/sandbox.created" },
   async ({ event }) => {
     const payload = DashboardSandboxCreatedEventSchema.parse(event.data);
-    const { run_id, task_id, sandbox_id, template, timeout_minutes, timestamp } =
+    const { sample_id, task_id, sandbox_id, template, timeout_minutes, timestamp } =
       payload;
 
     console.log("[Dashboard] Sandbox created:", {
-      run_id,
+      sample_id,
       task_id,
       sandbox_id,
       template,
     });
 
-    const runId = run_id;
+    const sampleId = sample_id;
 
     // Update store
     store.createSandbox(
-      runId,
+      sampleId,
       task_id,
       sandbox_id,
       template ?? null,
@@ -294,9 +294,9 @@ const onSandboxCreated = inngest.createFunction(
     );
 
     // Broadcast to run subscribers
-    const sandbox = store.getSandboxForTask(runId, task_id);
+    const sandbox = store.getSandboxForTask(sampleId, task_id);
     if (sandbox) {
-      broadcastSandboxCreated(runId, sandbox);
+      broadcastSandboxCreated(sampleId, sandbox);
     }
 
     return { success: true };
@@ -326,18 +326,18 @@ const onSandboxCommand = inngest.createFunction(
       exit_code,
     });
 
-    // Find the run_id for this task
+    // Find the sample_id for this task
     const runs = store.getAllRuns();
-    let runId: string | null = null;
+    let sampleId: string | null = null;
 
     for (const run of runs) {
       if (run.tasks.has(task_id)) {
-        runId = run.id;
+        sampleId = run.id;
         break;
       }
     }
 
-    if (!runId) {
+    if (!sampleId) {
       console.warn(
         `[Dashboard] Could not find run for task ${task_id} in sandbox.command`
       );
@@ -355,10 +355,10 @@ const onSandboxCommand = inngest.createFunction(
     };
 
     // Update store
-    store.addSandboxCommand(runId, task_id, commandState);
+    store.addSandboxCommand(sampleId, task_id, commandState);
 
     // Broadcast to run subscribers
-    broadcastSandboxCommand(runId, task_id, commandState);
+    broadcastSandboxCommand(sampleId, task_id, commandState);
 
     return { success: true };
   }
@@ -377,18 +377,18 @@ const onSandboxClosed = inngest.createFunction(
       reason,
     });
 
-    // Find the run_id for this task
+    // Find the sample_id for this task
     const runs = store.getAllRuns();
-    let runId: string | null = null;
+    let sampleId: string | null = null;
 
     for (const run of runs) {
       if (run.tasks.has(task_id)) {
-        runId = run.id;
+        sampleId = run.id;
         break;
       }
     }
 
-    if (!runId) {
+    if (!sampleId) {
       console.warn(
         `[Dashboard] Could not find run for task ${task_id} in sandbox.closed`
       );
@@ -396,10 +396,10 @@ const onSandboxClosed = inngest.createFunction(
     }
 
     // Update store
-    store.closeSandbox(runId, task_id, reason, timestamp);
+    store.closeSandbox(sampleId, task_id, reason, timestamp);
 
     // Broadcast to run subscribers
-    broadcastSandboxClosed(runId, task_id, reason, timestamp);
+    broadcastSandboxClosed(sampleId, task_id, reason, timestamp);
 
     return { success: true };
   }
@@ -414,8 +414,8 @@ const onGraphMutation = inngest.createFunction(
   { event: "dashboard/graph.mutation" },
   async ({ event }) => {
     const mutation = parseDashboardGraphMutationData(event.data);
-    store.applyGraphMutation(mutation.run_id, mutation);
-    broadcastGraphMutation(mutation.run_id, mutation);
+    store.applyGraphMutation(mutation.sample_id, mutation);
+    broadcastGraphMutation(mutation.sample_id, mutation);
     return { success: true };
   },
 );

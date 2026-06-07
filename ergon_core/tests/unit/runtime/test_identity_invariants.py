@@ -1,6 +1,6 @@
 """Identity-flow invariants from 02-persistence-layer.md §2.
 
-task_id is born once and flows unchanged. (run_id, task_id) is the
+task_id is born once and flows unchanged. (sample_id, task_id) is the
 canonical row key. execution_id is the per-attempt id. Sandbox identity
 is preserved across the worker → evaluate Inngest boundary.
 
@@ -32,9 +32,9 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
 )
-from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.shared.enums import SampleStatus
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.pool import StaticPool
@@ -60,13 +60,13 @@ def _session() -> Session:
 
 
 def _seed_definition(session: Session) -> tuple[UUID, UUID, set[UUID]]:
-    """Insert a definition with two tasks; return (definition_id, run_id,
+    """Insert a definition with two tasks; return (definition_id, sample_id,
     set_of_task_ids)."""
 
     definition_id = uuid4()
     instance_id = uuid4()
     task_ids = {uuid4(), uuid4()}
-    run_id = uuid4()
+    sample_id = uuid4()
     session.add_all(
         [
             ExperimentDefinition(
@@ -100,17 +100,17 @@ def _seed_definition(session: Session) -> tuple[UUID, UUID, set[UUID]]:
             )
         )
     session.add(
-        RunRecord(
-            id=run_id,
+        SampleRecord(
+            id=sample_id,
             definition_id=definition_id,
             benchmark_type="test",
             instance_key="sample-1",
             worker_team_json={},
-            status=RunStatus.EXECUTING,
+            status=SampleStatus.EXECUTING,
         )
     )
     session.commit()
-    return definition_id, run_id, task_ids
+    return definition_id, sample_id, task_ids
 
 
 # ── PR 1 invariant — GREEN today ─────────────────────────────────────
@@ -118,29 +118,29 @@ def _seed_definition(session: Session) -> tuple[UUID, UUID, set[UUID]]:
 
 def test_task_id_is_preserved_from_definition_to_run_tier() -> None:
     """PR 1 invariant: the same UUID flows from
-    experiment_definition_tasks → run_graph_nodes.
+    experiment_definition_tasks → sample_graph_nodes.
 
     The runtime identity lives in ``task_id``.
     """
 
     session = _session()
-    definition_id, run_id, defn_task_ids = _seed_definition(session)
+    definition_id, sample_id, defn_task_ids = _seed_definition(session)
 
     repo = RuntimeGraphRepository()
     repo.initialize_from_definition(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         definition_id=definition_id,
         initial_node_status="pending",
         initial_edge_status="pending",
         meta=MutationMeta(actor="test", reason="identity"),
     )
 
-    rows = session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all()
+    rows = session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all()
     # Every task_id should appear on exactly one run-graph
     # row.
-    assert "task_id" in RunGraphNode.model_fields
-    assert "id" not in RunGraphNode.model_fields
+    assert "task_id" in SampleGraphNode.model_fields
+    assert "id" not in SampleGraphNode.model_fields
     seen = {row.task_id for row in rows}
     assert seen == defn_task_ids, (
         f"task_id did not survive prepare: definition={defn_task_ids}, run-tier={seen}"
@@ -157,29 +157,31 @@ async def test_task_id_propagates_into_runtime_task_instance() -> None:
     definition row had."""
 
     session = _session()
-    definition_id, run_id, defn_task_ids = _seed_definition(session)
+    definition_id, sample_id, defn_task_ids = _seed_definition(session)
 
     repo = RuntimeGraphRepository()
     repo.initialize_from_definition(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         definition_id=definition_id,
         initial_node_status="pending",
         initial_edge_status="pending",
         meta=MutationMeta(actor="test", reason="identity"),
     )
 
-    nodes = session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all()
+    nodes = session.exec(
+        select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)
+    ).all()
     for row in nodes:
         canonical_id = row.task_id
-        view = await repo.node(session, run_id=run_id, task_id=canonical_id)
+        view = await repo.node(session, sample_id=sample_id, task_id=canonical_id)
         assert view.task_id == canonical_id
         assert view.task.task_id == canonical_id
     # And the inflated task ids match the original definition task ids
     seen = set()
     for row in nodes:
         canonical_id = row.task_id
-        view = await repo.node(session, run_id=run_id, task_id=canonical_id)
+        view = await repo.node(session, sample_id=sample_id, task_id=canonical_id)
         seen.add(view.task.task_id)
     assert seen == defn_task_ids
 
@@ -192,7 +194,7 @@ def test_sandbox_identity_is_preserved_across_worker_to_evaluate_boundary() -> N
     ``worker_execute`` stamps the live ``sandbox_id`` onto the execution
     row, and ``evaluate_task_run`` reads ``execution.sandbox_id`` and
     passes it to ``load_task_view(..., sandbox_id=...)`` to reattach. The
-    ``sandbox_id`` field on ``RunTaskExecution`` is the carrier; the
+    ``sandbox_id`` field on ``SampleTaskAttempt`` is the carrier; the
     structural guard checks both halves of the contract.
     """
 
@@ -201,10 +203,10 @@ def test_sandbox_identity_is_preserved_across_worker_to_evaluate_boundary() -> N
     from ergon_core.core.application.runtime.task_execution_repository import (
         TaskExecutionRepository,
     )
-    from ergon_core.core.persistence.telemetry.models import RunTaskExecution
+    from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
 
     # Carrier: the execution row owns the sandbox_id.
-    assert "sandbox_id" in RunTaskExecution.model_fields
+    assert "sandbox_id" in SampleTaskAttempt.model_fields
     # Internal writer still owns the column mutation; jobs reach it through
     # TaskExecutionService.attach_sandbox_to_execution.
     assert hasattr(TaskExecutionRepository, "set_sandbox_id")
@@ -229,7 +231,7 @@ def test_execution_id_is_unique_per_attempt_and_shared_across_evaluators() -> No
     execution_id; a retry mints a new one.
 
     PR 4 makes execution_id the join key linking
-    ``RunTaskExecution`` ⇄ ``TaskExecutionService`` ⇄ each
+    ``SampleTaskAttempt`` ⇄ ``TaskExecutionService`` ⇄ each
     ``TaskEvaluateRequest`` invocation. The structural guard checks
     that (a) ``TaskEvaluateRequest`` carries ``execution_id``, (b) the
     orchestrator's fanout reuses ``prepared.execution_id`` for every
@@ -297,19 +299,19 @@ def _patch_get_session_identity(monkeypatch: pytest.MonkeyPatch, session: Sessio
     monkeypatch.setattr(inspection_module, "get_session", ctx_factory)
 
 
-def _seed_identity_parent(session: Session, *, run_id: UUID) -> RunGraphNode:
+def _seed_identity_parent(session: Session, *, sample_id: UUID) -> SampleGraphNode:
     session.add(
-        RunRecord(
-            id=run_id,
+        SampleRecord(
+            id=sample_id,
             definition_id=uuid4(),
             benchmark_type="test",
             instance_key="sample-1",
             worker_team_json={},
-            status=RunStatus.EXECUTING,
+            status=SampleStatus.EXECUTING,
         )
     )
-    node = RunGraphNode(
-        run_id=run_id,
+    node = SampleGraphNode(
+        sample_id=sample_id,
         instance_key="sample-1",
         task_slug="parent",
         description="parent task",
@@ -327,7 +329,7 @@ def _seed_identity_parent(session: Session, *, run_id: UUID) -> RunGraphNode:
 async def test_dynamic_task_id_has_no_definition_row(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Δ.3: dynamic spawn writes only to run_graph_nodes."""
+    """Δ.3: dynamic spawn writes only to sample_graph_nodes."""
 
     # 1. In-memory SQLite with all tables.
     engine = create_engine(
@@ -338,8 +340,8 @@ async def test_dynamic_task_id_has_no_definition_row(
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
 
-    run_id = uuid4()
-    parent = _seed_identity_parent(session, run_id=run_id)
+    sample_id = uuid4()
+    parent = _seed_identity_parent(session, sample_id=sample_id)
 
     _patch_get_session_identity(monkeypatch, session)
     monkeypatch.setattr(
@@ -352,7 +354,7 @@ async def test_dynamic_task_id_has_no_definition_row(
     )
     task_inspect = TaskInspectionService()
     context = WorkerContext._for_job(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=parent.task_id,
         execution_id=uuid4(),
         definition_id=None,
@@ -385,14 +387,14 @@ async def test_dynamic_task_id_has_no_definition_row(
     )
     assert def_count == 0
 
-    # 3. It DOES appear as the task_id of exactly one run_graph_nodes row.
+    # 3. It DOES appear as the task_id of exactly one sample_graph_nodes row.
     node_count = len(
-        session.exec(select(RunGraphNode).where(RunGraphNode.task_id == handle.task_id)).all()
+        session.exec(select(SampleGraphNode).where(SampleGraphNode.task_id == handle.task_id)).all()
     )
     assert node_count == 1
 
     child_context = WorkerContext._for_job(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=handle.task_id,
         execution_id=uuid4(),
         definition_id=None,

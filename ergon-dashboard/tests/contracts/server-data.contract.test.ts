@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { loadExperimentList } from "../../src/lib/server-data/experiments";
-import { loadRunList } from "../../src/lib/server-data/runs";
+import { loadRunList } from "../../src/lib/server-data/samples";
 import { getHarnessExperiment, resetDashboardHarness } from "../../src/lib/testing/dashboardHarness";
 
 test("harness miss for experiment is represented as null, not notFound policy", () => {
@@ -93,7 +93,7 @@ test("run list server data applies list filters and parses index summary fields"
       experiment: "alpha",
     });
 
-    assert.match(requestedUrl, /\/runs\?/);
+    assert.match(requestedUrl, /\/samples\?/);
     assert.match(requestedUrl, /limit=25/);
     assert.match(requestedUrl, /offset=50/);
     assert.match(requestedUrl, /status=completed/);

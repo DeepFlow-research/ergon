@@ -15,10 +15,10 @@ from ergon_core.core.views.dashboard_events.contracts import (
     DashboardThreadMessageCreatedEvent,
     DashboardWorkflowStartedEvent,
 )
-from ergon_core.core.views.runs.models import (
+from ergon_core.core.views.samples.models import (
     RunCommunicationMessageDto,
     RunCommunicationThreadDto,
-    RunSnapshotDto,
+    SampleSnapshotDto,
 )
 
 
@@ -61,7 +61,7 @@ def test_thread_dto_exposes_summary_and_task_identity() -> None:
 
 def test_workflow_started_event_embeds_run_snapshot_contract() -> None:
     assert "task_tree" not in DashboardWorkflowStartedEvent.model_fields
-    assert DashboardWorkflowStartedEvent.model_fields["snapshot"].annotation is RunSnapshotDto
+    assert DashboardWorkflowStartedEvent.model_fields["snapshot"].annotation is SampleSnapshotDto
 
 
 @pytest.mark.asyncio
@@ -77,7 +77,7 @@ async def test_dashboard_emitter_publishes_prebuilt_contract(
 
     emitter = DashboardEmitter(enabled=True)
     event = DashboardTaskStatusChangedEvent(
-        run_id=uuid4(),
+        sample_id=uuid4(),
         task_id=uuid4(),
         task_name="task",
         new_status="running",

@@ -149,7 +149,7 @@ def _resources(record: Record, generation: object) -> list[ParsedResource]:
 
 
 def _source_run_id(record: Record, *, fallback_id: str) -> str:
-    explicit = record.get("source_run_id") or record.get("run_id") or record.get("id")
+    explicit = record.get("source_run_id") or record.get("sample_id") or record.get("id")
     if explicit is not None:
         return str(explicit)
     item_id = record.get("item_id")

@@ -42,18 +42,18 @@ def test_persistent_component_catalog_model_is_deleted() -> None:
 
 
 def test_telemetry_models_import_before_run_resource_api() -> None:
-    from ergon_core.core.persistence.telemetry.models import RunResource
+    from ergon_core.core.persistence.telemetry.models import SampleResource
 
-    from ergon_core.core.application.resources import RunResourceView
+    from ergon_core.core.application.resources import SampleResourceView
 
-    assert RunResource.__tablename__ == "run_resources"
-    assert RunResourceView.__name__ == "RunResourceView"
+    assert SampleResource.__tablename__ == "sample_resources"
+    assert SampleResourceView.__name__ == "SampleResourceView"
 
 
 def test_context_models_import_without_worker_cycle() -> None:
-    from ergon_core.core.persistence.context.models import RunContextEvent
+    from ergon_core.core.persistence.context.models import SampleContextEvent
 
-    assert RunContextEvent.__tablename__ == "run_context_events"
+    assert SampleContextEvent.__tablename__ == "sample_context_events"
 
 
 def test_context_part_logs_use_shared_logprob_type_without_api_cycle() -> None:
@@ -70,7 +70,7 @@ def test_worker_execute_does_not_expose_result_adapter_helpers() -> None:
 
 
 def test_runs_api_does_not_own_run_snapshot_read_model_helpers() -> None:
-    import ergon_core.core.infrastructure.http.routes.runs as runs_api
+    import ergon_core.core.infrastructure.http.routes.samples as runs_api
 
     assert not hasattr(runs_api, "_build_task_map")
     assert not hasattr(runs_api, "_task_keyed_executions")

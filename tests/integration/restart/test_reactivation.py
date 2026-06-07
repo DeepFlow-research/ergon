@@ -13,13 +13,17 @@ Covered here:
 
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
+from ergon_core.core.persistence.graph.models import (
+    SampleGraphEdge,
+    SampleGraphMutation,
+    SampleGraphNode,
+)
 from ergon_core.core.application.runtime.status import CANCELLED, EDGE_PENDING
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.core.application.runtime.orchestration import PropagateTaskCompletionCommand
-from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
+from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
 from sqlmodel import select
 
 from tests.integration.propagation._helpers import (
@@ -57,7 +61,7 @@ async def test_cancelled_managed_subtask_reactivates_when_dep_completes() -> Non
         )
         # Edge is EDGE_PENDING: reset by restart_task / _invalidate_downstream
         make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_b.task_id)
-        run_id = run.id
+        sample_id = run.id
         defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
@@ -67,7 +71,7 @@ async def test_cancelled_managed_subtask_reactivates_when_dep_completes() -> Non
         svc = WorkflowService()
         await svc.propagate(
             PropagateTaskCompletionCommand(
-                run_id=run_id,
+                sample_id=sample_id,
                 definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
@@ -81,7 +85,7 @@ async def test_cancelled_managed_subtask_reactivates_when_dep_completes() -> Non
                 f"got {b_status!r}"
             )
     finally:
-        cleanup_run(run_id, defn_id)
+        cleanup_run(sample_id, defn_id)
 
 
 @pytest.mark.asyncio
@@ -98,7 +102,7 @@ async def test_cancelled_static_node_does_not_reactivate() -> None:
         # node_b is a static node — parent_task_id=None (default)
         node_b = make_node(session, run.id, task_slug="task-b-static", status=CANCELLED)
         make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_b.task_id)
-        run_id = run.id
+        sample_id = run.id
         defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
@@ -108,7 +112,7 @@ async def test_cancelled_static_node_does_not_reactivate() -> None:
         svc = WorkflowService()
         await svc.propagate(
             PropagateTaskCompletionCommand(
-                run_id=run_id,
+                sample_id=sample_id,
                 definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
@@ -122,7 +126,7 @@ async def test_cancelled_static_node_does_not_reactivate() -> None:
                 f"only managed subtasks re-activate. Got {b_status!r}"
             )
     finally:
-        cleanup_run(run_id, defn_id)
+        cleanup_run(sample_id, defn_id)
 
 
 @pytest.mark.asyncio
@@ -150,7 +154,7 @@ async def test_fan_in_managed_subtask_reactivates_only_when_all_deps_complete() 
         )
         make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_c.task_id)
         make_edge(session, run.id, source_task_id=node_b.task_id, target_task_id=node_c.task_id)
-        run_id = run.id
+        sample_id = run.id
         defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
@@ -163,7 +167,7 @@ async def test_fan_in_managed_subtask_reactivates_only_when_all_deps_complete() 
         # Propagate A completing — B is still PENDING, so C must NOT re-activate
         await svc.propagate(
             PropagateTaskCompletionCommand(
-                run_id=run_id,
+                sample_id=sample_id,
                 definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
@@ -180,7 +184,7 @@ async def test_fan_in_managed_subtask_reactivates_only_when_all_deps_complete() 
         # Now propagate B completing — both A and B are COMPLETED, so C re-activates
         await svc.propagate(
             PropagateTaskCompletionCommand(
-                run_id=run_id,
+                sample_id=sample_id,
                 definition_id=defn_id,
                 task_id=node_b_id,
                 execution_id=node_b_id,
@@ -193,4 +197,4 @@ async def test_fan_in_managed_subtask_reactivates_only_when_all_deps_complete() 
                 f"C must re-activate to PENDING once both A and B are COMPLETED; got {c_status!r}"
             )
     finally:
-        cleanup_run(run_id, defn_id)
+        cleanup_run(sample_id, defn_id)

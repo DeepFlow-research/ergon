@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.core.persistence.shared.enums import RunResourceKind
+from ergon_core.core.persistence.shared.enums import SampleResourceKind
 
 
 class _Entry:
@@ -83,14 +83,14 @@ def _session_factory(session: _Session):
 
 @pytest.mark.asyncio
 async def test_publish_sandbox_files_writes_blob_and_appends_resource_row() -> None:
-    from ergon_core.core.application.resources.publishing import RunResourcePublishService
+    from ergon_core.core.application.resources.publishing import SampleResourcePublishService
 
-    run_id = uuid4()
+    sample_id = uuid4()
     execution_id = uuid4()
     session = _Session()
     repository = _Repository()
     blob_store = _BlobStore()
-    service = RunResourcePublishService(
+    service = SampleResourcePublishService(
         repository=repository,
         session_factory=lambda: _session_factory(session),
     )
@@ -98,16 +98,16 @@ async def test_publish_sandbox_files_writes_blob_and_appends_resource_row() -> N
     created = await service.publish_sandbox_files(
         reader=_Reader(),
         blob_store=blob_store,
-        run_id=run_id,
+        sample_id=sample_id,
         task_execution_id=execution_id,
-        publish_dirs=(("/workspace/final_output/", RunResourceKind.REPORT),),
+        publish_dirs=(("/workspace/final_output/", SampleResourceKind.REPORT),),
     )
 
     assert len(created) == 1
     appended = repository.appended[0]
-    assert appended["run_id"] == run_id
+    assert appended["sample_id"] == sample_id
     assert appended["task_execution_id"] == execution_id
-    assert appended["kind"] == RunResourceKind.REPORT.value
+    assert appended["kind"] == SampleResourceKind.REPORT.value
     assert appended["name"] == "report.md"
     assert appended["mime_type"] == "text/markdown"
     assert appended["size_bytes"] == len(b"# report")
@@ -119,12 +119,12 @@ async def test_publish_sandbox_files_writes_blob_and_appends_resource_row() -> N
 
 @pytest.mark.asyncio
 async def test_publish_sandbox_files_skips_existing_blob_path_without_writing() -> None:
-    from ergon_core.core.application.resources.publishing import RunResourcePublishService
+    from ergon_core.core.application.resources.publishing import SampleResourcePublishService
 
     session = _Session()
     repository = _Repository(prior_by_path=object())
     blob_store = _BlobStore()
-    service = RunResourcePublishService(
+    service = SampleResourcePublishService(
         repository=repository,
         session_factory=lambda: _session_factory(session),
     )
@@ -132,9 +132,9 @@ async def test_publish_sandbox_files_skips_existing_blob_path_without_writing() 
     created = await service.publish_sandbox_files(
         reader=_Reader(),
         blob_store=blob_store,
-        run_id=uuid4(),
+        sample_id=uuid4(),
         task_execution_id=uuid4(),
-        publish_dirs=(("/workspace/final_output/", RunResourceKind.REPORT),),
+        publish_dirs=(("/workspace/final_output/", SampleResourceKind.REPORT),),
     )
 
     assert created == []
@@ -144,20 +144,20 @@ async def test_publish_sandbox_files_skips_existing_blob_path_without_writing() 
 
 
 def test_publish_value_dedups_by_hash_before_blob_write() -> None:
-    from ergon_core.core.application.resources.publishing import RunResourcePublishService
+    from ergon_core.core.application.resources.publishing import SampleResourcePublishService
 
     repository = _Repository(prior_by_hash=object())
     blob_store = _BlobStore()
-    service = RunResourcePublishService(
+    service = SampleResourcePublishService(
         repository=repository,
         session_factory=lambda: _session_factory(_Session()),
     )
 
     created = service.publish_value(
         blob_store=blob_store,
-        run_id=uuid4(),
+        sample_id=uuid4(),
         task_execution_id=uuid4(),
-        kind=RunResourceKind.REPORT,
+        kind=SampleResourceKind.REPORT,
         name="summary.txt",
         content="already present",
     )

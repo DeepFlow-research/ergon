@@ -13,7 +13,7 @@ from ergon_cli.main import build_parser
             ["experiment", "show", "00000000-0000-0000-0000-000000000000"],
             {"command": "experiment", "experiment_action": "show"},
         ),
-        (["run", "list", "--limit", "3"], {"command": "run", "run_action": "list"}),
+        (["sample", "list", "--limit", "3"], {"command": "sample", "sample_action": "list"}),
         (["ingest", "list"], {"command": "ingest", "ingest_action": "list"}),
         (["worker", "list"], {"command": "worker", "worker_action": "list"}),
         (["evaluator", "list"], {"command": "evaluator", "evaluator_action": "list"}),

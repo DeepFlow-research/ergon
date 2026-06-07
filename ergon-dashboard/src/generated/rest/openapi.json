@@ -6,7 +6,7 @@
     "version": "0.1.0"
   },
   "paths": {
-    "/runs": {
+    "/samples": {
       "get": {
         "tags": [
           "runs"
@@ -93,7 +93,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/RunSummaryDto"
+                    "$ref": "#/components/schemas/SampleSummaryDto"
                   },
                   "title": "Response List Runs Runs Get"
                 }
@@ -113,17 +113,17 @@
         }
       }
     },
-    "/runs/{run_id}": {
+    "/samples/{sample_id}": {
       "get": {
         "tags": [
           "runs"
         ],
         "summary": "Get Run",
         "description": "Get a persisted run-detail snapshot suitable for frontend hydration.",
-        "operationId": "get_run_runs__run_id__get",
+        "operationId": "get_run_runs__sample_id__get",
         "parameters": [
           {
-            "name": "run_id",
+            "name": "sample_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -139,7 +139,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RunSnapshotDto"
+                  "$ref": "#/components/schemas/SampleSnapshotDto"
                 }
               }
             }
@@ -157,17 +157,17 @@
         }
       }
     },
-    "/runs/{run_id}/mutations": {
+    "/samples/{sample_id}/mutations": {
       "get": {
         "tags": [
           "runs"
         ],
         "summary": "Get Mutations",
         "description": "Return the append-only mutation log for a run, ordered by sequence.",
-        "operationId": "get_mutations_runs__run_id__mutations_get",
+        "operationId": "get_mutations_runs__sample_id__mutations_get",
         "parameters": [
           {
-            "name": "run_id",
+            "name": "sample_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -205,17 +205,17 @@
         }
       }
     },
-    "/runs/{run_id}/resources/{resource_id}/content": {
+    "/samples/{sample_id}/resources/{resource_id}/content": {
       "get": {
         "tags": [
           "runs"
         ],
         "summary": "Get Resource Content",
-        "description": "Stream the blob bytes for a RunResource.",
-        "operationId": "get_resource_content_runs__run_id__resources__resource_id__content_get",
+        "description": "Stream the blob bytes for a SampleResource.",
+        "operationId": "get_resource_content_runs__sample_id__resources__resource_id__content_get",
         "parameters": [
           {
-            "name": "run_id",
+            "name": "sample_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -592,16 +592,16 @@
         }
       }
     },
-    "/api/__danger__/test-harness/read/run/{run_id}/state": {
+    "/api/__danger__/test-harness/read/samples/{sample_id}/state": {
       "get": {
         "tags": [
           "danger-test-harness"
         ],
         "summary": "Read Run State",
-        "operationId": "read_run_state_api___danger___test_harness_read_run__run_id__state_get",
+        "operationId": "read_run_state_api___danger___test_harness_read_run__sample_id__state_get",
         "parameters": [
           {
-            "name": "run_id",
+            "name": "sample_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -635,7 +635,7 @@
         }
       }
     },
-    "/api/__danger__/test-harness/read/experiment/{experiment}/runs": {
+    "/api/__danger__/test-harness/read/experiment/{experiment}/samples": {
       "get": {
         "tags": [
           "danger-test-harness"
@@ -682,7 +682,7 @@
         }
       }
     },
-    "/api/__danger__/test-harness/write/run/seed": {
+    "/api/__danger__/test-harness/write/samples/seed": {
       "post": {
         "tags": [
           "danger-test-harness"
@@ -765,7 +765,7 @@
           "danger-test-harness"
         ],
         "summary": "Submit Experiment Runs",
-        "description": "Build + persist + dispatch N runs under one experiment tag.\n\nPer-slot flow persists the object-bound smoke ``Benchmark`` into the\nimmutable ``ExperimentDefinition`` tables. The v2 experiment grouping tag\nis written into definition metadata and copied to ``RunRecord.experiment``\nby launch. Slots submit sequentially \u2014 typical N \u2264 3, so the\nparallel-gather savings are negligible.",
+        "description": "Build + persist + dispatch N runs under one experiment tag.\n\nPer-slot flow persists the object-bound smoke ``Benchmark`` into the\nimmutable ``ExperimentDefinition`` tables. The v2 experiment grouping tag\nis written into definition metadata and copied to ``SampleRecord.experiment``\nby launch. Slots submit sequentially \u2014 typical N \u2264 3, so the\nparallel-gather savings are negligible.",
         "operationId": "submit_experiment_runs_api___danger___test_harness_write_experiment_runs_post",
         "requestBody": {
           "content": {
@@ -1151,7 +1151,7 @@
       },
       "EpisodeFailure": {
         "properties": {
-          "run_id": {
+          "sample_id": {
             "type": "string",
             "format": "uuid",
             "title": "Run Id"
@@ -1163,7 +1163,7 @@
         },
         "type": "object",
         "required": [
-          "run_id",
+          "sample_id",
           "error"
         ],
         "title": "EpisodeFailure",
@@ -1328,7 +1328,7 @@
       },
       "ExperimentRunMetricsDto": {
         "properties": {
-          "run_id": {
+          "sample_id": {
             "type": "string",
             "format": "uuid",
             "title": "Run Id"
@@ -1482,7 +1482,7 @@
         },
         "type": "object",
         "required": [
-          "run_id",
+          "sample_id",
           "status",
           "instance_key"
         ],
@@ -1525,7 +1525,7 @@
             "format": "uuid",
             "title": "Definition Id"
           },
-          "run_ids": {
+          "sample_ids": {
             "items": {
               "type": "string",
               "format": "uuid"
@@ -1545,13 +1545,13 @@
         "type": "object",
         "required": [
           "definition_id",
-          "run_ids"
+          "sample_ids"
         ],
         "title": "ExperimentRunResult"
       },
       "ExperimentRunRowDto": {
         "properties": {
-          "run_id": {
+          "sample_id": {
             "type": "string",
             "format": "uuid",
             "title": "Run Id"
@@ -1701,7 +1701,7 @@
         },
         "type": "object",
         "required": [
-          "run_id",
+          "sample_id",
           "definition_id",
           "benchmark_type",
           "instance_key",
@@ -1955,7 +1955,7 @@
             "title": "Id",
             "description": "Identifier of the mutation row itself, not a graph target id."
           },
-          "run_id": {
+          "sample_id": {
             "type": "string",
             "format": "uuid",
             "title": "Run Id"
@@ -2116,7 +2116,7 @@
         "type": "object",
         "required": [
           "id",
-          "run_id",
+          "sample_id",
           "sequence",
           "mutation_type",
           "target_type",
@@ -2521,7 +2521,7 @@
             "type": "string",
             "title": "Threadtopic"
           },
-          "runId": {
+          "sampleId": {
             "type": "string",
             "title": "Runid"
           },
@@ -2575,7 +2575,7 @@
           "id",
           "threadId",
           "threadTopic",
-          "runId",
+          "sampleId",
           "fromAgentId",
           "toAgentId",
           "content",
@@ -2590,7 +2590,7 @@
             "type": "string",
             "title": "Id"
           },
-          "runId": {
+          "sampleId": {
             "type": "string",
             "title": "Runid"
           },
@@ -2650,7 +2650,7 @@
         "type": "object",
         "required": [
           "id",
-          "runId",
+          "sampleId",
           "topic",
           "agentAId",
           "agentBId",
@@ -2659,14 +2659,14 @@
         ],
         "title": "RunCommunicationThreadDto"
       },
-      "RunContextEventDto": {
+      "SampleContextEventDto": {
         "properties": {
           "id": {
             "type": "string",
             "format": "uuid",
             "title": "Id"
           },
-          "runId": {
+          "sampleId": {
             "type": "string",
             "format": "uuid",
             "title": "Runid"
@@ -2738,7 +2738,7 @@
         "type": "object",
         "required": [
           "id",
-          "runId",
+          "sampleId",
           "taskExecutionId",
           "taskId",
           "workerBindingKey",
@@ -2747,7 +2747,7 @@
           "payload",
           "createdAt"
         ],
-        "title": "RunContextEventDto"
+        "title": "SampleContextEventDto"
       },
       "RunEvaluationCriterionDto": {
         "properties": {
@@ -3043,7 +3043,7 @@
         ],
         "title": "RunExecutionAttemptDto"
       },
-      "RunResourceDto": {
+      "SampleResourceDto": {
         "properties": {
           "id": {
             "type": "string",
@@ -3091,7 +3091,7 @@
           "sizeBytes",
           "createdAt"
         ],
-        "title": "RunResourceDto"
+        "title": "SampleResourceDto"
       },
       "RunSandboxCommandDto": {
         "properties": {
@@ -3233,7 +3233,7 @@
         ],
         "title": "RunSandboxDto"
       },
-      "RunSnapshotDto": {
+      "SampleSnapshotDto": {
         "properties": {
           "id": {
             "type": "string",
@@ -3253,7 +3253,7 @@
           },
           "tasks": {
             "additionalProperties": {
-              "$ref": "#/components/schemas/RunTaskDto"
+              "$ref": "#/components/schemas/SampleTaskDto"
             },
             "type": "object",
             "title": "Tasks"
@@ -3266,7 +3266,7 @@
           "resourcesByTask": {
             "additionalProperties": {
               "items": {
-                "$ref": "#/components/schemas/RunResourceDto"
+                "$ref": "#/components/schemas/SampleResourceDto"
               },
               "type": "array"
             },
@@ -3285,7 +3285,7 @@
           },
           "evaluationsByTask": {
             "additionalProperties": {
-              "$ref": "#/components/schemas/RunTaskEvaluationDto"
+              "$ref": "#/components/schemas/SampleTaskEvaluationDto"
             },
             "type": "object",
             "title": "Evaluationsbytask"
@@ -3300,7 +3300,7 @@
           "contextEventsByTask": {
             "additionalProperties": {
               "items": {
-                "$ref": "#/components/schemas/RunContextEventDto"
+                "$ref": "#/components/schemas/SampleContextEventDto"
               },
               "type": "array"
             },
@@ -3393,7 +3393,7 @@
           "metrics": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/RunSnapshotMetricsDto"
+                "$ref": "#/components/schemas/SampleSnapshotMetricsDto"
               },
               {
                 "type": "null"
@@ -3420,11 +3420,11 @@
           "name",
           "status"
         ],
-        "title": "RunSnapshotDto"
+        "title": "SampleSnapshotDto"
       },
-      "RunSnapshotMetricsDto": {
+      "SampleSnapshotMetricsDto": {
         "properties": {
-          "runId": {
+          "sampleId": {
             "type": "string",
             "title": "Runid"
           },
@@ -3491,12 +3491,12 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "runId",
+          "sampleId",
           "status"
         ],
-        "title": "RunSnapshotMetricsDto"
+        "title": "SampleSnapshotMetricsDto"
       },
-      "RunSummaryDto": {
+      "SampleSummaryDto": {
         "properties": {
           "id": {
             "type": "string",
@@ -3727,9 +3727,9 @@
           "instance_key",
           "sample_label"
         ],
-        "title": "RunSummaryDto"
+        "title": "SampleSummaryDto"
       },
-      "RunTaskDto": {
+      "SampleTaskDto": {
         "properties": {
           "id": {
             "type": "string",
@@ -3837,16 +3837,16 @@
           "isLeaf",
           "level"
         ],
-        "title": "RunTaskDto",
-        "description": "REST projection of RunGraphNode for run detail pages.\n\nThis is not the canonical graph schema; graph semantics live in\napplication/graph/models.py and application/runtime/status.py."
+        "title": "SampleTaskDto",
+        "description": "REST projection of SampleGraphNode for run detail pages.\n\nThis is not the canonical graph schema; graph semantics live in\napplication/graph/models.py and application/runtime/status.py."
       },
-      "RunTaskEvaluationDto": {
+      "SampleTaskEvaluationDto": {
         "properties": {
           "id": {
             "type": "string",
             "title": "Id"
           },
-          "runId": {
+          "sampleId": {
             "type": "string",
             "title": "Runid"
           },
@@ -3917,7 +3917,7 @@
         "type": "object",
         "required": [
           "id",
-          "runId",
+          "sampleId",
           "evaluatorName",
           "aggregationRule",
           "totalScore",
@@ -3927,7 +3927,7 @@
           "stagesPassed",
           "createdAt"
         ],
-        "title": "RunTaskEvaluationDto"
+        "title": "SampleTaskEvaluationDto"
       },
       "SeedRunRequest": {
         "properties": {
@@ -4035,7 +4035,7 @@
       },
       "SubmitExperimentRunsResponse": {
         "properties": {
-          "run_ids": {
+          "sample_ids": {
             "items": {
               "type": "string",
               "format": "uuid"
@@ -4046,7 +4046,7 @@
         },
         "type": "object",
         "required": [
-          "run_ids"
+          "sample_ids"
         ],
         "title": "SubmitExperimentRunsResponse"
       },
@@ -4100,7 +4100,7 @@
             "format": "uuid",
             "title": "Batch Id"
           },
-          "run_ids": {
+          "sample_ids": {
             "items": {
               "type": "string",
               "format": "uuid"
@@ -4116,7 +4116,7 @@
         "type": "object",
         "required": [
           "batch_id",
-          "run_ids"
+          "sample_ids"
         ],
         "title": "SubmitResponse",
         "description": "Ergon \u2192 Trainer: batch accepted."
@@ -4217,7 +4217,7 @@
       },
       "TestExperimentRunDto": {
         "properties": {
-          "run_id": {
+          "sample_id": {
             "type": "string",
             "format": "uuid",
             "title": "Run Id"
@@ -4229,7 +4229,7 @@
         },
         "type": "object",
         "required": [
-          "run_id",
+          "sample_id",
           "status"
         ],
         "title": "TestExperimentRunDto"
@@ -4320,7 +4320,7 @@
       },
       "TestRunStateDto": {
         "properties": {
-          "run_id": {
+          "sample_id": {
             "type": "string",
             "format": "uuid",
             "title": "Run Id"
@@ -4380,7 +4380,7 @@
         },
         "type": "object",
         "required": [
-          "run_id",
+          "sample_id",
           "status",
           "graph_nodes",
           "mutations",
@@ -4519,7 +4519,7 @@
       },
       "Trajectory": {
         "properties": {
-          "run_id": {
+          "sample_id": {
             "type": "string",
             "format": "uuid",
             "title": "Run Id"
@@ -4567,7 +4567,7 @@
         },
         "type": "object",
         "required": [
-          "run_id",
+          "sample_id",
           "agent_id",
           "prompt_ids",
           "completion_ids",

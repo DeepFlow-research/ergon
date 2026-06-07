@@ -9,7 +9,7 @@ from tests.fixtures.smoke_components.workers.swebench_smoke import SweBenchSadPa
 
 class _SpawnOnlyContext:
     def __init__(self) -> None:
-        self.run_id = uuid4()
+        self.sample_id = uuid4()
         self.task_id = uuid4()
         self.execution_id = uuid4()
         self.sandbox_id = "smoke-sandbox-test"

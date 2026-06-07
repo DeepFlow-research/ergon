@@ -13,16 +13,16 @@ from uuid import UUID
 from ergon_core.core.application.events.base import InngestEventContract
 
 
-class RunCancelledEvent(InngestEventContract):
-    name: ClassVar[str] = "run/cancelled"
+class SampleCancelledEvent(InngestEventContract):
+    name: ClassVar[str] = "sample/cancelled"
 
-    run_id: UUID
+    sample_id: UUID
 
 
-class RunCleanupEvent(InngestEventContract):
-    name: ClassVar[str] = "run/cleanup"
+class SampleCleanupEvent(InngestEventContract):
+    name: ClassVar[str] = "sample/cleanup"
 
-    run_id: UUID
+    sample_id: UUID
     status: str
     error_message: str | None = None
 
@@ -30,7 +30,7 @@ class RunCleanupEvent(InngestEventContract):
 class TaskReadyEvent(InngestEventContract):
     name: ClassVar[str] = "task/ready"
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
     task_id: UUID
 
@@ -38,7 +38,7 @@ class TaskReadyEvent(InngestEventContract):
 class TaskStartedEvent(InngestEventContract):
     name: ClassVar[str] = "task/started"
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
     task_id: UUID
     execution_id: UUID
@@ -57,7 +57,7 @@ PropagationCancelCause = Literal["parent_terminal", "dep_invalidated"]
 class TaskCancelledEvent(InngestEventContract):
     name: ClassVar[str] = "task/cancelled"
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
     task_id: UUID
     execution_id: UUID | None
@@ -69,7 +69,7 @@ class TaskCancelledEvent(InngestEventContract):
 class TaskCompletedEvent(InngestEventContract):
     name: ClassVar[str] = "task/completed"
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
     task_id: UUID
     execution_id: UUID
@@ -79,7 +79,7 @@ class TaskCompletedEvent(InngestEventContract):
 class TaskFailedEvent(InngestEventContract):
     name: ClassVar[str] = "task/failed"
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
     task_id: UUID
     execution_id: UUID
@@ -90,20 +90,20 @@ class TaskFailedEvent(InngestEventContract):
 class WorkflowStartedEvent(InngestEventContract):
     name: ClassVar[str] = "workflow/started"
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
 
 
 class WorkflowCompletedEvent(InngestEventContract):
     name: ClassVar[str] = "workflow/completed"
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
 
 
 class WorkflowFailedEvent(InngestEventContract):
     name: ClassVar[str] = "workflow/failed"
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
     error: str

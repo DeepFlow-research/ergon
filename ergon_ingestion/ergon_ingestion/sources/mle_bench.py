@@ -164,7 +164,7 @@ def _resource_kind(value: object) -> str:
 
 
 def _source_run_id(record: Record, competition_id: str, submission_id: str) -> str:
-    explicit = record.get("source_run_id") or record.get("run_id") or record.get("id")
+    explicit = record.get("source_run_id") or record.get("sample_id") or record.get("id")
     if explicit is not None:
         return str(explicit)
     return f"mle:{competition_id}:{submission_id}"

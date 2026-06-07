@@ -3,14 +3,14 @@
 from pathlib import Path
 
 from ergon_core.api.criterion import CriterionContext
-from ergon_core.core.application.resources import RunResourceView
+from ergon_core.core.application.resources import SampleResourceView
 from pydantic import BaseModel
 
 
 class ResourceEvidence(BaseModel):
     model_config = {"frozen": True, "arbitrary_types_allowed": True}
 
-    resource: RunResourceView
+    resource: SampleResourceView
     text: str
 
 
@@ -20,7 +20,7 @@ async def load_researchrubrics_evidence(
     resources = context.metadata.get("resources", ())
     evidence: list[ResourceEvidence] = []
     for resource in resources:
-        if not isinstance(resource, RunResourceView):
+        if not isinstance(resource, SampleResourceView):
             continue
         evidence.append(ResourceEvidence(resource=resource, text=_read_resource_text(resource)))
 
@@ -29,7 +29,7 @@ async def load_researchrubrics_evidence(
     return final_outputs, scratch_outputs
 
 
-def _read_resource_text(resource: RunResourceView) -> str:
+def _read_resource_text(resource: SampleResourceView) -> str:
     try:
         raw_content = Path(resource.file_path).read_bytes()
     except OSError as exc:
@@ -37,6 +37,6 @@ def _read_resource_text(resource: RunResourceView) -> str:
     return raw_content.decode("utf-8", errors="replace")
 
 
-def _is_final_output_resource(resource: RunResourceView) -> bool:
+def _is_final_output_resource(resource: SampleResourceView) -> bool:
     sandbox_origin = str(resource.metadata.get("sandbox_origin") or "")
     return resource.kind.value == "report" or sandbox_origin.startswith("/workspace/final_output/")

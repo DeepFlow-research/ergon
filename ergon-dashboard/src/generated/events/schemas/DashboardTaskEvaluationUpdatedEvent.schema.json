@@ -173,15 +173,15 @@
       "title": "RunEvaluationCriterionDto",
       "type": "object"
     },
-    "RunTaskEvaluationDto": {
+    "SampleTaskEvaluationDto": {
       "additionalProperties": false,
       "properties": {
         "id": {
           "title": "Id",
           "type": "string"
         },
-        "runId": {
-          "title": "Runid",
+        "sampleId": {
+          "title": "Sampleid",
           "type": "string"
         },
         "taskId": {
@@ -251,7 +251,7 @@
       },
       "required": [
         "id",
-        "runId",
+        "sampleId",
         "evaluatorName",
         "aggregationRule",
         "totalScore",
@@ -261,16 +261,16 @@
         "stagesPassed",
         "createdAt"
       ],
-      "title": "RunTaskEvaluationDto",
+      "title": "SampleTaskEvaluationDto",
       "type": "object"
     }
   },
   "additionalProperties": true,
-  "description": "Embeds the full RunTaskEvaluationDto as ``evaluation``.",
+  "description": "Embeds the full SampleTaskEvaluationDto as ``evaluation``.",
   "properties": {
-    "run_id": {
+    "sample_id": {
       "format": "uuid",
-      "title": "Run Id",
+      "title": "Sample Id",
       "type": "string"
     },
     "task_id": {
@@ -279,11 +279,11 @@
       "type": "string"
     },
     "evaluation": {
-      "$ref": "#/$defs/RunTaskEvaluationDto"
+      "$ref": "#/$defs/SampleTaskEvaluationDto"
     }
   },
   "required": [
-    "run_id",
+    "sample_id",
     "task_id",
     "evaluation"
   ],

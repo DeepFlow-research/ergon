@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 async def _cancel_orphans_for(
     ctx: Any,
     *,
-    run_id: UUID,
+    sample_id: UUID,
     definition_id: UUID,
     parent_task_id: UUID,
     cause: PropagationCancelCause,
@@ -37,7 +37,7 @@ async def _cancel_orphans_for(
         with get_session() as session:
             result = await svc.cancel_orphans(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 definition_id=definition_id,
                 parent_task_id=parent_task_id,
                 cause=cause,
@@ -73,7 +73,7 @@ async def run_block_descendants_on_failed_job(ctx: Any, payload: TaskFailedEvent
         with get_session() as session:
             blocked_ids = await svc.block_pending_descendants(
                 session,
-                run_id=payload.run_id,
+                sample_id=payload.sample_id,
                 parent_task_id=payload.task_id,
                 cause="parent_failed",
             )
@@ -88,7 +88,7 @@ async def run_cancel_orphans_on_cancelled_job(ctx: Any, payload: TaskCancelledEv
     logger.info("cancel-orphans parent=%s cause=parent_terminal", payload.task_id)
     return await _cancel_orphans_for(
         ctx,
-        run_id=payload.run_id,
+        sample_id=payload.sample_id,
         definition_id=payload.definition_id,
         parent_task_id=payload.task_id,
         cause="parent_terminal",

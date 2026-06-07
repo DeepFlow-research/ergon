@@ -14,26 +14,28 @@ class BackendHarnessClient:
     def __init__(self, base_url: str) -> None:
         self._base = base_url
 
-    def get_run_state(self, run_id: str) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+    def get_run_state(self, sample_id: str) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
         with httpx.Client(timeout=10.0) as client:
-            r = client.get(f"{self._base}/api/__danger__/test-harness/read/run/{run_id}/state")
+            r = client.get(
+                f"{self._base}/api/__danger__/test-harness/read/samples/{sample_id}/state"
+            )
             r.raise_for_status()
             return r.json()
 
     def wait_for_terminal(
         self,
-        run_id: str,
+        sample_id: str,
         *,
         timeout_s: float = 600.0,
         poll_s: float = 3.0,
     ) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
         deadline = time.monotonic() + timeout_s
         while time.monotonic() < deadline:
-            state = self.get_run_state(run_id)
+            state = self.get_run_state(sample_id)
             if state["status"] in {"completed", "failed", "cancelled"}:
                 return state
             time.sleep(poll_s)
-        raise TimeoutError(f"run {run_id} did not reach terminal status in {timeout_s}s")
+        raise TimeoutError(f"run {sample_id} did not reach terminal status in {timeout_s}s")
 
 
 @pytest.fixture

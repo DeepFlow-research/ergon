@@ -2,11 +2,11 @@
 
 Receives one ``TaskEvaluateRequest`` per evaluator from
 `execute_task._fan_out_evaluators`.
-The payload only carries identity (``run_id`` + ``task_id`` +
+The payload only carries identity (``sample_id`` + ``task_id`` +
 ``execution_id`` + ``evaluator_index``); everything else is
 reconstructed locally from the run-tier read boundary:
 
-- execution row + stamped ``sandbox_id`` ← ``session.get(RunTaskExecution)``
+- execution row + stamped ``sandbox_id`` ← ``session.get(SampleTaskAttempt)``
 - typed Task view ← ``TaskExecutionService.load_task_view(..., sandbox_id=...)``
 - persisted ``WorkerOutput`` ← ``TaskExecutionService.load_worker_output``
 - evaluator instance ← ``task.evaluators[payload.evaluator_index]``
@@ -40,13 +40,13 @@ from ergon_core.core.infrastructure.tracing import (
     get_trace_sink,
 )
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import RunTaskExecution
+from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
 from ergon_core.core.views.dashboard_events.contracts import DashboardTaskEvaluationUpdatedEvent
-from ergon_core.core.views.runs.evaluation_mapping import build_dashboard_evaluation_dto
+from ergon_core.core.views.samples.evaluation_mapping import build_dashboard_evaluation_dto
 
 if TYPE_CHECKING:
     from ergon_core.api.rubric import Evaluator
-    from ergon_core.core.application.runtime.models import RunGraphNodeView
+    from ergon_core.core.application.runtime.models import SampleGraphNodeView
 
 logger = logging.getLogger(__name__)
 _evaluation_persistence = EvaluationService()
@@ -66,23 +66,23 @@ async def run_evaluate_task_run_job(
     del ctx  # The orchestrator provides the evaluator-level retry boundary.
 
     span_start = datetime.now(UTC)
-    run_id = payload.run_id
+    sample_id = payload.sample_id
     task_id = payload.task_id
     execution_id = payload.execution_id
     evaluator_index = payload.evaluator_index
 
     with get_session() as session:
-        execution = session.get(RunTaskExecution, execution_id)
+        execution = session.get(SampleTaskAttempt, execution_id)
         if execution is None:
             raise ContractViolationError(
-                f"RunTaskExecution {execution_id} not found",
-                run_id=run_id,
+                f"SampleTaskAttempt {execution_id} not found",
+                sample_id=sample_id,
                 task_id=task_id,
                 execution_id=execution_id,
             )
         view = await _task_execution.load_task_view(
             session,
-            run_id=run_id,
+            sample_id=sample_id,
             task_id=task_id,
             sandbox_id=execution.sandbox_id,
         )
@@ -95,7 +95,7 @@ async def run_evaluate_task_run_job(
             raise ContractViolationError(
                 f"evaluator_index {evaluator_index} out of range for task "
                 f"{task.task_slug!r} (has {len(task.evaluators)} evaluators)",
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=task_id,
                 execution_id=execution_id,
             )
@@ -103,7 +103,7 @@ async def run_evaluate_task_run_job(
         binding_key = _evaluator_binding_key(evaluator, evaluator_index)
 
     context = CriterionContext(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=task.task_id,
         execution_id=execution_id,
         task=task,
@@ -117,7 +117,7 @@ async def run_evaluate_task_run_job(
             binding_key=binding_key,
             evaluator_index=evaluator_index,
             view=view,
-            run_id=run_id,
+            sample_id=sample_id,
             task_id=task_id,
             execution_id=execution_id,
             span_start=span_start,
@@ -136,8 +136,8 @@ async def _run_evaluation(
     context: CriterionContext,
     binding_key: str,
     evaluator_index: int,
-    view: "RunGraphNodeView",
-    run_id: UUID,
+    view: "SampleGraphNodeView",
+    sample_id: UUID,
     task_id: UUID,
     execution_id: UUID,
     span_start: datetime,
@@ -155,13 +155,13 @@ async def _run_evaluation(
         )
     except Exception as exc:  # slopcop: ignore[no-broad-except]
         logger.exception(
-            "evaluate_task_run failed run_id=%s task_id=%s index=%s",
-            run_id,
+            "evaluate_task_run failed sample_id=%s task_id=%s index=%s",
+            sample_id,
             task_id,
             evaluator_index,
         )
         await _evaluation_persistence.persist_failure(
-            run_id=run_id,
+            sample_id=sample_id,
             task_execution_id=execution_id,
             task_id=view.task_id,
             binding_key=binding_key,
@@ -175,7 +175,7 @@ async def _run_evaluation(
 
     result = service_result.result
     persisted = await _evaluation_persistence.persist_success(
-        run_id=run_id,
+        sample_id=sample_id,
         task_execution_id=execution_id,
         task_id=view.task_id,
         binding_key=binding_key,
@@ -183,11 +183,11 @@ async def _run_evaluation(
     )
     await get_dashboard_event_publisher().publish(
         DashboardTaskEvaluationUpdatedEvent(
-            run_id=run_id,
+            sample_id=sample_id,
             task_id=view.task_id,
             evaluation=build_dashboard_evaluation_dto(
                 evaluation_id=persisted.evaluation_id,
-                run_id=persisted.run_id,
+                sample_id=persisted.sample_id,
                 task_id=persisted.task_id,
                 total_score=persisted.total_score,
                 created_at=persisted.created_at,
@@ -198,12 +198,12 @@ async def _run_evaluation(
 
     # Trace span needs the evaluator_id for stable key derivation;
     # reuse the persistence lookup so the span key matches the
-    # `run_task_evaluations.definition_evaluator_id` FK on the
+    # `sample_task_evaluations.definition_evaluator_id` FK on the
     # row persist_success just wrote.
     with get_session() as session:
         evaluator_id = _evaluation_persistence.lookup_evaluator_id(
             session,
-            run_id,
+            sample_id,
             binding_key,
             evaluator_type=evaluator.type_slug,
             snapshot_json=evaluator.model_dump(mode="json"),
@@ -211,11 +211,11 @@ async def _run_evaluation(
     get_trace_sink().emit_span(
         CompletedSpan(
             name="evaluation.task",
-            context=evaluation_task_context(run_id, view.task_id, execution_id, evaluator_id),
+            context=evaluation_task_context(sample_id, view.task_id, execution_id, evaluator_id),
             start_time=span_start,
             end_time=datetime.now(UTC),
             attributes={
-                "run_id": str(run_id),
+                "sample_id": str(sample_id),
                 "task_id": str(view.task_id),
                 "execution_id": str(execution_id),
                 "evaluator_id": str(evaluator_id),

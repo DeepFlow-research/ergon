@@ -4,11 +4,15 @@ import time
 from uuid import UUID
 
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
+from ergon_core.core.persistence.graph.models import (
+    SampleGraphEdge,
+    SampleGraphMutation,
+    SampleGraphNode,
+)
 from ergon_core.core.application.runtime.status import TERMINAL_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.shared.enums import SampleStatus
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from sqlmodel import Session, select
 
 
@@ -21,8 +25,8 @@ def poll_until(condition, *, timeout: float = 30, interval: float = 0.5) -> None
     raise TimeoutError("poll_until timed out")
 
 
-def get_node(session: Session, task_id: UUID) -> RunGraphNode:
-    node = session.exec(select(RunGraphNode).where(RunGraphNode.task_id == task_id)).one()
+def get_node(session: Session, task_id: UUID) -> SampleGraphNode:
+    node = session.exec(select(SampleGraphNode).where(SampleGraphNode.task_id == task_id)).one()
     session.refresh(node)
     return node
 
@@ -33,9 +37,11 @@ def get_node_status(session: Session, task_id: UUID) -> str:
     return node.status
 
 
-def get_wal_entries(session: Session, task_id: UUID) -> list[RunGraphMutation]:
+def get_wal_entries(session: Session, task_id: UUID) -> list[SampleGraphMutation]:
     return list(
-        session.exec(select(RunGraphMutation).where(RunGraphMutation.target_id == task_id)).all()
+        session.exec(
+            select(SampleGraphMutation).where(SampleGraphMutation.target_id == task_id)
+        ).all()
     )
 
 
@@ -58,9 +64,11 @@ def assert_wal_has_status(
         )
 
 
-def assert_cross_cutting_invariants(session: Session, run_id: UUID) -> None:
+def assert_cross_cutting_invariants(session: Session, sample_id: UUID) -> None:
     """Basic invariants that should hold after any settled state."""
-    nodes = list(session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all())
+    nodes = list(
+        session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all()
+    )
     for node in nodes:
         session.refresh(node)
         entries = get_wal_entries(session, node.task_id)
@@ -81,14 +89,14 @@ def make_experiment_definition(session: Session) -> ExperimentDefinition:
     return defn
 
 
-def make_run(session: Session, definition_id: UUID) -> RunRecord:
-    """Create a minimal RunRecord row for test scaffolding."""
-    run = RunRecord(
+def make_run(session: Session, definition_id: UUID) -> SampleRecord:
+    """Create a minimal SampleRecord row for test scaffolding."""
+    run = SampleRecord(
         definition_id=definition_id,
         workflow_definition_id=definition_id,
         benchmark_type="ci-propagation-test",
         instance_key="test",
-        status=RunStatus.EXECUTING,
+        status=SampleStatus.EXECUTING,
     )
     session.add(run)
     session.flush()
@@ -98,16 +106,16 @@ def make_run(session: Session, definition_id: UUID) -> RunRecord:
 
 def make_node(
     session: Session,
-    run_id: UUID,
+    sample_id: UUID,
     *,
     task_slug: str,
     status: str = "pending",
     parent_task_id: UUID | None = None,
     level: int = 0,
-) -> RunGraphNode:
-    """Create a RunGraphNode row for test scaffolding."""
-    node = RunGraphNode(
-        run_id=run_id,
+) -> SampleGraphNode:
+    """Create a SampleGraphNode row for test scaffolding."""
+    node = SampleGraphNode(
+        sample_id=sample_id,
         instance_key="test",
         task_slug=task_slug,
         description=f"Test node: {task_slug}",
@@ -123,15 +131,15 @@ def make_node(
 
 def make_edge(
     session: Session,
-    run_id: UUID,
+    sample_id: UUID,
     *,
     source_task_id: UUID,
     target_task_id: UUID,
     status: str = "pending",
-) -> RunGraphEdge:
-    """Create a RunGraphEdge row for test scaffolding."""
-    edge = RunGraphEdge(
-        run_id=run_id,
+) -> SampleGraphEdge:
+    """Create a SampleGraphEdge row for test scaffolding."""
+    edge = SampleGraphEdge(
+        sample_id=sample_id,
         source_task_id=source_task_id,
         target_task_id=target_task_id,
         status=status,
@@ -144,27 +152,27 @@ def make_edge(
 
 def seed_linear_chain(
     session: Session,
-    run_id: UUID,
+    sample_id: UUID,
     slugs: list[str],
     *,
     first_status: str = "running",
     rest_status: str = "pending",
-) -> list[RunGraphNode]:
+) -> list[SampleGraphNode]:
     """Create a linear chain of nodes A→B→C… with edges between them.
 
     The first node defaults to 'running'; all others default to 'pending'.
     Returns nodes in order [A, B, C, ...].
     """
-    nodes: list[RunGraphNode] = []
+    nodes: list[SampleGraphNode] = []
     for i, slug in enumerate(slugs):
         status = first_status if i == 0 else rest_status
-        node = make_node(session, run_id, task_slug=slug, status=status)
+        node = make_node(session, sample_id, task_slug=slug, status=status)
         nodes.append(node)
 
     for i in range(len(nodes) - 1):
         make_edge(
             session,
-            run_id,
+            sample_id,
             source_task_id=nodes[i].task_id,
             target_task_id=nodes[i + 1].task_id,
         )

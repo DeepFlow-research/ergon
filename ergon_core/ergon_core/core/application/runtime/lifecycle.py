@@ -1,7 +1,7 @@
 """Workflow propagation service helpers.
 
-All state is stored in the graph layer (RunGraphNode, RunGraphEdge,
-RunGraphMutation). The graph mutation WAL is the single source of truth
+All state is stored in the graph layer (SampleGraphNode, SampleGraphEdge,
+SampleGraphMutation). The graph mutation WAL is the single source of truth
 for DAG execution state.
 """
 
@@ -13,7 +13,7 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTaskDependency,
 )
 from ergon_core.core.application.runtime import status as graph_status
-from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.application.runtime.models import MutationMeta
 from ergon_core.core.application.runtime.graph_lookup import GraphNodeLookup
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
@@ -24,7 +24,7 @@ _PROPAGATION_META = MutationMeta(actor="system:propagation")
 
 async def _update_task_status(
     session: Session,
-    run_id: UUID,
+    sample_id: UUID,
     task_id: UUID,
     new_status: str,
     *,
@@ -39,7 +39,7 @@ async def _update_task_status(
         reason = str(event_metadata["error"])
     await graph_repo.update_node_status(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=task_id,
         new_status=new_status,
         meta=MutationMeta(actor="system:propagation", reason=reason),
@@ -48,7 +48,7 @@ async def _update_task_status(
 
 async def mark_task_ready(
     session: Session,
-    run_id: UUID,
+    sample_id: UUID,
     task_id: UUID,
     *,
     graph_repo: RuntimeGraphRepository,
@@ -56,7 +56,7 @@ async def mark_task_ready(
 ) -> None:
     await _update_task_status(
         session,
-        run_id,
+        sample_id,
         task_id,
         graph_status.PENDING,
         graph_repo=graph_repo,
@@ -66,7 +66,7 @@ async def mark_task_ready(
 
 async def mark_task_running(
     session: Session,
-    run_id: UUID,
+    sample_id: UUID,
     task_id: UUID,
     execution_id: UUID,
     *,
@@ -75,7 +75,7 @@ async def mark_task_running(
 ) -> None:
     await _update_task_status(
         session,
-        run_id,
+        sample_id,
         task_id,
         graph_status.RUNNING,
         graph_repo=graph_repo,
@@ -85,7 +85,7 @@ async def mark_task_running(
 
 async def mark_task_failed(
     session: Session,
-    run_id: UUID,
+    sample_id: UUID,
     task_id: UUID,
     error: str,
     *,
@@ -95,7 +95,7 @@ async def mark_task_failed(
 ) -> None:
     await _update_task_status(
         session,
-        run_id,
+        sample_id,
         task_id,
         graph_status.FAILED,
         graph_repo=graph_repo,
@@ -106,7 +106,7 @@ async def mark_task_failed(
 
 async def get_initial_ready_tasks(
     session: Session,
-    run_id: UUID,
+    sample_id: UUID,
     definition_id: UUID,
     *,
     graph_repo: RuntimeGraphRepository,
@@ -128,7 +128,7 @@ async def get_initial_ready_tasks(
     for task_id in ready_ids:
         await mark_task_ready(
             session,
-            run_id,
+            sample_id,
             task_id,
             graph_repo=graph_repo,
             graph_lookup=graph_lookup,
@@ -140,7 +140,7 @@ async def get_initial_ready_tasks(
 
 async def mark_task_failed_by_node(
     session: Session,
-    run_id: UUID,
+    sample_id: UUID,
     task_id: UUID,
     error: str,
     *,
@@ -150,7 +150,7 @@ async def mark_task_failed_by_node(
     del execution_id
     await graph_repo.update_node_status(
         session,
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=task_id,
         new_status=graph_status.FAILED,
         meta=MutationMeta(
@@ -163,7 +163,7 @@ async def mark_task_failed_by_node(
 # TODO: as per the experiments design comment, feels like alot of this would benefit from being a service or repository method?
 async def _block_successors_bfs(
     session: Session,
-    run_id: UUID,
+    sample_id: UUID,
     seed_task_ids: set[UUID],
     *,
     failed_task_id: UUID,
@@ -174,7 +174,7 @@ async def _block_successors_bfs(
     queue = list(seed_task_ids)
     while queue:
         target_id = queue.pop()
-        target_node = session.get(RunGraphNode, (run_id, target_id))
+        target_node = session.get(SampleGraphNode, (sample_id, target_id))
         if target_node is None:
             continue
         if target_node.status == graph_status.RUNNING:
@@ -184,7 +184,7 @@ async def _block_successors_bfs(
 
         applied = await graph_repo.update_node_status(
             session,
-            run_id=run_id,
+            sample_id=sample_id,
             task_id=target_id,
             new_status=graph_status.BLOCKED,
             meta=MutationMeta(
@@ -197,16 +197,16 @@ async def _block_successors_bfs(
         if applied:
             target_outgoing = list(
                 session.exec(
-                    select(RunGraphEdge).where(
-                        RunGraphEdge.run_id == run_id,
-                        RunGraphEdge.source_task_id == target_id,
+                    select(SampleGraphEdge).where(
+                        SampleGraphEdge.sample_id == sample_id,
+                        SampleGraphEdge.source_task_id == target_id,
                     )
                 ).all()
             )
             for edge in target_outgoing:
                 await graph_repo.update_edge_status(
                     session,
-                    run_id=run_id,
+                    sample_id=sample_id,
                     edge_id=edge.id,
                     new_status=graph_status.EDGE_INVALIDATED,
                     meta=_PROPAGATION_META,
@@ -214,21 +214,21 @@ async def _block_successors_bfs(
                 queue.append(edge.target_task_id)
 
 
-def _dependency_free_children(session: Session, run_id: UUID, task_id: UUID) -> set[UUID]:
+def _dependency_free_children(session: Session, sample_id: UUID, task_id: UUID) -> set[UUID]:
     child_ids: set[UUID] = set()
     containment_children = list(
         session.exec(
-            select(RunGraphNode).where(
-                RunGraphNode.run_id == run_id,
-                RunGraphNode.parent_task_id == task_id,
+            select(SampleGraphNode).where(
+                SampleGraphNode.sample_id == sample_id,
+                SampleGraphNode.parent_task_id == task_id,
             )
         ).all()
     )
     for child in containment_children:
         has_incoming_edges = session.exec(
-            select(RunGraphEdge.id)
-            .where(RunGraphEdge.run_id == run_id)
-            .where(RunGraphEdge.target_task_id == child.task_id)
+            select(SampleGraphEdge.id)
+            .where(SampleGraphEdge.sample_id == sample_id)
+            .where(SampleGraphEdge.target_task_id == child.task_id)
         ).first()
         if has_incoming_edges is None:
             child_ids.add(child.task_id)
@@ -237,7 +237,7 @@ def _dependency_free_children(session: Session, run_id: UUID, task_id: UUID) -> 
 
 async def on_task_completed_or_failed(
     session: Session,
-    run_id: UUID,
+    sample_id: UUID,
     task_id: UUID,
     terminal_status: str,
     *,
@@ -248,9 +248,9 @@ async def on_task_completed_or_failed(
 
     outgoing = list(
         session.exec(
-            select(RunGraphEdge).where(
-                RunGraphEdge.run_id == run_id,
-                RunGraphEdge.source_task_id == task_id,
+            select(SampleGraphEdge).where(
+                SampleGraphEdge.sample_id == sample_id,
+                SampleGraphEdge.source_task_id == task_id,
             )
         ).all()
     )
@@ -259,7 +259,7 @@ async def on_task_completed_or_failed(
     for edge in outgoing:
         await graph_repo.update_edge_status(
             session,
-            run_id=run_id,
+            sample_id=sample_id,
             edge_id=edge.id,
             new_status=edge_status,
             meta=_PROPAGATION_META,
@@ -267,13 +267,13 @@ async def on_task_completed_or_failed(
 
     candidate_task_ids = {edge.target_task_id for edge in outgoing}
     if is_success:
-        candidate_task_ids.update(_dependency_free_children(session, run_id, task_id))
+        candidate_task_ids.update(_dependency_free_children(session, sample_id, task_id))
     newly_ready: list[UUID] = []
 
     if not is_success:
         await _block_successors_bfs(
             session,
-            run_id=run_id,
+            sample_id=sample_id,
             seed_task_ids=candidate_task_ids,
             failed_task_id=task_id,
             terminal_status=terminal_status,
@@ -283,7 +283,7 @@ async def on_task_completed_or_failed(
         return newly_ready
 
     for candidate_id in candidate_task_ids:
-        candidate_node = session.get(RunGraphNode, (run_id, candidate_id))
+        candidate_node = session.get(SampleGraphNode, (sample_id, candidate_id))
         if candidate_node is None:
             continue
         if (
@@ -302,15 +302,15 @@ async def on_task_completed_or_failed(
 
         incoming = list(
             session.exec(
-                select(RunGraphEdge).where(
-                    RunGraphEdge.run_id == run_id,
-                    RunGraphEdge.target_task_id == candidate_id,
+                select(SampleGraphEdge).where(
+                    SampleGraphEdge.sample_id == sample_id,
+                    SampleGraphEdge.target_task_id == candidate_id,
                 )
             ).all()
         )
 
         source_nodes = [
-            session.get(RunGraphNode, (run_id, edge.source_task_id)) for edge in incoming
+            session.get(SampleGraphNode, (sample_id, edge.source_task_id)) for edge in incoming
         ]
         if all(node is not None and node.status == graph_status.COMPLETED for node in source_nodes):
             reason = (
@@ -320,7 +320,7 @@ async def on_task_completed_or_failed(
             )
             await graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=candidate_id,
                 new_status=graph_status.PENDING,
                 meta=MutationMeta(
@@ -335,10 +335,12 @@ async def on_task_completed_or_failed(
     return newly_ready
 
 
-def is_workflow_complete_v2(session: Session, run_id: UUID) -> bool:
+def is_workflow_complete_v2(session: Session, sample_id: UUID) -> bool:
     """Every node terminal; zero FAILED. CANCELLED is neutral."""
     statuses = list(
-        session.exec(select(RunGraphNode.status).where(RunGraphNode.run_id == run_id)).all()
+        session.exec(
+            select(SampleGraphNode.status).where(SampleGraphNode.sample_id == sample_id)
+        ).all()
     )
     if not statuses:
         return True
@@ -350,10 +352,12 @@ def is_workflow_complete_v2(session: Session, run_id: UUID) -> bool:
 _SETTLED_STATUSES = graph_status.TERMINAL_STATUSES | frozenset({graph_status.BLOCKED})
 
 
-def is_workflow_failed_v2(session: Session, run_id: UUID) -> bool:
+def is_workflow_failed_v2(session: Session, sample_id: UUID) -> bool:
     """All nodes settled and at least one FAILED."""
     statuses = list(
-        session.exec(select(RunGraphNode.status).where(RunGraphNode.run_id == run_id)).all()
+        session.exec(
+            select(SampleGraphNode.status).where(SampleGraphNode.sample_id == sample_id)
+        ).all()
     )
     if not statuses:
         return False

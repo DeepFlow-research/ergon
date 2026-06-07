@@ -22,7 +22,7 @@ from ergon_ingestion.reducers.maestro import (
 
 
 class MaestroImporter:
-    """Parse MAESTRO public span rows into one run per ``run_id``."""
+    """Parse MAESTRO public span rows into one run per ``sample_id``."""
 
     info = ImporterInfo(
         slug="maestro",
@@ -46,7 +46,7 @@ class MaestroImporter:
             dataset=self.info.slug,
             input_path=source.input_path,
             ok=True,
-            planned_runs=len({str(row["run_id"]) for row in _read_rows(source.input_path)}),
+            planned_runs=len({str(row["sample_id"]) for row in _read_rows(source.input_path)}),
             warnings=[f"{self.info.slug} has conditional export-claim status"],
         )
 
@@ -58,24 +58,24 @@ class MaestroImporter:
 
 
 def parse_maestro_runs(rows: Iterable[Mapping[str, Any]]) -> list[ParsedRun]:
-    """Group MAESTRO span rows by ``run_id`` and emit parsed run contracts."""
+    """Group MAESTRO span rows by ``sample_id`` and emit parsed run contracts."""
 
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         record = dict(row)
-        grouped[str(record["run_id"])].append(record)
+        grouped[str(record["sample_id"])].append(record)
 
-    return [_run_from_spans(run_id, spans) for run_id, spans in sorted(grouped.items())]
+    return [_run_from_spans(sample_id, spans) for sample_id, spans in sorted(grouped.items())]
 
 
-def _run_from_spans(run_id: str, spans: list[dict[str, Any]]) -> ParsedRun:
+def _run_from_spans(sample_id: str, spans: list[dict[str, Any]]) -> ParsedRun:
     outcome = _first_present(spans, "attributes.run.outcome", "run.outcome")
     judgement = _first_present(spans, "attributes.run.judgement", "run.judgement")
     trace_ids = sorted({str(span["trace_id"]) for span in spans if span.get("trace_id")})
     agent_names = sorted({str(span["agent_name"]) for span in spans if span.get("agent_name")})
     coordination = coordination_overhead_reducer(spans)
     observed_fields = {
-        "run_id": run_id,
+        "sample_id": sample_id,
         "trace_ids": trace_ids,
         "span_count": len(spans),
         "agent_names": agent_names,
@@ -88,9 +88,9 @@ def _run_from_spans(run_id: str, spans: list[dict[str, Any]]) -> ParsedRun:
     }
 
     return ParsedRun(
-        source_run_id=run_id,
-        instance_key=run_id,
-        description=f"Imported MAESTRO span trace {run_id}",
+        source_run_id=sample_id,
+        instance_key=sample_id,
+        description=f"Imported MAESTRO span trace {sample_id}",
         schema_fit_class="span-trace",
         observed_fields=observed_fields,
         annotations=[
@@ -115,7 +115,7 @@ def _run_from_spans(run_id: str, spans: list[dict[str, Any]]) -> ParsedRun:
         ],
         resources=[
             ParsedResource(
-                name=f"{run_id}-spans.json",
+                name=f"{sample_id}-spans.json",
                 kind="artifact",
                 mime_type="application/json",
                 payload={"spans": spans},

@@ -24,7 +24,7 @@ class AlwaysFailSubworker:
             (
                 f"# Partial work {task_id}\n\n"
                 "This content was written before a deliberate failure. If smoke "
-                "sees this as a RunResource row, partial serialization works.\n"
+                "sees this as a SampleResource row, partial serialization works.\n"
             ),
         )
 

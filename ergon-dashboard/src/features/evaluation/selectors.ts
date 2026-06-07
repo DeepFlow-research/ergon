@@ -1,5 +1,5 @@
-import type { TaskEvaluationState, WorkflowRunState } from "@/lib/types";
-import { formatScore } from "@/lib/run-state/formatters";
+import type { TaskEvaluationState, SampleWorkspaceState } from "@/lib/types";
+import { formatScore } from "@/lib/sample-state/formatters";
 import type { EvalCriterionStatus, EvalRollupStatus, EvaluationRollup } from "./contracts";
 
 function criterionStatusToRollupStatus(status: EvalCriterionStatus): EvalRollupStatus {
@@ -160,7 +160,7 @@ export function evaluationToViewModel(
 }
 
 export function buildContainerEvaluationRollup(
-  state: WorkflowRunState,
+  state: SampleWorkspaceState,
   taskId: string,
 ): EvaluationRollup | null {
   const task = state.tasks.get(taskId);
@@ -196,6 +196,6 @@ export function buildContainerEvaluationRollup(
   };
 }
 
-export function isEvaluationBearingTask(state: WorkflowRunState, taskId: string): boolean {
+export function isEvaluationBearingTask(state: SampleWorkspaceState, taskId: string): boolean {
   return buildContainerEvaluationRollup(state, taskId) !== null;
 }

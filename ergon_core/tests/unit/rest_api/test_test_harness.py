@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 class _NullSession:
     """Minimal session stub that returns no rows for any exec/get call.
 
-    The read endpoint queries for a RunRecord first and 404s when absent; in
+    The read endpoint queries for a SampleRecord first and 404s when absent; in
     that branch no further DB access occurs. This stub exists so unit tests
     don't require a live Postgres.
     """
@@ -51,7 +51,7 @@ def _build_app_with_harness() -> FastAPI:
 def test_read_endpoint_returns_404_for_unknown_run_id() -> None:
     app = _build_app_with_harness()
     client = TestClient(app)
-    resp = client.get(f"/api/__danger__/test-harness/read/run/{uuid4()}/state")
+    resp = client.get(f"/api/__danger__/test-harness/read/samples/{uuid4()}/state")
     assert resp.status_code == 404
 
 
@@ -69,22 +69,22 @@ def test_read_state_dto_exposes_live_playwright_contract_fields() -> None:
 
 
 def test_read_experiment_runs_route_uses_v2_experiment_grouping(monkeypatch) -> None:
-    run_id = uuid4()
+    sample_id = uuid4()
 
     monkeypatch.setattr(
         test_harness,
         "_read_experiment_runs",
         lambda experiment, session: [
-            HarnessExperimentRun(run_id=run_id, status=f"{experiment}:completed")
+            HarnessExperimentRun(sample_id=sample_id, status=f"{experiment}:completed")
         ],
     )
 
     app = _build_app_with_harness()
     client = TestClient(app)
-    resp = client.get("/api/__danger__/test-harness/read/experiment/group-alpha/runs")
+    resp = client.get("/api/__danger__/test-harness/read/experiment/group-alpha/samples")
 
     assert resp.status_code == 200
-    assert resp.json() == [{"run_id": str(run_id), "status": "group-alpha:completed"}]
+    assert resp.json() == [{"sample_id": str(sample_id), "status": "group-alpha:completed"}]
 
 
 def test_reset_route_is_available_without_secret_header() -> None:

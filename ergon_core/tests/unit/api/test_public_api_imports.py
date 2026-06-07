@@ -13,16 +13,16 @@ def test_telemetry_models_can_import_before_public_api() -> None:
     shared_enums = importlib.import_module("ergon_core.core.persistence.shared.enums")
     public_api = importlib.import_module("ergon_core.api")
 
-    assert shared_enums.RunResourceKind.REPORT.value == "report"
-    assert not hasattr(telemetry, "RunResourceKind")
-    assert not hasattr(public_api, "RunResourceKind")
+    assert shared_enums.SampleResourceKind.REPORT.value == "report"
+    assert not hasattr(telemetry, "SampleResourceKind")
+    assert not hasattr(public_api, "SampleResourceKind")
 
 
 def test_public_api_root_stays_authoring_scoped() -> None:
     public_api = importlib.import_module("ergon_core.api")
 
     assert "__getattr__" not in public_api.__dict__
-    assert not hasattr(public_api, "RunResourceView")
+    assert not hasattr(public_api, "SampleResourceView")
     assert not hasattr(public_api, "CriterionRuntime")
     assert not hasattr(public_api, "CommandResult")
     assert not hasattr(public_api, "SandboxResult")

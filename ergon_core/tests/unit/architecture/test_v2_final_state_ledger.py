@@ -78,11 +78,11 @@ def _assert_evaluate_task_run_takes_thin_payload() -> None:
     )
 
 
-def _assert_run_graph_node_uses_task_id_primary_key() -> None:
-    from ergon_core.core.persistence.graph.models import RunGraphNode
+def _assert_sample_graph_node_uses_task_id_primary_key() -> None:
+    from ergon_core.core.persistence.graph.models import SampleGraphNode
 
-    assert "task_id" in RunGraphNode.model_fields
-    assert "id" not in RunGraphNode.model_fields
+    assert "task_id" in SampleGraphNode.model_fields
+    assert "id" not in SampleGraphNode.model_fields
 
 
 def _assert_task_has_no_model_post_init() -> None:
@@ -166,8 +166,8 @@ FINAL_STATE_ASSERTIONS: tuple[FinalStateAssertion, ...] = (
         reason="Δ.7: write-only package, no readers",
     ),
     FinalStateAssertion(
-        name="run_graph_node_uses_task_id_primary_key",
-        check=_assert_run_graph_node_uses_task_id_primary_key,
+        name="sample_graph_node_uses_task_id_primary_key",
+        check=_assert_sample_graph_node_uses_task_id_primary_key,
         reason="Δ.7 + identity model: task_id is the single canonical id",
     ),
     FinalStateAssertion(

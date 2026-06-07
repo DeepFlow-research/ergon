@@ -3,8 +3,8 @@
 from uuid import UUID
 
 from ergon_core.api.worker.results import WorkerOutput
-from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.persistence.telemetry.models import RunTaskExecution
+from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
 from sqlalchemy import func, update
 from sqlmodel import Session, col, select
 
@@ -20,13 +20,13 @@ class WorkerOutputNotFound(LookupError):
 class TaskExecutionRepository:
     """Domain queries over task execution rows."""
 
-    def latest_for_node(self, session: Session, task_id: UUID) -> RunTaskExecution | None:
+    def latest_for_node(self, session: Session, task_id: UUID) -> SampleTaskAttempt | None:
         stmt = (
-            select(RunTaskExecution)
-            .where(RunTaskExecution.task_id == task_id)
+            select(SampleTaskAttempt)
+            .where(SampleTaskAttempt.task_id == task_id)
             .order_by(
-                col(RunTaskExecution.attempt_number).desc(),
-                col(RunTaskExecution.started_at).desc(),
+                col(SampleTaskAttempt.attempt_number).desc(),
+                col(SampleTaskAttempt.started_at).desc(),
             )
             .limit(1)
         )
@@ -36,23 +36,23 @@ class TaskExecutionRepository:
         self,
         session: Session,
         parent_execution_id: UUID,
-    ) -> list[RunTaskExecution]:
-        parent = session.get(RunTaskExecution, parent_execution_id)
+    ) -> list[SampleTaskAttempt]:
+        parent = session.get(SampleTaskAttempt, parent_execution_id)
         if parent is None:
             return []
-        child_task_ids_stmt = select(RunGraphNode.task_id).where(
-            RunGraphNode.parent_task_id == parent.task_id
+        child_task_ids_stmt = select(SampleGraphNode.task_id).where(
+            SampleGraphNode.parent_task_id == parent.task_id
         )
-        stmt = select(RunTaskExecution).where(
-            col(RunTaskExecution.task_id).in_(child_task_ids_stmt)
+        stmt = select(SampleTaskAttempt).where(
+            col(SampleTaskAttempt.task_id).in_(child_task_ids_stmt)
         )
         return list(session.exec(stmt).all())
 
-    def next_attempt_for_node(self, session: Session, run_id: UUID, task_id: UUID) -> int:
+    def next_attempt_for_node(self, session: Session, sample_id: UUID, task_id: UUID) -> int:
         count = session.exec(
-            select(func.count(RunTaskExecution.id)).where(
-                RunTaskExecution.run_id == run_id,
-                RunTaskExecution.task_id == task_id,
+            select(func.count(SampleTaskAttempt.id)).where(
+                SampleTaskAttempt.sample_id == sample_id,
+                SampleTaskAttempt.task_id == task_id,
             )
         ).one()
         return count + 1
@@ -72,8 +72,8 @@ class TaskExecutionRepository:
         """
 
         session.exec(
-            update(RunTaskExecution)
-            .where(RunTaskExecution.id == execution_id)
+            update(SampleTaskAttempt)
+            .where(SampleTaskAttempt.id == execution_id)
             .values(sandbox_id=sandbox_id)
         )
 
@@ -83,7 +83,7 @@ class WorkerOutputRepository:
 
     The orchestrator (``worker_execute``) persists the terminal worker output
     before fanning out per-evaluator invocations; each eval worker reloads it
-    from a thin id-only payload. Storage lives on ``RunTaskExecution`` —
+    from a thin id-only payload. Storage lives on ``SampleTaskAttempt`` —
     keeping the execution row authoritative for everything the eval workers
     need keeps the run-tier read boundary one query wide.
     """
@@ -98,8 +98,8 @@ class WorkerOutputRepository:
         """Write ``output`` onto the execution row. Caller commits."""
 
         session.exec(
-            update(RunTaskExecution)
-            .where(RunTaskExecution.id == execution_id)
+            update(SampleTaskAttempt)
+            .where(SampleTaskAttempt.id == execution_id)
             .values(worker_output_json=output.model_dump(mode="json"))
         )
 
@@ -116,7 +116,7 @@ class WorkerOutputRepository:
         worker fails loudly rather than silently evaluating a missing output.
         """
 
-        row = session.get(RunTaskExecution, execution_id)
+        row = session.get(SampleTaskAttempt, execution_id)
         if row is None or row.worker_output_json is None:
             raise WorkerOutputNotFound(execution_id=execution_id)
         return WorkerOutput.model_validate(row.worker_output_json)

@@ -1,4 +1,4 @@
-"""Conventional status values for RunGraphNode and RunGraphEdge.
+"""Conventional status values for SampleGraphNode and SampleGraphEdge.
 
 The graph layer accepts any string at the DB level -- these are not
 enforced by the schema. They are the values used by the core runtime,

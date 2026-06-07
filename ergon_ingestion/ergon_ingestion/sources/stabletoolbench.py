@@ -168,7 +168,7 @@ def _source_run_id(record: Record, *, fallback_id: str) -> str:
     explicit = (
         record.get("trajectory_id")
         or record.get("source_run_id")
-        or record.get("run_id")
+        or record.get("sample_id")
         or record.get("id")
     )
     if explicit is not None:

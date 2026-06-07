@@ -1,12 +1,12 @@
 import { useRef, useCallback } from "react";
 import type { DashboardGraphMutationData } from "@/lib/contracts/events";
-import type { WorkflowRunState } from "@/lib/types";
+import type { SampleWorkspaceState } from "@/lib/types";
 import { applyGraphMutation } from "@/features/graph/state/graphMutationReducer";
 
 const DEBOUNCE_MS = 200;
 
 export function useGraphMutations(
-  setRunState: React.Dispatch<React.SetStateAction<WorkflowRunState | null>>,
+  setRunState: React.Dispatch<React.SetStateAction<SampleWorkspaceState | null>>,
 ) {
   const buffer = useRef<DashboardGraphMutationData[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);

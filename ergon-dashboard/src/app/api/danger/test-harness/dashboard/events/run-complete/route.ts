@@ -4,7 +4,7 @@ import { emitHarnessRunCompleted } from "@/lib/testing/dashboardHarness";
 
 export async function POST(request: Request) {
   const payload = (await request.json()) as {
-    runId: string;
+    sampleId: string;
     status: "completed" | "failed";
     durationSeconds: number;
     finalScore: number | null;

@@ -13,7 +13,7 @@ class CriterionContext(BaseModel):
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
-    run_id: UUID
+    sample_id: UUID
     task_id: UUID
     execution_id: UUID
     task: Task

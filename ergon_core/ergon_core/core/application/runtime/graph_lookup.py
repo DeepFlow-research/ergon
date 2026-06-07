@@ -2,23 +2,23 @@
 
 from uuid import UUID
 
-from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from sqlmodel import Session, select
 
 
 class GraphNodeLookup:
     """Caches task and edge ids for one run."""
 
-    def __init__(self, session: Session, run_id: UUID) -> None:
+    def __init__(self, session: Session, sample_id: UUID) -> None:
         task_ids = session.exec(
-            select(RunGraphNode.task_id).where(RunGraphNode.run_id == run_id)
+            select(SampleGraphNode.task_id).where(SampleGraphNode.sample_id == sample_id)
         ).all()
         self._tasks: frozenset[UUID] = frozenset(task_ids)
 
         edge_rows = session.exec(
-            select(RunGraphEdge.id, RunGraphEdge.source_task_id, RunGraphEdge.target_task_id).where(
-                RunGraphEdge.run_id == run_id
-            )
+            select(
+                SampleGraphEdge.id, SampleGraphEdge.source_task_id, SampleGraphEdge.target_task_id
+            ).where(SampleGraphEdge.sample_id == sample_id)
         ).all()
         self._edges: dict[tuple[UUID, UUID], UUID] = {
             (src, tgt): eid for eid, src, tgt in edge_rows

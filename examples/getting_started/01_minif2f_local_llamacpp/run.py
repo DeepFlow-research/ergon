@@ -11,7 +11,7 @@ from uuid import UUID
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
 from ergon_builtins.benchmarks.minif2f.worker_factory import make_minif2f_worker
 from ergon_core.api.worker import Worker
-from ergon_core.core.application.experiments.service import launch_run, persist_benchmark
+from ergon_core.core.application.experiments.service import launch_run as launch_sample, persist_benchmark
 from getting_started._shared.env import (
     DEFAULT_LLAMA_CPP_BASE_URL,
     DEFAULT_MINIF2F_LIMIT,
@@ -25,9 +25,9 @@ from getting_started._shared.env import (
     preflight_llamacpp_and_e2b,
 )
 from getting_started._shared.llamacpp import ManagedLlamaServer, start_llama_server
-from getting_started._shared.launch import first_run_id
+from getting_started._shared.launch import first_sample_id
 from getting_started._shared.model_cache import resolve_base_model
-from getting_started._shared.observe import cli_status_command, dashboard_run_url
+from getting_started._shared.observe import cli_status_command, dashboard_sample_url
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -70,7 +70,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=None,
         help=(
             "Local GGUF path or Hugging Face '<repo-id>:<filename.gguf>' ref. "
-            "Starts a managed llama.cpp server for this run."
+            "Starts a managed llama.cpp server for this sample."
         ),
     )
     parser.add_argument(
@@ -173,11 +173,11 @@ async def async_main(argv: Sequence[str] | None = None) -> int:
     try:
         benchmark = MiniF2FBenchmark(limit=args.limit, worker_factory=make_worker)
         handle = persist_benchmark(benchmark)
-        run_result = await launch_run(handle.definition_id)
-        run_id = first_run_id(run_result)
+        sample_result = await launch_sample(handle.definition_id)
+        sample_id = first_sample_id(sample_result)
         _print_launch_summary(
             definition_id=handle.definition_id,
-            run_id=run_id,
+            sample_id=sample_id,
             model_target=model_target,
             limit=args.limit,
             max_iterations=args.max_iterations,
@@ -218,19 +218,19 @@ def _validate_model_routing(args: argparse.Namespace, parser: argparse.ArgumentP
 def _print_launch_summary(
     *,
     definition_id: object,
-    run_id: UUID,
+    sample_id: UUID,
     model_target: str,
     limit: int,
     max_iterations: int,
 ) -> None:
-    print("MiniF2F llama.cpp run launched")
+    print("MiniF2F llama.cpp sample launched")
     print(f"Definition id: {definition_id}")
-    print(f"Run id: {run_id}")
+    print(f"Sample id: {sample_id}")
     print(f"Model target: {model_target}")
     print(f"Limit: {limit}")
     print(f"Max iterations: {max_iterations}")
-    print(f"CLI status: {cli_status_command(run_id)}")
-    url = dashboard_run_url(run_id)
+    print(f"CLI status: {cli_status_command(sample_id)}")
+    url = dashboard_sample_url(sample_id)
     if url:
         print(f"Dashboard: {url}")
 

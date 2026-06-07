@@ -1,7 +1,7 @@
 """Experiment-group submission helper for canonical smoke drivers.
 
 POSTs ``/api/__danger__/test-harness/write/experiment-runs`` on the api container; returns the
-run_ids in the same order as the slots passed in.
+sample_ids in the same order as the slots passed in.
 
 Tests are a pure black-box client of the stack: they do not import any
 ergon internals, do not call ``build_experiment`` / ``create_run`` /
@@ -70,7 +70,7 @@ async def submit_experiment_runs(
     model: str = "openai:gpt-4o",
     timeout: int = 300,  # reserved — server-side per-run timeout
 ) -> list[UUID]:
-    """Submit one run per slot under ``experiment``; return run_ids in order.
+    """Submit one sample per slot under ``experiment``; return sample_ids in order.
 
     Args:
         benchmark_slug:  e.g. ``"researchrubrics"``
@@ -103,7 +103,7 @@ async def submit_experiment_runs(
                 f"response body:\n{response.text[:4000]}",
             )
         body = response.json()
-    return [UUID(rid) for rid in body["run_ids"]]
+    return [UUID(sample_id) for sample_id in body["sample_ids"]]
 
 
 __all__ = ["build_experiment_payload", "smoke_experiment_key", "submit_experiment_runs"]

@@ -2,7 +2,7 @@
 
 import inngest
 
-from .job import run_cleanup_cancelled_task_job
+from .job import sample_cleanup_cancelled_task_job
 from ergon_core.core.infrastructure.inngest.client import RUN_CANCEL, inngest_client
 from .contract import TaskCancelledEvent
 from ergon_core.core.shared.json_types import JsonObject
@@ -15,7 +15,7 @@ from ergon_core.core.shared.json_types import JsonObject
     retries=3,
 )
 async def cleanup_cancelled_task_fn(ctx: inngest.Context) -> JsonObject:
-    return await run_cleanup_cancelled_task_job(
+    return await sample_cleanup_cancelled_task_job(
         ctx, TaskCancelledEvent.model_validate(ctx.event.data)
     )
 

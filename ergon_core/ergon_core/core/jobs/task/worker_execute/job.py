@@ -19,7 +19,7 @@ from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.jobs._events import send_job_step_event
 from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
-from ergon_core.core.application.resources.service import RunResourceReadService
+from ergon_core.core.application.resources.service import SampleResourceReadService
 from ergon_core.core.application.runtime.task_execution import TaskExecutionService
 from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
 from ergon_core.core.application.runtime.task_management import TaskManagementService
@@ -27,7 +27,7 @@ from ergon_core.core.shared.context_parts import ContextPartChunk
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.application.context.service import ContextEventService
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
-from ergon_core.core.persistence.context.models import RunContextEvent
+from ergon_core.core.persistence.context.models import SampleContextEvent
 from .contract import WorkerExecuteJobRequest
 from .contract import WorkerExecuteJobResult
 from ergon_core.core.infrastructure.tracing import (
@@ -35,7 +35,7 @@ from ergon_core.core.infrastructure.tracing import (
     get_trace_sink,
     worker_execute_context,
 )
-from ergon_core.core.persistence.context.models import RunContextEvent
+from ergon_core.core.persistence.context.models import SampleContextEvent
 from ergon_core.core.views.dashboard_events.context_events import context_event_to_dashboard_event
 from pydantic import BaseModel
 from sqlmodel import Session
@@ -49,8 +49,8 @@ async def run_worker_execute_job(
     ctx: object | None = None,
 ) -> WorkerExecuteJobResult:
     logger.info(
-        "worker-execute run_id=%s task_id=%s worker_type=%s",
-        payload.run_id,
+        "worker-execute sample_id=%s task_id=%s worker_type=%s",
+        payload.sample_id,
         payload.task_id,
         payload.worker_type,
     )
@@ -64,7 +64,7 @@ async def run_worker_execute_job(
     with get_session() as session:
         view = await task_execution.load_task_view(
             session,
-            run_id=payload.run_id,
+            sample_id=payload.sample_id,
             task_id=payload.task_id,
             sandbox_id=payload.sandbox_id,
         )
@@ -74,7 +74,7 @@ async def run_worker_execute_job(
     if not task.sandbox.is_live:
         raise ContractViolationError(
             "worker-execute object-bound task requires a live sandbox attached via sandbox_id",
-            run_id=payload.run_id,
+            sample_id=payload.sample_id,
             task_id=payload.task_id,
             execution_id=payload.execution_id,
             sandbox_id=payload.sandbox_id,
@@ -82,14 +82,14 @@ async def run_worker_execute_job(
     worker.validate_runtime_deps()
 
     worker_context = WorkerContext._for_job(
-        run_id=payload.run_id,
+        sample_id=payload.sample_id,
         task_id=payload.task_id,
         execution_id=payload.execution_id,
         definition_id=payload.definition_id,
         sandbox_id=payload.sandbox_id,
         task_mgmt=_task_management_service_for_context(ctx),
         task_inspect=TaskInspectionService(),
-        resource_service=RunResourceReadService(),
+        resource_service=SampleResourceReadService(),
         session_factory=get_session,
     )
 
@@ -97,7 +97,7 @@ async def run_worker_execute_job(
     dashboard_publisher = get_dashboard_event_publisher()
     execution_task_map = {payload.execution_id: payload.task_id}
 
-    async def _publish_context_event(event: RunContextEvent) -> None:
+    async def _publish_context_event(event: SampleContextEvent) -> None:
         dashboard_event = context_event_to_dashboard_event(event, execution_task_map)
         if dashboard_event is None:
             logger.warning(
@@ -148,7 +148,7 @@ async def run_worker_execute_job(
     # else from the run-tier read boundary:
     #
     #   WorkerOutput      ← TaskExecutionService.load_worker_output(execution_id)
-    #   live sandbox_id   ← session.get(RunTaskExecution, ...).sandbox_id
+    #   live sandbox_id   ← session.get(SampleTaskAttempt, ...).sandbox_id
     #                       (then fed to load_task_view(..., sandbox_id=))
     #
     # Both reads happen *after* the orchestrator's gather starts, so
@@ -171,14 +171,14 @@ async def run_worker_execute_job(
         CompletedSpan(
             name="worker.execute",
             context=worker_execute_context(
-                payload.run_id,
+                payload.sample_id,
                 payload.task_id,
                 payload.execution_id,
             ),
             start_time=span_start,
             end_time=datetime.now(UTC),
             attributes={
-                "run_id": str(payload.run_id),
+                "sample_id": str(payload.sample_id),
                 "task_id": str(payload.task_id),
                 "execution_id": str(payload.execution_id),
                 "sandbox_id": payload.sandbox_id,
@@ -207,7 +207,7 @@ def _task_management_service_for_context(ctx: Any | None) -> TaskManagementServi
 class _ReadyDispatch(BaseModel):
     model_config = {"frozen": True}
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
     task_id: UUID
 
@@ -236,7 +236,7 @@ class _StepAwareTaskManagementService(TaskManagementService):
     async def spawn_dynamic_task(
         self,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         parent_task_id: UUID,
         task: Task,
         depends_on: tuple[UUID, ...] = (),
@@ -252,7 +252,7 @@ class _StepAwareTaskManagementService(TaskManagementService):
             try:
                 handle = await TaskManagementService.spawn_dynamic_task(
                     self,
-                    run_id=run_id,
+                    sample_id=sample_id,
                     parent_task_id=parent_task_id,
                     task=task,
                     depends_on=depends_on,
@@ -271,18 +271,18 @@ class _StepAwareTaskManagementService(TaskManagementService):
 
     async def _collect_ready_dispatch(
         self,
-        run_id: UUID,
+        sample_id: UUID,
         definition_id: UUID,
         task_id: UUID,
     ) -> None:
         if self._active_ready_dispatches is None:
             raise ContractViolationError(
                 "Worker task-ready dispatch attempted outside a memoized graph mutation",
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=task_id,
             )
         self._active_ready_dispatches.append(
-            _ReadyDispatch(run_id=run_id, definition_id=definition_id, task_id=task_id)
+            _ReadyDispatch(sample_id=sample_id, definition_id=definition_id, task_id=task_id)
         )
 
     async def _dispatch_collected_ready_events(
@@ -292,7 +292,7 @@ class _StepAwareTaskManagementService(TaskManagementService):
     ) -> None:
         for dispatch in ready:
             event = TaskReadyEvent(
-                run_id=dispatch.run_id,
+                sample_id=dispatch.sample_id,
                 definition_id=dispatch.definition_id,
                 task_id=dispatch.task_id,
             )
@@ -347,7 +347,7 @@ async def _persist_context_events(
         with get_session() as session:
             await context_event_repo.persist_chunk(
                 session,
-                run_id=payload.run_id,
+                sample_id=payload.sample_id,
                 execution_id=payload.execution_id,
                 worker_binding_key=payload.assigned_worker_slug,
                 chunk=chunk,

@@ -24,8 +24,8 @@ interface SocketContextValue {
   connectionStatus: ConnectionStatus;
   connectionError: string | null;
   reconnect: () => void;
-  subscribe: (runId: string) => void;
-  unsubscribe: (runId: string) => void;
+  subscribe: (sampleId: string) => void;
+  unsubscribe: (sampleId: string) => void;
 }
 
 const SocketContext = createContext<SocketContextValue | null>(null);
@@ -114,15 +114,15 @@ export function SocketProvider({ children }: SocketProviderProps) {
     }
   }, [socket]);
 
-  const subscribe = useCallback((runId: string) => {
+  const subscribe = useCallback((sampleId: string) => {
     if (socket?.connected) {
-      socket.emit("subscribe", runId);
+      socket.emit("subscribe", sampleId);
     }
   }, [socket]);
 
-  const unsubscribe = useCallback((runId: string) => {
+  const unsubscribe = useCallback((sampleId: string) => {
     if (socket?.connected) {
-      socket.emit("unsubscribe", runId);
+      socket.emit("unsubscribe", sampleId);
     }
   }, [socket]);
 

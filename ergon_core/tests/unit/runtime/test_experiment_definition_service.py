@@ -37,21 +37,21 @@ def test_persist_benchmark_uses_experiments_service_public_facade(monkeypatch) -
 
 
 @pytest.mark.asyncio
-async def test_run_experiment_uses_experiments_service_public_facade(monkeypatch) -> None:
+async def test_sample_experiment_uses_experiments_service_public_facade(monkeypatch) -> None:
     definition_id = uuid4()
-    run_id = uuid4()
+    sample_id = uuid4()
     result = ExperimentRunResult(
         definition_id=definition_id,
-        run_ids=[run_id],
+        sample_ids=[sample_id],
         definition_ids=[definition_id],
     )
     seen: list[tuple[object, object]] = []
 
-    async def fake_launch_run(candidate_definition_id, *, emit_workflow_started=None):
+    async def fake_launch_sample(candidate_definition_id, *, emit_workflow_started=None):
         seen.append((candidate_definition_id, emit_workflow_started))
         return result
 
-    monkeypatch.setattr(service, "launch_run", fake_launch_run)
+    monkeypatch.setattr(service, "launch_sample", fake_launch_sample)
 
     assert await service.run_experiment(ExperimentRunRequest(definition_id=definition_id)) == result
     assert seen == [(definition_id, None)]

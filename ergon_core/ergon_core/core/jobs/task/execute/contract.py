@@ -7,7 +7,7 @@ from pydantic import BaseModel
 class TaskExecuteResult(BaseModel):
     model_config = {"frozen": True}
 
-    run_id: UUID
+    sample_id: UUID
     task_id: UUID
     execution_id: UUID
     success: bool = False

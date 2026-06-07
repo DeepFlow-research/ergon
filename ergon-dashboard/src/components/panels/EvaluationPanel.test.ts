@@ -9,7 +9,7 @@ import { EvaluationPanel } from "./EvaluationPanel";
 function evaluation(): TaskEvaluationState {
   return {
     id: "evaluation-1",
-    runId: "run-1",
+    sampleId: "run-1",
     taskId: "task-1",
     evaluatorName: "rubric",
     aggregationRule: "weighted_sum",

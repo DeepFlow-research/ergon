@@ -10,7 +10,7 @@ from ergon_cli.domains.examples.parser import register_examples_parser
 from ergon_cli.domains.experiments.parser import register_experiment_parser
 from ergon_cli.domains.ingestion.parser import register_ingest_parser
 from ergon_cli.domains.onboarding.parser import register_onboard_parser
-from ergon_cli.domains.runs.parser import register_run_parser
+from ergon_cli.domains.samples.parser import register_sample_parser
 from ergon_cli.domains.stack.parser import register_stack_parser
 from ergon_cli.domains.tests.parser import register_test_parser
 from ergon_cli.domains.workers.parser import register_worker_parser
@@ -22,7 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     register_benchmark_parser(subparsers)
     register_experiment_parser(subparsers)
-    register_run_parser(subparsers)
+    register_sample_parser(subparsers)
     register_ingest_parser(subparsers)
     register_worker_parser(subparsers)
     register_evaluator_parser(subparsers)

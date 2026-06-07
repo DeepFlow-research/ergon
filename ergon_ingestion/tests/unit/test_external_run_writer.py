@@ -5,11 +5,11 @@ import numpy as np
 from sqlmodel import SQLModel, Session, create_engine, select
 
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import RunGraphAnnotation, RunGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphAnnotation, SampleGraphNode
 from ergon_core.core.persistence.telemetry.models import (
-    RunRecord,
-    RunResource,
-    RunTaskExecution,
+    SampleRecord,
+    SampleResource,
+    SampleTaskAttempt,
 )
 from ergon_ingestion.models import (
     ImportSource,
@@ -74,17 +74,18 @@ def test_external_run_writer_persists_import_spine_without_reducer_tables(tmp_pa
         result = writer.write_run(parsed)
         session.commit()
 
-        assert result.run_id is not None
+        assert result.sample_id is not None
         definition = session.exec(select(ExperimentDefinition)).one()
         assert definition.benchmark_type == "imported:gap"
         assert definition.metadata_json["import_batch_id"] == "paper-rq1-v1"
-        assert session.exec(select(RunRecord)).one().instance_key == "gap-row-1"
-        assert session.exec(select(RunGraphNode)).one().task_slug == "imported-root"
+        assert session.exec(select(SampleRecord)).one().instance_key == "gap-row-1"
+        assert session.exec(select(SampleGraphNode)).one().task_slug == "imported-root"
         assert (
-            session.exec(select(RunTaskExecution)).one().output_json["source_run_id"] == "gap-row-1"
+            session.exec(select(SampleTaskAttempt)).one().output_json["source_run_id"]
+            == "gap-row-1"
         )
-        assert session.exec(select(RunGraphAnnotation)).one().namespace == "gap.labels"
-        assert session.exec(select(RunResource)).one().name == "source-row.json"
+        assert session.exec(select(SampleGraphAnnotation)).one().namespace == "gap.labels"
+        assert session.exec(select(SampleResource)).one().name == "source-row.json"
 
 
 def test_external_run_writer_sanitizes_non_finite_json_values(tmp_path: Path) -> None:
@@ -116,7 +117,7 @@ def test_external_run_writer_sanitizes_non_finite_json_values(tmp_path: Path) ->
         writer.write_run(parsed)
         session.commit()
 
-        run = session.exec(select(RunRecord)).one()
+        run = session.exec(select(SampleRecord)).one()
         assert run.summary_json["observed_fields"]["thinking_budget"] is None
         assert run.summary_json["observed_fields"]["nested"]["temperature"] is None
 
@@ -150,8 +151,8 @@ def test_external_run_writer_materializes_numpy_array_payloads(tmp_path: Path) -
         writer.write_run(parsed)
         session.commit()
 
-        run = session.exec(select(RunRecord)).one()
-        resource = session.exec(select(RunResource)).one()
+        run = session.exec(select(SampleRecord)).one()
+        resource = session.exec(select(SampleResource)).one()
         assert run.summary_json["observed_fields"]["scores"] == [1.0, None]
         assert resource.file_path.endswith(".json")
 
@@ -197,8 +198,8 @@ def test_external_run_writer_compacts_oversized_db_metadata(tmp_path: Path) -> N
         writer.write_run(parsed)
         session.commit()
 
-        run = session.exec(select(RunRecord)).one()
-        resource = session.exec(select(RunResource)).one()
+        run = session.exec(select(SampleRecord)).one()
+        resource = session.exec(select(SampleResource)).one()
         assert run.summary_json["observed_fields"]["trajectory_id"] == "agent-reward-large"
         assert run.summary_json["observed_fields"]["process_trace"]["_ergon_compacted"] is True
         assert Path(resource.file_path).read_text().count("x") == 4_500_000

@@ -9,8 +9,8 @@ from collections.abc import Sequence
 from uuid import UUID
 
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import RunResource
-from ergon_core.core.application.resources.repository import RunResourceRepository
+from ergon_core.core.persistence.telemetry.models import SampleResource
+from ergon_core.core.application.resources.repository import SampleResourceRepository
 from ergon_core.core.application.runtime.task_execution_repository import (
     TaskExecutionRepository,
 )
@@ -31,10 +31,10 @@ class ResearchGraphToolkit:
     subclass unpacks context and passes them in (§7.3 pattern).
     """
 
-    def __init__(self, *, run_id: UUID, task_execution_id: UUID) -> None:
-        self._run_id = run_id
+    def __init__(self, *, sample_id: UUID, task_execution_id: UUID) -> None:
+        self._run_id = sample_id
         self._task_execution_id = task_execution_id
-        self._resource_repo = RunResourceRepository()
+        self._resource_repo = SampleResourceRepository()
         self._task_repo = TaskExecutionRepository()
 
     def build_tools(self) -> list[Tool[AgentToolBudgetDeps]]:
@@ -55,7 +55,7 @@ class ResearchGraphToolkit:
     # ------------------------------------------------------------------
 
     def _list_my_resources(self) -> Tool[AgentToolBudgetDeps]:
-        run_id = self._run_id
+        sample_id = self._run_id
         task_execution_id = self._task_execution_id
 
         async def list_my_resources(
@@ -75,7 +75,7 @@ class ResearchGraphToolkit:
             with get_session() as session:
                 rows = self._resource_repo.list_by_execution(session, task_execution_id)
             return _to_refs_sorted(
-                [r for r in rows if r.run_id == run_id],
+                [r for r in rows if r.sample_id == sample_id],
             )
 
         return Tool(function=list_my_resources, takes_ctx=True)
@@ -85,7 +85,7 @@ class ResearchGraphToolkit:
     # ------------------------------------------------------------------
 
     def _list_child_resources(self) -> Tool[AgentToolBudgetDeps]:
-        run_id = self._run_id
+        sample_id = self._run_id
         task_execution_id = self._task_execution_id
 
         async def list_child_resources(
@@ -107,11 +107,11 @@ class ResearchGraphToolkit:
                     session,
                     task_execution_id,
                 )
-            result: list[RunResource] = []
+            result: list[SampleResource] = []
             for child in children:
                 with get_session() as session:
                     rows = self._resource_repo.list_by_execution(session, child.id)
-                result.extend(r for r in rows if r.run_id == run_id)
+                result.extend(r for r in rows if r.sample_id == sample_id)
             return _to_refs_sorted(result)
 
         return Tool(function=list_child_resources, takes_ctx=True)
@@ -121,7 +121,7 @@ class ResearchGraphToolkit:
     # ------------------------------------------------------------------
 
     def _list_descendant_resources(self) -> Tool[AgentToolBudgetDeps]:
-        run_id = self._run_id
+        sample_id = self._run_id
         task_execution_id = self._task_execution_id
 
         async def list_descendant_resources(
@@ -145,7 +145,7 @@ class ResearchGraphToolkit:
                 return tool_budget.exhausted_result("non-workflow tool budget reached")
             visited: set[UUID] = {task_execution_id}
             frontier: list[UUID] = [task_execution_id]
-            result: list[RunResource] = []
+            result: list[SampleResource] = []
 
             for _depth in range(max_depth):
                 next_frontier: list[UUID] = []
@@ -162,7 +162,7 @@ class ResearchGraphToolkit:
                         next_frontier.append(child.id)
                         with get_session() as session:
                             rows = self._resource_repo.list_by_execution(session, child.id)
-                        result.extend(r for r in rows if r.run_id == run_id)
+                        result.extend(r for r in rows if r.sample_id == sample_id)
                 frontier = next_frontier
                 if not frontier:
                     break
@@ -176,7 +176,7 @@ class ResearchGraphToolkit:
     # ------------------------------------------------------------------
 
     def _list_run_resources(self) -> Tool[AgentToolBudgetDeps]:
-        run_id = self._run_id
+        sample_id = self._run_id
 
         async def list_run_resources(
             ctx: "RunContext[AgentToolBudgetDeps]",
@@ -193,7 +193,7 @@ class ResearchGraphToolkit:
             ):
                 return tool_budget.exhausted_result("non-workflow tool budget reached")
             with get_session() as session:
-                rows = self._resource_repo.list_by_run(session, run_id)
+                rows = self._resource_repo.list_by_run(session, sample_id)
             return _to_refs_sorted(rows)
 
         return Tool(function=list_run_resources, takes_ctx=True)
@@ -203,7 +203,7 @@ class ResearchGraphToolkit:
     # ------------------------------------------------------------------
 
     def _get_resource_by_logical_path(self) -> Tool[AgentToolBudgetDeps]:
-        run_id = self._run_id
+        sample_id = self._run_id
 
         async def get_resource_by_logical_path(
             ctx: "RunContext[AgentToolBudgetDeps]",
@@ -224,7 +224,7 @@ class ResearchGraphToolkit:
             ):
                 return tool_budget.exhausted_result("non-workflow tool budget reached")
             with get_session() as session:
-                rows = self._resource_repo.list_by_run(session, run_id)
+                rows = self._resource_repo.list_by_run(session, sample_id)
             matching = [r for r in rows if r.file_path == logical_path]
             if not matching:
                 return None
@@ -238,7 +238,7 @@ class ResearchGraphToolkit:
     # ------------------------------------------------------------------
 
     def _get_resource_by_content_hash(self) -> Tool[AgentToolBudgetDeps]:
-        run_id = self._run_id
+        sample_id = self._run_id
 
         async def get_resource_by_content_hash(
             ctx: "RunContext[AgentToolBudgetDeps]",
@@ -259,7 +259,7 @@ class ResearchGraphToolkit:
             ):
                 return tool_budget.exhausted_result("non-workflow tool budget reached")
             with get_session() as session:
-                rows = self._resource_repo.list_by_run(session, run_id)
+                rows = self._resource_repo.list_by_run(session, sample_id)
             matching = [r for r in rows if r.content_hash == content_hash]
             if not matching:
                 return None
@@ -274,7 +274,7 @@ class ResearchGraphToolkit:
 # ---------------------------------------------------------------------------
 
 
-def _to_refs_sorted(rows: Sequence[RunResource]) -> list[ResourceRef]:
+def _to_refs_sorted(rows: Sequence[SampleResource]) -> list[ResourceRef]:
     """Convert ORM rows to ResourceRef DTOs, sorted created_at DESC."""
     sorted_rows = sorted(rows, key=lambda r: (r.created_at, r.id), reverse=True)
     return [ResourceRef.from_row(r) for r in sorted_rows]

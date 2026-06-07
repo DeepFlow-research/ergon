@@ -272,9 +272,9 @@ def test_application_clusters_stay_out_of_runtime_layout() -> None:
 
     for new_path in (
         core_root / "application" / "runtime" / "__init__.py",
-        core_root / "application" / "runtime" / "run_lifecycle.py",
+        core_root / "application" / "runtime" / "sample_lifecycle.py",
         core_root / "application" / "runtime" / "orchestration.py",
-        core_root / "application" / "runtime" / "run_records.py",
+        core_root / "application" / "runtime" / "sample_records.py",
         core_root / "application" / "runtime" / "workflow_models.py",
         core_root / "application" / "runtime" / "graph_repository.py",
         core_root / "application" / "runtime" / "lifecycle.py",
@@ -325,7 +325,7 @@ def test_read_context_and_resource_modules_stay_in_application_and_views_layout(
         core_root / "runtime" / "resources.py",
         core_root / "application" / "read_models",
         core_root / "application" / "read_models" / "models.py",
-        core_root / "application" / "read_models" / "runs.py",
+        core_root / "application" / "read_models" / "samples.py",
         core_root / "application" / "read_models" / "run_snapshot.py",
         core_root / "application" / "read_models" / "experiments.py",
         core_root / "application" / "read_models" / "resources.py",
@@ -345,10 +345,10 @@ def test_read_context_and_resource_modules_stay_in_application_and_views_layout(
         core_root / "application" / "resources" / "models.py",
         core_root / "application" / "resources" / "repository.py",
         core_root / "views" / "__init__.py",
-        core_root / "views" / "runs" / "__init__.py",
-        core_root / "views" / "runs" / "models.py",
-        core_root / "views" / "runs" / "service.py",
-        core_root / "views" / "runs" / "snapshot.py",
+        core_root / "views" / "samples" / "__init__.py",
+        core_root / "views" / "samples" / "models.py",
+        core_root / "views" / "samples" / "service.py",
+        core_root / "views" / "samples" / "snapshot.py",
         core_root / "views" / "experiments" / "__init__.py",
         core_root / "views" / "experiments" / "models.py",
         core_root / "views" / "experiments" / "service.py",
@@ -382,7 +382,7 @@ def test_views_package_replaces_non_compat_read_models() -> None:
 
     for removed_path in (
         read_models_root / "models.py",
-        read_models_root / "runs.py",
+        read_models_root / "samples.py",
         read_models_root / "run_snapshot.py",
         read_models_root / "experiments.py",
         read_models_root / "resources.py",
@@ -393,10 +393,10 @@ def test_views_package_replaces_non_compat_read_models() -> None:
 
     for new_path in (
         views_root / "__init__.py",
-        views_root / "runs" / "__init__.py",
-        views_root / "runs" / "models.py",
-        views_root / "runs" / "service.py",
-        views_root / "runs" / "snapshot.py",
+        views_root / "samples" / "__init__.py",
+        views_root / "samples" / "models.py",
+        views_root / "samples" / "service.py",
+        views_root / "samples" / "snapshot.py",
         views_root / "experiments" / "__init__.py",
         views_root / "experiments" / "models.py",
         views_root / "experiments" / "service.py",
@@ -432,7 +432,7 @@ def test_views_services_may_read_persistence_rows() -> None:
     views_root = ROOT / "ergon_core" / "ergon_core" / "core" / "views"
 
     for path in (
-        views_root / "runs" / "service.py",
+        views_root / "samples" / "service.py",
         views_root / "experiments" / "service.py",
     ):
         text = path.read_text()

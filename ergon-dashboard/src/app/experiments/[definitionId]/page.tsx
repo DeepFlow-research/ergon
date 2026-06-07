@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { RunMetricExplorer } from "@/components/experiments/RunMetricExplorer";
-import { formatRunMetricValue, metricDescriptor } from "@/components/experiments/runMetricExplorerModel";
+import { SampleRunMetricExplorer } from "@/components/experiments/SampleRunMetricExplorer";
+import { formatRunMetricValue, metricDescriptor } from "@/components/experiments/sampleRunMetricExplorerModel";
 import { formatDurationMs } from "@/lib/formatDuration";
 import { loadExperimentDetail, type ExperimentDetailWithRunMetrics } from "@/lib/server-data/experiments";
 
@@ -27,8 +27,8 @@ function workerTeamLabel(workerTeam: Record<string, unknown>) {
   return entries.map(([key, value]) => `${key}: ${String(value)}`).join(", ");
 }
 
-function runHref(runId: string) {
-  return `/run/${runId}`;
+function runHref(sampleId: string) {
+  return `/samples/${sampleId}`;
 }
 
 export default async function ExperimentPage({ params }: ExperimentPageProps) {
@@ -143,7 +143,7 @@ export default async function ExperimentPage({ params }: ExperimentPageProps) {
       </section>
 
       <div className="mb-6" data-testid="experiment-run-distribution">
-        <RunMetricExplorer points={detail.runMetricPoints} runHrefBase="/run" />
+        <SampleRunMetricExplorer points={detail.runMetricPoints} runHrefBase="/samples" />
       </div>
 
       <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] shadow-card">
@@ -163,51 +163,51 @@ export default async function ExperimentPage({ params }: ExperimentPageProps) {
           <tbody>
             {detail.runMetricPoints.map((point) => (
               <tr
-                key={point.runId}
-                data-testid={`experiment-run-row-${point.runId}`}
+                key={point.sampleId}
+                data-testid={`experiment-run-row-${point.sampleId}`}
                 className="group cursor-pointer border-b border-[var(--line)] last:border-0 hover:bg-[var(--paper)]"
               >
                 <td>
                   <Link
-                    href={runHref(point.runId)}
+                    href={runHref(point.sampleId)}
                     className="block px-3 py-2 font-mono text-xs text-[var(--ink)] underline-offset-2 group-hover:underline"
                   >
                     {point.runName}
                   </Link>
                 </td>
                 <td>
-                  <Link href={runHref(point.runId)} className="block px-3 py-2 text-[var(--muted)]">
+                  <Link href={runHref(point.sampleId)} className="block px-3 py-2 text-[var(--muted)]">
                     {point.sampleLabel}
                   </Link>
                 </td>
                 <td>
-                  <Link href={runHref(point.runId)} className="block px-3 py-2 text-[var(--muted)]">
+                  <Link href={runHref(point.sampleId)} className="block px-3 py-2 text-[var(--muted)]">
                     <StatusBadge status={point.status} size="sm" />
                     {point.errorSummary ? <div className="mt-1 max-w-56 truncate text-xs text-red-500">{point.errorSummary}</div> : null}
                   </Link>
                 </td>
                 <td>
-                  <Link href={runHref(point.runId)} className="block px-3 py-2 font-mono text-xs text-[var(--ink)]">
+                  <Link href={runHref(point.sampleId)} className="block px-3 py-2 font-mono text-xs text-[var(--ink)]">
                     {formatRunMetricValue(scoreDescriptor, point.metrics.score)}
                   </Link>
                 </td>
                 <td>
-                  <Link href={runHref(point.runId)} className="block px-3 py-2 font-mono text-xs text-[var(--muted)]">
+                  <Link href={runHref(point.sampleId)} className="block px-3 py-2 font-mono text-xs text-[var(--muted)]">
                     {formatRunMetricValue(durationDescriptor, point.metrics.duration_ms)}
                   </Link>
                 </td>
                 <td>
-                  <Link href={runHref(point.runId)} className="block px-3 py-2 font-mono text-xs text-[var(--muted)]">
+                  <Link href={runHref(point.sampleId)} className="block px-3 py-2 font-mono text-xs text-[var(--muted)]">
                     {formatRunMetricValue(tasksDescriptor, point.metrics.total_tasks)}
                   </Link>
                 </td>
                 <td>
-                  <Link href={runHref(point.runId)} className="block px-3 py-2 text-xs text-[var(--muted)]">
+                  <Link href={runHref(point.sampleId)} className="block px-3 py-2 text-xs text-[var(--muted)]">
                     {formatRunMetricValue(costDescriptor, point.metrics.total_cost_usd)}
                   </Link>
                 </td>
                 <td>
-                  <Link href={runHref(point.runId)} className="block px-3 py-2 text-[var(--muted)]">
+                  <Link href={runHref(point.sampleId)} className="block px-3 py-2 text-[var(--muted)]">
                     {point.modelTarget ?? "—"}
                   </Link>
                 </td>

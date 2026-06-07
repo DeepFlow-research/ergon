@@ -43,7 +43,7 @@ def _reset_sandbox_singleton() -> None:
     BaseSandboxManager._instance = None
     BaseSandboxManager._sandboxes = {}
     BaseSandboxManager._creation_locks = {}
-    BaseSandboxManager._run_ids = {}
+    BaseSandboxManager._sample_ids = {}
     BaseSandboxManager._display_task_ids = {}
     BaseSandboxManager._file_registries = {}
     BaseSandboxManager._created_files_registry = {}
@@ -92,9 +92,9 @@ async def test_install_dependencies_runs_exactly_once_on_repeated_create(
     )
 
     mgr = _ProbeManager()
-    await mgr.create(sandbox_key=task_id, run_id=task_id, timeout_minutes=30)
-    await mgr.create(sandbox_key=task_id, run_id=task_id, timeout_minutes=30)
-    await mgr.create(sandbox_key=task_id, run_id=task_id, timeout_minutes=30)
+    await mgr.create(sandbox_key=task_id, sample_id=task_id, timeout_minutes=30)
+    await mgr.create(sandbox_key=task_id, sample_id=task_id, timeout_minutes=30)
+    await mgr.create(sandbox_key=task_id, sample_id=task_id, timeout_minutes=30)
 
     assert _ProbeManager.install_calls == 1, (
         "BaseSandboxManager.create must early-return on a cached sandbox "

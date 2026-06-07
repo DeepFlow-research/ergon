@@ -13,7 +13,7 @@ from ergon_core.api import Task
 
 def _command_context(harness) -> WorkflowCommandContext:
     return WorkflowCommandContext(
-        run_id=harness.context.run_id,
+        sample_id=harness.context.sample_id,
         task_id=harness.context.task_id,
         execution_id=harness.context.execution_id,
         sandbox_task_key=harness.context.task_id,

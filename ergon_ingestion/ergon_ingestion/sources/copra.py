@@ -79,10 +79,10 @@ def parsed_run_from_copra_record(
     """Convert one parsed theorem attempt into a database-independent run."""
     observed = _normalise_record(record)
     theorem = str(observed.get("Theorem") or observed.get("theorem") or source_run_id or "unknown")
-    run_id = source_run_id or theorem
+    sample_id = source_run_id or theorem
     resource_payload = _resource_payload(observed)
     return ParsedRun(
-        source_run_id=run_id,
+        source_run_id=sample_id,
         instance_key=theorem,
         description=f"COPRA theorem attempt {theorem}",
         schema_fit_class="artifact-only",

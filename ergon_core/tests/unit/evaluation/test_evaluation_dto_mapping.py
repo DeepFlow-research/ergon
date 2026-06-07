@@ -1,13 +1,13 @@
 from uuid import uuid4
 
 from ergon_core.core.application.evaluation.summary import EvaluationSummary
-from ergon_core.core.persistence.telemetry.models import RunTaskEvaluation
-from ergon_core.core.views.runs.evaluation_mapping import evaluation_row_to_dto
+from ergon_core.core.persistence.telemetry.models import SampleTaskEvaluation
+from ergon_core.core.views.samples.evaluation_mapping import evaluation_row_to_dto
 
 
 def test_evaluation_row_to_dto_maps_multiple_criterion_outcomes() -> None:
     evaluation_id = uuid4()
-    run_id = uuid4()
+    sample_id = uuid4()
     task_id = uuid4()
     summary = EvaluationSummary(
         evaluator_name="judge",
@@ -52,9 +52,9 @@ def test_evaluation_row_to_dto_maps_multiple_criterion_outcomes() -> None:
             },
         ],
     )
-    row = RunTaskEvaluation(
+    row = SampleTaskEvaluation(
         id=evaluation_id,
-        run_id=run_id,
+        sample_id=sample_id,
         task_execution_id=uuid4(),
         task_id=task_id,
         definition_evaluator_id=uuid4(),
@@ -67,7 +67,7 @@ def test_evaluation_row_to_dto_maps_multiple_criterion_outcomes() -> None:
     dto = evaluation_row_to_dto(row)
 
     assert dto.id == str(evaluation_id)
-    assert dto.run_id == str(run_id)
+    assert dto.sample_id == str(sample_id)
     assert dto.task_id == str(task_id)
     assert dto.evaluator_name == "judge"
     assert dto.total_score == 1.5

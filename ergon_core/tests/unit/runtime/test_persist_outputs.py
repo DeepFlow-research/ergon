@@ -12,8 +12,8 @@ class _FakeTaskExecutionService:
     def __init__(self, seen: list[str | None]) -> None:
         self._seen = seen
 
-    async def load_task_view(self, _session, *, run_id, task_id, sandbox_id=None):
-        del run_id, task_id
+    async def load_task_view(self, _session, *, sample_id, task_id, sandbox_id=None):
+        del sample_id, task_id
         self._seen.append(sandbox_id)
         sandbox = SimpleNamespace(output_path="/workspace/public-output/")
         return SimpleNamespace(task=SimpleNamespace(sandbox=sandbox))
@@ -56,11 +56,11 @@ async def test_persist_outputs_publishes_public_sandbox_through_resource_service
         lambda: _FakeTaskExecutionService(seen_sandbox_ids),
     )
     monkeypatch.setattr(composition, "SandboxResourcePublisher", _FakePublisher)
-    monkeypatch.setattr(composition, "RunResourcePublishService", _FakePublishService)
+    monkeypatch.setattr(composition, "SampleResourcePublishService", _FakePublishService)
 
     result = await run_persist_outputs_job(
         PersistOutputsRequest(
-            run_id=uuid4(),
+            sample_id=uuid4(),
             definition_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),

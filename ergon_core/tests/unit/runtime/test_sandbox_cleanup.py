@@ -36,7 +36,7 @@ class _FakeStepCtx:
 async def test_cleanup_on_completed_terminates_sandbox(monkeypatch: pytest.MonkeyPatch) -> None:
     """A ``task/completed`` event with a sandbox_id terminates that sandbox."""
     payload = TaskCompletedEvent(
-        run_id=uuid4(),
+        sample_id=uuid4(),
         definition_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
@@ -65,7 +65,7 @@ async def test_cleanup_on_completed_terminates_sandbox(monkeypatch: pytest.Monke
 async def test_cleanup_on_failed_terminates_sandbox(monkeypatch: pytest.MonkeyPatch) -> None:
     """A ``task/failed`` event with a sandbox_id terminates that sandbox."""
     payload = TaskFailedEvent(
-        run_id=uuid4(),
+        sample_id=uuid4(),
         definition_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
@@ -97,7 +97,7 @@ async def test_cleanup_on_failed_skips_when_sandbox_id_missing(
 ) -> None:
     """A failure before sandbox-setup carries ``sandbox_id=None``; cleanup is a no-op."""
     payload = TaskFailedEvent(
-        run_id=uuid4(),
+        sample_id=uuid4(),
         definition_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),

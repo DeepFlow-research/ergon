@@ -31,10 +31,10 @@ from ergon_core.api.criterion import Criterion
 from ergon_core.api.criterion import CriterionContext, CriterionOutcome
 from ergon_core.api.errors import CriterionCheckError
 from ergon_core.api.sandbox.runtime import CommandResult
-from ergon_core.core.persistence.graph.models import RunGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.application.runtime.status import COMPLETED, NON_AUTONOMOUS_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import RunResource, RunTaskExecution
+from ergon_core.core.persistence.telemetry.models import SampleResource, SampleTaskAttempt
 from tests.fixtures.smoke_components.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
 from pydantic import BaseModel
 from sqlmodel import col, desc, select
@@ -115,25 +115,25 @@ class SmokeCriterionBase(Criterion):
     async def _pull_children(
         self,
         context: CriterionContext,
-    ) -> list[RunGraphNode]:
-        """Return direct-child ``RunGraphNode`` rows of the parent task.
+    ) -> list[SampleGraphNode]:
+        """Return direct-child ``SampleGraphNode`` rows of the parent task.
 
         ``context.execution_id`` points at the parent's
-        ``RunTaskExecution``; ``RunTaskExecution.task_id`` is the parent's
+        ``SampleTaskAttempt``; ``SampleTaskAttempt.task_id`` is the parent's
         graph-node id.  Direct children are the rows whose
         ``parent_task_id`` equals that id.
         """
         with get_session() as session:
-            parent_exec = session.get(RunTaskExecution, context.execution_id)
+            parent_exec = session.get(SampleTaskAttempt, context.execution_id)
             if parent_exec is None or parent_exec.task_id is None:
                 raise CriterionCheckError(
-                    f"no RunTaskExecution / task_id for execution_id={context.execution_id}",
+                    f"no SampleTaskAttempt / task_id for execution_id={context.execution_id}",
                 )
             children = list(
                 session.exec(
-                    select(RunGraphNode)
-                    .where(RunGraphNode.parent_task_id == parent_exec.task_id)
-                    .order_by(RunGraphNode.task_slug),
+                    select(SampleGraphNode)
+                    .where(SampleGraphNode.parent_task_id == parent_exec.task_id)
+                    .order_by(SampleGraphNode.task_slug),
                 ).all(),
             )
         return children
@@ -144,7 +144,7 @@ class SmokeCriterionBase(Criterion):
         *,
         timeout_s: float = 180.0,
         interval_s: float = 2.0,
-    ) -> tuple[list[RunGraphNode], list[RunGraphNode], dict[UUID, ProbeResult]]:
+    ) -> tuple[list[SampleGraphNode], list[SampleGraphNode], dict[UUID, ProbeResult]]:
         deadline = time.monotonic() + timeout_s
         last_error: CriterionCheckError | None = None
 
@@ -170,8 +170,8 @@ class SmokeCriterionBase(Criterion):
 
     async def _artifact_children(
         self,
-        children: list[RunGraphNode],
-    ) -> list[RunGraphNode]:
+        children: list[SampleGraphNode],
+    ) -> list[SampleGraphNode]:
         """Return leaf descendants that should publish probe/artifact resources.
 
         The happy smoke path routes direct child ``l_2`` to a recursive worker.
@@ -181,9 +181,11 @@ class SmokeCriterionBase(Criterion):
         with get_session() as session:
             nested = list(
                 session.exec(
-                    select(RunGraphNode)
-                    .where(RunGraphNode.parent_task_id.in_([child.task_id for child in children]))  # ty: ignore[unresolved-attribute]
-                    .order_by(RunGraphNode.task_slug),
+                    select(SampleGraphNode)
+                    .where(
+                        SampleGraphNode.parent_task_id.in_([child.task_id for child in children])
+                    )  # ty: ignore[unresolved-attribute]
+                    .order_by(SampleGraphNode.task_slug),
                 ).all(),
             )
         nested_parent_ids = {node.parent_task_id for node in nested}
@@ -195,12 +197,12 @@ class SmokeCriterionBase(Criterion):
     async def _pull_probe_results(
         self,
         context: CriterionContext,
-        children: list[RunGraphNode],
+        children: list[SampleGraphNode],
     ) -> dict[UUID, ProbeResult]:
         """Return ``{child_task_id: {"exit_code": int, "stdout": str}}``.
 
-        For each child, finds its ``RunTaskExecution`` rows, picks the
-        latest ``RunResource`` whose name begins with ``probe_`` and
+        For each child, finds its ``SampleTaskAttempt`` rows, picks the
+        latest ``SampleResource`` whose name begins with ``probe_`` and
         ends with ``.json``, and parses its blob-stored bytes.
         """
         results: dict[UUID, ProbeResult] = {}
@@ -209,31 +211,31 @@ class SmokeCriterionBase(Criterion):
                 exec_ids = [
                     row.id
                     for row in session.exec(
-                        select(RunTaskExecution).where(
-                            RunTaskExecution.task_id == child.task_id,
+                        select(SampleTaskAttempt).where(
+                            SampleTaskAttempt.task_id == child.task_id,
                         ),
                     ).all()
                 ]
                 if not exec_ids:
                     raise CriterionCheckError(
-                        f"{child.task_slug}: no RunTaskExecution rows for task",
+                        f"{child.task_slug}: no SampleTaskAttempt rows for task",
                     )
                 resource = session.exec(
-                    select(RunResource)
+                    select(SampleResource)
                     .where(
-                        col(RunResource.task_execution_id).in_(exec_ids),
+                        col(SampleResource.task_execution_id).in_(exec_ids),
                     )
                     .where(
-                        col(RunResource.name).like("probe_%.json"),
+                        col(SampleResource.name).like("probe_%.json"),
                     )
                     .order_by(
-                        desc(RunResource.created_at),
+                        desc(SampleResource.created_at),
                     )
                     .limit(1),
                 ).first()
                 if resource is None:
                     raise CriterionCheckError(
-                        f"{child.task_slug}: no probe_*.json RunResource row",
+                        f"{child.task_slug}: no probe_*.json SampleResource row",
                     )
                 blob_bytes = Path(resource.file_path).read_bytes()
                 try:
@@ -300,7 +302,7 @@ class SmokeCriterionBase(Criterion):
     async def _verify_env_content(
         self,
         context: CriterionContext,
-        children: list[RunGraphNode],
+        children: list[SampleGraphNode],
         probes: dict[UUID, ProbeResult],
     ) -> None:
         """Subclass hook: read artifacts and check env-specific file shape.

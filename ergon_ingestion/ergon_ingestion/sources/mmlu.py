@@ -119,7 +119,7 @@ def _planned_runs(path: Path) -> int:
 
 
 def _source_run_id(row: Record, *, model: str, subject: str, item_id: str) -> str:
-    explicit = _first_present(row, ["source_run_id", "run_id"])
+    explicit = _first_present(row, ["source_run_id", "sample_id"])
     if explicit is not None:
         return str(explicit)
     return f"{model}:{subject}:{item_id}"

@@ -40,7 +40,7 @@ class SubtaskLifecycleToolkit:
     """Produces the eight manager-facing tool callables for ``Agent(tools=[...])``.
 
     The toolkit is a closure factory, not a service: it captures
-    ``run_id`` and ``parent_task_id`` from ``WorkerContext`` so that
+    ``sample_id`` and ``parent_task_id`` from ``WorkerContext`` so that
     creation tools (add_subtask, plan_subtasks, list_subtasks) are
     scoped to the manager's subtree by construction.
 
@@ -50,7 +50,7 @@ class SubtaskLifecycleToolkit:
     only response-shaping and UUID parsing logic here.
 
     ``definition_id`` is NOT captured here --- the service resolves it
-    from ``run_id`` at dispatch time, keeping the tool surface
+    from ``sample_id`` at dispatch time, keeping the tool surface
     thin and eliminating a class of stale-id bugs when definitions are
     reloaded mid-run.
     """

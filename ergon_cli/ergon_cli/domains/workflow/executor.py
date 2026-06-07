@@ -9,7 +9,7 @@ from typing import cast
 from uuid import UUID
 
 from ergon_cli.domains.workflow.models import WorkflowCommandContext, WorkflowCommandOutput
-from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
+from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
 from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel
 from sqlmodel import Session
@@ -20,7 +20,7 @@ _OUTPUT_FORMATS = ("text", "json")
 _DEPENDENCY_DIRECTIONS = ("upstream", "downstream", "both")
 
 _FORBIDDEN_CONTEXT_FLAGS = {
-    "--run-id",
+    "--sample-id",
     "--task-id",
     "--node-id",
     "--execution-id",
@@ -126,7 +126,7 @@ def _handle_inspect(
     if args.action == "resource-list":
         resources = service.list_resources(
             session,
-            run_id=context.run_id,
+            sample_id=context.sample_id,
             task_id=context.task_id,
             scope=args.scope,
             kind=args.kind,
@@ -146,7 +146,7 @@ def _handle_inspect(
         resource_id = UUID(args.resource_id)
         content = service.read_resource_bytes(
             session,
-            run_id=context.run_id,
+            sample_id=context.sample_id,
             resource_id=resource_id,
             max_bytes=args.max_bytes,
         )
@@ -156,7 +156,7 @@ def _handle_inspect(
     if args.action == "task-tree":
         parent = UUID(args.parent_task_id) if args.parent_task_id else None
         deadline = time.monotonic() + max(args.wait_seconds, 0)
-        tasks = service.list_tasks(session, run_id=context.run_id, parent_task_id=parent)
+        tasks = service.list_tasks(session, sample_id=context.sample_id, parent_task_id=parent)
         while args.wait_seconds > 0 and time.monotonic() < deadline:
             children = [task for task in tasks if task.parent_task_id == context.task_id]
             if children and all(
@@ -164,7 +164,7 @@ def _handle_inspect(
             ):
                 break
             time.sleep(2)
-            tasks = service.list_tasks(session, run_id=context.run_id, parent_task_id=parent)
+            tasks = service.list_tasks(session, sample_id=context.sample_id, parent_task_id=parent)
         return _format_output(
             {"tasks": [_dump(task) for task in tasks]},
             text_lines=[
@@ -176,7 +176,7 @@ def _handle_inspect(
     if args.action == "task-dependencies":
         deps = service.list_dependencies(
             session,
-            run_id=context.run_id,
+            sample_id=context.sample_id,
             task_id=context.task_id,
             direction=args.direction,
         )
@@ -191,7 +191,7 @@ def _handle_inspect(
     if args.action == "next-actions":
         actions = service.get_next_actions(
             session,
-            run_id=context.run_id,
+            sample_id=context.sample_id,
             task_id=context.task_id,
             manager_capable=args.manager_capable,
         )

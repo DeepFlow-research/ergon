@@ -2,8 +2,8 @@
 
 Every mutation method:
 1. Validates structural invariants (acyclicity, referential integrity).
-2. Writes to run_graph_* tables.
-3. Appends to run_graph_mutations in the same transaction.
+2. Writes to sample_graph_* tables.
+3. Appends to sample_graph_mutations in the same transaction.
 
 The repository does NOT validate status transitions or authorization.
 Those are the experiment layer's responsibility.
@@ -23,10 +23,10 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionWorker,
 )
 from ergon_core.core.persistence.graph.models import (
-    RunGraphAnnotation,
-    RunGraphEdge,
-    RunGraphMutation,
-    RunGraphNode,
+    SampleGraphAnnotation,
+    SampleGraphEdge,
+    SampleGraphMutation,
+    SampleGraphNode,
 )
 from ergon_core.core.application.runtime.status import TERMINAL_STATUSES
 from ergon_core.core.application.runtime.errors import (
@@ -47,7 +47,7 @@ from ergon_core.core.application.runtime.models import (
     NodeAddedMutation,
     NodeFieldChangedMutation,
     NodeStatusChangedMutation,
-    RunGraphNodeView,
+    SampleGraphNodeView,
     WorkflowGraphDto,
 )
 from ergon_core.core.shared.utils import utcnow
@@ -78,10 +78,10 @@ class RuntimeGraphRepository:
     """
 
     def __init__(self) -> None:
-        self._mutation_listeners: list[Callable[[RunGraphMutation], Awaitable[None]]] = []
+        self._mutation_listeners: list[Callable[[SampleGraphMutation], Awaitable[None]]] = []
 
     def add_mutation_listener(
-        self, listener: Callable[[RunGraphMutation], Awaitable[None]]
+        self, listener: Callable[[SampleGraphMutation], Awaitable[None]]
     ) -> None:
         self._mutation_listeners.append(listener)
 
@@ -90,7 +90,7 @@ class RuntimeGraphRepository:
     def initialize_from_definition(
         self,
         session: Session,
-        run_id: UUID,
+        sample_id: UUID,
         definition_id: UUID,
         *,
         initial_node_status: str,
@@ -149,14 +149,14 @@ class RuntimeGraphRepository:
         )
 
         def_to_node: dict[UUID, UUID] = {}
-        node_rows: list[RunGraphNode] = []
+        node_rows: list[SampleGraphNode] = []
 
         for task in tasks:
             def_to_node[task.id] = task.id
             node_rows.append(
-                RunGraphNode(
+                SampleGraphNode(
                     task_id=task.id,
-                    run_id=run_id,
+                    sample_id=sample_id,
                     instance_key=instance_key_by_id[task.instance_id],
                     task_slug=task.task_slug,
                     description=task.description,
@@ -169,12 +169,12 @@ class RuntimeGraphRepository:
                 )
             )
 
-        edge_rows: list[RunGraphEdge] = []
+        edge_rows: list[SampleGraphEdge] = []
         for dep in deps:
             edge_rows.append(
-                RunGraphEdge(
+                SampleGraphEdge(
                     id=uuid4(),
-                    run_id=run_id,
+                    sample_id=sample_id,
                     definition_dependency_id=dep.id,
                     source_task_id=def_to_node[dep.depends_on_task_id],
                     target_task_id=def_to_node[dep.task_id],
@@ -188,15 +188,15 @@ class RuntimeGraphRepository:
         session.add_all(edge_rows)
         session.flush()
 
-        seq = self._next_sequence(session, run_id)
+        seq = self._next_sequence(session, sample_id)
 
-        annotation_rows: list[RunGraphAnnotation] = []
-        mutation_rows: list[RunGraphMutation] = []
+        annotation_rows: list[SampleGraphAnnotation] = []
+        mutation_rows: list[SampleGraphMutation] = []
 
         for task, node in zip(tasks, node_rows):
             mutation_rows.append(
-                RunGraphMutation(
-                    run_id=run_id,
+                SampleGraphMutation(
+                    sample_id=sample_id,
                     sequence=seq,
                     mutation_type="node.added",
                     target_type="node",
@@ -213,8 +213,8 @@ class RuntimeGraphRepository:
             payload = task.task_json.get("task_payload") or {}
             if payload:
                 annotation_rows.append(
-                    RunGraphAnnotation(
-                        run_id=run_id,
+                    SampleGraphAnnotation(
+                        sample_id=sample_id,
                         target_type="node",
                         target_id=node.task_id,
                         namespace="payload",
@@ -224,8 +224,8 @@ class RuntimeGraphRepository:
                     )
                 )
                 mutation_rows.append(
-                    RunGraphMutation(
-                        run_id=run_id,
+                    SampleGraphMutation(
+                        sample_id=sample_id,
                         sequence=seq,
                         mutation_type="annotation.set",
                         target_type="node",
@@ -244,8 +244,8 @@ class RuntimeGraphRepository:
 
         for edge in edge_rows:
             mutation_rows.append(
-                RunGraphMutation(
-                    run_id=run_id,
+                SampleGraphMutation(
+                    sample_id=sample_id,
                     sequence=seq,
                     mutation_type="edge.added",
                     target_type="edge",
@@ -264,7 +264,7 @@ class RuntimeGraphRepository:
         session.flush()
 
         return WorkflowGraphDto(
-            run_id=run_id,
+            sample_id=sample_id,
             nodes=[_to_node_dto(n) for n in node_rows],
             edges=[_to_edge_dto(e) for e in edge_rows],
         )
@@ -275,39 +275,39 @@ class RuntimeGraphRepository:
         self,
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
         sandbox_id: str | None = None,
-    ) -> RunGraphNodeView:
-        """Inflate a typed RunGraphNodeView from `run_graph_nodes.task_json`.
+    ) -> SampleGraphNodeView:
+        """Inflate a typed SampleGraphNodeView from `sample_graph_nodes.task_json`.
 
         The repository reads only the run-tier ``task_json`` column and
         reconstructs a typed Task via ``Task.from_definition``. The job
-        body downstream receives a ``RunGraphNodeView`` with the Task
+        body downstream receives a ``SampleGraphNodeView`` with the Task
         already inflated: no raw JSON and no definition-tier reads.
 
         Async because ``Task.from_definition`` is async.
 
-        ``RunGraphNode.task_id`` is the task identity for both
+        ``SampleGraphNode.task_id`` is the task identity for both
         definition-seeded and dynamic nodes.
         """
 
         row = session.exec(
-            select(RunGraphNode).where(
-                RunGraphNode.run_id == run_id,
-                RunGraphNode.task_id == task_id,
+            select(SampleGraphNode).where(
+                SampleGraphNode.sample_id == sample_id,
+                SampleGraphNode.task_id == task_id,
             )
         ).first()
         if row is None:
-            raise NodeNotFoundError(task_id, run_id=run_id)
+            raise NodeNotFoundError(task_id, sample_id=sample_id)
 
         task = await Task.from_definition(
             row.task_json,
             task_id=row.task_id,
             sandbox_id=sandbox_id,
         )
-        return RunGraphNodeView(
-            run_id=row.run_id,
+        return SampleGraphNodeView(
+            sample_id=row.sample_id,
             task_id=row.task_id,
             parent_task_id=row.parent_task_id,
             status=row.status,
@@ -318,7 +318,7 @@ class RuntimeGraphRepository:
     async def add_node(  # slopcop: ignore[max-function-params]
         self,
         session: Session,
-        run_id: UUID,
+        sample_id: UUID,
         *,
         task_slug: str,
         instance_key: str,
@@ -342,8 +342,8 @@ class RuntimeGraphRepository:
         if task_json is None:
             raise ValueError("RuntimeGraphRepository.add_task requires task_json")
         now = utcnow()
-        node = RunGraphNode(
-            run_id=run_id,
+        node = SampleGraphNode(
+            sample_id=sample_id,
             instance_key=instance_key,
             task_slug=task_slug,
             description=description,
@@ -361,7 +361,7 @@ class RuntimeGraphRepository:
 
         await self._log_mutation(
             session,
-            run_id,
+            sample_id,
             mutation_type="node.added",
             target_type="node",
             target_id=node.task_id,
@@ -375,7 +375,7 @@ class RuntimeGraphRepository:
         self,
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
         new_status: str,
         meta: MutationMeta,
@@ -390,7 +390,7 @@ class RuntimeGraphRepository:
         write a terminal status resolve to "first writer wins" without
         requiring distributed locks.
         """
-        node = self._get_node_row(session, run_id, task_id)
+        node = self._get_node_row(session, sample_id, task_id)
 
         if only_if_not_terminal and node.status in TERMINAL_STATUSES:
             return False
@@ -403,7 +403,7 @@ class RuntimeGraphRepository:
 
         await self._log_mutation(
             session,
-            run_id,
+            sample_id,
             mutation_type="node.status_changed",
             target_type="node",
             target_id=task_id,
@@ -417,7 +417,7 @@ class RuntimeGraphRepository:
         self,
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
         field: Literal["description", "assigned_worker_slug"],
         value: str | None,
@@ -427,7 +427,7 @@ class RuntimeGraphRepository:
             raise ValueError(
                 f"Field {field!r} is not updatable. Allowed: {sorted(_UPDATABLE_NODE_FIELDS)}"
             )
-        node = self._get_node_row(session, run_id, task_id)
+        node = self._get_node_row(session, sample_id, task_id)
         if field == "description":
             if value is None:
                 raise ValueError("description cannot be cleared")
@@ -442,7 +442,7 @@ class RuntimeGraphRepository:
 
         await self._log_mutation(
             session,
-            run_id,
+            sample_id,
             mutation_type="node.field_changed",
             target_type="node",
             target_id=task_id,
@@ -457,20 +457,20 @@ class RuntimeGraphRepository:
     async def add_edge(
         self,
         session: Session,
-        run_id: UUID,
+        sample_id: UUID,
         *,
         source_task_id: UUID,
         target_task_id: UUID,
         status: str,
         meta: MutationMeta,
     ) -> GraphEdgeDto:
-        self._require_node_exists(session, run_id, source_task_id)
-        self._require_node_exists(session, run_id, target_task_id)
-        self._check_no_cycle(session, run_id, source_task_id, target_task_id)
+        self._require_node_exists(session, sample_id, source_task_id)
+        self._require_node_exists(session, sample_id, target_task_id)
+        self._check_no_cycle(session, sample_id, source_task_id, target_task_id)
 
         now = utcnow()
-        edge = RunGraphEdge(
-            run_id=run_id,
+        edge = SampleGraphEdge(
+            sample_id=sample_id,
             source_task_id=source_task_id,
             target_task_id=target_task_id,
             status=status,
@@ -482,7 +482,7 @@ class RuntimeGraphRepository:
 
         await self._log_mutation(
             session,
-            run_id,
+            sample_id,
             mutation_type="edge.added",
             target_type="edge",
             target_id=edge.id,
@@ -496,12 +496,12 @@ class RuntimeGraphRepository:
         self,
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         edge_id: UUID,
         new_status: str,
         meta: MutationMeta,
     ) -> GraphEdgeDto:
-        edge = self._get_edge_row(session, run_id, edge_id)
+        edge = self._get_edge_row(session, sample_id, edge_id)
         old_status = edge.status
 
         edge.status = new_status
@@ -511,7 +511,7 @@ class RuntimeGraphRepository:
 
         await self._log_mutation(
             session,
-            run_id,
+            sample_id,
             mutation_type="edge.status_changed",
             target_type="edge",
             target_id=edge_id,
@@ -527,23 +527,23 @@ class RuntimeGraphRepository:
         self,
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
     ) -> GraphNodeDto:
-        return _to_node_dto(self._get_node_row(session, run_id, task_id))
+        return _to_node_dto(self._get_node_row(session, sample_id, task_id))
 
     def get_incoming_edges(
         self,
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
     ) -> list[GraphEdgeDto]:
         rows = list(
             session.exec(
-                select(RunGraphEdge).where(
-                    RunGraphEdge.run_id == run_id,
-                    RunGraphEdge.target_task_id == task_id,
+                select(SampleGraphEdge).where(
+                    SampleGraphEdge.sample_id == sample_id,
+                    SampleGraphEdge.target_task_id == task_id,
                 )
             ).all()
         )
@@ -553,14 +553,14 @@ class RuntimeGraphRepository:
         self,
         session: Session,
         *,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
     ) -> list[GraphEdgeDto]:
         rows = list(
             session.exec(
-                select(RunGraphEdge).where(
-                    RunGraphEdge.run_id == run_id,
-                    RunGraphEdge.source_task_id == task_id,
+                select(SampleGraphEdge).where(
+                    SampleGraphEdge.sample_id == sample_id,
+                    SampleGraphEdge.source_task_id == task_id,
                 )
             ).all()
         )
@@ -571,59 +571,59 @@ class RuntimeGraphRepository:
     def _get_node_row(
         self,
         session: Session,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
-    ) -> RunGraphNode:
+    ) -> SampleGraphNode:
         row = session.exec(
-            select(RunGraphNode).where(
-                RunGraphNode.task_id == task_id,
-                RunGraphNode.run_id == run_id,
+            select(SampleGraphNode).where(
+                SampleGraphNode.task_id == task_id,
+                SampleGraphNode.sample_id == sample_id,
             )
         ).first()
         if row is None:
-            raise NodeNotFoundError(task_id, run_id=run_id)
+            raise NodeNotFoundError(task_id, sample_id=sample_id)
         return row
 
     def _get_edge_row(
         self,
         session: Session,
-        run_id: UUID,
+        sample_id: UUID,
         edge_id: UUID,
-    ) -> RunGraphEdge:
+    ) -> SampleGraphEdge:
         row = session.exec(
-            select(RunGraphEdge).where(
-                RunGraphEdge.id == edge_id,
-                RunGraphEdge.run_id == run_id,
+            select(SampleGraphEdge).where(
+                SampleGraphEdge.id == edge_id,
+                SampleGraphEdge.sample_id == sample_id,
             )
         ).first()
         if row is None:
-            raise EdgeNotFoundError(edge_id, run_id=run_id)
+            raise EdgeNotFoundError(edge_id, sample_id=sample_id)
         return row
 
     def _require_node_exists(
         self,
         session: Session,
-        run_id: UUID,
+        sample_id: UUID,
         task_id: UUID,
     ) -> None:
         exists = session.exec(
-            select(RunGraphNode.task_id).where(
-                RunGraphNode.task_id == task_id,
-                RunGraphNode.run_id == run_id,
+            select(SampleGraphNode.task_id).where(
+                SampleGraphNode.task_id == task_id,
+                SampleGraphNode.sample_id == sample_id,
             )
         ).first()
         if exists is None:
             raise DanglingEdgeError(
                 edge_id=uuid4(),
                 missing_task_id=task_id,
-                run_id=run_id,
+                sample_id=sample_id,
             )
 
-    def _next_sequence(self, session: Session, run_id: UUID) -> int:
+    def _next_sequence(self, session: Session, sample_id: UUID) -> int:
         stmt = (
-            select(RunGraphMutation.sequence)
-            .where(RunGraphMutation.run_id == run_id)
-            .order_by(col(RunGraphMutation.sequence).desc())
+            select(SampleGraphMutation.sequence)
+            .where(SampleGraphMutation.sample_id == sample_id)
+            .order_by(col(SampleGraphMutation.sequence).desc())
             .limit(1)
         )
         last = session.exec(stmt).first()
@@ -632,7 +632,7 @@ class RuntimeGraphRepository:
     async def _log_mutation(
         self,
         session: Session,
-        run_id: UUID,
+        sample_id: UUID,
         *,
         mutation_type: str,
         target_type: str,
@@ -641,9 +641,9 @@ class RuntimeGraphRepository:
         old_value: GraphMutationValue | None,
         new_value: GraphMutationValue,
     ) -> None:
-        seq = self._next_sequence(session, run_id)
-        row = RunGraphMutation(
-            run_id=run_id,
+        seq = self._next_sequence(session, sample_id)
+        row = SampleGraphMutation(
+            sample_id=sample_id,
             sequence=seq,
             mutation_type=mutation_type,
             target_type=target_type,
@@ -666,13 +666,17 @@ class RuntimeGraphRepository:
     def _check_no_cycle(
         self,
         session: Session,
-        run_id: UUID,
+        sample_id: UUID,
         source_id: UUID,
         target_id: UUID,
     ) -> None:
         """DFS from target_id following outgoing edges. If we reach
         source_id, adding source→target would create a cycle."""
-        edges = list(session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all())
+        edges = list(
+            session.exec(
+                select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)
+            ).all()
+        )
         adj: dict[UUID, list[UUID]] = defaultdict(list)
         for e in edges:
             adj[e.source_task_id].append(e.target_task_id)
@@ -682,7 +686,7 @@ class RuntimeGraphRepository:
         while stack:
             current = stack.pop()
             if current == source_id:
-                raise CycleError(source_id, target_id, run_id=run_id)
+                raise CycleError(source_id, target_id, sample_id=sample_id)
             if current in visited:
                 continue
             visited.add(current)
@@ -694,10 +698,10 @@ class RuntimeGraphRepository:
 # ---------------------------------------------------------------------------
 
 
-def _to_node_dto(row: RunGraphNode) -> GraphNodeDto:
+def _to_node_dto(row: SampleGraphNode) -> GraphNodeDto:
     return GraphNodeDto(
         task_id=row.task_id,
-        run_id=row.run_id,
+        sample_id=row.sample_id,
         instance_key=row.instance_key,
         task_slug=row.task_slug,
         description=row.description,
@@ -708,10 +712,10 @@ def _to_node_dto(row: RunGraphNode) -> GraphNodeDto:
     )
 
 
-def _to_edge_dto(row: RunGraphEdge) -> GraphEdgeDto:
+def _to_edge_dto(row: SampleGraphEdge) -> GraphEdgeDto:
     return GraphEdgeDto(
         id=row.id,
-        run_id=row.run_id,
+        sample_id=row.sample_id,
         definition_dependency_id=row.definition_dependency_id,
         source_task_id=row.source_task_id,
         target_task_id=row.target_task_id,
@@ -719,7 +723,7 @@ def _to_edge_dto(row: RunGraphEdge) -> GraphEdgeDto:
     )
 
 
-def _node_snapshot(node: RunGraphNode) -> NodeAddedMutation:
+def _node_snapshot(node: SampleGraphNode) -> NodeAddedMutation:
     return NodeAddedMutation(
         task_slug=node.task_slug,
         instance_key=node.instance_key,
@@ -729,7 +733,7 @@ def _node_snapshot(node: RunGraphNode) -> NodeAddedMutation:
     )
 
 
-def _edge_snapshot(edge: RunGraphEdge) -> EdgeAddedMutation:
+def _edge_snapshot(edge: SampleGraphEdge) -> EdgeAddedMutation:
     return EdgeAddedMutation(
         source_task_id=edge.source_task_id,
         target_task_id=edge.target_task_id,

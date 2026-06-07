@@ -7,7 +7,7 @@ from pydantic import BaseModel
 class TaskPropagateResult(BaseModel):
     model_config = {"frozen": True}
 
-    run_id: UUID
+    sample_id: UUID
     task_id: UUID
     newly_ready_tasks: int = 0
     workflow_complete: bool = False

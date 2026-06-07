@@ -23,7 +23,7 @@ export interface TestGraphMutationDto {
 }
 
 export interface TestRunStateDto {
-  run_id: string;
+  sample_id: string;
   status: string;
   graph_nodes: TestGraphNodeDto[];
   mutations: TestGraphMutationDto[];
@@ -46,9 +46,9 @@ export class BackendHarnessClient {
     private readonly baseUrl: string,
   ) {}
 
-  async getRunState(runId: string): Promise<TestRunStateDto> {
+  async getRunState(sampleId: string): Promise<TestRunStateDto> {
     const response = await this.request.get(
-      `${this.baseUrl}/api/__danger__/test-harness/read/run/${runId}/state`,
+      `${this.baseUrl}/api/__danger__/test-harness/read/samples/${sampleId}/state`,
     );
     if (!response.ok()) {
       throw new Error(

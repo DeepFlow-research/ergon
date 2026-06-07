@@ -2,10 +2,10 @@
 
 Verifies the dynamic-spawn write path:
 
-- Exactly one row inserted into run_graph_nodes with is_dynamic=True and
+- Exactly one row inserted into sample_graph_nodes with is_dynamic=True and
   the full Task snapshot in task_json.
 - Zero rows inserted into experiment_definition_tasks.
-- Optional depends_on creates the dependency edge in run_graph_edges.
+- Optional depends_on creates the dependency edge in sample_graph_edges.
 - Returned SpawnedTaskHandle.task_id matches the inserted node's task_id.
 """
 
@@ -20,9 +20,9 @@ from ergon_core.core.jobs.task.worker_execute.job import _StepAwareTaskManagemen
 from ergon_core.core.application.runtime import management as management_module
 from ergon_core.core.application.runtime.task_management import TaskManagementService
 from ergon_core.core.persistence.definitions.models import ExperimentDefinitionTask
-from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
-from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
+from ergon_core.core.persistence.shared.enums import SampleStatus
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -61,19 +61,19 @@ def _make_session() -> Session:
     return Session(engine)
 
 
-def _seed_parent(session: Session, *, run_id: UUID) -> RunGraphNode:
+def _seed_parent(session: Session, *, sample_id: UUID) -> SampleGraphNode:
     session.add(
-        RunRecord(
-            id=run_id,
+        SampleRecord(
+            id=sample_id,
             definition_id=uuid4(),
             benchmark_type="test",
             instance_key="sample-1",
             worker_team_json={},
-            status=RunStatus.EXECUTING,
+            status=SampleStatus.EXECUTING,
         )
     )
-    parent = RunGraphNode(
-        run_id=run_id,
+    parent = SampleGraphNode(
+        sample_id=sample_id,
         instance_key="sample-1",
         task_slug="parent",
         description="Parent task",
@@ -87,9 +87,9 @@ def _seed_parent(session: Session, *, run_id: UUID) -> RunGraphNode:
     return parent
 
 
-def _seed_other(session: Session, *, run_id: UUID, slug: str) -> RunGraphNode:
-    node = RunGraphNode(
-        run_id=run_id,
+def _seed_other(session: Session, *, sample_id: UUID, slug: str) -> SampleGraphNode:
+    node = SampleGraphNode(
+        sample_id=sample_id,
         instance_key="sample-1",
         task_slug=slug,
         description=f"Task {slug}",
@@ -162,24 +162,24 @@ async def test_spawn_dynamic_task_inserts_dynamic_node_with_task_json(
 ) -> None:
     """A single is_dynamic=True row is written with the full Task snapshot."""
     session = _make_session()
-    run_id = uuid4()
-    parent = _seed_parent(session, run_id=run_id)
+    sample_id = uuid4()
+    parent = _seed_parent(session, sample_id=sample_id)
     svc = _service(session, monkeypatch)
 
-    nodes_before = session.exec(select(RunGraphNode)).all()
+    nodes_before = session.exec(select(SampleGraphNode)).all()
     assert len(nodes_before) == 1  # only the parent
 
     task = _make_task()
     handle = await svc.spawn_dynamic_task(
-        run_id=run_id,
+        sample_id=sample_id,
         parent_task_id=parent.task_id,
         task=task,
     )
 
     new_node = session.exec(
-        select(RunGraphNode).where(
-            RunGraphNode.run_id == run_id,
-            RunGraphNode.task_slug == "child",
+        select(SampleGraphNode).where(
+            SampleGraphNode.sample_id == sample_id,
+            SampleGraphNode.task_slug == "child",
         )
     ).one()
 
@@ -208,14 +208,14 @@ async def test_spawn_dynamic_task_does_not_write_definition_row(
 ) -> None:
     """experiment_definition_tasks count is unchanged before/after spawn."""
     session = _make_session()
-    run_id = uuid4()
-    parent = _seed_parent(session, run_id=run_id)
+    sample_id = uuid4()
+    parent = _seed_parent(session, sample_id=sample_id)
     svc = _service(session, monkeypatch)
 
     defs_before = session.exec(select(ExperimentDefinitionTask)).all()
 
     await svc.spawn_dynamic_task(
-        run_id=run_id,
+        sample_id=sample_id,
         parent_task_id=parent.task_id,
         task=_make_task(),
     )
@@ -228,21 +228,23 @@ async def test_spawn_dynamic_task_does_not_write_definition_row(
 async def test_spawn_dynamic_task_creates_dependency_edge(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """depends_on=(other,) writes a run_graph_edges row source=other, target=new."""
+    """depends_on=(other,) writes a sample_graph_edges row source=other, target=new."""
     session = _make_session()
-    run_id = uuid4()
-    parent = _seed_parent(session, run_id=run_id)
-    other = _seed_other(session, run_id=run_id, slug="other")
+    sample_id = uuid4()
+    parent = _seed_parent(session, sample_id=sample_id)
+    other = _seed_other(session, sample_id=sample_id, slug="other")
     svc = _service(session, monkeypatch)
 
     handle = await svc.spawn_dynamic_task(
-        run_id=run_id,
+        sample_id=sample_id,
         parent_task_id=parent.task_id,
         task=_make_task(),
         depends_on=(other.task_id,),
     )
 
-    edges = session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all()
+    edges = session.exec(
+        select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)
+    ).all()
     assert len(edges) == 1
     assert edges[0].source_task_id == other.task_id
     assert edges[0].target_task_id == handle.task_id
@@ -254,12 +256,12 @@ async def test_spawn_dynamic_task_handle_matches_inserted_row_id(
 ) -> None:
     """SpawnedTaskHandle.task_id is the new task's task_id (UUID)."""
     session = _make_session()
-    run_id = uuid4()
-    parent = _seed_parent(session, run_id=run_id)
+    sample_id = uuid4()
+    parent = _seed_parent(session, sample_id=sample_id)
     svc = _service(session, monkeypatch)
 
     handle = await svc.spawn_dynamic_task(
-        run_id=run_id,
+        sample_id=sample_id,
         parent_task_id=parent.task_id,
         task=_make_task(),
     )
@@ -267,9 +269,9 @@ async def test_spawn_dynamic_task_handle_matches_inserted_row_id(
     inserted_ids = frozenset(
         row.task_id
         for row in session.exec(
-            select(RunGraphNode).where(
-                RunGraphNode.run_id == run_id,
-                RunGraphNode.task_slug == "child",
+            select(SampleGraphNode).where(
+                SampleGraphNode.sample_id == sample_id,
+                SampleGraphNode.task_slug == "child",
             )
         ).all()
     )
@@ -285,8 +287,8 @@ async def test_step_aware_spawn_dynamic_task_is_replay_safe(
 ) -> None:
     """Repeated Inngest replay returns the memoized handle without duplicating DB rows/events."""
     session = _make_session()
-    run_id = uuid4()
-    parent = _seed_parent(session, run_id=run_id)
+    sample_id = uuid4()
+    parent = _seed_parent(session, sample_id=sample_id)
     _patch = monkeypatch.setattr
     _patch(management_module, "get_session", lambda: _SessionContext(session))
     _patch(
@@ -299,21 +301,21 @@ async def test_step_aware_spawn_dynamic_task_is_replay_safe(
     task = _make_task()
 
     first = await _StepAwareTaskManagementService(_FakeCtx(step)).spawn_dynamic_task(
-        run_id=run_id,
+        sample_id=sample_id,
         parent_task_id=parent.task_id,
         task=task,
     )
     second = await _StepAwareTaskManagementService(_FakeCtx(step)).spawn_dynamic_task(
-        run_id=run_id,
+        sample_id=sample_id,
         parent_task_id=parent.task_id,
         task=task,
     )
 
     child_rows = session.exec(
-        select(RunGraphNode).where(
-            RunGraphNode.run_id == run_id,
-            RunGraphNode.parent_task_id == parent.task_id,
-            RunGraphNode.task_slug == "child",
+        select(SampleGraphNode).where(
+            SampleGraphNode.sample_id == sample_id,
+            SampleGraphNode.parent_task_id == parent.task_id,
+            SampleGraphNode.task_slug == "child",
         )
     ).all()
     assert first == second

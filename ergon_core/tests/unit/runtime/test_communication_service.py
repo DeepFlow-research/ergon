@@ -52,13 +52,13 @@ async def test_save_message_persists_thread_summary_and_emits_it(
     monkeypatch.setattr(emitter, "publish", _record_thread_event)
     set_dashboard_emitter(emitter)
 
-    run_id = uuid4()
+    sample_id = uuid4()
     execution_id = uuid4()
     summary = "Leaf workers report completion artifacts and probe exit status."
 
     response = await module.CommunicationService().save_message(
         CreateMessageRequest(
-            run_id=run_id,
+            sample_id=sample_id,
             from_agent_id="leaf-l_1",
             to_agent_id="parent",
             thread_topic="smoke-completion",
@@ -93,10 +93,10 @@ async def test_save_message_backfills_missing_summary_without_overwriting_existi
     set_dashboard_emitter(emitter)
 
     service = module.CommunicationService()
-    run_id = uuid4()
+    sample_id = uuid4()
     await service.save_message(
         CreateMessageRequest(
-            run_id=run_id,
+            sample_id=sample_id,
             from_agent_id="leaf-l_1",
             to_agent_id="parent",
             thread_topic="smoke-completion",
@@ -105,7 +105,7 @@ async def test_save_message_backfills_missing_summary_without_overwriting_existi
     )
     await service.save_message(
         CreateMessageRequest(
-            run_id=run_id,
+            sample_id=sample_id,
             from_agent_id="leaf-l_2",
             to_agent_id="parent",
             thread_topic="smoke-completion",
@@ -115,7 +115,7 @@ async def test_save_message_backfills_missing_summary_without_overwriting_existi
     )
     await service.save_message(
         CreateMessageRequest(
-            run_id=run_id,
+            sample_id=sample_id,
             from_agent_id="leaf-l_3",
             to_agent_id="parent",
             thread_topic="smoke-completion",
@@ -125,6 +125,6 @@ async def test_save_message_backfills_missing_summary_without_overwriting_existi
     )
 
     with session_factory() as session:
-        thread = session.exec(select(Thread).where(Thread.run_id == run_id)).one()
+        thread = session.exec(select(Thread).where(Thread.sample_id == sample_id)).one()
 
     assert thread.summary == "Completion reports from leaf workers."

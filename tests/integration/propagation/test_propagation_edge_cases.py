@@ -6,15 +6,19 @@ EC-2: duplicate task/ready idempotency. Expected to pass with current code.
 
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
+from ergon_core.core.persistence.graph.models import (
+    SampleGraphEdge,
+    SampleGraphMutation,
+    SampleGraphNode,
+)
 from ergon_core.core.application.runtime.status import BLOCKED, CANCELLED
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.core.application.runtime.models import MutationMeta
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from ergon_core.core.application.runtime.orchestration import PropagateTaskCompletionCommand
-from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
+from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
 from sqlmodel import select
 
 from tests.integration.propagation._helpers import (
@@ -34,15 +38,21 @@ pytestmark = pytest.mark.integration
 # ---------------------------------------------------------------------------
 
 
-def _cleanup_run(run_id, defn_id) -> None:  # type: ignore[no-untyped-def]
+def _cleanup_run(sample_id, defn_id) -> None:  # type: ignore[no-untyped-def]
     with get_session() as session:
         for mut in session.exec(
-            select(RunGraphMutation).where(RunGraphMutation.run_id == run_id)
+            select(SampleGraphMutation).where(SampleGraphMutation.sample_id == sample_id)
         ).all():
             session.delete(mut)
-        for edge in session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all():
+        for edge in session.exec(
+            select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)
+        ).all():
             session.delete(edge)
-        nodes = list(session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all())
+        nodes = list(
+            session.exec(
+                select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)
+            ).all()
+        )
         remaining = {node.task_id: node for node in nodes}
         while remaining:
             parent_ids = {
@@ -55,7 +65,7 @@ def _cleanup_run(run_id, defn_id) -> None:  # type: ignore[no-untyped-def]
                 session.delete(node)
                 remaining.pop(node.task_id)
             session.flush()
-        run_row = session.get(RunRecord, run_id)
+        run_row = session.get(SampleRecord, sample_id)
         if run_row is not None:
             session.delete(run_row)
         defn_row = session.get(ExperimentDefinition, defn_id)
@@ -94,7 +104,7 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
         node_c = make_node(session, run.id, task_slug="fan-c", status="pending")
         make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_c.task_id)
         make_edge(session, run.id, source_task_id=node_b.task_id, target_task_id=node_c.task_id)
-        run_id = run.id
+        sample_id = run.id
         defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
@@ -106,14 +116,14 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=node_a_id,
                 new_status=TaskExecutionStatus.FAILED,
                 meta=MutationMeta(actor="test:setup", reason="test: A failed"),
             )
             await graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=node_b_id,
                 new_status=TaskExecutionStatus.COMPLETED,
                 meta=MutationMeta(actor="test:setup", reason="test: B completed"),
@@ -125,7 +135,7 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
         # Propagate A's failure first
         await svc.propagate_failure(
             PropagateTaskCompletionCommand(
-                run_id=run_id,
+                sample_id=sample_id,
                 definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
@@ -135,7 +145,7 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
         # Then propagate B's completion — B is done but A already failed C
         await svc.propagate(
             PropagateTaskCompletionCommand(
-                run_id=run_id,
+                sample_id=sample_id,
                 definition_id=defn_id,
                 task_id=node_b_id,
                 execution_id=node_b_id,
@@ -150,19 +160,19 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
             )
             assert_wal_has_status(session, node_c_id, BLOCKED)
 
-        # RunRecord must remain EXECUTING — the run is stuck, not over
+        # SampleRecord must remain EXECUTING — the run is stuck, not over
         with get_session() as session:
-            run_row = session.get(RunRecord, run_id)
+            run_row = session.get(SampleRecord, sample_id)
             assert run_row is not None
-            assert run_row.status == RunStatus.EXECUTING, (
-                f"RunRecord must remain EXECUTING while C is blocked; got {run_row.status!r}"
+            assert run_row.status == SampleStatus.EXECUTING, (
+                f"SampleRecord must remain EXECUTING while C is blocked; got {run_row.status!r}"
             )
 
         with get_session() as session:
-            assert_cross_cutting_invariants(session, run_id)
+            assert_cross_cutting_invariants(session, sample_id)
 
     finally:
-        _cleanup_run(run_id, defn_id)
+        _cleanup_run(sample_id, defn_id)
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +195,7 @@ async def test_ec2_duplicate_propagate_is_idempotent() -> None:
         node_a = make_node(session, run.id, task_slug="idem-a", status="running")
         node_b = make_node(session, run.id, task_slug="idem-b", status="pending")
         make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_b.task_id)
-        run_id = run.id
+        sample_id = run.id
         defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
@@ -196,7 +206,7 @@ async def test_ec2_duplicate_propagate_is_idempotent() -> None:
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=node_a_id,
                 new_status=TaskExecutionStatus.RUNNING,
                 meta=MutationMeta(actor="test:setup", reason="test setup"),
@@ -206,7 +216,7 @@ async def test_ec2_duplicate_propagate_is_idempotent() -> None:
         svc = WorkflowService()
 
         command = PropagateTaskCompletionCommand(
-            run_id=run_id,
+            sample_id=sample_id,
             definition_id=defn_id,
             task_id=node_a_id,
             execution_id=node_a_id,
@@ -239,7 +249,7 @@ async def test_ec2_duplicate_propagate_is_idempotent() -> None:
             }, f"B status corrupted by duplicate propagate; got {b_status!r}"
 
         with get_session() as session:
-            assert_cross_cutting_invariants(session, run_id)
+            assert_cross_cutting_invariants(session, sample_id)
 
     finally:
-        _cleanup_run(run_id, defn_id)
+        _cleanup_run(sample_id, defn_id)

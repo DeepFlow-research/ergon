@@ -19,10 +19,12 @@ class _Service(BaseModel):
 
     resource: WorkflowResourceRef | None
 
-    def list_resources(self, session, *, run_id, task_id, scope, kind=None, max_depth=3, limit=50):
+    def list_resources(
+        self, session, *, sample_id, task_id, scope, kind=None, max_depth=3, limit=50
+    ):
         assert isinstance(session, _Session)
         assert self.resource is not None
-        assert run_id == self.resource.run_id
+        assert sample_id == self.resource.sample_id
         assert task_id == self.resource.task_id
         assert scope == "visible"
         assert kind is None
@@ -34,7 +36,7 @@ class _Service(BaseModel):
 class _TaskTreeService(BaseModel):
     requested_parent_task_id: object | None = None
 
-    def list_tasks(self, session, *, run_id, parent_task_id=None):
+    def list_tasks(self, session, *, sample_id, parent_task_id=None):
         assert isinstance(session, _Session)
         self.requested_parent_task_id = parent_task_id
         return [
@@ -57,7 +59,7 @@ class _FailingService:
 
 def _context() -> WorkflowCommandContext:
     return WorkflowCommandContext(
-        run_id=uuid4(),
+        sample_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
         sandbox_task_key=uuid4(),
@@ -66,11 +68,11 @@ def _context() -> WorkflowCommandContext:
 
 
 def test_resource_list_json_uses_injected_context() -> None:
-    run_id = uuid4()
+    sample_id = uuid4()
     task_id = uuid4()
     resource = WorkflowResourceRef(
         resource_id=uuid4(),
-        run_id=run_id,
+        sample_id=sample_id,
         task_execution_id=uuid4(),
         task_id=task_id,
         task_slug="research",
@@ -86,7 +88,7 @@ def test_resource_list_json_uses_injected_context() -> None:
     output = execute_workflow_command(
         "inspect resource-list --scope visible --limit 5 --format json",
         context=WorkflowCommandContext(
-            run_id=run_id,
+            sample_id=sample_id,
             task_id=task_id,
             execution_id=uuid4(),
             sandbox_task_key=uuid4(),
@@ -105,7 +107,7 @@ def test_resource_list_json_uses_injected_context() -> None:
 
 def test_agent_command_rejects_user_supplied_context_flags() -> None:
     output = execute_workflow_command(
-        f"inspect resource-list --scope visible --run-id {uuid4()}",
+        f"inspect resource-list --scope visible --sample-id {uuid4()}",
         context=_context(),
         session_factory=_Session,
         service=_Service(resource=None),  # type: ignore[arg-type]

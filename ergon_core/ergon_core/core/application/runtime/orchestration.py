@@ -35,14 +35,14 @@ class TaskDescriptor(BaseModel):
 class InitializeWorkflowCommand(BaseModel):
     model_config = {"frozen": True}
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
 
 
 class InitializedWorkflow(BaseModel):
     model_config = {"frozen": True}
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
     benchmark_type: str
     total_tasks: int
@@ -54,7 +54,7 @@ class InitializedWorkflow(BaseModel):
 class PrepareTaskExecutionCommand(BaseModel):
     model_config = {"frozen": True}
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
     task_id: UUID
 
@@ -68,7 +68,7 @@ class PreparedTaskExecution(BaseModel):
 
     model_config = {"frozen": True}
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
     task_id: UUID
     task_slug: str
@@ -94,7 +94,7 @@ class FailTaskExecutionCommand(BaseModel):
     model_config = {"frozen": True}
 
     execution_id: UUID
-    run_id: UUID
+    sample_id: UUID
     task_id: UUID | None
     error_message: str
     error_json: JsonObject | None = None
@@ -109,7 +109,7 @@ class WorkflowTerminalState(StrEnum):
 class PropagateTaskCompletionCommand(BaseModel):
     model_config = {"frozen": True}
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
     task_id: UUID
     execution_id: UUID
@@ -118,7 +118,7 @@ class PropagateTaskCompletionCommand(BaseModel):
 class PropagationResult(BaseModel):
     model_config = {"frozen": True}
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
     completed_task_id: UUID
     ready_tasks: list[TaskDescriptor] = Field(default_factory=list)
@@ -128,14 +128,14 @@ class PropagationResult(BaseModel):
 class FinalizeWorkflowCommand(BaseModel):
     model_config = {"frozen": True}
 
-    run_id: UUID
+    sample_id: UUID
     definition_id: UUID
 
 
 class FinalizedWorkflowResult(BaseModel):
     model_config = {"frozen": True}
 
-    run_id: UUID
+    sample_id: UUID
     final_score: float | None = None
     normalized_score: float | None = None
     evaluators_count: int = 0

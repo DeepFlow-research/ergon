@@ -1,9 +1,9 @@
 """Shared assertion helpers for canonical smoke drivers.
 
-Per-run helpers take a single ``run_id`` and are called in a loop for
+Per-run helpers take a single ``sample_id`` and are called in a loop for
 each experiment-group member.  No "at-least-one-passed" fallbacks; each
 run must pass every check independently.  Experiment-group helpers take
-the experiment key + run_id list.
+the experiment key + sample_id list.
 
 See docs/superpowers/plans/test-refactor/02-drivers-and-asserts.md §2
 and §10 for the full catalogue.
@@ -22,7 +22,7 @@ import time
 from uuid import UUID
 
 import httpx
-from ergon_core.core.views.runs.models import RunTaskDto
+from ergon_core.core.views.samples.models import SampleTaskDto
 from ergon_core.test_support.e2e_read_helpers import (
     ResourceSnapshot,
     first_probe_resource,
@@ -54,9 +54,9 @@ FAILED = "failed"
 # =============================================================================
 
 
-def _assert_run_graph(run_id: UUID) -> None:
+def _assert_sample_graph(sample_id: UUID) -> None:
     """Happy path: root + 9 direct children + 2 nested children; all COMPLETED."""
-    snapshot = require_run_snapshot(run_id)
+    snapshot = require_run_snapshot(sample_id)
     tasks = list(snapshot.tasks.values())
     by_slug = {task.name: task for task in tasks}
     root_tasks = [task for task in tasks if task.level == 0]
@@ -80,7 +80,7 @@ def _assert_run_graph(run_id: UUID) -> None:
     _assert_dag_edges(tasks)
 
 
-def _assert_dag_edges(leaves: list[RunTaskDto]) -> None:
+def _assert_dag_edges(leaves: list[SampleTaskDto]) -> None:
     """Verify each dependency edge is exposed by the read-service task DTO."""
     by_id = {task.id: task for task in leaves}
     actual_pairs = {
@@ -102,9 +102,9 @@ def _assert_dag_edges(leaves: list[RunTaskDto]) -> None:
     assert not missing, f"missing DAG edges: {missing}"
 
 
-def _assert_run_resources(run_id: UUID) -> None:
+def _assert_sample_resources(sample_id: UUID) -> None:
     """Exactly 20 task resources: 10 benchmark artifacts + 10 probe_*.json."""
-    snapshot = require_run_snapshot(run_id)
+    snapshot = require_run_snapshot(sample_id)
     resources = [
         resource
         for task_resources in snapshot.resources_by_task.values()
@@ -125,11 +125,11 @@ def _assert_run_resources(run_id: UUID) -> None:
     )
 
 
-def _assert_run_turn_counts(run_id: UUID) -> None:
+def _assert_run_turn_counts(sample_id: UUID) -> None:
     """Parent + recursive ``l_2`` + artifact leaves emit fixed chunk counts.
 
     Each smoke context chunk contains one assistant text part, so persistence
-    emits exactly one ``RunContextEvent`` per chunk.
+    emits exactly one ``SampleContextEvent`` per chunk.
     """
     leaf_count = len(EXPECTED_SUBTASK_SLUGS) - 1 + len(NESTED_LINE_SLUGS)
     expected = (
@@ -138,7 +138,7 @@ def _assert_run_turn_counts(run_id: UUID) -> None:
         + leaf_count * BaseSmokeLeafWorker.LEAF_TURN_COUNT
     )  # currently 3 + 3 + 10×2 = 26
 
-    snapshot = require_run_snapshot(run_id)
+    snapshot = require_run_snapshot(sample_id)
     event_count = sum(len(events) for events in snapshot.context_events_by_task.values())
 
     assert event_count == expected, (
@@ -149,8 +149,8 @@ def _assert_run_turn_counts(run_id: UUID) -> None:
     )
 
 
-def _assert_run_evaluation(run_id: UUID) -> None:
-    """Exactly 2 root RunTaskEvaluation rows with score 1.0.
+def _assert_run_evaluation(sample_id: UUID) -> None:
+    """Exactly 2 root SampleTaskEvaluation rows with score 1.0.
 
     Retries for up to 30 s because the evaluator invocations land
     asynchronously even though PR 4's ``execute_task`` fanout is
@@ -159,7 +159,7 @@ def _assert_run_evaluation(run_id: UUID) -> None:
 
     Note on ordering: pre-PR-4 the evaluator was a sibling Inngest
     function triggered by ``task/completed``, so evaluations were
-    written strictly after ``RunTaskExecution.completed_at``. PR 4
+    written strictly after ``SampleTaskAttempt.completed_at``. PR 4
     moved fanout inside ``execute_task`` via ``ctx.group.parallel``
     after ``persist_outputs`` returns, so evaluation rows are written
     *before* ``finalize_success`` stamps ``completed_at``. The
@@ -173,7 +173,7 @@ def _assert_run_evaluation(run_id: UUID) -> None:
     evaluations = []
     root_execution = None
     while time.monotonic() < deadline:
-        root_execution, evaluations = list_root_execution_and_evaluations(run_id)
+        root_execution, evaluations = list_root_execution_and_evaluations(sample_id)
         if len(evaluations) == 2:
             break
         time.sleep(2)
@@ -182,7 +182,7 @@ def _assert_run_evaluation(run_id: UUID) -> None:
     assert len(evaluations) == 2, f"expected 2 root task evaluations, got {len(evaluations)}"
     scores = [evaluation.score for evaluation in evaluations]
     assert scores == [1.0, 1.0], f"expected two score 1.0 evaluations, got {scores}"
-    snapshot = require_run_snapshot(run_id)
+    snapshot = require_run_snapshot(sample_id)
     assert snapshot.final_score == 1.0
     snapshot_evaluations = list(snapshot.evaluations_by_task.values())
     assert snapshot_evaluations, "expected run snapshot evaluation DTOs"
@@ -201,21 +201,21 @@ def _assert_run_evaluation(run_id: UUID) -> None:
 # =============================================================================
 
 
-def _assert_sandbox_command_wal(run_id: UUID) -> None:
+def _assert_sandbox_command_wal(sample_id: UUID) -> None:
     """Bash commands land as WAL rows via ``PostgresSandboxEventSink``."""
-    entries = list_sandbox_command_wal(run_id)
+    entries = list_sandbox_command_wal(sample_id)
     probes = [e for e in entries if "wc" in e.command or "probe" in e.command]
     # Canonical sad-path smokes block l_3 before it starts, so the eight
     # executed leaves should emit probe commands while l_3 emits none.
     assert len(probes) >= 8, f"expected ≥8 probe WAL entries, got {len(probes)}"
 
 
-def _assert_sandbox_lifecycle_events(run_id: UUID) -> None:
+def _assert_sandbox_lifecycle_events(sample_id: UUID) -> None:
     """``sandbox_created`` + ``sandbox_closed`` symmetric per sandbox."""
     deadline = time.monotonic() + 30
     events = []
     while time.monotonic() < deadline:
-        events = list_sandbox_events(run_id)
+        events = list_sandbox_events(sample_id)
         created = {e.sandbox_id for e in events if e.kind == "sandbox_created"}
         closed = {e.sandbox_id for e in events if e.kind == "sandbox_closed"}
         if created == closed:
@@ -230,9 +230,9 @@ def _assert_sandbox_lifecycle_events(run_id: UUID) -> None:
     )
 
 
-def _assert_thread_messages_ordered(run_id: UUID) -> None:
+def _assert_thread_messages_ordered(sample_id: UUID) -> None:
     """11 completion messages on the ``smoke-completion`` thread."""
-    snapshot = require_run_snapshot(run_id)
+    snapshot = require_run_snapshot(sample_id)
     threads = [thread for thread in snapshot.threads if thread.topic == "smoke-completion"]
     assert len(threads) == 1, f"expected 1 smoke-completion thread, got {len(threads)}"
     msgs = sorted(threads[0].messages, key=lambda msg: msg.sequence_num)
@@ -246,7 +246,7 @@ def _assert_thread_messages_ordered(run_id: UUID) -> None:
     assert all(m.task_execution_id is not None for m in msgs)
 
 
-def _assert_blob_roundtrip(run_id: UUID) -> None:
+def _assert_blob_roundtrip(sample_id: UUID) -> None:
     """Read one probe JSON artifact from disk; confirm it parses and
     is byte-stable across two reads.
 
@@ -256,7 +256,7 @@ def _assert_blob_roundtrip(run_id: UUID) -> None:
     direct ``kind='output'`` rows store container-internal download paths
     that are not directly accessible from the host-side test process.
     """
-    row = first_probe_resource(run_id)
+    row = first_probe_resource(sample_id)
     assert row is not None, "no probe_*.json (kind=report) to round-trip"
     assert row.content_hash
     bytes_a = read_resource_bytes(row)
@@ -266,18 +266,22 @@ def _assert_blob_roundtrip(run_id: UUID) -> None:
     assert "exit_code" in parsed, f"probe JSON missing exit_code: {parsed!r}"
 
 
-def _assert_minif2f_artifacts(run_id: UUID) -> None:
+def _assert_minif2f_artifacts(sample_id: UUID) -> None:
     """Every MiniF2F leaf persists a Lean proof artifact with the smoke theorem."""
-    resources = _require_named_resources(run_id, prefix="proof_", suffix=".lean", expected_count=10)
+    resources = _require_named_resources(
+        sample_id, prefix="proof_", suffix=".lean", expected_count=10
+    )
     for resource in resources:
         text = read_resource_bytes(resource).decode("utf-8")
         assert "theorem smoke_trivial" in text, f"{resource.name} missing theorem marker"
         assert ":=" in text, f"{resource.name} missing Lean proof term"
 
 
-def _assert_swebench_artifacts(run_id: UUID) -> None:
+def _assert_swebench_artifacts(sample_id: UUID) -> None:
     """Every SWE-Bench leaf persists a parseable Python patch with add()."""
-    resources = _require_named_resources(run_id, prefix="patch_", suffix=".py", expected_count=10)
+    resources = _require_named_resources(
+        sample_id, prefix="patch_", suffix=".py", expected_count=10
+    )
     for resource in resources:
         source = read_resource_bytes(resource).decode("utf-8")
         module = ast.parse(source, filename=resource.name)
@@ -288,13 +292,13 @@ def _assert_swebench_artifacts(run_id: UUID) -> None:
 
 
 def _require_named_resources(
-    run_id: UUID,
+    sample_id: UUID,
     *,
     prefix: str,
     suffix: str,
     expected_count: int,
 ) -> list[ResourceSnapshot]:
-    resources = list_named_resources(run_id, prefix=prefix, suffix=suffix)
+    resources = list_named_resources(sample_id, prefix=prefix, suffix=suffix)
     assert len(resources) == expected_count, (
         f"expected {expected_count} {prefix}*{suffix} resources, got {len(resources)}"
     )
@@ -303,15 +307,15 @@ def _require_named_resources(
     return resources
 
 
-def _assert_temporal_ordering(run_id: UUID) -> None:
+def _assert_temporal_ordering(sample_id: UUID) -> None:
     """Schedule honours DAG deps: children start no earlier than parents finish.
 
-    Uses ``RunTaskExecution.started_at`` / ``completed_at`` via
+    Uses ``SampleTaskAttempt.started_at`` / ``completed_at`` via
     ``task_id`` join.  Only checks edges whose both endpoints reached
     at least ``started`` state. Blocked descendants are skipped because
     they should never have execution timestamps.
     """
-    slug_exec = leaf_execution_timings_by_slug(run_id)
+    slug_exec = leaf_execution_timings_by_slug(sample_id)
 
     def _after(child: str, parents: list[str]) -> None:
         c_exec = slug_exec.get(child)
@@ -342,12 +346,12 @@ def _assert_experiment_membership(experiment: str, run_ids: list[UUID]) -> None:
     """Runs are visible via the experiment-group test-harness endpoint."""
     api_base = os.environ["ERGON_API_BASE_URL"]
     r = httpx.get(
-        f"{api_base}/api/__danger__/test-harness/read/experiment/{experiment}/runs",
+        f"{api_base}/api/__danger__/test-harness/read/experiment/{experiment}/samples",
         timeout=10.0,
     )
     r.raise_for_status()
     rows = r.json()
-    returned = {UUID(row["run_id"]) for row in rows}
+    returned = {UUID(row["sample_id"]) for row in rows}
     expected = set(run_ids)
     assert expected <= returned, f"experiment group missing expected run ids: {expected - returned}"
 
@@ -357,9 +361,9 @@ def _assert_experiment_membership(experiment: str, run_ids: list[UUID]) -> None:
 # =============================================================================
 
 
-def _assert_sadpath_graph_cascade(run_id: UUID) -> None:
+def _assert_sadpath_graph_cascade(sample_id: UUID) -> None:
     """Canonical sad path: parent plans, l_2 fails, l_3 blocks, independent leaves complete."""
-    snapshot = require_run_snapshot(run_id)
+    snapshot = require_run_snapshot(sample_id)
     tasks = list(snapshot.tasks.values())
     leaves = [task for task in tasks if task.level > 0]
     root_tasks = [task for task in tasks if task.level == 0]
@@ -381,13 +385,13 @@ def _assert_sadpath_graph_cascade(run_id: UUID) -> None:
         )
 
 
-def _assert_sadpath_partial_artifact(run_id: UUID) -> None:
+def _assert_sadpath_partial_artifact(sample_id: UUID) -> None:
     """``AlwaysFailSubworker`` writes ``partial_<node>.md`` before raising.
-    The runtime's persist step must still serialize it as a RunResource."""
+    The runtime's persist step must still serialize it as a SampleResource."""
     deadline = time.monotonic() + 30
     partials: list[ResourceSnapshot] = []
     while time.monotonic() < deadline:
-        partials = list_named_resources(run_id, prefix="partial_", suffix=".md")
+        partials = list_named_resources(sample_id, prefix="partial_", suffix=".md")
         if partials:
             break
         time.sleep(2)
@@ -401,12 +405,12 @@ def _assert_sadpath_partial_artifact(run_id: UUID) -> None:
     assert body.startswith("# Partial work"), f"partial artifact body unexpected: {body[:80]!r}"
 
 
-def _assert_sadpath_partial_wal(run_id: UUID) -> None:
+def _assert_sadpath_partial_wal(sample_id: UUID) -> None:
     """Pre-failure ``wc -l partial_*`` command persists as WAL row."""
     deadline = time.monotonic() + 30
     wc = []
     while time.monotonic() < deadline:
-        entries = list_sandbox_command_wal(run_id)
+        entries = list_sandbox_command_wal(sample_id)
         wc = [e for e in entries if "wc -l" in e.command and "partial_" in e.command]
         if wc:
             break
@@ -417,9 +421,9 @@ def _assert_sadpath_partial_wal(run_id: UUID) -> None:
     )
 
 
-def _assert_sadpath_thread_messages(run_id: UUID) -> None:
+def _assert_sadpath_thread_messages(sample_id: UUID) -> None:
     """Sad path sends messages for the 7 completed leaves only."""
-    snapshot = require_run_snapshot(run_id)
+    snapshot = require_run_snapshot(sample_id)
     thread = next(
         (thread for thread in snapshot.threads if thread.topic == "smoke-completion"), None
     )
@@ -438,9 +442,9 @@ def _assert_sadpath_thread_messages(run_id: UUID) -> None:
     assert from_slugs == set(EXPECTED_SUBTASK_SLUGS) - {"l_2", "l_3"}
 
 
-def _assert_sadpath_evaluation(run_id: UUID) -> None:
+def _assert_sadpath_evaluation(sample_id: UUID) -> None:
     """Sad-path run should not be mistaken for a successful run."""
-    snapshot = require_run_snapshot(run_id)
+    snapshot = require_run_snapshot(sample_id)
     assert snapshot.status == "failed"
 
 
@@ -449,17 +453,17 @@ def _assert_sadpath_evaluation(run_id: UUID) -> None:
 # =============================================================================
 
 
-async def wait_for_terminal(run_id: UUID, timeout_seconds: int = 270) -> str:
+async def wait_for_terminal(sample_id: UUID, timeout_seconds: int = 270) -> str:
     """Poll the harness read endpoint until the run reaches a terminal state."""
     return await wait_for_terminal_status(
-        run_id,
+        sample_id,
         expected_statuses=frozenset({"completed"}),
         timeout_seconds=timeout_seconds,
     )
 
 
 async def wait_for_terminal_status(
-    run_id: UUID,
+    sample_id: UUID,
     *,
     expected_statuses: frozenset[str],
     timeout_seconds: int = 270,
@@ -470,7 +474,9 @@ async def wait_for_terminal_status(
     last_state: dict[str, object] | None = None
     async with httpx.AsyncClient(timeout=10.0) as client:
         while time.monotonic() < deadline:
-            r = await client.get(f"{api_base}/api/__danger__/test-harness/read/run/{run_id}/state")
+            r = await client.get(
+                f"{api_base}/api/__danger__/test-harness/read/samples/{sample_id}/state"
+            )
             if r.status_code == 200:
                 state = r.json()
                 last_state = state
@@ -479,11 +485,11 @@ async def wait_for_terminal_status(
                     return status
                 if status in TERMINAL_STATUSES:
                     raise AssertionError(
-                        f"run {run_id} reached terminal failure status {status!r}:\n"
+                        f"run {sample_id} reached terminal failure status {status!r}:\n"
                         f"{json.dumps(state, indent=2, sort_keys=True)}"
                     )
             await asyncio.sleep(2)
     raise TimeoutError(
-        f"run {run_id} did not reach terminal status within {timeout_seconds}s:\n"
+        f"run {sample_id} did not reach terminal status within {timeout_seconds}s:\n"
         f"{json.dumps(last_state, indent=2, sort_keys=True)}",
     )

@@ -9,7 +9,7 @@ for that environment:
 
   1. Write a deterministic, well-known file into the sandbox under
      ``/workspace/final_output/`` so the runtime's persist step can
-     hash it and produce a ``RunResource`` row.
+     hash it and produce a ``SampleResource`` row.
   2. Run a bash probe against it (compile / parse / count lines / etc.)
      and persist the probe result as a second file
      (``probe_<node>.json``) that the criterion later reads.

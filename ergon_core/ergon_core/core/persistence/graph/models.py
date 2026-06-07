@@ -4,10 +4,10 @@ The core graph layer. Status is a free-form string — the core does not
 constrain values. Domain semantics live in the experiment layer.
 
 Tables:
-    run_graph_nodes        — mutable task nodes, one per run
-    run_graph_edges        — mutable dependency edges, one per run
-    run_graph_annotations  — append-only namespaced metadata (WAL)
-    run_graph_mutations    — append-only audit log of every change
+    sample_graph_nodes        — mutable task nodes, one per run
+    sample_graph_edges        — mutable dependency edges, one per run
+    sample_graph_annotations  — append-only namespaced metadata (WAL)
+    sample_graph_mutations    — append-only audit log of every change
 """
 
 from datetime import datetime
@@ -38,14 +38,14 @@ TZDateTime = DateTime(timezone=True)
 
 
 # ---------------------------------------------------------------------------
-# RunGraphNode
+# SampleGraphNode
 # ---------------------------------------------------------------------------
 
 
-class RunGraphNode(SQLModel, table=True):
-    __tablename__ = "run_graph_nodes"
+class SampleGraphNode(SQLModel, table=True):
+    __tablename__ = "sample_graph_nodes"
 
-    run_id: UUID = Field(foreign_key="runs.id", primary_key=True, index=True)
+    sample_id: UUID = Field(foreign_key="samples.id", primary_key=True, index=True)
     task_id: UUID = Field(
         default_factory=uuid4,
         primary_key=True,
@@ -125,15 +125,15 @@ class RunGraphNode(SQLModel, table=True):
 
 
 # ---------------------------------------------------------------------------
-# RunGraphEdge
+# SampleGraphEdge
 # ---------------------------------------------------------------------------
 
 
-class RunGraphEdge(SQLModel, table=True):
-    __tablename__ = "run_graph_edges"
+class SampleGraphEdge(SQLModel, table=True):
+    __tablename__ = "sample_graph_edges"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
+    sample_id: UUID = Field(foreign_key="samples.id", index=True)
     definition_dependency_id: UUID | None = Field(
         default=None,
         foreign_key="experiment_definition_task_dependencies.id",
@@ -150,11 +150,11 @@ class RunGraphEdge(SQLModel, table=True):
 
 
 # ---------------------------------------------------------------------------
-# RunGraphAnnotation
+# SampleGraphAnnotation
 # ---------------------------------------------------------------------------
 
 
-class RunGraphAnnotation(SQLModel, table=True):
+class SampleGraphAnnotation(SQLModel, table=True):
     """Append-only annotation WAL. Each set_annotation() inserts a new row.
     Current value = latest sequence. Point-in-time = sequence <= N.
 
@@ -162,11 +162,11 @@ class RunGraphAnnotation(SQLModel, table=True):
     reconstructed at any mutation sequence — needed for counterfactual
     replay and credit assignment in the training pipeline."""
 
-    __tablename__ = "run_graph_annotations"
+    __tablename__ = "sample_graph_annotations"
     __table_args__ = (
         Index(
             "ix_annotation_lookup",
-            "run_id",
+            "sample_id",
             "target_type",
             "target_id",
             "namespace",
@@ -175,7 +175,7 @@ class RunGraphAnnotation(SQLModel, table=True):
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
+    sample_id: UUID = Field(foreign_key="samples.id", index=True)
     target_type: str = Field(
         description=(
             "GraphTargetType literal ('node' or 'edge') stored as a string for SQLModel "
@@ -198,21 +198,21 @@ class RunGraphAnnotation(SQLModel, table=True):
         return data
 
     @model_validator(mode="after")
-    def _validate_payload(self) -> "RunGraphAnnotation":
+    def _validate_payload(self) -> "SampleGraphAnnotation":
         self.__class__._parse_payload(self.payload)
         return self
 
 
 # ---------------------------------------------------------------------------
-# RunGraphMutation
+# SampleGraphMutation
 # ---------------------------------------------------------------------------
 
 
-class RunGraphMutation(SQLModel, table=True):
-    __tablename__ = "run_graph_mutations"
+class SampleGraphMutation(SQLModel, table=True):
+    __tablename__ = "sample_graph_mutations"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
+    sample_id: UUID = Field(foreign_key="samples.id", index=True)
     sequence: int = Field(index=True)
     mutation_type: str = Field(
         index=True,
@@ -231,7 +231,7 @@ class RunGraphMutation(SQLModel, table=True):
     reason: str | None = None
     triggered_by_mutation_id: UUID | None = Field(
         default=None,
-        foreign_key="run_graph_mutations.id",
+        foreign_key="sample_graph_mutations.id",
         ondelete="SET NULL",
     )
     batch_operation_id: UUID | None = Field(default=None, index=False)

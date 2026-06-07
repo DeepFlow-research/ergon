@@ -16,12 +16,12 @@ from ergon_core.core.application.runtime.orchestration import (
 _TASK_ID_CASES = [
     (
         "TaskReadyEvent",
-        lambda: TaskReadyEvent(run_id=uuid4(), definition_id=uuid4(), task_id=uuid4()),
+        lambda: TaskReadyEvent(sample_id=uuid4(), definition_id=uuid4(), task_id=uuid4()),
     ),
     (
         "TaskFailedEvent",
         lambda: TaskFailedEvent(
-            run_id=uuid4(),
+            sample_id=uuid4(),
             definition_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
@@ -31,7 +31,7 @@ _TASK_ID_CASES = [
     (
         "PrepareTaskExecutionCommand",
         lambda: PrepareTaskExecutionCommand(
-            run_id=uuid4(),
+            sample_id=uuid4(),
             definition_id=uuid4(),
             task_id=uuid4(),
         ),
@@ -46,7 +46,7 @@ _TASK_ID_CASES = [
     (
         "PropagateTaskCompletionCommand",
         lambda: PropagateTaskCompletionCommand(
-            run_id=uuid4(),
+            sample_id=uuid4(),
             definition_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
@@ -57,7 +57,7 @@ _TASK_ID_CASES = [
 
 def test_task_ready_event_requires_task_id() -> None:
     with pytest.raises(ValueError):
-        TaskReadyEvent(run_id=uuid4(), definition_id=uuid4())  # type: ignore[call-arg]
+        TaskReadyEvent(sample_id=uuid4(), definition_id=uuid4())  # type: ignore[call-arg]
 
 
 @pytest.mark.parametrize("label,factory", _TASK_ID_CASES, ids=[c[0] for c in _TASK_ID_CASES])
@@ -73,7 +73,7 @@ def test_task_id_round_trips(label, factory):
 def test_task_completed_event_uses_task_id() -> None:
     task_id = uuid4()
     event = TaskCompletedEvent(
-        run_id=uuid4(),
+        sample_id=uuid4(),
         definition_id=uuid4(),
         task_id=task_id,
         execution_id=uuid4(),

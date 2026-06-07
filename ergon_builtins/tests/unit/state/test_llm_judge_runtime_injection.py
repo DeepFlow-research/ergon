@@ -18,7 +18,7 @@ from ergon_core.test_support.task_factory import task_with_id
 
 def _make_eval_context() -> CriterionContext:
     return CriterionContext(
-        run_id=uuid4(),
+        sample_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
         task=task_with_id(
@@ -42,7 +42,7 @@ class TestCriterionContextRuntime:
     def test_context_is_frozen(self):
         ctx = _make_eval_context()
         with pytest.raises(Exception):  # slopcop: ignore[no-broad-except]
-            ctx.run_id = uuid4()  # type: ignore[misc]
+            ctx.sample_id = uuid4()  # type: ignore[misc]
 
 
 class TestLLMJudgeCriterionWithRuntime:

@@ -12,22 +12,22 @@ from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
 from ergon_core.api.errors import ContainmentViolation
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import AwaitCompletionNotSupportedError, SpawnedTaskHandle
-from ergon_core.core.application.resources.models import RunResourceView
-from ergon_core.core.application.resources.service import RunResourceReadService
+from ergon_core.core.application.resources.models import SampleResourceView
+from ergon_core.core.application.resources.service import SampleResourceReadService
 from ergon_core.core.application.runtime.task_models import (
     CancelTaskCommand,
     RefineTaskCommand,
     RestartTaskCommand,
     SubtaskInfo,
 )
-from ergon_core.core.persistence.shared.enums import RunResourceKind
-from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
+from ergon_core.core.persistence.shared.enums import SampleResourceKind
+from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.graph.models import RunGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.telemetry.models import (
-    RunRecord,
-    RunResource,
-    RunTaskExecution,
+    SampleRecord,
+    SampleResource,
+    SampleTaskAttempt,
 )
 from ergon_core.core.shared.utils import utcnow
 from ergon_core.test_support import task_factory
@@ -60,8 +60,8 @@ class _FakeTaskManagement:
     def __init__(self) -> None:
         self.calls: list[tuple[str, object, object]] = []
 
-    async def spawn_dynamic_task(self, *, run_id, parent_task_id, task, depends_on):
-        self.calls.append(("spawn", run_id, parent_task_id, task, depends_on))
+    async def spawn_dynamic_task(self, *, sample_id, parent_task_id, task, depends_on):
+        self.calls.append(("spawn", sample_id, parent_task_id, task, depends_on))
         return SpawnedTaskHandle(task_id=uuid4())
 
     async def cancel_task(self, session, command: CancelTaskCommand):
@@ -80,8 +80,8 @@ class _FakeInspection:
         self.descendant_set = descendants or frozenset()
         self.calls: list[tuple[str, object]] = []
 
-    def list_subtasks(self, session, *, run_id, parent_task_id):
-        self.calls.append(("list_subtasks", session, run_id, parent_task_id))
+    def list_subtasks(self, session, *, sample_id, parent_task_id):
+        self.calls.append(("list_subtasks", session, sample_id, parent_task_id))
         return [
             SubtaskInfo(
                 task_id=uuid4(),
@@ -94,8 +94,8 @@ class _FakeInspection:
             )
         ]
 
-    def get_subtask(self, session, *, run_id, task_id):
-        self.calls.append(("get_subtask", session, run_id, task_id))
+    def get_subtask(self, session, *, sample_id, task_id):
+        self.calls.append(("get_subtask", session, sample_id, task_id))
         return SubtaskInfo(
             task_id=task_id,
             task_slug="target",
@@ -106,14 +106,14 @@ class _FakeInspection:
             error=None,
         )
 
-    async def descendant_ids(self, *, run_id, root_task_id):
-        self.calls.append(("descendant_ids", run_id, root_task_id))
+    async def descendant_ids(self, *, sample_id, root_task_id):
+        self.calls.append(("descendant_ids", sample_id, root_task_id))
         return self.descendant_set
 
 
 class _FakeResources:
-    def __init__(self, *, run_id, other_run_id, blob_path: Path) -> None:
-        self.run_id = run_id
+    def __init__(self, *, sample_id, other_run_id, blob_path: Path) -> None:
+        self.sample_id = sample_id
         self.other_run_id = other_run_id
         self.blob_path = blob_path
         self.calls: list[tuple[str, object]] = []
@@ -121,11 +121,11 @@ class _FakeResources:
     def list_for_run(self, **kwargs):
         self.calls.append(("list_for_run", kwargs))
         return [
-            RunResourceView(
+            SampleResourceView(
                 id=uuid4(),
-                run_id=self.run_id,
+                sample_id=self.sample_id,
                 task_execution_id=kwargs.get("task_execution_id"),
-                kind=RunResourceKind.REPORT,
+                kind=SampleResourceKind.REPORT,
                 name="report.txt",
                 mime_type="text/plain",
                 file_path=str(self.blob_path),
@@ -137,10 +137,10 @@ class _FakeResources:
             )
         ]
 
-    def read_bytes(self, *, run_id, current_task_id, resource_id):
-        self.calls.append(("read_bytes", run_id, current_task_id, resource_id))
-        run_id = self.other_run_id if str(resource_id).endswith("ffff") else self.run_id
-        if run_id != self.run_id:
+    def read_bytes(self, *, sample_id, current_task_id, resource_id):
+        self.calls.append(("read_bytes", sample_id, current_task_id, resource_id))
+        sample_id = self.other_run_id if str(resource_id).endswith("ffff") else self.sample_id
+        if sample_id != self.sample_id:
             raise ContainmentViolation(
                 parent_task_id=current_task_id,
                 target_task_id=resource_id,
@@ -148,9 +148,9 @@ class _FakeResources:
         return self.blob_path.read_bytes()
 
 
-def _context(*, run_id, task_id, inspect=None, resource_service=None) -> WorkerContext:
+def _context(*, sample_id, task_id, inspect=None, resource_service=None) -> WorkerContext:
     return WorkerContext._for_job(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=task_id,
         execution_id=uuid4(),
         definition_id=uuid4(),
@@ -164,13 +164,13 @@ def _context(*, run_id, task_id, inspect=None, resource_service=None) -> WorkerC
 
 @pytest.mark.asyncio
 async def test_facade_mutations_call_current_service_command_signatures() -> None:
-    run_id = uuid4()
+    sample_id = uuid4()
     root_id = uuid4()
     child_id = uuid4()
     inspect = _FakeInspection(frozenset({child_id}))
     mgmt = _FakeTaskManagement()
     context = WorkerContext._for_job(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=root_id,
         execution_id=uuid4(),
         definition_id=uuid4(),
@@ -195,11 +195,11 @@ async def test_facade_mutations_call_current_service_command_signatures() -> Non
 
 @pytest.mark.asyncio
 async def test_spawn_task_uses_empty_tuple_dependency_default() -> None:
-    run_id = uuid4()
+    sample_id = uuid4()
     root_id = uuid4()
     mgmt = _FakeTaskManagement()
     context = WorkerContext._for_job(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=root_id,
         execution_id=uuid4(),
         definition_id=uuid4(),
@@ -225,11 +225,11 @@ async def test_spawn_task_uses_empty_tuple_dependency_default() -> None:
 
 @pytest.mark.asyncio
 async def test_facade_inspection_uses_current_service_names() -> None:
-    run_id = uuid4()
+    sample_id = uuid4()
     root_id = uuid4()
     child_id = uuid4()
     inspect = _FakeInspection(frozenset({child_id}))
-    context = _context(run_id=run_id, task_id=root_id, inspect=inspect)
+    context = _context(sample_id=sample_id, task_id=root_id, inspect=inspect)
 
     subtasks = await context.subtasks()
     descendants = await context.descendants()
@@ -250,10 +250,10 @@ async def test_facade_inspection_uses_current_service_names() -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("method", ["cancel_task", "refine_task", "restart_task", "get_task"])
 async def test_lifecycle_methods_enforce_descendant_containment(method: str) -> None:
-    run_id = uuid4()
+    sample_id = uuid4()
     root_id = uuid4()
     outside_id = uuid4()
-    context = _context(run_id=run_id, task_id=root_id, inspect=_FakeInspection(frozenset()))
+    context = _context(sample_id=sample_id, task_id=root_id, inspect=_FakeInspection(frozenset()))
 
     with pytest.raises(ContainmentViolation):
         if method == "refine_task":
@@ -264,15 +264,15 @@ async def test_lifecycle_methods_enforce_descendant_containment(method: str) -> 
 
 @pytest.mark.asyncio
 async def test_resources_are_run_scoped_not_descendant_scoped(tmp_path: Path) -> None:
-    run_id = uuid4()
+    sample_id = uuid4()
     other_run_id = uuid4()
     root_id = uuid4()
     sibling_task_id = uuid4()
     execution_id = uuid4()
     blob = tmp_path / "blob.txt"
     blob.write_bytes(b"ok")
-    repo = _FakeResources(run_id=run_id, other_run_id=other_run_id, blob_path=blob)
-    context = _context(run_id=run_id, task_id=root_id, resource_service=repo)
+    repo = _FakeResources(sample_id=sample_id, other_run_id=other_run_id, blob_path=blob)
+    context = _context(sample_id=sample_id, task_id=root_id, resource_service=repo)
 
     resources = await context.resources(task_id=sibling_task_id, execution_id=execution_id)
     data = await context.read_resource(resources[0].id)
@@ -284,12 +284,12 @@ async def test_resources_are_run_scoped_not_descendant_scoped(tmp_path: Path) ->
 
 @pytest.mark.asyncio
 async def test_read_resource_rejects_cross_run_rows(tmp_path: Path) -> None:
-    run_id = uuid4()
+    sample_id = uuid4()
     other_run_id = uuid4()
     blob = tmp_path / "blob.txt"
     blob.write_bytes(b"ok")
-    repo = _FakeResources(run_id=run_id, other_run_id=other_run_id, blob_path=blob)
-    context = _context(run_id=run_id, task_id=uuid4(), resource_service=repo)
+    repo = _FakeResources(sample_id=sample_id, other_run_id=other_run_id, blob_path=blob)
+    context = _context(sample_id=sample_id, task_id=uuid4(), resource_service=repo)
     cross_run_resource_id = uuid4()
     cross_run_resource_id = type(cross_run_resource_id)(f"{str(cross_run_resource_id)[:-4]}ffff")
 
@@ -300,7 +300,7 @@ async def test_read_resource_rejects_cross_run_rows(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path) -> None:
     session = _sql_session()
-    run_id = uuid4()
+    sample_id = uuid4()
     other_run_id = uuid4()
     definition_id = uuid4()
     root_id = uuid4()
@@ -317,54 +317,54 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
                 name="bench",
                 metadata_json={},
             ),
-            RunRecord(
-                id=run_id,
+            SampleRecord(
+                id=sample_id,
                 definition_id=definition_id,
                 benchmark_type="bench",
                 instance_key="sample-1",
                 worker_team_json={},
-                status=RunStatus.EXECUTING,
+                status=SampleStatus.EXECUTING,
             ),
-            RunRecord(
+            SampleRecord(
                 id=other_run_id,
                 definition_id=definition_id,
                 benchmark_type="bench",
                 instance_key="sample-2",
                 worker_team_json={},
-                status=RunStatus.EXECUTING,
+                status=SampleStatus.EXECUTING,
             ),
-            RunGraphNode(
+            SampleGraphNode(
                 task_id=root_id,
-                run_id=run_id,
+                sample_id=sample_id,
                 instance_key="sample-1",
                 task_slug="root",
                 description="root",
                 status="running",
             ),
-            RunGraphNode(
+            SampleGraphNode(
                 task_id=sibling_id,
-                run_id=run_id,
+                sample_id=sample_id,
                 instance_key="sample-1",
                 task_slug="sibling",
                 description="sibling",
                 status="completed",
             ),
-            RunTaskExecution(
+            SampleTaskAttempt(
                 id=sibling_execution_id,
-                run_id=run_id,
+                sample_id=sample_id,
                 task_id=sibling_id,
                 status=TaskExecutionStatus.COMPLETED,
             ),
-            RunTaskExecution(
+            SampleTaskAttempt(
                 id=other_execution_id,
-                run_id=other_run_id,
+                sample_id=other_run_id,
                 task_id=uuid4(),
                 status=TaskExecutionStatus.COMPLETED,
             ),
-            RunResource(
-                run_id=run_id,
+            SampleResource(
+                sample_id=sample_id,
                 task_execution_id=sibling_execution_id,
-                kind=RunResourceKind.REPORT.value,
+                kind=SampleResourceKind.REPORT.value,
                 name="report.txt",
                 mime_type="text/plain",
                 file_path=str(blob),
@@ -379,14 +379,14 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
         yield session
 
     context = WorkerContext._for_job(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=root_id,
         execution_id=uuid4(),
         definition_id=definition_id,
         sandbox_id="sbx",
         task_mgmt=_FakeTaskManagement(),
         task_inspect=_FakeInspection(),
-        resource_service=RunResourceReadService(session_factory=session_factory),
+        resource_service=SampleResourceReadService(session_factory=session_factory),
         session_factory=session_factory,
     )
 
@@ -403,11 +403,11 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
 
 def test_context_requires_facade_services_at_construction() -> None:
     with pytest.raises(ValidationError, match="task_mgmt"):
-        WorkerContext(run_id=uuid4(), task_id=uuid4(), execution_id=uuid4(), sandbox_id="sbx")
+        WorkerContext(sample_id=uuid4(), task_id=uuid4(), execution_id=uuid4(), sandbox_id="sbx")
 
     with pytest.raises(ValidationError, match="injected dependencies"):
         WorkerContext(
-            run_id=uuid4(),
+            sample_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
             sandbox_id="sbx",

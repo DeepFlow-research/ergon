@@ -10,7 +10,7 @@ RUNS_API_PATH = (
     / "infrastructure"
     / "http"
     / "routes"
-    / "runs.py"
+    / "samples.py"
 )
 
 DOMAIN_HELPERS = {

@@ -125,7 +125,7 @@ def _planned_runs(path: Path) -> int:
 
 
 def _source_run_id(record: Record, *, fallback_id: str) -> str:
-    explicit = record.get("source_run_id") or record.get("run_id") or record.get("id")
+    explicit = record.get("source_run_id") or record.get("sample_id") or record.get("id")
     if explicit is not None:
         return str(explicit)
     return _string_field(record, "task_id") or fallback_id

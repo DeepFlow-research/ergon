@@ -62,7 +62,7 @@ def coordination_overhead_reducer(spans: Sequence[Mapping[str, Any]]) -> ParsedR
         implementation_ref="ergon_ingestion.reducers.maestro.coordination_overhead_reducer",
         fields_read=COORDINATION_FIELDS,
         aggregation={
-            "group_by": ["run_id"],
+            "group_by": ["sample_id"],
             "span_count": "count(span_id)",
             "token_count": "sum(token_count, input_tokens, output_tokens)",
             "duration_ms": "sum(duration_ms or duration)",

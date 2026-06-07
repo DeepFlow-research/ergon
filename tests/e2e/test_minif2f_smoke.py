@@ -16,8 +16,8 @@ from tests.e2e._asserts import (
     _assert_experiment_membership,
     _assert_minif2f_artifacts,
     _assert_run_evaluation,
-    _assert_run_graph,
-    _assert_run_resources,
+    _assert_sample_graph,
+    _assert_sample_resources,
     _assert_run_turn_counts,
     _assert_sadpath_evaluation,
     _assert_sadpath_graph_cascade,
@@ -98,7 +98,7 @@ async def test_smoke_experiment_group(tmp_path: pathlib.Path) -> None:
     _invoke_playwright(
         experiment=experiment,
         experiment_runs=[
-            {"run_id": str(rid), "kind": kind}
+            {"sample_id": str(rid), "kind": kind}
             for (kind, _, _), rid in zip(smoke_slots, run_ids, strict=True)
         ],
         screenshot_dir=screenshot_dir,
@@ -106,8 +106,8 @@ async def test_smoke_experiment_group(tmp_path: pathlib.Path) -> None:
 
 
 def _assert_happy_run(rid) -> None:
-    _assert_run_graph(rid)
-    _assert_run_resources(rid)
+    _assert_sample_graph(rid)
+    _assert_sample_resources(rid)
     _assert_run_turn_counts(rid)
     _assert_thread_messages_ordered(rid)
     _assert_blob_roundtrip(rid)

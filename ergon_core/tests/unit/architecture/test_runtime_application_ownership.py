@@ -35,8 +35,8 @@ def test_runtime_is_single_application_owner_for_graph_task_and_workflow_lifecyc
         "lifecycle.py",
         "models.py",
         "resources.py",
-        "run_identity.py",
-        "run_lifecycle.py",
+        "sample_identity.py",
+        "sample_lifecycle.py",
         "status.py",
         "task_cleanup.py",
         "task_execution.py",
@@ -67,7 +67,7 @@ def test_core_imports_do_not_reference_retired_runtime_packages() -> None:
 def test_runtime_services_do_not_reintroduce_duplicated_dispatch_or_identity_helpers() -> None:
     offenders: list[str] = []
     for path in RUNTIME_ROOT.glob("*.py"):
-        if path.name in {"events.py", "run_identity.py"}:
+        if path.name in {"events.py", "sample_identity.py"}:
             continue
         tree = ast.parse(path.read_text(), filename=str(path))
         for node in ast.walk(tree):
@@ -87,7 +87,7 @@ def test_runtime_public_service_parameters_use_task_id_vocabulary() -> None:
         "ergon_core.core.application.runtime.task_inspection",
         "ergon_core.core.application.runtime.task_management",
         "ergon_core.core.application.runtime.resources",
-        "ergon_core.core.application.runtime.run_lifecycle",
+        "ergon_core.core.application.runtime.sample_lifecycle",
     ):
         module = __import__(module_name, fromlist=["*"])
         for _, member in inspect.getmembers(module, inspect.isfunction):

@@ -2,7 +2,7 @@
 
 Copies bytes out of an E2B sandbox into a content-addressed blob store on the
 local filesystem. Application resource row semantics live in
-``RunResourcePublishService``.
+``SampleResourcePublishService``.
 """
 
 import logging
@@ -12,9 +12,9 @@ from typing import Any, ClassVar
 from uuid import UUID
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
-from ergon_core.core.application.resources.models import RunResourceView
-from ergon_core.core.application.resources.publishing import RunResourcePublishService
-from ergon_core.core.persistence.shared.enums import RunResourceKind
+from ergon_core.core.application.resources.models import SampleResourceView
+from ergon_core.core.application.resources.publishing import SampleResourcePublishService
+from ergon_core.core.persistence.shared.enums import SampleResourceKind
 
 logger = logging.getLogger(__name__)
 
@@ -25,28 +25,28 @@ class SandboxResourcePublisher:
     """Adapter for reading sandbox files and writing content-addressed blobs.
 
     ``sync()`` and ``publish_value()`` remain as compatibility helpers, but
-    they delegate resource append/dedup decisions to ``RunResourcePublishService``.
+    they delegate resource append/dedup decisions to ``SampleResourcePublishService``.
     """
 
     # Default ``(sandbox_path, resource_kind)`` pairs scanned by ``sync()``.
     # Managers that need to publish from additional directories (e.g. a
     # researcher's scratchpad as well as ``final_output/``) pass a custom
     # ``publish_dirs`` to ``__init__``.
-    DEFAULT_PUBLISH_DIRS: ClassVar[tuple[tuple[str, RunResourceKind], ...]] = (
-        ("/workspace/final_output/", RunResourceKind.REPORT),
+    DEFAULT_PUBLISH_DIRS: ClassVar[tuple[tuple[str, SampleResourceKind], ...]] = (
+        ("/workspace/final_output/", SampleResourceKind.REPORT),
     )
 
     def __init__(
         self,
         *,
         sandbox: AsyncSandbox | Any,  # slopcop: ignore[no-typing-any]
-        run_id: UUID,
+        sample_id: UUID,
         task_execution_id: UUID,
         blob_root: Path = _DEFAULT_BLOB_ROOT,
-        publish_dirs: tuple[tuple[str, RunResourceKind], ...] | None = None,
+        publish_dirs: tuple[tuple[str, SampleResourceKind], ...] | None = None,
     ) -> None:
         self._sandbox = sandbox
-        self._run_id = run_id
+        self._sample_id = sample_id
         self._task_execution_id = task_execution_id
         self._blob_root = blob_root
         self._publish_dirs = publish_dirs if publish_dirs is not None else self.DEFAULT_PUBLISH_DIRS
@@ -56,14 +56,14 @@ class SandboxResourcePublisher:
         cls,
         *,
         sandbox: Any,  # slopcop: ignore[no-typing-any]
-        run_id: UUID,
+        sample_id: UUID,
         task_execution_id: UUID,
         blob_root: Path = _DEFAULT_BLOB_ROOT,
-        publish_dirs: tuple[tuple[str, RunResourceKind], ...] | None = None,
+        publish_dirs: tuple[tuple[str, SampleResourceKind], ...] | None = None,
     ) -> "SandboxResourcePublisher":
         return cls(
             sandbox=sandbox,
-            run_id=run_id,
+            sample_id=sample_id,
             task_execution_id=task_execution_id,
             blob_root=blob_root,
             publish_dirs=publish_dirs,
@@ -74,12 +74,12 @@ class SandboxResourcePublisher:
     # persist_outputs_fn at task end.
     # ------------------------------------------------------------------
 
-    async def sync(self) -> list[RunResourceView]:
+    async def sync(self) -> list[SampleResourceView]:
         """Publish configured sandbox dirs through the application service."""
-        return await RunResourcePublishService().publish_sandbox_files(
+        return await SampleResourcePublishService().publish_sandbox_files(
             reader=self,
             blob_store=self,
-            run_id=self._run_id,
+            sample_id=self._sample_id,
             task_execution_id=self._task_execution_id,
             publish_dirs=self._publish_dirs,
         )
@@ -92,15 +92,15 @@ class SandboxResourcePublisher:
     def publish_value(
         self,
         *,
-        kind: RunResourceKind,
+        kind: SampleResourceKind,
         name: str,
         content: str,
         mime_type: str = "text/plain",
-    ) -> RunResourceView | None:
+    ) -> SampleResourceView | None:
         """Publish explicit value content through the application service."""
-        return RunResourcePublishService().publish_value(
+        return SampleResourcePublishService().publish_value(
             blob_store=self,
-            run_id=self._run_id,
+            sample_id=self._sample_id,
             task_execution_id=self._task_execution_id,
             kind=kind,
             name=name,

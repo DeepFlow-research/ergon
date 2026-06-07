@@ -112,7 +112,7 @@ class FileDatasetImporter:
             record.get("source_run_id")
             or record.get("instance_key")
             or record.get("id")
-            or record.get("run_id")
+            or record.get("sample_id")
             or fallback_id
         )
         instance_key = str(record.get("instance_key") or source_id)

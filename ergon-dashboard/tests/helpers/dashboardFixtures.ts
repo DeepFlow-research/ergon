@@ -1,16 +1,16 @@
 import type { DashboardHarnessSeedPayload } from "../../src/lib/testing/dashboardHarness";
-import concurrentMasFixture from "../fixtures/mas-runs/concurrent-mas-run.json";
+import concurrentMasFixture from "../fixtures/mas-samples/concurrent-mas-run.json";
 import type {
   CommunicationThreadState,
   ContextEventState,
-  SerializedWorkflowRunState,
+  SerializedSampleWorkspaceState,
   TaskEvaluationState,
   TaskState,
 } from "../../src/lib/types";
 import { TaskStatus } from "../../src/lib/types";
 
 export const FIXTURE_IDS = {
-  runId: "22222222-2222-4222-8222-222222222222",
+  sampleId: "22222222-2222-4222-8222-222222222222",
   definitionId: "33333333-3333-4333-8333-333333333333",
   rootTaskId: "task-root",
   exploreTaskId: "task-explore",
@@ -31,7 +31,7 @@ export const FIXTURE_IDS = {
 
 export const CONCURRENT_MAS_FIXTURE_IDS = {
   definitionId: "33333333-3333-4333-8333-333333333333",
-  runId: "99999999-9999-4999-8999-999999999999",
+  sampleId: "99999999-9999-4999-8999-999999999999",
   searchTaskId: "10000000-0000-4000-8000-000000000002",
   checkTaskId: "10000000-0000-4000-8000-000000000003",
 } as const;
@@ -49,7 +49,7 @@ function taskState(task: Partial<TaskState> & Pick<TaskState, "id" | "name" | "d
   };
 }
 
-function serializedRunState(): SerializedWorkflowRunState {
+function serializedRunState(): SerializedSampleWorkspaceState {
   const root = taskState({
     id: FIXTURE_IDS.rootTaskId,
     name: "Prove theorem",
@@ -83,7 +83,7 @@ function serializedRunState(): SerializedWorkflowRunState {
   const solveContextEvents = [
     {
       id: FIXTURE_IDS.toolCallEventId,
-      runId: FIXTURE_IDS.runId,
+      sampleId: FIXTURE_IDS.sampleId,
       taskExecutionId: FIXTURE_IDS.solveExecutionId,
       taskId: FIXTURE_IDS.solveTaskNodeUuid,
       workerBindingKey: "react-worker",
@@ -111,7 +111,7 @@ function serializedRunState(): SerializedWorkflowRunState {
     },
     {
       id: FIXTURE_IDS.toolResultEventId,
-      runId: FIXTURE_IDS.runId,
+      sampleId: FIXTURE_IDS.sampleId,
       taskExecutionId: FIXTURE_IDS.solveExecutionId,
       taskId: FIXTURE_IDS.solveTaskNodeUuid,
       workerBindingKey: "react-worker",
@@ -141,7 +141,7 @@ function serializedRunState(): SerializedWorkflowRunState {
   ];
 
   return {
-    id: FIXTURE_IDS.runId,
+    id: FIXTURE_IDS.sampleId,
     definitionId: FIXTURE_IDS.definitionId,
     name: "parallel",
     status: "executing",
@@ -229,22 +229,22 @@ function serializedRunState(): SerializedWorkflowRunState {
     threads: [
       {
         id: FIXTURE_IDS.threadId,
-        runId: FIXTURE_IDS.runId,
+        sampleId: FIXTURE_IDS.sampleId,
         taskId: FIXTURE_IDS.solveTaskId,
         topic: "task_clarification",
-        agentAId: `${FIXTURE_IDS.runId}:stakeholder`,
-        agentBId: `${FIXTURE_IDS.runId}:worker`,
+        agentAId: `${FIXTURE_IDS.sampleId}:stakeholder`,
+        agentBId: `${FIXTURE_IDS.sampleId}:worker`,
         createdAt: "2026-03-18T12:00:05.000Z",
         updatedAt: "2026-03-18T12:00:17.000Z",
         messages: [
           {
             id: FIXTURE_IDS.messageIdA,
             threadId: FIXTURE_IDS.threadId,
-            runId: FIXTURE_IDS.runId,
+            sampleId: FIXTURE_IDS.sampleId,
             taskId: FIXTURE_IDS.solveTaskId,
             threadTopic: "task_clarification",
-            fromAgentId: `${FIXTURE_IDS.runId}:worker`,
-            toAgentId: `${FIXTURE_IDS.runId}:stakeholder`,
+            fromAgentId: `${FIXTURE_IDS.sampleId}:worker`,
+            toAgentId: `${FIXTURE_IDS.sampleId}:stakeholder`,
             content: "Can I use the standard divisibility lemma here?",
             sequenceNum: 0,
             createdAt: "2026-03-18T12:00:05.000Z",
@@ -252,11 +252,11 @@ function serializedRunState(): SerializedWorkflowRunState {
           {
             id: FIXTURE_IDS.messageIdB,
             threadId: FIXTURE_IDS.threadId,
-            runId: FIXTURE_IDS.runId,
+            sampleId: FIXTURE_IDS.sampleId,
             taskId: FIXTURE_IDS.solveTaskId,
             threadTopic: "task_clarification",
-            fromAgentId: `${FIXTURE_IDS.runId}:stakeholder`,
-            toAgentId: `${FIXTURE_IDS.runId}:worker`,
+            fromAgentId: `${FIXTURE_IDS.sampleId}:stakeholder`,
+            toAgentId: `${FIXTURE_IDS.sampleId}:worker`,
             content: "Yes. Focus on parity first, then discharge the algebraic side condition.",
             sequenceNum: 1,
             createdAt: "2026-03-18T12:00:17.000Z",
@@ -267,7 +267,7 @@ function serializedRunState(): SerializedWorkflowRunState {
     evaluationsByTask: {
       [FIXTURE_IDS.solveTaskId]: {
         id: FIXTURE_IDS.evaluationId,
-        runId: FIXTURE_IDS.runId,
+        sampleId: FIXTURE_IDS.sampleId,
         taskId: FIXTURE_IDS.solveTaskId,
         evaluatorName: "rubric",
         aggregationRule: "weighted_sum",
@@ -316,28 +316,28 @@ function serializedRunState(): SerializedWorkflowRunState {
     cancelledTasks: 0,
     finalScore: null,
     error: null,
-  } as unknown as SerializedWorkflowRunState;
+  } as unknown as SerializedSampleWorkspaceState;
 }
 
 export function createDeltaThread(): CommunicationThreadState {
   return {
     id: FIXTURE_IDS.threadId,
-    runId: FIXTURE_IDS.runId,
+    sampleId: FIXTURE_IDS.sampleId,
     taskId: FIXTURE_IDS.solveTaskId,
     topic: "task_clarification",
-    agentAId: `${FIXTURE_IDS.runId}:stakeholder`,
-    agentBId: `${FIXTURE_IDS.runId}:worker`,
+    agentAId: `${FIXTURE_IDS.sampleId}:stakeholder`,
+    agentBId: `${FIXTURE_IDS.sampleId}:worker`,
     createdAt: "2026-03-18T12:00:05.000Z",
     updatedAt: "2026-03-18T12:00:24.000Z",
     messages: [
       {
         id: FIXTURE_IDS.messageIdA,
         threadId: FIXTURE_IDS.threadId,
-        runId: FIXTURE_IDS.runId,
+        sampleId: FIXTURE_IDS.sampleId,
         taskId: FIXTURE_IDS.solveTaskId,
         threadTopic: "task_clarification",
-        fromAgentId: `${FIXTURE_IDS.runId}:worker`,
-        toAgentId: `${FIXTURE_IDS.runId}:stakeholder`,
+        fromAgentId: `${FIXTURE_IDS.sampleId}:worker`,
+        toAgentId: `${FIXTURE_IDS.sampleId}:stakeholder`,
         content: "Can I use the standard divisibility lemma here?",
         sequenceNum: 0,
         createdAt: "2026-03-18T12:00:05.000Z",
@@ -345,11 +345,11 @@ export function createDeltaThread(): CommunicationThreadState {
       {
         id: FIXTURE_IDS.messageIdB,
         threadId: FIXTURE_IDS.threadId,
-        runId: FIXTURE_IDS.runId,
+        sampleId: FIXTURE_IDS.sampleId,
         taskId: FIXTURE_IDS.solveTaskId,
         threadTopic: "task_clarification",
-        fromAgentId: `${FIXTURE_IDS.runId}:stakeholder`,
-        toAgentId: `${FIXTURE_IDS.runId}:worker`,
+        fromAgentId: `${FIXTURE_IDS.sampleId}:stakeholder`,
+        toAgentId: `${FIXTURE_IDS.sampleId}:worker`,
         content: "Yes. Focus on parity first, then discharge the algebraic side condition.",
         sequenceNum: 1,
         createdAt: "2026-03-18T12:00:17.000Z",
@@ -357,11 +357,11 @@ export function createDeltaThread(): CommunicationThreadState {
       {
         id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
         threadId: FIXTURE_IDS.threadId,
-        runId: FIXTURE_IDS.runId,
+        sampleId: FIXTURE_IDS.sampleId,
         taskId: FIXTURE_IDS.solveTaskId,
         threadTopic: "task_clarification",
-        fromAgentId: `${FIXTURE_IDS.runId}:worker`,
-        toAgentId: `${FIXTURE_IDS.runId}:stakeholder`,
+        fromAgentId: `${FIXTURE_IDS.sampleId}:worker`,
+        toAgentId: `${FIXTURE_IDS.sampleId}:stakeholder`,
         content: "Understood. I am rewriting the final proof around that parity split now.",
         sequenceNum: 2,
         createdAt: "2026-03-18T12:00:24.000Z",
@@ -373,7 +373,7 @@ export function createDeltaThread(): CommunicationThreadState {
 export function createDeltaContextEvent(): ContextEventState {
   return {
     id: FIXTURE_IDS.deltaToolCallEventId,
-    runId: FIXTURE_IDS.runId,
+    sampleId: FIXTURE_IDS.sampleId,
     taskExecutionId: "execution-solve-1",
     taskId: FIXTURE_IDS.solveTaskId,
     workerBindingKey: "react-worker",
@@ -397,7 +397,7 @@ export function createDeltaContextEvent(): ContextEventState {
 export function createUpdatedEvaluation(): TaskEvaluationState {
   return {
     id: FIXTURE_IDS.evaluationId,
-    runId: FIXTURE_IDS.runId,
+    sampleId: FIXTURE_IDS.sampleId,
     taskId: FIXTURE_IDS.solveTaskId,
     evaluatorName: "rubric",
     aggregationRule: "weighted_sum",
@@ -439,7 +439,7 @@ export function createUpdatedEvaluation(): TaskEvaluationState {
 export function createEmptyCriteriaEvaluation(): TaskEvaluationState {
   return {
     id: FIXTURE_IDS.evaluationId,
-    runId: FIXTURE_IDS.runId,
+    sampleId: FIXTURE_IDS.sampleId,
     taskId: FIXTURE_IDS.solveTaskId,
     evaluatorName: "rubric",
     aggregationRule: "weighted_sum",
@@ -488,7 +488,7 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
     },
     runs: [
       {
-        run_id: FIXTURE_IDS.runId,
+        sample_id: FIXTURE_IDS.sampleId,
         definition_id: FIXTURE_IDS.definitionId,
         benchmark_type: "minif2f",
         instance_key: "algebra_sample",
@@ -506,7 +506,7 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
         total_cost_usd: 0.12,
         error_message: null,
         metrics: {
-          run_id: FIXTURE_IDS.runId,
+          sample_id: FIXTURE_IDS.sampleId,
           run_name: "algebra_sample",
           status: "completed",
           sample_label: "algebra_sample",
@@ -562,9 +562,9 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
 function createConcurrentMasSeedOnly(): DashboardHarnessSeedPayload {
   return {
     experimentDetails: {},
-    runs: [concurrentMasFixture.runState as unknown as SerializedWorkflowRunState],
+    runs: [concurrentMasFixture.runState as unknown as SerializedSampleWorkspaceState],
     mutations: {
-      [CONCURRENT_MAS_FIXTURE_IDS.runId]: concurrentMasFixture.mutations,
+      [CONCURRENT_MAS_FIXTURE_IDS.sampleId]: concurrentMasFixture.mutations,
     },
   } as DashboardHarnessSeedPayload;
 }

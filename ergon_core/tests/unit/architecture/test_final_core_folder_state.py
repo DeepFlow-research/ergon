@@ -164,9 +164,9 @@ def test_job_inngest_wrappers_do_not_query_sqlmodel_directly() -> None:
 
 def test_infrastructure_does_not_own_views_or_resource_append_policy() -> None:
     forbidden_snippets = (
-        "RunResourceRepository(",
-        "RunResource(",
-        "session.add(RunResource",
+        "SampleResourceRepository(",
+        "SampleResource(",
+        "session.add(SampleResource",
     )
     forbidden_view_builders = {"build_run_snapshot", "_build_task_tree_for_run"}
     offenders: list[str] = []

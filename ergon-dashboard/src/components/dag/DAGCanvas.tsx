@@ -7,7 +7,7 @@
  * - Hierarchical dagre layout with nested container rendering
  * - Depth-based expansion control via floating controls
  * - Search/filter tasks by name
- * - Live updates via useRunState hook
+ * - Live updates via useSampleWorkspaceState hook
  * - Zoom/pan controls
  */
 
@@ -25,7 +25,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { TaskStatus, type WorkflowRunState } from "@/lib/types";
+import { TaskStatus, type SampleWorkspaceState } from "@/lib/types";
 import { nodeTypes, type TaskNodeType } from "./TaskNode";
 import { GraphDependencyEdge } from "./edges/GraphDependencyEdge";
 import { buildContainerEvaluationRollup } from "@/features/evaluation/selectors";
@@ -36,8 +36,8 @@ import type { ContainerDimensions } from "@/features/graph/layout/layoutTypes";
 import { SearchInput } from "@/components/common/SearchInput";
 
 interface DAGCanvasProps {
-  runId: string;
-  runState: WorkflowRunState | null;
+  sampleId: string;
+  runState: SampleWorkspaceState | null;
   isLoading?: boolean;
   error?: string | null;
   isSubscribed?: boolean;
@@ -235,7 +235,7 @@ function LegendCard() {
 /* ─── Main canvas ───────────────────────────────────────────────── */
 
 function DAGCanvasInner({
-  runId,
+  sampleId,
   runState,
   isLoading = false,
   error = null,
@@ -444,7 +444,7 @@ function DAGCanvasInner({
           </h3>
           <p style={{ color: "var(--muted)" }}>{error}</p>
           <p className="text-xs mt-2 font-mono" style={{ color: "var(--faint)" }}>
-            Run ID: {runId}
+            Sample ID: {sampleId}
           </p>
         </div>
       </div>
@@ -474,7 +474,7 @@ function DAGCanvasInner({
               : "Connecting to server..."}
           </p>
           <p className="text-xs mt-2 font-mono" style={{ color: "var(--faint)" }}>
-            Run ID: {runId}
+            Sample ID: {sampleId}
           </p>
         </div>
       </div>

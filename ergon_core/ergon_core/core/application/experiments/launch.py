@@ -7,7 +7,9 @@ import inngest
 from ergon_core.core.application.events import WorkflowStartedEvent
 from ergon_core.core.application.experiments.errors import DefinitionNotFoundError
 from ergon_core.core.application.experiments.models import DefinitionHandle, ExperimentRunResult
-from ergon_core.core.application.runtime.run_lifecycle import create_run
+from ergon_core.core.application.runtime.sample_lifecycle import (
+    create_run as create_definition_backed_sample,
+)
 from ergon_core.core.infrastructure.inngest.client import inngest_client
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.shared.db import get_session
@@ -16,13 +18,13 @@ from ergon_core.core.shared.json_types import JsonValue
 WorkflowStartedEmitter = Callable[[UUID, UUID], Awaitable[None]]
 
 
-async def launch_run(
+async def launch_sample(
     definition_id: UUID,
     *,
     assignment_metadata: Mapping[str, JsonValue] | None = None,
     emit_workflow_started: WorkflowStartedEmitter | None = None,
 ) -> ExperimentRunResult:
-    """Materialize a run directly from an ExperimentDefinition row."""
+    """Materialize a sample directly from an ExperimentDefinition row."""
 
     emitter = emit_workflow_started or _emit_workflow_started
     with get_session() as session:
@@ -31,7 +33,7 @@ async def launch_run(
             raise DefinitionNotFoundError(definition_id)
         metadata = definition.parsed_metadata()
         experiment = metadata.get("experiment")
-        run = create_run(
+        sample = create_definition_backed_sample(
             DefinitionHandle(
                 definition_id=definition.id,
                 benchmark_type=definition.benchmark_type,
@@ -47,16 +49,19 @@ async def launch_run(
             seed=None,
             experiment=experiment if isinstance(experiment, str) else None,
         )
-    await emitter(run.id, definition_id)
+    await emitter(sample.id, definition_id)
     return ExperimentRunResult(
         definition_id=definition_id,
-        run_ids=[run.id],
+        sample_ids=[sample.id],
         definition_ids=[definition_id],
     )
 
 
-async def _emit_workflow_started(run_id: UUID, definition_id: UUID) -> None:
-    event = WorkflowStartedEvent(run_id=run_id, definition_id=definition_id)
+launch_run = launch_sample
+
+
+async def _emit_workflow_started(sample_id: UUID, definition_id: UUID) -> None:
+    event = WorkflowStartedEvent(sample_id=sample_id, definition_id=definition_id)
     await inngest_client.send(
         inngest.Event(
             name=WorkflowStartedEvent.name,

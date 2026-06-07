@@ -17,7 +17,7 @@ from ergon_core.core.application.evaluation.summary import CriterionOutcomeEntry
 from ergon_core.core.application.evaluation.models import CriterionSpec
 from ergon_core.core.application.evaluation.mappers import build_evaluation_summary
 from ergon_core.core.application.evaluation.service import EvaluationServiceResult
-from ergon_core.core.views.runs.evaluation_mapping import build_dashboard_evaluation_dto
+from ergon_core.core.views.samples.evaluation_mapping import build_dashboard_evaluation_dto
 from pydantic import ValidationError
 
 
@@ -211,7 +211,7 @@ def test_dashboard_evaluation_dto_allows_nullable_feedback_and_input() -> None:
 
     dto = build_dashboard_evaluation_dto(
         evaluation_id=uuid4(),
-        run_id=uuid4(),
+        sample_id=uuid4(),
         task_id=uuid4(),
         total_score=1.0,
         created_at="2026-04-25T20:00:00Z",
@@ -234,7 +234,7 @@ def test_dashboard_evaluation_dto_exposes_required_rubric_metadata() -> None:
 
     dto = build_dashboard_evaluation_dto(
         evaluation_id=uuid4(),
-        run_id=uuid4(),
+        sample_id=uuid4(),
         task_id=uuid4(),
         total_score=1.0,
         created_at="2026-04-25T20:00:00Z",

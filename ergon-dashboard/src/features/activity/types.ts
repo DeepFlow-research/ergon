@@ -1,4 +1,4 @@
-import type { RunEventKind } from "@/lib/runEvents";
+import type { RunEventKind } from "@/lib/sampleEvents";
 
 export type ActivityKind =
   | "execution"

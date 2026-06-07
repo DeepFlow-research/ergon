@@ -325,7 +325,7 @@ async def test_main_persists_and_launches_minif2f_with_local_worker(monkeypatch,
     module = _load_example_module()
     observed: dict[str, object] = {}
     definition_id = UUID("11111111-1111-1111-1111-111111111111")
-    run_id = UUID("22222222-2222-2222-2222-222222222222")
+    sample_id = UUID("22222222-2222-2222-2222-222222222222")
 
     def fake_preflight(*, base_url: str) -> object:
         observed["preflight_base_url"] = base_url
@@ -360,7 +360,7 @@ async def test_main_persists_and_launches_minif2f_with_local_worker(monkeypatch,
 
     async def fake_launch_run(persisted_definition_id: UUID) -> FakeRunResult:
         observed["launched_definition_id"] = persisted_definition_id
-        return FakeRunResult(run_id)
+        return FakeRunResult(sample_id)
 
     monkeypatch.setattr(module, "preflight_llamacpp_and_e2b", fake_preflight)
     monkeypatch.setattr(module, "MiniF2FBenchmark", FakeBenchmark)
@@ -393,7 +393,7 @@ async def test_main_persists_and_launches_minif2f_with_local_worker(monkeypatch,
     }
     output = capsys.readouterr().out
     assert str(definition_id) in output
-    assert str(run_id) in output
+    assert str(sample_id) in output
     assert "uv run ergon run status 22222222-2222-2222-2222-222222222222" in output
     assert "http://localhost:3000/run/22222222-2222-2222-2222-222222222222" in output
 
@@ -406,7 +406,7 @@ async def test_main_resolves_base_model_starts_llamacpp_and_cleans_up(
     module = _load_example_module()
     observed: dict[str, object] = {}
     definition_id = UUID("33333333-3333-3333-3333-333333333333")
-    run_id = UUID("44444444-4444-4444-4444-444444444444")
+    sample_id = UUID("44444444-4444-4444-4444-444444444444")
     resolved_model = tmp_path / "model.gguf"
     resolved_model.write_text("fake model")
 
@@ -442,7 +442,7 @@ async def test_main_resolves_base_model_starts_llamacpp_and_cleans_up(
 
     async def fake_launch_run(persisted_definition_id: UUID) -> FakeRunResult:
         observed["launched_definition_id"] = persisted_definition_id
-        return FakeRunResult(run_id)
+        return FakeRunResult(sample_id)
 
     monkeypatch.setattr(module, "resolve_base_model", fake_resolve)
     monkeypatch.setattr(module, "start_llama_server", fake_start)

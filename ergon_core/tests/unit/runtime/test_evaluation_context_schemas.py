@@ -11,14 +11,14 @@ from ergon_core.core.jobs.task.evaluate.contract import TaskEvaluateRequest
 
 def test_task_evaluate_request_is_id_only_with_evaluator_index() -> None:
     request = TaskEvaluateRequest(
-        run_id=uuid4(),
+        sample_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
         evaluator_index=1,
     )
 
     assert set(request.model_dump(mode="json")) == {
-        "run_id",
+        "sample_id",
         "task_id",
         "execution_id",
         "evaluator_index",
@@ -28,7 +28,7 @@ def test_task_evaluate_request_is_id_only_with_evaluator_index() -> None:
 def test_task_evaluate_request_requires_evaluator_index() -> None:
     with pytest.raises(ValidationError, match="evaluator_index"):
         TaskEvaluateRequest(
-            run_id=uuid4(),
+            sample_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
         )

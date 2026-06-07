@@ -1,17 +1,17 @@
 from uuid import uuid4
 
 from ergon_core.core.persistence.telemetry.models import Thread, ThreadMessage
-from ergon_core.core.views.runs.snapshot import _build_communication_threads
+from ergon_core.core.views.samples.snapshot import _build_communication_threads
 
 
 def test_build_communication_threads_populates_summary_and_task_anchors() -> None:
-    run_id = uuid4()
+    sample_id = uuid4()
     thread_id = uuid4()
     execution_id = uuid4()
     task_id = uuid4()
     thread = Thread(
         id=thread_id,
-        run_id=run_id,
+        sample_id=sample_id,
         topic="smoke-completion",
         summary="Leaf workers report completion artifacts and probe exit status.",
         agent_a_id="leaf-l_1",
@@ -19,7 +19,7 @@ def test_build_communication_threads_populates_summary_and_task_anchors() -> Non
     )
     message = ThreadMessage(
         thread_id=thread_id,
-        run_id=run_id,
+        sample_id=sample_id,
         task_execution_id=execution_id,
         from_agent_id="leaf-l_1",
         to_agent_id="parent",
@@ -42,13 +42,13 @@ def test_build_communication_threads_populates_summary_and_task_anchors() -> Non
 
 
 def test_build_communication_threads_keeps_run_level_thread_when_messages_span_tasks() -> None:
-    run_id = uuid4()
+    sample_id = uuid4()
     thread_id = uuid4()
     execution_a = uuid4()
     execution_b = uuid4()
     thread = Thread(
         id=thread_id,
-        run_id=run_id,
+        sample_id=sample_id,
         topic="smoke-completion",
         agent_a_id="leaf-l_1",
         agent_b_id="parent",
@@ -56,7 +56,7 @@ def test_build_communication_threads_keeps_run_level_thread_when_messages_span_t
     messages = [
         ThreadMessage(
             thread_id=thread_id,
-            run_id=run_id,
+            sample_id=sample_id,
             task_execution_id=execution_a,
             from_agent_id="leaf-l_1",
             to_agent_id="parent",
@@ -65,7 +65,7 @@ def test_build_communication_threads_keeps_run_level_thread_when_messages_span_t
         ),
         ThreadMessage(
             thread_id=thread_id,
-            run_id=run_id,
+            sample_id=sample_id,
             task_execution_id=execution_b,
             from_agent_id="leaf-l_2",
             to_agent_id="parent",

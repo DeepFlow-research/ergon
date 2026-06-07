@@ -20,14 +20,14 @@ def test_artifact_health_reports_tool_budget_signals(tmp_path: Path) -> None:
     db_dir = tmp_path / "db"
     db_dir.mkdir()
     for name in [
-        "run_task_executions.jsonl",
-        "run_task_evaluations.jsonl",
-        "run_resources.jsonl",
-        "run_graph_nodes.jsonl",
+        "sample_task_attempts.jsonl",
+        "sample_task_evaluations.jsonl",
+        "sample_resources.jsonl",
+        "sample_graph_nodes.jsonl",
     ]:
         (db_dir / name).write_text("")
     _write_jsonl(
-        db_dir / "run_context_events.jsonl",
+        db_dir / "sample_context_events.jsonl",
         [
             {
                 "event_type": "tool_call",

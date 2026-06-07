@@ -4,7 +4,7 @@ Frozen Pydantic models. Callers never receive raw SQLModel rows.
 
 UUID fields use NewType aliases (RunId, NodeId, etc.) so that type
 checkers catch cross-field swaps — e.g. passing a task id where a
-run_id is expected. The aliases are erased at runtime (zero
+sample_id is expected. The aliases are erased at runtime (zero
 serialization cost).
 """
 
@@ -45,7 +45,7 @@ class GraphNodeDto(BaseModel):
     model_config = {"frozen": True}
 
     task_id: NodeId
-    run_id: RunId
+    sample_id: RunId
     instance_key: str
     task_slug: str
     description: str
@@ -78,7 +78,7 @@ class GraphEdgeDto(BaseModel):
     model_config = {"frozen": True}
 
     id: EdgeId
-    run_id: RunId
+    sample_id: RunId
     definition_dependency_id: DefinitionId | None
     source_task_id: NodeId
     target_task_id: NodeId
@@ -94,7 +94,7 @@ class GraphAnnotationDto(BaseModel):
     model_config = {"frozen": True}
 
     id: UUID = Field(description="Identifier of the annotation row itself.")
-    run_id: RunId
+    sample_id: RunId
     target_type: GraphTargetType
     target_id: UUID = Field(
         description=(
@@ -113,7 +113,7 @@ class GraphMutationRecordDto(BaseModel):
     model_config = {"frozen": True}
 
     id: UUID = Field(description="Identifier of the mutation row itself, not a graph target id.")
-    run_id: RunId
+    sample_id: RunId
     sequence: int
     mutation_type: MutationType
     target_type: GraphTargetType
@@ -135,7 +135,7 @@ class WorkflowGraphDto(BaseModel):
 
     model_config = {"frozen": True}
 
-    run_id: RunId
+    sample_id: RunId
     nodes: list[GraphNodeDto] = Field(default_factory=list)
     edges: list[GraphEdgeDto] = Field(default_factory=list)
 
@@ -255,8 +255,8 @@ GraphMutationValue = Annotated[
 ]
 
 
-class RunGraphNodeView(BaseModel):
-    """Typed view of one ``run_graph_nodes`` row + its inflated Task.
+class SampleGraphNodeView(BaseModel):
+    """Typed view of one ``sample_graph_nodes`` row + its inflated Task.
 
     The job body receives this view from ``RuntimeGraphRepository.node``
     instead of raw JSON. The Task is already inflated via
@@ -269,7 +269,7 @@ class RunGraphNodeView(BaseModel):
 
     model_config = {"frozen": True, "arbitrary_types_allowed": True}
 
-    run_id: RunId
+    sample_id: RunId
     task_id: UUID
     parent_task_id: NodeId | None
     status: str

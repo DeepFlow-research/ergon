@@ -4,31 +4,31 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from ergon_core.core.persistence.shared.enums import RunResourceKind
+from ergon_core.core.persistence.shared.enums import SampleResourceKind
 from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
-    from ergon_core.core.persistence.telemetry.models import RunResource as _RunResourceRow
+    from ergon_core.core.persistence.telemetry.models import SampleResource as _SampleResourceRow
 
 
-class RunResourceView(BaseModel):
-    """Read-only DTO for a ``run_resources`` row.
+class SampleResourceView(BaseModel):
+    """Read-only DTO for a ``sample_resources`` row.
 
-    Construct via ``RunResourceView.from_row(orm_row)``.
+    Construct via ``SampleResourceView.from_row(orm_row)``.
     """
 
     model_config = ConfigDict(frozen=True)
 
-    id: UUID = Field(description="Primary key of the run_resources row.")
-    run_id: UUID = Field(description="The run this resource was produced in.")
+    id: UUID = Field(description="Primary key of the sample_resources row.")
+    sample_id: UUID = Field(description="The run this resource was produced in.")
     task_execution_id: UUID | None = Field(
         description=(
             "The task execution that produced the resource, or ``None`` for "
             "run-scoped resources (e.g. aggregate reports)."
         ),
     )
-    kind: RunResourceKind = Field(
+    kind: SampleResourceKind = Field(
         description="Canonical category (report, worker_output, trace, etc.).",
     )
     name: str = Field(
@@ -62,13 +62,13 @@ class RunResourceView(BaseModel):
     )
 
     @classmethod
-    def from_row(cls, row: "_RunResourceRow") -> "RunResourceView":
-        """Map an ORM ``RunResource`` row to a frozen DTO."""
+    def from_row(cls, row: "_SampleResourceRow") -> "SampleResourceView":
+        """Map an ORM ``SampleResource`` row to a frozen DTO."""
         return cls(
             id=row.id,
-            run_id=row.run_id,
+            sample_id=row.sample_id,
             task_execution_id=row.task_execution_id,
-            kind=RunResourceKind(row.kind),
+            kind=SampleResourceKind(row.kind),
             name=row.name,
             mime_type=row.mime_type,
             file_path=row.file_path,

@@ -9,7 +9,7 @@ import { Server as HttpServer } from "http";
 import { Server as SocketServer, Socket } from "socket.io";
 import { config } from "../config";
 import { store } from "../state/store";
-import { serializeRunState } from "../runState";
+import { serializeRunState } from "../sampleState";
 import {
   ContextEventState,
   ServerToClientEvents,
@@ -79,7 +79,7 @@ export function initSocketServer(httpServer: HttpServer): TypedServer {
       const runs = store.getAllRuns();
       console.log(`[Socket.io] Sending ${runs.length} runs to client`);
       socket.emit("sync:runs", runs.map(r => ({
-        runId: r.id,
+        sampleId: r.id,
         name: r.name,
         status: r.status,
         startedAt: r.startedAt,
@@ -91,33 +91,33 @@ export function initSocketServer(httpServer: HttpServer): TypedServer {
     });
 
     // Request full state for a specific run (for run detail page)
-    socket.on("request:run", (runId: string) => {
-      console.log(`[Socket.io] Client ${socket.id} requested full state for run ${runId}`);
+    socket.on("request:run", (sampleId: string) => {
+      console.log(`[Socket.io] Client ${socket.id} requested full state for run ${sampleId}`);
       
       // Debug: log all runs in store
       const allRuns = store.getAllRuns();
       console.log(`[Socket.io] Store contains ${allRuns.length} runs:`, allRuns.map(r => r.id));
       
-      const run = store.getRun(runId);
+      const run = store.getRun(sampleId);
       if (run) {
         console.log(`[Socket.io] Found run! Sending full state (${run.tasks.size} tasks, status: ${run.status})`);
         socket.emit("sync:run", serializeRunState(run));
       } else {
-        console.log(`[Socket.io] Run ${runId} NOT FOUND in store. Available runs: ${allRuns.map(r => r.id.substring(0, 8)).join(', ') || 'none'}`);
+        console.log(`[Socket.io] Run ${sampleId} NOT FOUND in store. Available runs: ${allRuns.map(r => r.id.substring(0, 8)).join(', ') || 'none'}`);
         socket.emit("sync:run", null);
       }
     });
 
     // Client subscribes to a run's updates
-    socket.on("subscribe", (runId: string) => {
-      const room = `run:${runId}`;
+    socket.on("subscribe", (sampleId: string) => {
+      const room = `run:${sampleId}`;
       socket.join(room);
       console.log(`[Socket.io] ${socket.id} subscribed to ${room}`);
     });
 
     // Client unsubscribes from a run's updates
-    socket.on("unsubscribe", (runId: string) => {
-      const room = `run:${runId}`;
+    socket.on("unsubscribe", (sampleId: string) => {
+      const room = `run:${sampleId}`;
       socket.leave(room);
       console.log(`[Socket.io] ${socket.id} unsubscribed from ${room}`);
     });
@@ -146,13 +146,13 @@ export function getSocketServer(): TypedServer | null {
 /**
  * Broadcast a new run started to all connected clients.
  */
-export function broadcastRunStarted(runId: string, name: string): void {
+export function broadcastRunStarted(sampleId: string, name: string): void {
   const io = getIO();
-  console.log(`[Socket.io] broadcastRunStarted called - io is ${io ? 'initialized' : 'NULL'}, runId: ${runId}, name: ${name}`);
+  console.log(`[Socket.io] broadcastRunStarted called - io is ${io ? 'initialized' : 'NULL'}, sampleId: ${sampleId}, name: ${name}`);
   if (io) {
     const socketsCount = io.sockets.sockets.size;
     console.log(`[Socket.io] Broadcasting run:started to ${socketsCount} connected clients`);
-    io.emit("run:started", { runId, name });
+    io.emit("run:started", { sampleId, name });
   } else {
     console.warn("[Socket.io] WARNING: Cannot broadcast run:started - io is null! Check that initSocketServer was called.");
   }
@@ -162,7 +162,7 @@ export function broadcastRunStarted(runId: string, name: string): void {
  * Broadcast run completed to subscribers of that run.
  */
 export function broadcastRunCompleted(
-  runId: string,
+  sampleId: string,
   status: "completed" | "failed",
   completedAt: string,
   durationSeconds: number,
@@ -172,7 +172,7 @@ export function broadcastRunCompleted(
   const io = getIO();
   // Broadcast to all clients (not just room subscribers) so the run list updates
   io?.emit("run:completed", {
-    runId,
+    sampleId,
     status,
     completedAt,
     durationSeconds,
@@ -185,7 +185,7 @@ export function broadcastRunCompleted(
  * Broadcast task status change to subscribers of that run.
  */
 export function broadcastTaskStatus(
-  runId: string,
+  sampleId: string,
   taskId: string,
   status: TaskStatus,
   timestamp: string,
@@ -193,8 +193,8 @@ export function broadcastTaskStatus(
   assignedWorkerSlug: string | null
 ): void {
   const io = getIO();
-  io?.to(`run:${runId}`).emit("task:status", {
-    runId,
+  io?.to(`run:${sampleId}`).emit("task:status", {
+    sampleId,
     taskId,
     status,
     timestamp,
@@ -207,76 +207,76 @@ export function broadcastTaskStatus(
  * Broadcast new resource to subscribers of that run.
  */
 export function broadcastResourceNew(
-  runId: string,
+  sampleId: string,
   resource: ResourceState
 ): void {
   const io = getIO();
-  io?.to(`run:${runId}`).emit("resource:new", { runId, resource });
+  io?.to(`run:${sampleId}`).emit("resource:new", { sampleId, resource });
 }
 
 /**
  * Broadcast sandbox created to subscribers of that run.
  */
 export function broadcastSandboxCreated(
-  runId: string,
+  sampleId: string,
   sandbox: SandboxState
 ): void {
   const io = getIO();
-  io?.to(`run:${runId}`).emit("sandbox:created", { runId, sandbox });
+  io?.to(`run:${sampleId}`).emit("sandbox:created", { sampleId, sandbox });
 }
 
 /**
  * Broadcast sandbox command to subscribers of that run.
  */
 export function broadcastSandboxCommand(
-  runId: string,
+  sampleId: string,
   taskId: string,
   command: SandboxCommandState
 ): void {
   const io = getIO();
-  io?.to(`run:${runId}`).emit("sandbox:command", { runId, taskId, command });
+  io?.to(`run:${sampleId}`).emit("sandbox:command", { sampleId, taskId, command });
 }
 
 /**
  * Broadcast sandbox closed to subscribers of that run.
  */
 export function broadcastSandboxClosed(
-  runId: string,
+  sampleId: string,
   taskId: string,
   reason: string,
   timestamp: string,
 ): void {
   const io = getIO();
-  io?.to(`run:${runId}`).emit("sandbox:closed", { runId, taskId, reason, timestamp });
+  io?.to(`run:${sampleId}`).emit("sandbox:closed", { sampleId, taskId, reason, timestamp });
 }
 
 export function broadcastThreadMessage(
   data: DashboardThreadMessageCreatedData
 ): void {
   const io = getIO();
-  io?.to(`run:${data.run_id}`).emit("thread:message", data);
+  io?.to(`run:${data.sample_id}`).emit("thread:message", data);
 }
 
 export function broadcastTaskEvaluation(
   data: DashboardTaskEvaluationUpdatedData
 ): void {
   const io = getIO();
-  io?.to(`run:${data.run_id}`).emit("task:evaluation", data);
+  io?.to(`run:${data.sample_id}`).emit("task:evaluation", data);
 }
 
 export function broadcastGraphMutation(
-  runId: string,
+  sampleId: string,
   mutation: DashboardGraphMutationData,
 ): void {
   const io = getIO();
-  io?.to(`run:${runId}`).emit("graph:mutation", { runId, mutation });
+  io?.to(`run:${sampleId}`).emit("graph:mutation", { sampleId, mutation });
 }
 
 export function broadcastContextEvent(
-  runId: string,
+  sampleId: string,
   taskId: string,
   event: ContextEventState,
 ): void {
   const io = getIO();
-  io?.to(`run:${runId}`).emit("context:event", { runId, taskId, event });
+  io?.to(`run:${sampleId}`).emit("context:event", { sampleId, taskId, event });
 }

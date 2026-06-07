@@ -174,7 +174,7 @@ def _resources_from_record(record: Record, *, task_prompt: str) -> list[ParsedRe
 
 
 def _source_run_id(record: Record, *, instance_id: str) -> str:
-    explicit = record.get("source_run_id") or record.get("run_id") or record.get("id")
+    explicit = record.get("source_run_id") or record.get("sample_id") or record.get("id")
     if explicit is not None and explicit != "":
         return str(explicit)
     return f"swe-lancer:{instance_id}"

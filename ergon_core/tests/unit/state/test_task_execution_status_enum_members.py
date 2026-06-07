@@ -25,7 +25,7 @@ migration.
 Follow-up
 ---------
 A real-database equivalent — round-tripping each enum value through a
-throwaway ``run_task_executions`` row against a real Postgres fixture —
+throwaway ``sample_task_attempts`` row against a real Postgres fixture —
 is a follow-up. The repo's existing state/unit tests run on SQLite, and
 SQLite renders ``sa.Enum`` as VARCHAR so it cannot catch this class of
 drift.

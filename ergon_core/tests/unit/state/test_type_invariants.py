@@ -11,18 +11,18 @@ from uuid import uuid4
 
 import pytest
 from ergon_core.core.persistence.graph.models import (
-    RunGraphAnnotation,
-    RunGraphMutation,
+    SampleGraphAnnotation,
+    SampleGraphMutation,
 )
 from ergon_core.core.persistence.shared.enums import (
-    RunStatus,
+    SampleStatus,
     TaskExecutionStatus,
 )
 from ergon_core.core.persistence.telemetry.models import (
     RolloutBatch,
-    RunRecord,
-    RunResource,
-    RunTaskExecution,
+    SampleRecord,
+    SampleResource,
+    SampleTaskAttempt,
 )
 from pydantic import ValidationError
 
@@ -35,19 +35,19 @@ from pydantic import ValidationError
     "build_fn,field,expected",
     [
         (
-            lambda: RunRecord(
+            lambda: SampleRecord(
                 definition_id=uuid4(),
                 benchmark_type="ci-test",
                 instance_key="sample-1",
                 worker_team_json={"primary": "test-worker"},
-                status=RunStatus.PENDING,
+                status=SampleStatus.PENDING,
             ),
             "status",
-            RunStatus.PENDING,
+            SampleStatus.PENDING,
         ),
         (
-            lambda: RunTaskExecution(
-                run_id=uuid4(),
+            lambda: SampleTaskAttempt(
+                sample_id=uuid4(),
                 task_id=uuid4(),
                 node_id=uuid4(),
                 status=TaskExecutionStatus.RUNNING,
@@ -56,8 +56,8 @@ from pydantic import ValidationError
             TaskExecutionStatus.RUNNING,
         ),
         (
-            lambda: RunResource(
-                run_id=uuid4(),
+            lambda: SampleResource(
+                sample_id=uuid4(),
                 kind="output",
                 name="test.txt",
                 mime_type="text/plain",
@@ -68,8 +68,8 @@ from pydantic import ValidationError
             "output",
         ),
         (
-            lambda: RunGraphMutation(
-                run_id=uuid4(),
+            lambda: SampleGraphMutation(
+                sample_id=uuid4(),
                 sequence=0,
                 mutation_type="node.added",
                 target_type="node",
@@ -81,8 +81,8 @@ from pydantic import ValidationError
             "node.added",
         ),
         (
-            lambda: RunGraphMutation(
-                run_id=uuid4(),
+            lambda: SampleGraphMutation(
+                sample_id=uuid4(),
                 sequence=0,
                 mutation_type="edge.added",
                 target_type="edge",
@@ -94,8 +94,8 @@ from pydantic import ValidationError
             "edge",
         ),
         (
-            lambda: RunGraphAnnotation(
-                run_id=uuid4(),
+            lambda: SampleGraphAnnotation(
+                sample_id=uuid4(),
                 target_type="node",
                 target_id=uuid4(),
                 namespace="payload",
@@ -116,9 +116,9 @@ def test_field_accepts_valid_value(build_fn, field, expected):
 
 def test_task_execution_rejects_missing_static_or_dynamic_identity():
     with pytest.raises(ValidationError):
-        RunTaskExecution.model_validate(
+        SampleTaskAttempt.model_validate(
             {
-                "run_id": str(uuid4()),
+                "sample_id": str(uuid4()),
                 "status": TaskExecutionStatus.RUNNING,
             }
         )
@@ -127,7 +127,7 @@ def test_task_execution_rejects_missing_static_or_dynamic_identity():
 def test_run_record_uses_definition_identity():
     definition_id = uuid4()
 
-    run = RunRecord.model_validate(
+    run = SampleRecord.model_validate(
         {
             "definition_id": str(definition_id),
             "benchmark_type": "ci-benchmark",
@@ -147,8 +147,8 @@ def test_run_record_uses_definition_identity():
 
 
 def test_enum_value_matches_string():
-    assert RunStatus.PENDING == "pending"
-    assert RunStatus.COMPLETED == "completed"
+    assert SampleStatus.PENDING == "pending"
+    assert SampleStatus.COMPLETED == "completed"
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +164,7 @@ def test_enum_value_matches_string():
     "cls,base_data,invalid_field,invalid_value",
     [
         (
-            RunRecord,
+            SampleRecord,
             {
                 "definition_id": str(uuid4()),
                 "benchmark_type": "ci-test",
@@ -176,15 +176,15 @@ def test_enum_value_matches_string():
             "not-a-status",
         ),
         (
-            RunTaskExecution,
-            {"run_id": str(uuid4()), "status": "pending"},
+            SampleTaskAttempt,
+            {"sample_id": str(uuid4()), "status": "pending"},
             "status",
             "garbage",
         ),
         (
-            RunResource,
+            SampleResource,
             {
-                "run_id": str(uuid4()),
+                "sample_id": str(uuid4()),
                 "name": "test",
                 "mime_type": "text/plain",
                 "file_path": "/x",

@@ -197,7 +197,7 @@ def _tool_calls(record: Record) -> object | None:
 def _source_run_id(record: Record, *, fallback_id: str) -> str:
     explicit = (
         record.get("source_run_id")
-        or record.get("run_id")
+        or record.get("sample_id")
         or record.get("id")
         or record.get("question_id")
     )

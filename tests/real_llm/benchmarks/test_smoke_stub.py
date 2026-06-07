@@ -4,7 +4,7 @@ actually spending tokens. Uses the researchrubrics smoke fixture + stub model.
 Validates:
   - docker stack up (or --assume-stack-up), stack fixture did not skip
   - `ergon benchmark run` CLI path works
-  - /api/__danger__/test-harness/read/run/{id}/state returns a terminal state
+  - /api/__danger__/test-harness/read/samples/{id}/state returns a terminal state
   - Postgres row exists with the right relationships
   - Playwright can find the run grouping in the dashboard
 """
@@ -15,25 +15,25 @@ from datetime import datetime, timezone
 
 import pytest
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from sqlmodel import select
 
 pytestmark = [pytest.mark.real_llm, pytest.mark.asyncio]
 
 
 def _latest_run_id_since(since: datetime) -> str:
-    """Query the most recent RunRecord created at or after `since`."""
+    """Query the most recent SampleRecord created at or after `since`."""
     ensure_db()
     with get_session() as session:
         stmt = (
-            select(RunRecord)
-            .where(RunRecord.created_at >= since)
-            .order_by(RunRecord.created_at.desc())
+            select(SampleRecord)
+            .where(SampleRecord.created_at >= since)
+            .order_by(SampleRecord.created_at.desc())
             .limit(1)
         )
         row = session.exec(stmt).first()
         if row is None:
-            raise RuntimeError("no RunRecord found after canary CLI invocation")
+            raise RuntimeError("no SampleRecord found after canary CLI invocation")
         return str(row.id)
 
 
@@ -78,10 +78,10 @@ async def test_harness_canary_smoke_stub(
         f"CLI failed (rc={result.returncode}):\nstdout: {result.stdout}\nstderr: {result.stderr}"
     )
 
-    run_id = _latest_run_id_since(before)
+    sample_id = _latest_run_id_since(before)
 
     # Poll the harness until terminal.
-    state = harness_client.wait_for_terminal(run_id, timeout_s=120)
+    state = harness_client.wait_for_terminal(sample_id, timeout_s=120)
     assert state["status"] == "completed", f"run did not complete: {state}"
     assert len(state.get("graph_nodes", [])) >= 1
 

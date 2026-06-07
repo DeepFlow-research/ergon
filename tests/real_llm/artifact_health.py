@@ -133,11 +133,11 @@ def analyze_rollout_artifacts(  # noqa: C901
     """Analyze a rollout directory without importing DB/runtime models."""
     manifest = _read_json(out_dir / "manifest.json")
     db_dir = out_dir / "db"
-    executions = _read_jsonl(db_dir / "run_task_executions.jsonl")
-    evaluations = _read_jsonl(db_dir / "run_task_evaluations.jsonl")
-    resources = _read_jsonl(db_dir / "run_resources.jsonl")
-    graph_nodes = _read_jsonl(db_dir / "run_graph_nodes.jsonl")
-    context_events = _read_jsonl(db_dir / "run_context_events.jsonl")
+    executions = _read_jsonl(db_dir / "sample_task_attempts.jsonl")
+    evaluations = _read_jsonl(db_dir / "sample_task_evaluations.jsonl")
+    resources = _read_jsonl(db_dir / "sample_resources.jsonl")
+    graph_nodes = _read_jsonl(db_dir / "sample_graph_nodes.jsonl")
+    context_events = _read_jsonl(db_dir / "sample_context_events.jsonl")
 
     task_count = len(executions)
     evaluation_count = len(evaluations)

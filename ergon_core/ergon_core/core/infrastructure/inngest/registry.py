@@ -14,7 +14,7 @@ from ergon_core.core.jobs.task.cleanup_cancelled.inngest import (
     cleanup_cancelled_task_fn,
 )
 from ergon_core.core.jobs.resources.persist_outputs.inngest import persist_outputs_fn
-from ergon_core.core.jobs.run.cleanup.inngest import run_cleanup_fn
+from ergon_core.core.jobs.run.cleanup.inngest import sample_cleanup_fn
 from ergon_core.core.jobs.sandbox.cleanup.inngest import (
     sandbox_cleanup_on_completed_fn,
     sandbox_cleanup_on_failed_fn,
@@ -45,7 +45,7 @@ ALL_FUNCTIONS = [
     block_descendants_on_failed_fn,
     cancel_orphans_on_cancelled_fn,
     cleanup_cancelled_task_fn,
-    run_cleanup_fn,
+    sample_cleanup_fn,
     sandbox_cleanup_on_completed_fn,
     sandbox_cleanup_on_failed_fn,
 ]

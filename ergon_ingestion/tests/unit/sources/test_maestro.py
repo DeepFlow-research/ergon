@@ -71,7 +71,7 @@ def test_maestro_importer_reads_jsonl_fixture_grouped_by_run(tmp_path: Path) -> 
 def _maestro_rows() -> list[dict]:
     return [
         {
-            "run_id": "run-alpha",
+            "sample_id": "run-alpha",
             "trace_id": "trace-alpha",
             "span_id": "alpha-root",
             "parent_span_id": None,
@@ -87,7 +87,7 @@ def _maestro_rows() -> list[dict]:
             },
         },
         {
-            "run_id": "run-alpha",
+            "sample_id": "run-alpha",
             "trace_id": "trace-alpha",
             "span_id": "alpha-worker",
             "parent_span_id": "alpha-root",
@@ -99,7 +99,7 @@ def _maestro_rows() -> list[dict]:
             "attributes": {"coordination.round": 1},
         },
         {
-            "run_id": "run-alpha",
+            "sample_id": "run-alpha",
             "trace_id": "trace-alpha",
             "span_id": "alpha-reviewer",
             "parent_span_id": "alpha-root",
@@ -111,7 +111,7 @@ def _maestro_rows() -> list[dict]:
             "attributes": {"coordination.round": 1},
         },
         {
-            "run_id": "run-beta",
+            "sample_id": "run-beta",
             "trace_id": "trace-beta",
             "span_id": "beta-root",
             "parent_span_id": None,
@@ -125,7 +125,7 @@ def _maestro_rows() -> list[dict]:
             },
         },
         {
-            "run_id": "run-beta",
+            "sample_id": "run-beta",
             "trace_id": "trace-beta",
             "span_id": "beta-worker",
             "parent_span_id": "beta-root",

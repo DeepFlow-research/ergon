@@ -5,7 +5,7 @@ This test is a **trigger**, not an assertion suite.  It runs a real
 (Sonnet 4.6 via OpenRouter by default) and dumps an exhaustive
 rollout artifact — every persistence table, dashboard screenshots,
 and a stitched ``report.md`` — to
-``tests/real_llm/.rollouts/<timestamp>-<run_id>/``.
+``tests/real_llm/.rollouts/<timestamp>-<sample_id>/``.
 
 A reviewing agent (or human) then opens ``report.md`` and reasons
 about whether the agent succeeded, and what to iterate on in the
@@ -32,9 +32,9 @@ from uuid import UUID
 import pytest
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from ergon_core.core.persistence.telemetry.models import (
-    RunRecord,
-    RunResource,
-    RunTaskEvaluation,
+    SampleRecord,
+    SampleResource,
+    SampleTaskEvaluation,
 )
 from ergon_core.core.shared.settings import settings
 from sqlmodel import select
@@ -75,36 +75,42 @@ def _require_keys() -> None:
 
 
 def _latest_run_id_since(since: datetime) -> UUID:
-    """Return the most recent RunRecord.id created at or after ``since``."""
+    """Return the most recent SampleRecord.id created at or after ``since``."""
     ensure_db()
     with get_session() as session:
         stmt = (
-            select(RunRecord)
-            .where(RunRecord.created_at >= since)
-            .order_by(RunRecord.created_at.desc())
+            select(SampleRecord)
+            .where(SampleRecord.created_at >= since)
+            .order_by(SampleRecord.created_at.desc())
             .limit(1)
         )
         row = session.exec(stmt).first()
         if row is None:
             raise RuntimeError(
-                "no RunRecord created since the harness started — "
+                "no SampleRecord created since the harness started — "
                 "did the CLI subprocess actually dispatch a run?"
             )
         return row.id
 
 
-def _wait_for_post_terminal_artifacts(run_id: UUID) -> None:
+def _wait_for_post_terminal_artifacts(sample_id: UUID) -> None:
     """Let async resource/evaluation rows land before dumping artifacts."""
     deadline = time.monotonic() + _POST_TERMINAL_ARTIFACT_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         with get_session() as session:
             resources = len(
-                list(session.exec(select(RunResource).where(RunResource.run_id == run_id)).all())
+                list(
+                    session.exec(
+                        select(SampleResource).where(SampleResource.sample_id == sample_id)
+                    ).all()
+                )
             )
             evaluations = len(
                 list(
                     session.exec(
-                        select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)
+                        select(SampleTaskEvaluation).where(
+                            SampleTaskEvaluation.sample_id == sample_id
+                        )
                     ).all()
                 )
             )
@@ -115,7 +121,7 @@ def _wait_for_post_terminal_artifacts(run_id: UUID) -> None:
 
 async def test_researchrubrics_rollout(
     real_llm_stack: None,  # session fixture: stack up
-    harness_client,  # poll /api/__danger__/test-harness/read/run/{id}/state
+    harness_client,  # poll /api/__danger__/test-harness/read/samples/{id}/state
     playwright_context,  # dashboard screenshots
     openrouter_budget: OpenRouterBudget | None,
 ) -> None:
@@ -160,22 +166,22 @@ async def test_researchrubrics_rollout(
         check=False,
     )
 
-    run_id = _latest_run_id_since(started_at)
+    sample_id = _latest_run_id_since(started_at)
     terminal_state = harness_client.wait_for_terminal(
-        run_id,
+        sample_id,
         timeout_s=_HARNESS_POLL_TIMEOUT_SECONDS,
     )
-    _wait_for_post_terminal_artifacts(run_id)
+    _wait_for_post_terminal_artifacts(sample_id)
 
-    out_dir = rollout_dir(run_id)
+    out_dir = rollout_dir(sample_id)
 
     # Persist CLI stdout/stderr up front so a crashed DB dump still
     # leaves breadcrumbs for the reviewing agent.
     (out_dir / "cli_stdout.txt").write_text(cli_proc.stdout or "")
     (out_dir / "cli_stderr.txt").write_text(cli_proc.stderr or "")
 
-    table_counts = dump_rollout(run_id, out_dir)
-    screenshots = await capture_dashboard(run_id, playwright_context, out_dir)
+    table_counts = dump_rollout(sample_id, out_dir)
+    screenshots = await capture_dashboard(sample_id, playwright_context, out_dir)
 
     finished_at = datetime.now(timezone.utc)
     budget_after = (
@@ -184,7 +190,7 @@ async def test_researchrubrics_rollout(
 
     manifest_path = write_manifest(
         out_dir,
-        run_id=run_id,
+        sample_id=sample_id,
         benchmark=benchmark,
         worker=worker,
         evaluator=evaluator,
@@ -215,6 +221,6 @@ async def test_researchrubrics_rollout(
     # The single assertion. ``failed`` and ``cancelled`` are still
     # successful rollouts — the artifact is the product.
     assert terminal_state["status"] in {"completed", "failed", "cancelled"}, (
-        f"run {run_id} did not reach a terminal status within "
+        f"run {sample_id} did not reach a terminal status within "
         f"{_HARNESS_POLL_TIMEOUT_SECONDS}s — see {out_dir}"
     )

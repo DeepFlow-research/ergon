@@ -26,7 +26,7 @@ from uuid import UUID
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
 from ergon_core.api.worker import WorkerOutput
-from ergon_core.core.persistence.graph.models import RunGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.infrastructure.sandbox.instrumentation import InstrumentedSandbox
 from ergon_core.core.application.communication.models import CreateMessageRequest
@@ -91,7 +91,7 @@ class BaseSmokeLeafWorker(Worker):
         sandbox = InstrumentedSandbox(
             raw_sandbox,
             SmokeSandboxManager._event_sink,
-            context.run_id,
+            context.sample_id,
             context.task_id or context.execution_id,
             settings.otel_stdout_stderr_max_length,
         )
@@ -133,7 +133,7 @@ class BaseSmokeLeafWorker(Worker):
 
         - Thread topic: ``"smoke-completion"``
         - ``from_agent_id``: ``f"leaf-{task_slug}"`` — looked up from
-          ``RunGraphNode.task_slug`` by ``context.task_id``
+          ``SampleGraphNode.task_slug`` by ``context.task_id``
         - ``to_agent_id``: ``"parent"``
         - 9 messages per happy run, sequence_num 1..9 per-thread-monotonic
         - 8 messages per sad run (l_2 suppresses this call; l_3 still runs)
@@ -141,7 +141,7 @@ class BaseSmokeLeafWorker(Worker):
         task_slug = self._lookup_task_slug(context.task_id)
         await communication_service.save_message(
             CreateMessageRequest(
-                run_id=context.run_id,
+                sample_id=context.sample_id,
                 task_execution_id=context.execution_id,
                 from_agent_id=f"leaf-{task_slug}",
                 to_agent_id="parent",
@@ -154,7 +154,7 @@ class BaseSmokeLeafWorker(Worker):
 
     @staticmethod
     def _lookup_task_slug(task_id: UUID | None) -> str:
-        """Resolve the leaf's ``task_slug`` from its ``RunGraphNode``.
+        """Resolve the leaf's ``task_slug`` from its ``SampleGraphNode``.
 
         ``WorkerContext`` exposes ``task_id`` but not ``task_slug``; the
         leaf's message needs the slug so observers can identify which
@@ -165,5 +165,7 @@ class BaseSmokeLeafWorker(Worker):
         if task_id is None:
             return "unknown"
         with get_session() as session:
-            node = session.exec(select(RunGraphNode).where(RunGraphNode.task_id == task_id)).first()
+            node = session.exec(
+                select(SampleGraphNode).where(SampleGraphNode.task_id == task_id)
+            ).first()
         return node.task_slug if node is not None else f"node-{task_id.hex[:8]}"

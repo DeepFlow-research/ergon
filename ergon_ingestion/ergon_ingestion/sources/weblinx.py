@@ -206,7 +206,7 @@ def _external_refs(record: Record, actions: list[Record]) -> list[Record]:
 
 
 def _source_run_id(record: Record, *, fallback_id: str) -> str:
-    value = record.get("demo_id") or record.get("source_run_id") or record.get("run_id")
+    value = record.get("demo_id") or record.get("source_run_id") or record.get("sample_id")
     return fallback_id if value is None else str(value)
 
 

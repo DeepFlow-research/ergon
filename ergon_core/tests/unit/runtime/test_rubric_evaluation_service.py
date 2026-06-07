@@ -68,7 +68,7 @@ async def test_rubric_service_uses_criterion_max_score_not_signed_weight() -> No
     )
     result = await service.evaluate(
         context=CriterionContext(
-            run_id=uuid4(),
+            sample_id=uuid4(),
             task_id=task.task_id,
             execution_id=uuid4(),
             task=task,
@@ -125,7 +125,7 @@ async def test_evaluator_dependencies_are_validated_before_criteria_resolution()
     with pytest.raises(DependencyError, match="definitely_missing_ergon_eval_dep_17"):
         await service.evaluate(
             context=CriterionContext(
-                run_id=uuid4(),
+                sample_id=uuid4(),
                 task_id=task.task_id,
                 execution_id=uuid4(),
                 task=task,

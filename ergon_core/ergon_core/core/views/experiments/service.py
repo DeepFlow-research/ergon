@@ -12,15 +12,15 @@ from ergon_core.core.views.experiments.models import (
     ExperimentSummaryDto,
     ExperimentTagDefinitionDto,
 )
-from ergon_core.core.persistence.context.models import RunContextEvent
+from ergon_core.core.persistence.context.models import SampleContextEvent
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
 )
-from ergon_core.core.persistence.graph.models import RunGraphNode
+from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.views.runs.metrics import aggregate_run_metrics
+from ergon_core.core.persistence.telemetry.models import SampleRecord
+from ergon_core.core.views.samples.metrics import aggregate_run_metrics
 from sqlmodel import Session, col, select
 
 
@@ -60,7 +60,7 @@ class ExperimentReadService:
         with get_session() as session:
             tags = {
                 tag
-                for tag in session.exec(select(RunRecord.experiment)).all()
+                for tag in session.exec(select(SampleRecord.experiment)).all()
                 if isinstance(tag, str) and tag
             }
         return sorted(tags)
@@ -69,12 +69,12 @@ class ExperimentReadService:
         with get_session() as session:
             runs = list(
                 session.exec(
-                    select(RunRecord)
-                    .where(RunRecord.experiment == tag)
-                    .order_by(col(RunRecord.created_at).desc())
+                    select(SampleRecord)
+                    .where(SampleRecord.experiment == tag)
+                    .order_by(col(SampleRecord.created_at).desc())
                 ).all()
             )
-            latest_by_definition: dict[UUID, RunRecord] = {}
+            latest_by_definition: dict[UUID, SampleRecord] = {}
             for run in runs:
                 latest_by_definition.setdefault(run.definition_id, run)
 
@@ -98,13 +98,13 @@ def _definition_summary(
     session: Session,
     definition: ExperimentDefinition,
     *,
-    runs: list[RunRecord] | None = None,
+    runs: list[SampleRecord] | None = None,
 ) -> ExperimentSummaryDto:
     """Build a summary DTO from an ``ExperimentDefinition`` row.
 
     Identity fields (``name``/``description``/``benchmark_type``/``created_by``)
     come directly from the columns Task 1 added.  Run / sample bookkeeping is
-    derived: ``RunRecord.experiment`` indexes grouped runs, and
+    derived: ``SampleRecord.experiment`` indexes grouped runs, and
     ``ExperimentDefinitionInstance`` rows index instances.
     """
     runs = runs if runs is not None else _runs_for_definition_view(session, definition)
@@ -147,7 +147,7 @@ def _definition_detail(
 ) -> ExperimentDetailDto:
     """Build a detail DTO from an ``ExperimentDefinition`` row."""
     runs = _runs_for_definition_view(session, definition)
-    task_counts = _task_counts_by_run(session, [run.id for run in runs])
+    task_counts = _task_counts_by_sample(session, [run.id for run in runs])
     context_events = _context_events_by_run(session, [run.id for run in runs])
     run_rows = [
         _run_row(
@@ -174,12 +174,14 @@ def _definition_detail(
 def _runs_for_definition_view(
     session: Session,
     definition: ExperimentDefinition,
-) -> list[RunRecord]:
+) -> list[SampleRecord]:
     experiment = optional_str_metadata(definition.parsed_metadata(), "experiment")
     if experiment:
-        return list(session.exec(select(RunRecord).where(RunRecord.experiment == experiment)).all())
+        return list(
+            session.exec(select(SampleRecord).where(SampleRecord.experiment == experiment)).all()
+        )
     return list(
-        session.exec(select(RunRecord).where(RunRecord.definition_id == definition.id)).all()
+        session.exec(select(SampleRecord).where(SampleRecord.definition_id == definition.id)).all()
     )
 
 
@@ -196,10 +198,10 @@ def _instance_count(session: Session, definition_id: UUID) -> int:
 
 
 def _run_row(
-    run: RunRecord,
+    run: SampleRecord,
     *,
     total_tasks: int | None = None,
-    context_events: list[RunContextEvent],
+    context_events: list[SampleContextEvent],
 ) -> ExperimentRunRowDto:
     summary = run.parsed_summary()
     duration_ms = _duration_ms(run)
@@ -207,7 +209,7 @@ def _run_row(
     error_summary = _error_summary(run, summary)
     aggregated = aggregate_run_metrics(context_events, summary=summary)
     return ExperimentRunRowDto(
-        run_id=run.id,
+        sample_id=run.id,
         definition_id=run.definition_id,
         benchmark_type=run.benchmark_type,
         instance_key=run.instance_key,
@@ -225,7 +227,7 @@ def _run_row(
         total_cost_usd=aggregated.total_cost_usd,
         error_message=error_summary,
         metrics=ExperimentRunMetricsDto(
-            run_id=run.id,
+            sample_id=run.id,
             run_name=run.sample_id or run.instance_key,
             status=str(run.status),
             sample_label=run.sample_id,
@@ -246,28 +248,34 @@ def _run_row(
     )
 
 
-def _task_counts_by_run(session: Session, run_ids: list[UUID]) -> dict[UUID, int]:
+def _task_counts_by_sample(session: Session, sample_ids: list[UUID]) -> dict[UUID, int]:
     return {
-        run_id: len(
-            list(session.exec(select(RunGraphNode.task_id).where(RunGraphNode.run_id == run_id)))
+        sample_id: len(
+            list(
+                session.exec(
+                    select(SampleGraphNode.task_id).where(SampleGraphNode.sample_id == sample_id)
+                )
+            )
         )
-        for run_id in run_ids
+        for sample_id in sample_ids
     }
 
 
 def _context_events_by_run(
     session: Session,
-    run_ids: list[UUID],
-) -> dict[UUID, list[RunContextEvent]]:
-    if not run_ids:
+    sample_ids: list[UUID],
+) -> dict[UUID, list[SampleContextEvent]]:
+    if not sample_ids:
         return {}
 
     rows = list(
-        session.exec(select(RunContextEvent).where(col(RunContextEvent.run_id).in_(run_ids)))
+        session.exec(
+            select(SampleContextEvent).where(col(SampleContextEvent.sample_id).in_(sample_ids))
+        )
     )
-    result: dict[UUID, list[RunContextEvent]] = {run_id: [] for run_id in run_ids}
+    result: dict[UUID, list[SampleContextEvent]] = {sample_id: [] for sample_id in sample_ids}
     for row in rows:
-        result.setdefault(row.run_id, []).append(row)
+        result.setdefault(row.sample_id, []).append(row)
     return result
 
 
@@ -360,7 +368,7 @@ def _rounded_average(values: list[int]) -> int | None:
     return None if average is None else round(average)
 
 
-def _duration_ms(run: RunRecord) -> int | None:
+def _duration_ms(run: SampleRecord) -> int | None:
     if run.started_at is None or run.completed_at is None:
         return None
     return round((run.completed_at - run.started_at).total_seconds() * 1000)
@@ -380,7 +388,7 @@ def _summary_text(summary: dict, key: str) -> str | None:
     return None
 
 
-def _error_summary(run: RunRecord, summary: dict) -> str | None:
+def _error_summary(run: SampleRecord, summary: dict) -> str | None:
     if run.error_message:
         return run.error_message
     if str(run.status) not in {"failed", "cancelled"}:

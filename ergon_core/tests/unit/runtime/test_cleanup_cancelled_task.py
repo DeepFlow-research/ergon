@@ -23,18 +23,18 @@ class _FakeStepCtx:
 async def test_cleanup_cancelled_task_marks_execution_without_releasing_sandbox(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    run_id = uuid4()
+    sample_id = uuid4()
     task_id = uuid4()
     execution_id = uuid4()
     payload = TaskCancelledEvent(
-        run_id=run_id,
+        sample_id=sample_id,
         definition_id=uuid4(),
         task_id=task_id,
         execution_id=execution_id,
         cause="manager_decision",
     )
     cleanup = CleanupResult(
-        run_id=run_id,
+        sample_id=sample_id,
         task_id=task_id,
         execution_id=execution_id,
         sandbox_id="sbx-cancelled",
@@ -61,7 +61,7 @@ async def test_cleanup_cancelled_task_marks_execution_without_releasing_sandbox(
     monkeypatch.setattr(cleanup_module, "get_session", lambda: SessionContext())
     monkeypatch.setattr(cleanup_module, "get_dashboard_event_publisher", lambda: Emitter())
 
-    result = await cleanup_module.run_cleanup_cancelled_task_job(_FakeStepCtx(), payload)
+    result = await cleanup_module.sample_cleanup_cancelled_task_job(_FakeStepCtx(), payload)
 
     assert result["sandbox_id"] == "sbx-cancelled"
     assert result["sandbox_released"] is False

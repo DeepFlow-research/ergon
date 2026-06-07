@@ -1,9 +1,9 @@
 {
   "additionalProperties": true,
   "properties": {
-    "run_id": {
+    "sample_id": {
       "format": "uuid",
-      "title": "Run Id",
+      "title": "Sample Id",
       "type": "string"
     },
     "status": {
@@ -45,7 +45,7 @@
     }
   },
   "required": [
-    "run_id",
+    "sample_id",
     "status",
     "completed_at",
     "duration_seconds"

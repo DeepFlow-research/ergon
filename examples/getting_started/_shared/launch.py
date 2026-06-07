@@ -3,7 +3,7 @@
 from uuid import UUID
 
 
-def first_run_id(run_result: object) -> UUID:
-    """Return the first launched run id from an Ergon launch result."""
-    run_ids = getattr(run_result, "run_ids")
-    return run_ids[0]
+def first_sample_id(sample_result: object) -> UUID:
+    """Return the first launched sample id from an Ergon launch result."""
+    sample_ids = getattr(sample_result, "sample_ids")
+    return sample_ids[0]

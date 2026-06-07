@@ -1,8 +1,8 @@
 from uuid import uuid4
 from types import SimpleNamespace
 
-from ergon_core.core.persistence.telemetry.models import RunTaskEvaluation
-from ergon_core.core.views.runs.snapshot import _task_keyed_evaluations
+from ergon_core.core.persistence.telemetry.models import SampleTaskEvaluation
+from ergon_core.core.views.samples.snapshot import _task_keyed_evaluations
 from ergon_core.core.jobs.task.evaluate.job import _evaluator_binding_key
 
 
@@ -30,11 +30,11 @@ def _summary_json() -> dict:
 
 
 def test_task_keyed_evaluations_use_runtime_task_id_for_dynamic_tasks() -> None:
-    run_id = uuid4()
+    sample_id = uuid4()
     dynamic_task_id = uuid4()
 
-    evaluation = RunTaskEvaluation(
-        run_id=run_id,
+    evaluation = SampleTaskEvaluation(
+        sample_id=sample_id,
         task_execution_id=uuid4(),
         task_id=dynamic_task_id,
         definition_evaluator_id=uuid4(),
@@ -46,7 +46,7 @@ def test_task_keyed_evaluations_use_runtime_task_id_for_dynamic_tasks() -> None:
 
     result = _task_keyed_evaluations(
         [evaluation],
-        str(run_id),
+        str(sample_id),
     )
 
     assert set(result) == {str(dynamic_task_id)}

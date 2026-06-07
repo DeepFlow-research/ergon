@@ -52,7 +52,7 @@ class GapImporter:
     def parse_row(self, row: dict[str, object], *, fallback_id: str) -> ParsedRun:
         source_id = str(
             row.get("source_run_id")
-            or row.get("run_id")
+            or row.get("sample_id")
             or row.get("id")
             or row.get("task_id")
             or fallback_id
