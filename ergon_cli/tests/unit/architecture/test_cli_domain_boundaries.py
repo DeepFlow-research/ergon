@@ -43,7 +43,7 @@ def test_domain_services_do_not_import_argparse() -> None:
 
 
 def test_domain_services_do_not_print_except_setup_streaming_boundaries() -> None:
-    allowed = {DOMAIN_ROOT / "benchmarks" / "service.py"}
+    allowed = {DOMAIN_ROOT / "environments" / "service.py"}
 
     for path in sorted(DOMAIN_ROOT.glob("*/service.py")):
         if path in allowed:

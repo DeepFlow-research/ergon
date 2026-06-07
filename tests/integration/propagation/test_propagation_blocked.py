@@ -1,7 +1,6 @@
 """Tests for BLOCKED propagation semantics."""
 
 import pytest
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.application.runtime.status import BLOCKED, CANCELLED
 from ergon_core.core.persistence.shared.db import get_session
@@ -19,7 +18,6 @@ from tests.integration.propagation._helpers import (
     assert_wal_has_status,
     get_node_status,
     make_edge,
-    make_experiment_definition,
     make_node,
     make_run,
     seed_linear_chain,
@@ -33,7 +31,7 @@ pytestmark = pytest.mark.integration
 # ---------------------------------------------------------------------------
 
 
-def _cleanup_run(sample_id, defn_id) -> None:  # type: ignore[no-untyped-def]
+def _cleanup_run(sample_id) -> None:  # type: ignore[no-untyped-def]
     """Remove all rows created by a test, in FK-safe order."""
     with get_session() as session:
         delete_typed_sample_wal(session, sample_id)
@@ -48,9 +46,6 @@ def _cleanup_run(sample_id, defn_id) -> None:  # type: ignore[no-untyped-def]
         run_row = session.get(SampleRecord, sample_id)
         if run_row is not None:
             session.delete(run_row)
-        defn_row = session.get(ExperimentDefinition, defn_id)
-        if defn_row is not None:
-            session.delete(defn_row)
         session.commit()
 
 
@@ -68,8 +63,7 @@ async def test_3_failure_cascade_successor_blocked() -> None:
     - WAL entry for C records BLOCKED status.
     """
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         # A seeded completed; B seeded pending; C pending — WAL stamps below set definitive statuses
         node_a, node_b, node_c = seed_linear_chain(
             session,
@@ -79,7 +73,6 @@ async def test_3_failure_cascade_successor_blocked() -> None:
             rest_status="pending",
         )
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
         node_c_id = node_c.task_id
@@ -110,7 +103,6 @@ async def test_3_failure_cascade_successor_blocked() -> None:
         await svc.propagate_failure(
             PropagateTaskCompletionCommand(
                 sample_id=sample_id,
-                definition_id=defn_id,
                 task_id=node_b_id,
                 execution_id=node_b_id,
             )
@@ -137,7 +129,7 @@ async def test_3_failure_cascade_successor_blocked() -> None:
             assert_cross_cutting_invariants(session, sample_id)
 
     finally:
-        _cleanup_run(sample_id, defn_id)
+        _cleanup_run(sample_id)
 
 
 # ---------------------------------------------------------------------------
@@ -155,8 +147,7 @@ async def test_7_parent_failure_children_blocked() -> None:
     auto-managed (not left pending for a manager).
     """
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         parent_node = make_node(session, run.id, task_slug="parent", status="running")
         child_a = make_node(session, run.id, task_slug="child-a", status="pending")
         child_b = make_node(session, run.id, task_slug="child-b", status="pending")
@@ -177,7 +168,6 @@ async def test_7_parent_failure_children_blocked() -> None:
             session, run.id, source_task_id=parent_node.task_id, target_task_id=child_d.task_id
         )
         sample_id = run.id
-        defn_id = defn.id
         parent_task_id = parent_node.task_id
         child_a_id = child_a.task_id
         child_b_id = child_b.task_id
@@ -215,7 +205,6 @@ async def test_7_parent_failure_children_blocked() -> None:
         await svc.propagate_failure(
             PropagateTaskCompletionCommand(
                 sample_id=sample_id,
-                definition_id=defn_id,
                 task_id=parent_task_id,
                 execution_id=parent_task_id,
             )
@@ -256,7 +245,7 @@ async def test_7_parent_failure_children_blocked() -> None:
             assert_cross_cutting_invariants(session, sample_id)
 
     finally:
-        _cleanup_run(sample_id, defn_id)
+        _cleanup_run(sample_id)
 
 
 # ---------------------------------------------------------------------------
@@ -272,8 +261,7 @@ async def test_10_blocked_propagates_transitively() -> None:
     not just one level deep.
     """
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a, node_b, node_c = seed_linear_chain(
             session,
             run.id,
@@ -282,7 +270,6 @@ async def test_10_blocked_propagates_transitively() -> None:
             rest_status="pending",
         )
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
         node_c_id = node_c.task_id
@@ -304,7 +291,6 @@ async def test_10_blocked_propagates_transitively() -> None:
         await svc.propagate_failure(
             PropagateTaskCompletionCommand(
                 sample_id=sample_id,
-                definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
             )
@@ -336,7 +322,7 @@ async def test_10_blocked_propagates_transitively() -> None:
             assert_cross_cutting_invariants(session, sample_id)
 
     finally:
-        _cleanup_run(sample_id, defn_id)
+        _cleanup_run(sample_id)
 
 
 # ---------------------------------------------------------------------------
@@ -352,13 +338,11 @@ async def test_12_running_successor_not_interrupted() -> None:
     must not interrupt it by writing BLOCKED or CANCELLED over a RUNNING node.
     """
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="task-a", status="failed")
         node_b = make_node(session, run.id, task_slug="task-b", status="running")
         make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_b.task_id)
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
         session.commit()
@@ -386,7 +370,6 @@ async def test_12_running_successor_not_interrupted() -> None:
         await svc.propagate_failure(
             PropagateTaskCompletionCommand(
                 sample_id=sample_id,
-                definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
             )
@@ -412,4 +395,4 @@ async def test_12_running_successor_not_interrupted() -> None:
             assert_cross_cutting_invariants(session, sample_id)
 
     finally:
-        _cleanup_run(sample_id, defn_id)
+        _cleanup_run(sample_id)

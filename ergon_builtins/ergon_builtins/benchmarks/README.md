@@ -1,63 +1,56 @@
-# Builtin Benchmarks
+# Builtin Environments
 
-Each subdirectory is one benchmark.  Import from Python; **there is no
-CLI authoring path** (PR 6.5 deleted `ergon experiment define` /
-`ergon run <benchmark>`).  Authoring is Python-only; the CLI is for
-observation (`ergon experiment show` / `ergon run status`, added in
-PR 8).
+Each subdirectory is one env.  Import from Python; **there is no
+CLI authoring path**.  Authoring is Python-only; the CLI is for
+observation (`ergon experiment show`, `ergon sample status`, and related read
+commands).
 
 ## Catalogue
 
-| Benchmark | Module | Worker factories | Default sandbox |
+| Environment | Module | Worker factories | Default sandbox |
 |---|---|---|---|
-| MiniF2F | `ergon_builtins.benchmarks.minif2f` | `make_minif2f_worker` (ReAct) | `LeanSandbox` |
-| SWE-Bench Verified | `ergon_builtins.benchmarks.swebench_verified` | `make_swebench_worker` (ReAct) | `SWEBenchSandbox` |
-| ResearchRubrics | `ergon_builtins.benchmarks.researchrubrics` | `make_research_worker` (ReAct) | `ResearchE2BSandbox` |
-| GDPEval | `ergon_builtins.benchmarks.gdpeval` | `make_gdpeval_worker` (ReAct) | `GDPEvalSandbox` |
+| MiniF2F | `ergon_builtins.environments.minif2f` | `make_minif2f_worker` (ReAct) | `LeanSandbox` |
+| SWE-Bench Verified | `ergon_builtins.environments.swebench_verified` | `make_swebench_worker` (ReAct) | `SWEBenchSandbox` |
+| ResearchRubrics | `ergon_builtins.environments.researchrubrics` | `make_research_worker` (ReAct) | `ResearchE2BSandbox` |
+| GDPEval | `ergon_builtins.environments.gdpeval` | `make_gdpeval_worker` (ReAct) | `GDPEvalSandbox` |
 
-Adding a new benchmark = a new subdirectory containing:
+Adding a new environment = a new subdirectory containing:
 
-- `benchmark.py` — `<Slug>Benchmark(Benchmark)` with parameterised
+- `env.py` — `<Slug>Environment(Environment)` with parameterised
   `__init__(*, worker_factory=..., sandbox_factory=..., evaluator_factory=...)`
-- `sandbox.py` — `<Slug>Sandbox(Sandbox)` per-benchmark
+- `sandbox.py` — `<Slug>Sandbox(Sandbox)` per-environment
 - `toolkit.py` — `<Slug>Toolkit(BaseModel)` serialisable config
 - `tools/tool_builder.py` — runtime tool builders (lazy-imported by `toolkit.py`)
 - `worker_factory.py` — `make_<slug>_worker()` factory (one per agentic
-  strategy; bind `ReActWorker` / `CoTWorker` / etc. to this benchmark's
+  strategy; bind `ReActWorker` / `CoTWorker` / etc. to this environment's
   toolkit + sandbox + system prompt)
 - `rubric.py` + optional `criteria/` — evaluator + criteria
 Then update this table in the same PR.  No core registry to edit; no
-runtime dispatch dict; no per-benchmark `experiment.py` file.
+runtime dispatch dict; no per-environment `experiment.py` file.
 
 ## Authoring example (MiniF2F)
 
 ```python
 import asyncio
-from ergon_builtins.benchmarks.minif2f import MiniF2FBenchmark
-from ergon_builtins.benchmarks.minif2f.worker_factory import make_minif2f_worker
-from ergon_core.api import persist_benchmark
-# launch_run lives in core.application.experiments.launch
+from ergon_builtins.environments.minif2f import MiniF2FEnvironment
+from ergon_builtins.environments.minif2f.worker_factory import make_minif2f_worker
 
 async def main():
-    benchmark = MiniF2FBenchmark(
+    env = MiniF2FEnvironment(
         worker_factory=make_minif2f_worker,
         limit=10,
     )
-    handle = persist_benchmark(
-        benchmark,
-        name="minif2f-react",
-        # experiment="ablation-2026-05-15",   # optional grouping tag
-    )
-    print(f"DEFINITION_ID={handle.definition_id}")
-    # Then kick the run via the dashboard or programmatic launch.
+    # Submit this configured environment through a higher-level
+    # experiment/environment authoring flow.
+    print(env.name)
 
 asyncio.run(main())
 ```
 
 ## A/B testing across strategies
 
-The benchmark is parameterised so you can swap workers without touching
-benchmark code:
+The environment is parameterised so you can swap workers without touching
+environment code:
 
 ```python
 EXPERIMENT = "minif2f-strategy-ablation-2026-05-15"
@@ -66,19 +59,12 @@ for label, worker_factory in [
     ("react", make_minif2f_worker),
     # ("cot", make_minif2f_cot_worker),   # when CoTWorker lands
 ]:
-    benchmark = MiniF2FBenchmark(worker_factory=worker_factory, limit=10)
-    persist_benchmark(
-        benchmark,
-        name=f"minif2f-{label}",
-        experiment=EXPERIMENT,
-        metadata={"strategy": label},
-    )
+    env = MiniF2FEnvironment(worker_factory=worker_factory, limit=10)
+    metadata = {"strategy": label}
+    # Add environment plus metadata to your experiment/environment authoring flow.
 ```
 
-The `experiment` argument is the optional grouping tag — definitions
-tagged with the same string belong to the same logical experiment.
-Use `ergon experiment by-tag <tag>` (PR 8) to list all definitions
-sharing a tag and see their latest run status.
+The experiment tag groups related submissions for read models and dashboards.
 
 ## Why no CLI authoring path?
 
@@ -93,21 +79,21 @@ parameterisable — strictly better for reproducibility than `ergon run
 ## Discovery via Python
 
 ```python
-import ergon_builtins.benchmarks as benchmarks
+import ergon_builtins.environments as environments
 import pkgutil
 
-for _, name, ispkg in pkgutil.iter_modules(benchmarks.__path__):
+for _, name, ispkg in pkgutil.iter_modules(environments.__path__):
     if ispkg:
         print(name)
 ```
 
-Or just `ls ergon_builtins/ergon_builtins/benchmarks/`.
+Or just `ls ergon_builtins/ergon_builtins/environments/`.
 
 ## Observing runs via the CLI
 
-After persisting and launching a benchmark from Python, use the CLI to observe its state:
+After persisting and launching a environment from Python, use the CLI to observe its state:
 
 - `ergon run status <run-id>` — current state of one run
-- `ergon run list [--status=S] [--definition-id=<UUID>]` — list runs, optionally filtered
+- `ergon sample list [--status=S] [--experiment-id=<UUID>]` — list samples, optionally filtered
 - `ergon experiment show <UUID>` — full experiment detail (UUID-based)
 - `ergon experiment list` — list recent experiments

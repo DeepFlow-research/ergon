@@ -1,4 +1,4 @@
-import type { RunActivity } from "./types";
+import type { SampleActivity } from "./types";
 
 function parseTime(value: string): number {
   const parsed = Date.parse(value);
@@ -6,7 +6,7 @@ function parseTime(value: string): number {
 }
 
 export function resolveCurrentActivityId(
-  activities: RunActivity[],
+  activities: SampleActivity[],
   currentTimestamp: string | null,
   currentSequence: number | null = null,
 ): string | null {
@@ -14,7 +14,7 @@ export function resolveCurrentActivityId(
   const currentMs = Date.parse(currentTimestamp);
   if (!Number.isFinite(currentMs)) return null;
 
-  let selected: RunActivity | null = null;
+  let selected: SampleActivity | null = null;
   let selectedMs = Number.NEGATIVE_INFINITY;
   for (const activity of activities) {
     const activityMs = parseTime(activity.startAt);

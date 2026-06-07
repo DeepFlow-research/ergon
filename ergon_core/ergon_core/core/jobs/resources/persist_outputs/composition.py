@@ -24,14 +24,14 @@ async def publish_public_sandbox_resources(
     publisher = SandboxResourcePublisher.from_public_sandbox(
         sandbox=sandbox,
         sample_id=payload.sample_id,
-        task_execution_id=payload.execution_id,
+        task_attempt_id=payload.execution_id,
         publish_dirs=publish_dirs,
     )
     synced = await SampleResourcePublishService().publish_sandbox_files(
         reader=publisher,
         blob_store=publisher,
         sample_id=payload.sample_id,
-        task_execution_id=payload.execution_id,
+        task_attempt_id=payload.execution_id,
         publish_dirs=publish_dirs,
     )
     return len(synced)

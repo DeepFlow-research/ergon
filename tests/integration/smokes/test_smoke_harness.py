@@ -1,7 +1,7 @@
 """Integration smoke test for the /api/__danger__/test-harness/* test-harness endpoints.
 
 Round-trips against a real running server + Postgres:
-  seed -> read state -> reset -> verify gone (404)
+  seed sample -> read state -> reset -> verify gone (404)
 
 Requires:
   - Server running at ERGON_API_BASE_URL (default http://127.0.0.1:9000).
@@ -15,8 +15,7 @@ from datetime import datetime, timezone
 
 import httpx
 import pytest
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.shared.db import get_engine, get_session
+from ergon_core.core.persistence.shared.db import get_engine
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
@@ -95,24 +94,17 @@ def _reset_before_each() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_seed_then_read_then_reset_roundtrip() -> None:
-    """Seed a run, read its state, reset it, verify 404."""
-
-    # ── Step 1: create an ExperimentDefinition via the ORM ──────────────────
-    with get_session() as session:
-        defn = ExperimentDefinition(benchmark_type="ci-smoke-harness", name="ci-smoke-harness")
-        session.add(defn)
-        session.commit()
-        session.refresh(defn)
-        defn_id = defn.id
+def test_seed_sample_then_read_then_reset_roundtrip() -> None:
+    """Seed a sample, read its state, reset it, verify 404."""
 
     try:
-        # ── Step 2: seed a sample via POST /api/__danger__/test-harness/write/samples/seed ──────────
+        # ── Step 1: seed a sample via POST /api/__danger__/test-harness/write/samples/seed ──────────
         with httpx.Client(timeout=10.0) as client:
             seed_resp = client.post(
                 f"{API}/api/__danger__/test-harness/write/samples/seed",
                 json={
-                    "definition_id": str(defn_id),
+                    "environment_type": "ci-smoke-harness",
+                    "instance_key": "ci-smoke-harness",
                     "experiment": _EXPERIMENT,
                     "status": "completed",
                 },
@@ -124,7 +116,7 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
         sample_id = seed_resp.json()["sample_id"]
         assert sample_id  # non-empty UUID string
 
-        # ── Step 3: read state via GET /api/__danger__/test-harness/read/samples/{sample_id}/state ───
+        # ── Step 2: read state via GET /api/__danger__/test-harness/read/samples/{sample_id}/state ───
         with httpx.Client(timeout=10.0) as client:
             state_resp = client.get(
                 f"{API}/api/__danger__/test-harness/read/samples/{sample_id}/state"
@@ -135,7 +127,7 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
         assert body["sample_id"] == sample_id
         assert body["status"] == "completed"
 
-        # ── Step 4: reset via POST /api/__danger__/test-harness/write/reset ─────────────────────────
+        # ── Step 3: reset via POST /api/__danger__/test-harness/write/reset ─────────────────────────
         with httpx.Client(timeout=10.0) as client:
             reset_resp = client.post(
                 f"{API}/api/__danger__/test-harness/write/reset",
@@ -144,7 +136,7 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
 
         assert reset_resp.status_code == 204, reset_resp.text
 
-        # ── Step 5: confirm the sample is gone ───────────────────────────────────
+        # ── Step 4: confirm the sample is gone ───────────────────────────────────
         with httpx.Client(timeout=10.0) as client:
             gone_resp = client.get(
                 f"{API}/api/__danger__/test-harness/read/samples/{sample_id}/state"
@@ -153,30 +145,25 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
         assert gone_resp.status_code == 404, gone_resp.text
 
     finally:
-        # ── Cleanup: delete seeded samples before their definition row ───────────
+        # ── Cleanup: delete seeded samples ───────────────────────────────────────
         with httpx.Client(timeout=10.0) as client:
             client.post(
                 f"{API}/api/__danger__/test-harness/write/reset",
                 json={"experiment_prefix": _EXPERIMENT_PREFIX},
             )
-        with get_session() as session:
-            row = session.get(ExperimentDefinition, defn_id)
-            if row is not None:
-                session.delete(row)
-                session.commit()
 
 
-def test_write_experiment_runs_accepts_explicit_runtime_choices() -> None:
-    """Submit grouped experiment-run endpoint accepts explicit runtime choices."""
+def test_write_experiment_samples_accepts_explicit_runtime_choices() -> None:
+    """Submit grouped experiment-sample endpoint accepts explicit runtime choices."""
     experiment = (
         f"{_EXPERIMENT_PREFIX}explicit-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}"
     )
 
     with httpx.Client(timeout=10.0) as client:
         response = client.post(
-            f"{API}/api/__danger__/test-harness/write/experiment-runs",
+            f"{API}/api/__danger__/test-harness/write/experiment-samples",
             json={
-                "benchmark_slug": "minif2f",
+                "environment_slug": "minif2f",
                 "slots": [
                     {
                         "worker_slug": "minif2f-smoke-worker",

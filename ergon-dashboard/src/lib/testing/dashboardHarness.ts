@@ -1,6 +1,6 @@
 import {
   broadcastContextEvent,
-  broadcastRunCompleted,
+  broadcastSampleCompleted,
   broadcastTaskEvaluation,
   broadcastTaskStatus,
   broadcastThreadMessage,
@@ -10,36 +10,39 @@ import { store } from "@/lib/state/store";
 import {
   CommunicationThreadState,
   ContextEventState,
-  ExperimentDetail,
+  SampleDashboardState,
   SerializedSampleWorkspaceState,
   TaskEvaluationState,
   TaskStatus,
 } from "@/lib/types";
-import { deserializeRunState, serializeRunState } from "@/lib/sampleState";
+import { deserializeSampleState, serializeSampleState } from "@/lib/sampleState";
 
 declare global {
   // eslint-disable-next-line no-var
   var __dashboardHarness:
     | {
-        experimentDetails: Record<string, ExperimentDetail>;
-        mutationsByRun: Record<string, unknown[]>;
-        seededRunIds: Set<string>;
+        experimentDetails: Record<string, unknown>;
+        sampleStates: Record<string, SampleDashboardState>;
+        eventsBySample: Record<string, unknown[]>;
+        seededSampleIds: Set<string>;
       }
     | undefined;
 }
 
 export interface DashboardHarnessSeedPayload {
-  experimentDetails?: Record<string, ExperimentDetail>;
+  experimentDetails?: Record<string, unknown>;
+  sampleStates?: Record<string, SampleDashboardState>;
   runs?: SerializedSampleWorkspaceState[];
-  mutations?: Record<string, unknown[]>;
+  events?: Record<string, unknown[]>;
 }
 
 function getHarnessState() {
   if (!global.__dashboardHarness) {
     global.__dashboardHarness = {
       experimentDetails: {},
-      mutationsByRun: {},
-      seededRunIds: new Set(),
+      sampleStates: {},
+      eventsBySample: {},
+      seededSampleIds: new Set(),
     };
   }
   return global.__dashboardHarness;
@@ -56,8 +59,9 @@ export function resetDashboardHarness(): void {
   store.reset();
   const harness = getHarnessState();
   harness.experimentDetails = {};
-  harness.mutationsByRun = {};
-  harness.seededRunIds.clear();
+  harness.sampleStates = {};
+  harness.eventsBySample = {};
+  harness.seededSampleIds.clear();
 }
 
 export function seedDashboardHarness(payload: DashboardHarnessSeedPayload): void {
@@ -66,34 +70,40 @@ export function seedDashboardHarness(payload: DashboardHarnessSeedPayload): void
 
   const harness = getHarnessState();
   harness.experimentDetails = payload.experimentDetails ?? {};
-  harness.mutationsByRun = payload.mutations ?? {};
+  harness.sampleStates = payload.sampleStates ?? {};
+  harness.eventsBySample = payload.events ?? {};
 
   for (const run of payload.runs ?? []) {
-    store.seedRun(deserializeRunState(run));
-    harness.seededRunIds.add(run.id);
+    store.seedSample(deserializeSampleState(run));
+    harness.seededSampleIds.add(run.id);
   }
 }
 
-export function getHarnessExperiment(definitionId: string): ExperimentDetail | null {
+export function getHarnessExperiment(experimentId: string): unknown | null {
   requireHarnessEnabled();
-  return getHarnessState().experimentDetails[definitionId] ?? null;
+  return getHarnessState().experimentDetails[experimentId] ?? null;
 }
 
-export function getHarnessRun(sampleId: string): SerializedSampleWorkspaceState | null {
+export function getHarnessSampleState(sampleId: string): SampleDashboardState | null {
   requireHarnessEnabled();
-  if (!getHarnessState().seededRunIds.has(sampleId)) {
+  return getHarnessState().sampleStates[sampleId] ?? null;
+}
+
+export function getHarnessSample(sampleId: string): SerializedSampleWorkspaceState | null {
+  requireHarnessEnabled();
+  if (!getHarnessState().seededSampleIds.has(sampleId)) {
     return null;
   }
-  const run = store.getRun(sampleId);
-  return run ? serializeRunState(run) : null;
+  const run = store.getSample(sampleId);
+  return run ? serializeSampleState(run) : null;
 }
 
-export function getHarnessRunMutations(sampleId: string): unknown[] | null {
+export function getHarnessSampleEvents(sampleId: string): unknown[] | null {
   requireHarnessEnabled();
-  return getHarnessState().mutationsByRun[sampleId] ?? null;
+  return getHarnessState().eventsBySample[sampleId] ?? null;
 }
 
-export function emitHarnessRunCompleted(data: {
+export function emitHarnessSampleCompleted(data: {
   sampleId: string;
   status: "completed" | "failed";
   durationSeconds: number;
@@ -101,7 +111,7 @@ export function emitHarnessRunCompleted(data: {
   error: string | null;
 }): void {
   requireHarnessEnabled();
-  store.completeRun(
+  store.completeSample(
     data.sampleId,
     data.status,
     new Date().toISOString(),
@@ -109,7 +119,7 @@ export function emitHarnessRunCompleted(data: {
     data.finalScore,
     data.error,
   );
-  broadcastRunCompleted(
+  broadcastSampleCompleted(
     data.sampleId,
     data.status,
     new Date().toISOString(),

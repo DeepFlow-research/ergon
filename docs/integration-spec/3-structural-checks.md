@@ -78,9 +78,9 @@ EXPECTED_CALL_GRAPH: dict[str, dict[str, list[str]]] = {
         "publishers": ["external:api"],
         "subscribers": ["cancel-run"],
     },
-    "run/cleanup": {
+    "sample/cleanup": {
         "publishers": ["complete-workflow", "fail-workflow"],
-        "subscribers": ["cleanup-run"],
+        "subscribers": ["sample-cleanup"],
     },
     # criterion/evaluate: publishers unknown, subscribers MISSING — this is the live bug
     # this entry must be completed and a handler added before this test can pass

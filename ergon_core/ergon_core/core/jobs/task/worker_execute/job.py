@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
 
-from ergon_core.api.benchmark.task import Task
+from ergon_core.api.task import Task
 from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
 from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.jobs._events import send_job_step_event
@@ -28,8 +28,8 @@ from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.application.context.service import ContextEventService
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.persistence.context.models import SampleContextEvent
-from .contract import WorkerExecuteJobRequest
-from .contract import WorkerExecuteJobResult
+from .contract import WorkerExecuteRequest
+from .contract import WorkerExecuteResult
 from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     get_trace_sink,
@@ -44,10 +44,10 @@ logger = logging.getLogger(__name__)
 
 
 async def run_worker_execute_job(
-    payload: WorkerExecuteJobRequest,
+    payload: WorkerExecuteRequest,
     *,
     ctx: object | None = None,
-) -> WorkerExecuteJobResult:
+) -> WorkerExecuteResult:
     logger.info(
         "worker-execute sample_id=%s task_id=%s worker_type=%s",
         payload.sample_id,
@@ -85,7 +85,6 @@ async def run_worker_execute_job(
         sample_id=payload.sample_id,
         task_id=payload.task_id,
         execution_id=payload.execution_id,
-        definition_id=payload.definition_id,
         sandbox_id=payload.sandbox_id,
         task_mgmt=_task_management_service_for_context(ctx),
         task_inspect=TaskInspectionService(),
@@ -102,7 +101,7 @@ async def run_worker_execute_job(
         if dashboard_event is None:
             logger.warning(
                 "context_event: no task_id for execution %s",
-                event.task_execution_id,
+                event.task_attempt_id,
             )
             return
         await dashboard_publisher.publish(dashboard_event)
@@ -129,7 +128,7 @@ async def run_worker_execute_job(
             chunk_count,
             error_msg,
         )
-        return WorkerExecuteJobResult(
+        return WorkerExecuteResult(
             success=False,
             error=error_msg,
             error_json={
@@ -191,7 +190,7 @@ async def run_worker_execute_job(
         )
     )
 
-    return WorkerExecuteJobResult(
+    return WorkerExecuteResult(
         success=output.success,
         final_assistant_message=output.output,
         error=None if output.success else output.output,
@@ -208,7 +207,6 @@ class _ReadyDispatch(BaseModel):
     model_config = {"frozen": True}
 
     sample_id: UUID
-    definition_id: UUID
     task_id: UUID
 
 
@@ -272,7 +270,6 @@ class _StepAwareTaskManagementService(TaskManagementService):
     async def _collect_ready_dispatch(
         self,
         sample_id: UUID,
-        definition_id: UUID,
         task_id: UUID,
     ) -> None:
         if self._active_ready_dispatches is None:
@@ -281,9 +278,7 @@ class _StepAwareTaskManagementService(TaskManagementService):
                 sample_id=sample_id,
                 task_id=task_id,
             )
-        self._active_ready_dispatches.append(
-            _ReadyDispatch(sample_id=sample_id, definition_id=definition_id, task_id=task_id)
-        )
+        self._active_ready_dispatches.append(_ReadyDispatch(sample_id=sample_id, task_id=task_id))
 
     async def _dispatch_collected_ready_events(
         self,
@@ -293,7 +288,6 @@ class _StepAwareTaskManagementService(TaskManagementService):
         for dispatch in ready:
             event = TaskReadyEvent(
                 sample_id=dispatch.sample_id,
-                definition_id=dispatch.definition_id,
                 task_id=dispatch.task_id,
             )
             await send_job_step_event(
@@ -338,7 +332,7 @@ async def _consume_worker_stream(
 
 async def _persist_context_events(
     context_event_repo: ContextEventService,
-    payload: WorkerExecuteJobRequest,
+    payload: WorkerExecuteRequest,
     chunk: ContextPartChunk,
     chunk_count: int,
 ) -> None:

@@ -1,8 +1,10 @@
 "use client";
 
-import { RunLifecycleStatus, TaskStatus } from "@/lib/types";
+import React from "react";
 
-type StatusType = TaskStatus | RunLifecycleStatus | string;
+import { SampleLifecycleStatus, TaskStatus } from "@/lib/types";
+
+type StatusType = TaskStatus | SampleLifecycleStatus | string;
 
 interface StatusConfig {
   label: string;

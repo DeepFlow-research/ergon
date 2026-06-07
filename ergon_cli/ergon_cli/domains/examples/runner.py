@@ -65,9 +65,15 @@ def _script_args(command: ExampleCommand) -> list[str]:
 
 def _repo_root(script_path: str) -> Path:
     configured = os.environ.get("ERGON_REPO_ROOT")
-    candidates: list[Path] = []
     if configured:
-        candidates.append(Path(configured).resolve())
+        candidate = Path(configured).resolve()
+        if (candidate / script_path).is_file():
+            return candidate
+        raise ExampleRunError(
+            f"ERGON_REPO_ROOT is set, but the configured checkout does not contain {script_path}."
+        )
+
+    candidates: list[Path] = []
     cwd = Path.cwd().resolve()
     candidates.append(cwd)
     candidates.extend(cwd.parents)

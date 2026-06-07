@@ -3,123 +3,68 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class ExperimentStatusCountsDto(BaseModel):
-    pending: int = 0
-    executing: int = 0
-    evaluating: int = 0
-    completed: int = 0
-    failed: int = 0
-    cancelled: int = 0
+def _to_camel(value: str) -> str:
+    head, *tail = value.split("_")
+    return head + "".join(part.capitalize() for part in tail)
 
 
-class ExperimentSummaryDto(BaseModel):
-    definition_id: UUID
-    name: str
-    description: str | None = None
-    benchmark_type: str
+class CamelModel(BaseModel):
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
+
+
+class SamplerInvocationView(CamelModel):
+    sampler_invocation_id: UUID
+    sampler_name: str
+    requested_k: int
+    candidate_pool_size: int
+    selected_count: int
+    sampler_config: dict = Field(default_factory=dict)
+    created_at: datetime
+
+
+class EnvironmentContributionView(CamelModel):
+    environment_id: UUID
+    environment_name: str
+    source_mode: str
     sample_count: int
-    status: str
-    default_worker_team: dict = Field(default_factory=dict)
-    default_evaluator_slug: str | None = None
-    default_model_target: str | None = None
-    created_by: str | None = None
-    created_at: datetime
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
-    run_count: int = 0
-    status_counts: ExperimentStatusCountsDto = Field(default_factory=ExperimentStatusCountsDto)
-    failure_count: int = 0
-    latest_activity_at: datetime | None = None
-    average_score: float | None = None
-    average_duration_ms: int | None = None
-    average_tasks: float | None = None
-    total_cost_usd: float | None = None
+    selected_count: int
+    source_metadata: dict = Field(default_factory=dict)
 
 
-class ExperimentRunMetricsDto(BaseModel):
+class ExperimentSampleSummaryView(CamelModel):
     sample_id: UUID
-    run_name: str | None = None
-    status: str
-    sample_label: str | None = None
-    instance_key: str
-    score: float | None = None
-    return_value: float | None = None
-    duration_ms: int | None = None
-    total_tasks: int | None = None
-    tool_call_count: int = 0
-    total_tokens: int | None = None
-    token_breakdown: dict[str, int] = Field(default_factory=dict)
-    total_cost_usd: float | None = None
-    cost_observed: bool = False
-    model_target: str | None = None
-    evaluator_slug: str | None = None
-    error_summary: str | None = None
-
-
-class ExperimentRunRowDto(BaseModel):
-    sample_id: UUID
-    definition_id: UUID
-    benchmark_type: str
-    instance_key: str
+    experiment_id: UUID
+    environment_id: UUID
+    environment_name: str
+    sample_key: str
+    sample_ref: dict = Field(default_factory=dict)
+    source_metadata: dict = Field(default_factory=dict)
     status: str
     created_at: datetime
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
-    evaluator_slug: str | None = None
-    model_target: str | None = None
-    worker_team: dict = Field(default_factory=dict)
-    seed: int | None = None
-    running_time_ms: int | None = None
-    final_score: float | None = None
-    total_tasks: int | None = None
-    total_cost_usd: float | None = None
-    error_message: str | None = None
-    metrics: ExperimentRunMetricsDto
 
 
-class ExperimentAnalyticsDto(BaseModel):
-    total_runs: int = 0
-    status_counts: ExperimentStatusCountsDto = Field(default_factory=ExperimentStatusCountsDto)
-    average_score: float | None = None
-    average_duration_ms: int | None = None
-    average_tasks: float | None = None
-    total_cost_usd: float | None = None
-    latest_activity_at: datetime | None = None
-    error_count: int = 0
-
-
-class ExperimentDetailDto(BaseModel):
-    # Kept denormalized so the public contract exposes definition identity and
-    # display fields without requiring consumers to traverse the nested summary.
-    definition_id: UUID | None = None
-    name: str | None = None
-    description: str | None = None
-    benchmark_type: str | None = None
-    experiment: ExperimentSummaryDto
-    runs: list[ExperimentRunRowDto] = Field(default_factory=list)
-    analytics: ExperimentAnalyticsDto = Field(default_factory=ExperimentAnalyticsDto)
-    sample_selection: dict = Field(default_factory=dict)
-    design: dict = Field(default_factory=dict)
-    metadata: dict = Field(default_factory=dict)
-
-    @model_validator(mode="after")
-    def _backfill_identity_from_summary(self) -> "ExperimentDetailDto":
-        if self.definition_id is None:
-            self.definition_id = self.experiment.definition_id
-        if self.name is None:
-            self.name = self.experiment.name
-        if self.description is None:
-            self.description = self.experiment.description
-        if self.benchmark_type is None:
-            self.benchmark_type = self.experiment.benchmark_type
-        return self
-
-
-class ExperimentTagDefinitionDto(BaseModel):
-    definition_id: UUID
+class ExperimentDetailView(CamelModel):
+    experiment_id: UUID
     name: str
-    benchmark_type: str
-    latest_run_status: str | None = None
+    description: str | None = None
+    environments: list[EnvironmentContributionView] = Field(default_factory=list)
+    sample_count: int
+    samples: list[ExperimentSampleSummaryView] = Field(default_factory=list)
+    sampler_invocations: list[SamplerInvocationView] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime
+
+
+class ExperimentListView(CamelModel):
+    items: list[ExperimentDetailView] = Field(default_factory=list)
+
+
+class ExperimentSamplesView(CamelModel):
+    items: list[ExperimentSampleSummaryView] = Field(default_factory=list)
+
+
+class SamplerInvocationsView(CamelModel):
+    items: list[SamplerInvocationView] = Field(default_factory=list)

@@ -9,7 +9,7 @@ from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.core.application.samples.events import SampleRuntimeEventAppender
 from ergon_core.core.infrastructure.inngest.errors import DataIntegrityError
-from ergon_core.core.jobs.run.cleanup.contract import SampleCleanupEvent
+from ergon_core.core.jobs.sample.cleanup.contract import SampleCleanupEvent
 from .contract import WorkflowFailedEvent, WorkflowFailedResult
 from ergon_core.core.jobs._events import send_job_event
 from ergon_core.core.infrastructure.tracing import (
@@ -74,7 +74,6 @@ async def run_fail_workflow_job(payload: WorkflowFailedEvent) -> WorkflowFailedR
             status_message=truncate_text(payload.error),
             attributes={
                 "sample_id": str(payload.sample_id),
-                "definition_id": str(payload.definition_id),
                 "error": truncate_text(payload.error),
             },
         )
@@ -93,7 +92,6 @@ async def run_fail_workflow_job(payload: WorkflowFailedEvent) -> WorkflowFailedR
                     status_message=truncate_text(payload.error),
                     attributes={
                         "sample_id": str(payload.sample_id),
-                        "definition_id": str(payload.definition_id),
                         "status": run.status,
                         "error": truncate_text(payload.error),
                     },

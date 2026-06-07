@@ -1,5 +1,6 @@
 """Architecture guards for the Phase 1 public API target structure."""
 
+from abc import ABC
 import importlib
 import inspect
 
@@ -10,10 +11,12 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
     public_api = importlib.import_module("ergon_core.api")
 
     expected = {
-        "Benchmark",
-        "BenchmarkRequirements",
         "Task",
         "EmptyTaskPayload",
+        "Environment",
+        "Experiment",
+        "ExperimentSubmitResult",
+        "PersistedExperiment",
         "Worker",
         "WorkerContext",
         "WorkerOutput",
@@ -33,19 +36,22 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "CriterionEvidence",
         "EvidenceMessage",
         # PR 5 — object-bound authoring surface.
-        # PR 6.5 — Experiment wrapper deleted; persist_benchmark replaces it.
         "Evaluator",
-        "persist_benchmark",
+        "RandomSampler",
         "Rubric",
+        "Sample",
         "Sandbox",
         "SandboxKindMismatch",
         "SandboxRuntime",
         "SandboxNotLiveError",
+        "Sampler",
+        "SamplingContext",
         "TaskEvaluationResult",
         "CriterionCheckError",
     }
     retired = {
         "BenchmarkTask",
+        "Benchmark",
         "BenchmarkDeps",
         "EvaluationContext",
         "CriterionResult",
@@ -56,6 +62,13 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "WorkerSpec",
         "PersistedExperimentDefinition",
         "DefinitionHandle",
+        "Episode",
+        "EnvironmentSource",
+        "ExperimentHandle",
+        "ExperimentRunHandle",
+        "persist_benchmark",
+        "persist_experiment",
+        "SourceDescriptor",
         # Toolkit is a ReAct/builtins implementation detail, not a core
         # authoring API concept.
         "Toolkit",
@@ -69,18 +82,46 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
     assert all(not hasattr(public_api, name) for name in retired)
 
 
+def test_experiment_public_api_does_not_export_service_ports() -> None:
+    public_api = importlib.import_module("ergon_core.api")
+    experiment_api = importlib.import_module("ergon_core.api.experiment")
+
+    forbidden = {
+        "ExperimentSubmissionPort",
+        "PersistExperimentPort",
+        "SamplingHistory",
+    }
+
+    for module in (public_api, experiment_api):
+        for name in forbidden:
+            assert not hasattr(module, name), f"{module.__name__} exports {name}"
+
+
+def test_sampler_is_public_abstract_base_model() -> None:
+    from pydantic import BaseModel
+
+    from ergon_core.api import RandomSampler, Sampler
+
+    assert issubclass(Sampler, BaseModel)
+    assert issubclass(Sampler, ABC)
+    assert issubclass(RandomSampler, Sampler)
+
+
+def test_persisted_experiment_is_the_public_persistence_receipt() -> None:
+    public_api = importlib.import_module("ergon_core.api")
+
+    assert hasattr(public_api, "PersistedExperiment")
+    assert not hasattr(public_api, "ExperimentRef")
+
+
 def test_semantic_api_clusters_are_importable() -> None:
-    benchmark = importlib.import_module("ergon_core.api.benchmark")
+    task = importlib.import_module("ergon_core.api.task")
     worker = importlib.import_module("ergon_core.api.worker")
     criterion = importlib.import_module("ergon_core.api.criterion")
     rubric = importlib.import_module("ergon_core.api.rubric")
 
-    assert benchmark.__all__ == [
-        "Benchmark",
-        "BenchmarkRequirements",
-        "Task",
-        "EmptyTaskPayload",
-    ]
+    assert task.Task.__module__ == "ergon_core.api.task"
+    assert task.EmptyTaskPayload.__module__ == "ergon_core.api.task"
     # PR 9 Task 1 added ``SpawnedTaskHandle`` to the worker cluster as
     # the return type of ``WorkerContext.spawn_task`` and
     # ``WorkerContext.restart_task``.

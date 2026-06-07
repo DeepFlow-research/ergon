@@ -5,7 +5,6 @@ EC-2: duplicate task/ready idempotency. Expected to pass with current code.
 """
 
 import pytest
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.application.runtime.status import BLOCKED, CANCELLED
 from ergon_core.core.persistence.shared.db import get_session
@@ -23,7 +22,6 @@ from tests.integration.propagation._helpers import (
     assert_wal_has_status,
     get_node_status,
     make_edge,
-    make_experiment_definition,
     make_node,
     make_run,
 )
@@ -35,7 +33,7 @@ pytestmark = pytest.mark.integration
 # ---------------------------------------------------------------------------
 
 
-def _cleanup_run(sample_id, defn_id) -> None:  # type: ignore[no-untyped-def]
+def _cleanup_run(sample_id) -> None:  # type: ignore[no-untyped-def]
     with get_session() as session:
         delete_typed_sample_wal(session, sample_id)
         for edge in session.exec(
@@ -62,9 +60,6 @@ def _cleanup_run(sample_id, defn_id) -> None:  # type: ignore[no-untyped-def]
         run_row = session.get(SampleRecord, sample_id)
         if run_row is not None:
             session.delete(run_row)
-        defn_row = session.get(ExperimentDefinition, defn_id)
-        if defn_row is not None:
-            session.delete(defn_row)
         session.commit()
 
 
@@ -91,15 +86,13 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
       3. C cannot start (one dep failed) → must be BLOCKED.
     """
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="fan-a", status="running")
         node_b = make_node(session, run.id, task_slug="fan-b", status="running")
         node_c = make_node(session, run.id, task_slug="fan-c", status="pending")
         make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_c.task_id)
         make_edge(session, run.id, source_task_id=node_b.task_id, target_task_id=node_c.task_id)
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
         node_c_id = node_c.task_id
@@ -130,7 +123,6 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
         await svc.propagate_failure(
             PropagateTaskCompletionCommand(
                 sample_id=sample_id,
-                definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
             )
@@ -140,7 +132,6 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
         await svc.propagate(
             PropagateTaskCompletionCommand(
                 sample_id=sample_id,
-                definition_id=defn_id,
                 task_id=node_b_id,
                 execution_id=node_b_id,
             )
@@ -166,7 +157,7 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
             assert_cross_cutting_invariants(session, sample_id)
 
     finally:
-        _cleanup_run(sample_id, defn_id)
+        _cleanup_run(sample_id)
 
 
 # ---------------------------------------------------------------------------
@@ -184,13 +175,11 @@ async def test_ec2_duplicate_propagate_is_idempotent() -> None:
     Expected to PASS with current code — no xfail.
     """
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="idem-a", status="running")
         node_b = make_node(session, run.id, task_slug="idem-b", status="pending")
         make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_b.task_id)
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
         session.commit()
@@ -211,7 +200,6 @@ async def test_ec2_duplicate_propagate_is_idempotent() -> None:
 
         command = PropagateTaskCompletionCommand(
             sample_id=sample_id,
-            definition_id=defn_id,
             task_id=node_a_id,
             execution_id=node_a_id,
         )
@@ -246,4 +234,4 @@ async def test_ec2_duplicate_propagate_is_idempotent() -> None:
             assert_cross_cutting_invariants(session, sample_id)
 
     finally:
-        _cleanup_run(sample_id, defn_id)
+        _cleanup_run(sample_id)

@@ -6,7 +6,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Fallback template name.  `ergon benchmark setup minif2f` persists the
+# Fallback template name.  `ergon environment setup minif2f` persists the
 # resolved template_id to ~/.ergon/sandbox_templates.json; when that exists
 # we prefer the pinned build_id over the mutable name so reruns are
 # reproducible across rebuilds of the same template name.

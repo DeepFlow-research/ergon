@@ -1,4 +1,4 @@
-"""Pure read-model helpers for persisted run snapshots."""
+"""Pure read-model helpers for persisted sample snapshots."""
 
 from collections import defaultdict
 from datetime import datetime
@@ -7,18 +7,17 @@ from uuid import UUID
 
 from ergon_core.core.views.samples.evaluation_mapping import evaluation_row_to_dto
 from ergon_core.core.views.samples.models import (
-    RunCommunicationMessageDto,
-    RunCommunicationThreadDto,
+    SampleCommunicationMessageDto,
+    SampleCommunicationThreadDto,
     SampleContextEventDto,
-    RunExecutionAttemptDto,
+    SampleExecutionAttemptDto,
     SampleResourceDto,
-    RunSandboxCommandDto,
-    RunSandboxDto,
+    SampleSandboxCommandDto,
+    SampleSandboxDto,
     SampleTaskDto,
     SampleTaskEvaluationDto,
 )
 from ergon_core.core.persistence.context.models import SampleContextEvent
-from ergon_core.core.persistence.definitions.models import ExperimentDefinitionWorker
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.persistence.telemetry.models import (
     SampleResource,
@@ -30,11 +29,9 @@ from ergon_core.core.persistence.telemetry.models import (
 from ergon_core.core.shared.context_parts import ContextEventType
 
 
-# TODO: this file / logic almost certainly duplicates the run benchmarks logic? if not it needs to be moved, renamed and laid out cleaner.
 def _build_task_map(
     nodes: list[SampleGraphNode],
     edges: list[SampleGraphEdge],
-    worker_by_binding: dict[str, ExperimentDefinitionWorker],
     task_timestamps: dict[UUID, tuple[datetime | None, datetime | None]],
 ) -> tuple[dict[str, SampleTaskDto], str, int, int, int, int, int, int]:
     """Three clean passes using stored containment columns.
@@ -50,11 +47,6 @@ def _build_task_map(
 
     for node in nodes:
         nid = str(node.task_id)
-        worker = (
-            worker_by_binding.get(node.assigned_worker_slug)
-            if node.assigned_worker_slug is not None
-            else None
-        )
         started_at, completed_at = task_timestamps.get(node.task_id, (None, None))
         task_map[nid] = SampleTaskDto(
             id=nid,
@@ -66,7 +58,6 @@ def _build_task_map(
             depends_on_ids=[],
             is_leaf=True,
             level=node.level,
-            assigned_worker_id=str(worker.id) if worker else None,
             assigned_worker_slug=node.assigned_worker_slug,
             started_at=started_at,
             completed_at=completed_at,
@@ -102,22 +93,17 @@ def _build_task_map(
 
 def _task_keyed_executions(
     executions: list[SampleTaskAttempt],
-    worker_map: dict[UUID, ExperimentDefinitionWorker],
-) -> dict[str, list[RunExecutionAttemptDto]]:
-    by_task: dict[str, list[RunExecutionAttemptDto]] = defaultdict(list)
+) -> dict[str, list[SampleExecutionAttemptDto]]:
+    by_task: dict[str, list[SampleExecutionAttemptDto]] = defaultdict(list)
     for ex in sorted(
         executions,
-        key=lambda e: (str(e.task_id), e.attempt_number),
+        key=lambda e: (str(e.task_id), e.created_at, e.id),
     ):
         tid = str(ex.task_id)
         error_msg: str | None = None
         if ex.error_json:
             message = ex.error_json.get("message")
             error_msg = message if isinstance(message, str) else str(ex.error_json)
-
-        worker = worker_map.get(ex.definition_worker_id) if ex.definition_worker_id else None
-        agent_id = str(worker.id) if worker else None
-        agent_name = worker.binding_key if worker else None
 
         resource_ids: list[str] = []
         output = ex.parsed_output()
@@ -126,18 +112,16 @@ def _task_keyed_executions(
             resource_ids = [str(r) for r in raw_resource_ids]
 
         by_task[tid].append(
-            RunExecutionAttemptDto(
+            SampleExecutionAttemptDto(
                 id=str(ex.id),
                 task_id=tid,
-                attempt_number=ex.attempt_number,
+                attempt_number=len(by_task[tid]) + 1,
                 status=ex.status,
                 started_at=ex.started_at,
                 completed_at=ex.completed_at,
                 final_assistant_message=ex.final_assistant_message,
                 error_message=error_msg,
                 score=None,
-                agent_id=agent_id,
-                agent_name=agent_name,
                 output_resource_ids=resource_ids,
             )
         )
@@ -151,9 +135,7 @@ def _task_keyed_resources(
     by_task: dict[str, list[SampleResourceDto]] = defaultdict(list)
     for resource in resources:
         task_id_uuid = (
-            execution_task_map.get(resource.task_execution_id)
-            if resource.task_execution_id
-            else None
+            execution_task_map.get(resource.task_attempt_id) if resource.task_attempt_id else None
         )
         if task_id_uuid is None:
             continue
@@ -162,9 +144,7 @@ def _task_keyed_resources(
             SampleResourceDto(
                 id=str(resource.id),
                 task_id=tid,
-                task_execution_id=(
-                    str(resource.task_execution_id) if resource.task_execution_id else ""
-                ),
+                task_attempt_id=(str(resource.task_attempt_id) if resource.task_attempt_id else ""),
                 name=resource.name,
                 mime_type=resource.mime_type,
                 file_path=resource.file_path,
@@ -188,13 +168,13 @@ def _task_keyed_evaluations(
 
 def _task_keyed_sandboxes(
     run_summary: dict,
-) -> dict[str, RunSandboxDto]:
+) -> dict[str, SampleSandboxDto]:
     """Extract sandbox info from run summary_json if available."""
-    result: dict[str, RunSandboxDto] = {}
+    result: dict[str, SampleSandboxDto] = {}
     sandboxes = run_summary.get("sandboxes", {})
     for task_id, sandbox in sandboxes.items():
         commands = [
-            RunSandboxCommandDto(
+            SampleSandboxCommandDto(
                 command=cmd.get("command", ""),
                 stdout=cmd.get("stdout"),
                 stderr=cmd.get("stderr"),
@@ -204,7 +184,7 @@ def _task_keyed_sandboxes(
             )
             for cmd in sandbox.get("commands", [])
         ]
-        result[task_id] = RunSandboxDto(
+        result[task_id] = SampleSandboxDto(
             sandbox_id=sandbox.get("sandbox_id", ""),
             task_id=task_id,
             template=sandbox.get("template"),
@@ -222,24 +202,24 @@ def _build_communication_threads(
     threads: list[Thread],
     messages: list[ThreadMessage],
     execution_task_map: dict[UUID, UUID],
-) -> list[RunCommunicationThreadDto]:
+) -> list[SampleCommunicationThreadDto]:
     msgs_by_thread: dict[UUID, list[ThreadMessage]] = defaultdict(list)
     for message in sorted(messages, key=lambda m: m.sequence_num):
         msgs_by_thread[message.thread_id].append(message)
 
-    result: list[RunCommunicationThreadDto] = []
+    result: list[SampleCommunicationThreadDto] = []
     for thread in threads:
         thread_messages = msgs_by_thread.get(thread.id, [])
         task_ids = {
             task_id
             for message in thread_messages
-            if message.task_execution_id is not None
-            for task_id in [execution_task_map.get(message.task_execution_id)]
+            if message.task_attempt_id is not None
+            for task_id in [execution_task_map.get(message.task_attempt_id)]
             if task_id is not None
         }
         thread_task_id = next(iter(task_ids)) if len(task_ids) == 1 else None
         result.append(
-            RunCommunicationThreadDto(
+            SampleCommunicationThreadDto(
                 id=str(thread.id),
                 sample_id=str(thread.sample_id),
                 task_id=str(thread_task_id) if thread_task_id else None,
@@ -250,21 +230,21 @@ def _build_communication_threads(
                 created_at=thread.created_at,
                 updated_at=thread.updated_at,
                 messages=[
-                    RunCommunicationMessageDto(
+                    SampleCommunicationMessageDto(
                         id=str(message.id),
                         thread_id=str(message.thread_id),
                         sample_id=str(message.sample_id),
                         thread_topic=thread.topic,
                         task_id=(
-                            str(execution_task_map[message.task_execution_id])
+                            str(execution_task_map[message.task_attempt_id])
                             if (
-                                message.task_execution_id
-                                and message.task_execution_id in execution_task_map
+                                message.task_attempt_id
+                                and message.task_attempt_id in execution_task_map
                             )
                             else None
                         ),
-                        task_execution_id=(
-                            str(message.task_execution_id) if message.task_execution_id else None
+                        task_attempt_id=(
+                            str(message.task_attempt_id) if message.task_attempt_id else None
                         ),
                         from_agent_id=message.from_agent_id,
                         to_agent_id=message.to_agent_id,
@@ -307,14 +287,14 @@ def _context_events_by_task(
 ) -> dict[str, list[SampleContextEventDto]]:
     context_events_by_task: dict[str, list[SampleContextEventDto]] = defaultdict(list)
     for event in context_events_rows:
-        task_id = execution_task_map.get(event.task_execution_id)
+        task_id = execution_task_map.get(event.task_attempt_id)
         if task_id is None:
             continue
         context_events_by_task[str(task_id)].append(
             SampleContextEventDto(
                 id=event.id,
                 sample_id=event.sample_id,
-                task_execution_id=event.task_execution_id,
+                task_attempt_id=event.task_attempt_id,
                 task_id=task_id,
                 worker_binding_key=event.worker_binding_key,
                 sequence=event.sequence,

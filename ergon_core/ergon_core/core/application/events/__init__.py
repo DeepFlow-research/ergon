@@ -6,6 +6,7 @@ from ergon_core.core.application.events.runtime import (
     PropagationCancelCause,
     SampleCancelledEvent,
     SampleCleanupEvent,
+    SampleStartedEvent,
     TaskCancelledEvent,
     TaskCompletedEvent,
     TaskFailedEvent,
@@ -13,7 +14,6 @@ from ergon_core.core.application.events.runtime import (
     TaskStartedEvent,
     WorkflowCompletedEvent,
     WorkflowFailedEvent,
-    WorkflowStartedEvent,
 )
 
 __all__ = [
@@ -22,6 +22,7 @@ __all__ = [
     "PropagationCancelCause",
     "SampleCancelledEvent",
     "SampleCleanupEvent",
+    "SampleStartedEvent",
     "TaskCancelledEvent",
     "TaskCompletedEvent",
     "TaskFailedEvent",
@@ -29,5 +30,4 @@ __all__ = [
     "TaskStartedEvent",
     "WorkflowCompletedEvent",
     "WorkflowFailedEvent",
-    "WorkflowStartedEvent",
 ]

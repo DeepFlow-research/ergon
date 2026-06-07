@@ -1,19 +1,27 @@
 import { config } from "@/lib/config";
-import { parseRunSnapshot, type RunSnapshot } from "@/lib/contracts/rest";
+import {
+  parseSampleDetail,
+  parseSampleEvents,
+  parseSampleGraph,
+  parseSampleSnapshot,
+  type SampleSnapshot,
+  type SampleEventsView,
+} from "@/lib/contracts/rest";
+import { buildSampleState, type SampleDashboardState } from "@/lib/sample-state/dashboard";
 import { fetchErgonApi } from "@/lib/serverApi";
-import { getHarnessRun } from "@/lib/testing/dashboardHarness";
+import { getHarnessSample, getHarnessSampleEvents, getHarnessSampleState } from "@/lib/testing/dashboardHarness";
 
 import { backendUnavailable, type ServerDataResult } from "./responses";
 
-export interface RunListFilters {
+export interface SampleListFilters {
   limit?: number;
   offset?: number;
   status?: string;
-  definitionId?: string;
+  experimentId?: string;
   experiment?: string;
 }
 
-export interface RunSummary {
+export interface SampleSummary {
   id: string;
   name: string;
   status: string;
@@ -22,8 +30,7 @@ export interface RunSummary {
   completed_at: string | null;
   latest_activity_at: string | null;
   duration_seconds: number | null;
-  definition_id: string;
-  definition_name: string | null;
+  experiment_id: string | null;
   experiment: string | null;
   benchmark_type: string;
   instance_key: string;
@@ -43,14 +50,14 @@ export interface RunSummary {
   metrics: Record<string, unknown>;
 }
 
-export async function loadRunList(
-  filters: RunListFilters = {},
-): Promise<ServerDataResult<RunSummary[]>> {
+export async function loadSampleList(
+  filters: SampleListFilters = {},
+): Promise<ServerDataResult<SampleSummary[]>> {
   const searchParams = new URLSearchParams();
   searchParams.set("limit", String(filters.limit ?? 100));
   if (filters.offset) searchParams.set("offset", String(filters.offset));
   if (filters.status) searchParams.set("status", filters.status);
-  if (filters.definitionId) searchParams.set("definition_id", filters.definitionId);
+  if (filters.experimentId) searchParams.set("experiment_id", filters.experimentId);
   if (filters.experiment) searchParams.set("experiment", filters.experiment);
 
   try {
@@ -59,43 +66,119 @@ export async function loadRunList(
     if (response.ok) {
       return {
         ok: true,
-        data: parseRunList(body),
+        data: parseSampleList(body),
         status: response.status,
         source: "backend",
       };
     }
     return { ok: false, body, status: response.status, source: "backend" };
   } catch (error) {
-    return backendUnavailable("Ergon API is unavailable while loading runs.", error);
+    return backendUnavailable("Ergon API is unavailable while loading samples.", error);
   }
 }
 
-export async function loadRunSnapshot(sampleId: string): Promise<ServerDataResult<RunSnapshot>> {
+export async function loadSampleSnapshot(sampleId: string): Promise<ServerDataResult<SampleSnapshot>> {
   if (config.enableTestHarness) {
-    const run = getHarnessRun(sampleId);
-    if (run !== null) {
-      return { ok: true, data: parseRunSnapshot(run), status: 200, source: "harness" };
+    const sample = getHarnessSample(sampleId);
+    if (sample !== null) {
+      return { ok: true, data: parseSampleSnapshot(sample), status: 200, source: "harness" };
     }
   }
 
   try {
-    const response = await fetchErgonApi(`/samples/${sampleId}`);
+    const response = await fetchErgonApi(`/samples/${sampleId}/workspace`);
     const body = await response.json();
     if (response.ok) {
       return {
         ok: true,
-        data: parseRunSnapshot(body),
+        data: parseSampleSnapshot(body),
         status: response.status,
         source: "backend",
       };
     }
     return { ok: false, body, status: response.status, source: "backend" };
   } catch (error) {
-    return backendUnavailable(`Ergon API is unavailable while loading run ${sampleId}.`, error);
+    return backendUnavailable(`Ergon API is unavailable while loading sample ${sampleId}.`, error);
   }
 }
 
-function parseRunList(input: unknown): RunSummary[] {
+export async function loadSampleEvents(sampleId: string): Promise<ServerDataResult<SampleEventsView>> {
+  if (config.enableTestHarness) {
+    const events = getHarnessSampleEvents(sampleId);
+    if (events !== null) {
+      return {
+        ok: true,
+        data: parseSampleEvents({ items: events }),
+        status: 200,
+        source: "harness",
+      };
+    }
+  }
+
+  try {
+    const response = await fetchErgonApi(`/samples/${sampleId}/events`);
+    const body = await response.json();
+    if (response.ok) {
+      return {
+        ok: true,
+        data: parseSampleEvents(body),
+        status: response.status,
+        source: "backend",
+      };
+    }
+    return { ok: false, body, status: response.status, source: "backend" };
+  } catch (error) {
+    return backendUnavailable(`Ergon API is unavailable while loading events for sample ${sampleId}.`, error);
+  }
+}
+
+export async function loadSampleState(sampleId: string): Promise<ServerDataResult<SampleDashboardState>> {
+  if (config.enableTestHarness) {
+    const sample = getHarnessSampleState(sampleId);
+    if (sample !== null) {
+      return { ok: true, data: sample, status: 200, source: "harness" };
+    }
+  }
+
+  try {
+    const [detailResponse, eventsResponse, graphResponse] = await Promise.all([
+      fetchErgonApi(`/samples/${sampleId}`),
+      fetchErgonApi(`/samples/${sampleId}/events`),
+      fetchErgonApi(`/samples/${sampleId}/graph`),
+    ]);
+
+    const [detailBody, eventsBody, graphBody] = await Promise.all([
+      detailResponse.json(),
+      eventsResponse.json(),
+      graphResponse.json(),
+    ]);
+
+    if (!detailResponse.ok) {
+      return { ok: false, body: detailBody, status: detailResponse.status, source: "backend" };
+    }
+    if (!eventsResponse.ok) {
+      return { ok: false, body: eventsBody, status: eventsResponse.status, source: "backend" };
+    }
+    if (!graphResponse.ok) {
+      return { ok: false, body: graphBody, status: graphResponse.status, source: "backend" };
+    }
+
+    return {
+      ok: true,
+      data: buildSampleState({
+        detail: parseSampleDetail(detailBody),
+        events: parseSampleEvents(eventsBody).items,
+        graph: parseSampleGraph(graphBody),
+      }),
+      status: 200,
+      source: "backend",
+    };
+  } catch (error) {
+    return backendUnavailable(`Ergon API is unavailable while loading sample ${sampleId}.`, error);
+  }
+}
+
+function parseSampleList(input: unknown): SampleSummary[] {
   if (!Array.isArray(input)) return [];
   return input.map((item) => {
     const record = typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {};
@@ -109,8 +192,7 @@ function parseRunList(input: unknown): RunSummary[] {
       completed_at: optionalString(record.completed_at),
       latest_activity_at: optionalString(record.latest_activity_at),
       duration_seconds: optionalNumber(record.duration_seconds),
-      definition_id: String(record.definition_id ?? ""),
-      definition_name: optionalString(record.definition_name),
+      experiment_id: optionalString(record.experiment_id),
       experiment: optionalString(record.experiment),
       benchmark_type: String(record.benchmark_type ?? ""),
       instance_key: String(record.instance_key ?? ""),

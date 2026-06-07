@@ -4,32 +4,39 @@ from uuid import uuid4
 import pytest
 import ergon_cli.domains.experiments.commands as experiment_cmd
 import ergon_cli.domains.experiments.service as experiment_domain_service
-from ergon_cli.domains.experiments.models import ExperimentTagDefinitionView
 from ergon_cli.main import build_parser
 from ergon_core.core.views.experiments.models import (
-    ExperimentDetailDto,
-    ExperimentRunMetricsDto,
-    ExperimentRunRowDto,
-    ExperimentSummaryDto,
+    EnvironmentContributionView,
+    ExperimentDetailView as CoreExperimentDetailView,
+    ExperimentListView,
+    ExperimentSampleSummaryView,
 )
 
 
-def _summary(**overrides) -> ExperimentSummaryDto:
+def _experiment_state(**overrides) -> CoreExperimentDetailView:
     data = {
-        "definition_id": uuid4(),
+        "experiment_id": uuid4(),
         "name": "ci experiment",
-        "benchmark_type": "ci-benchmark",
+        "environments": [
+            EnvironmentContributionView(
+                environment_id=uuid4(),
+                environment_name="mini-validation",
+                source_mode="materialized",
+                sample_count=2,
+                selected_count=2,
+            )
+        ],
         "sample_count": 2,
-        "status": "defined",
+        "samples": [],
+        "sampler_invocations": [],
         "created_at": "2026-04-27T12:00:00Z",
-        "run_count": 0,
     }
     data.update(overrides)
-    return ExperimentSummaryDto.model_validate(data)
+    return CoreExperimentDetailView.model_validate(data)
 
 
 def test_experiment_subcommands_are_registered_in_main_parser() -> None:
-    """Show and list are registered for current definition-backed experiments."""
+    """Show and list are registered for current experiments."""
     parser = build_parser()
 
     show_args = parser.parse_args(["experiment", "show", str(uuid4())])
@@ -75,9 +82,14 @@ def test_experiment_run_subcommand_is_no_longer_registered() -> None:
 
 def test_experiment_list_prints_rows(monkeypatch, capsys):
     class FakeReadService:
-        def list_experiments(self, *, limit: int):
+        def list_experiment_states(self, *, limit: int):
             assert limit == 3
-            return [_summary(name="alpha"), _summary(name="beta", status="running", run_count=2)]
+            return ExperimentListView(
+                items=[
+                    _experiment_state(name="alpha"),
+                    _experiment_state(name="beta", sample_count=4),
+                ]
+            )
 
     monkeypatch.setattr(experiment_domain_service, "ExperimentReadService", FakeReadService)
 
@@ -87,93 +99,62 @@ def test_experiment_list_prints_rows(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "alpha" in out
     assert "beta" in out
-    assert "running" in out
+    assert "mini-validation" in out
+    assert "DEFINITION_ID" not in out
+    assert "EXPERIMENT_ID" in out
 
 
 def test_experiment_show_prints_detail(monkeypatch, capsys):
     sample_id = uuid4()
+    experiment_id = uuid4()
+    environment_id = uuid4()
 
     class FakeReadService:
-        def get_experiment(self, definition_id):
-            return ExperimentDetailDto(
-                experiment=_summary(definition_id=definition_id),
-                runs=[
-                    ExperimentRunRowDto(
-                        sample_id=sample_id,
-                        definition_id=uuid4(),
-                        benchmark_type="ci-benchmark",
-                        instance_key="sample-a",
-                        status="completed",
-                        created_at="2026-04-27T12:00:00Z",
-                        metrics=ExperimentRunMetricsDto(
-                            sample_id=sample_id,
-                            status="completed",
-                            instance_key="sample-a",
-                        ),
+        def get_experiment_state(self, requested_experiment_id):
+            assert requested_experiment_id == experiment_id
+            return CoreExperimentDetailView(
+                experiment_id=experiment_id,
+                name="ci experiment",
+                environments=[
+                    EnvironmentContributionView(
+                        environment_id=environment_id,
+                        environment_name="mini-validation",
+                        source_mode="materialized",
+                        sample_count=1,
+                        selected_count=1,
                     )
                 ],
-                sample_selection={"instance_keys": ["sample-a"]},
+                sample_count=1,
+                samples=[
+                    ExperimentSampleSummaryView(
+                        sample_id=sample_id,
+                        experiment_id=experiment_id,
+                        environment_id=environment_id,
+                        environment_name="mini-validation",
+                        sample_key="sample-a",
+                        status="completed",
+                        created_at="2026-04-27T12:00:00Z",
+                    )
+                ],
+                created_at="2026-04-27T12:00:00Z",
             )
 
-    definition_id = uuid4()
     monkeypatch.setattr(experiment_domain_service, "ExperimentReadService", FakeReadService)
 
-    rc = experiment_cmd.handle_experiment_show(Namespace(definition_id=str(definition_id)))
+    rc = experiment_cmd.handle_experiment_show(Namespace(experiment_id=str(experiment_id)))
 
     assert rc == 0
     out = capsys.readouterr().out
-    assert str(definition_id) in out
+    assert str(experiment_id) in out
     assert str(sample_id) in out
     assert "sample-a" in out
+    assert "definition" not in out.lower()
 
 
-def test_experiment_tag_subcommands_are_registered() -> None:
+def test_experiment_tag_subcommands_are_no_longer_registered() -> None:
     parser = build_parser()
 
-    tags_args = parser.parse_args(["experiment", "tags"])
-    by_tag_args = parser.parse_args(["experiment", "by-tag", "alpha"])
-
-    assert tags_args.experiment_action == "tags"
-    assert by_tag_args.experiment_action == "by-tag"
-    assert by_tag_args.tag == "alpha"
-
-
-def test_experiment_tags_prints_run_record_experiment_tags(monkeypatch, capsys):
-    class FakeTagService:
-        def distinct_tags(self):
-            return ["alpha", "beta"]
-
-    monkeypatch.setattr(experiment_domain_service, "ExperimentReadService", FakeTagService)
-
-    rc = experiment_cmd.handle_experiment_tags(Namespace())
-
-    assert rc == 0
-    out = capsys.readouterr().out
-    assert "alpha" in out
-    assert "beta" in out
-
-
-def test_experiment_by_tag_prints_definitions_for_run_record_tag(monkeypatch, capsys):
-    definition_id = uuid4()
-
-    class FakeTagService:
-        def definitions_by_tag(self, tag):
-            assert tag == "alpha"
-            return [
-                ExperimentTagDefinitionView(
-                    definition_id=definition_id,
-                    name="alpha definition",
-                    benchmark_type="ci-benchmark",
-                    latest_run_status="completed",
-                )
-            ]
-
-    monkeypatch.setattr(experiment_domain_service, "ExperimentReadService", FakeTagService)
-
-    rc = experiment_cmd.handle_experiment_by_tag(Namespace(tag="alpha"))
-
-    assert rc == 0
-    out = capsys.readouterr().out
-    assert str(definition_id) in out
-    assert "alpha definition" in out
-    assert "completed" in out
+    with pytest.raises(SystemExit):
+        parser.parse_args(["experiment", "tags"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["experiment", "by-tag", "alpha"])

@@ -8,10 +8,6 @@ state.
 from uuid import UUID
 
 from ergon_core.core.shared.json_types import JsonObject
-from ergon_core.core.persistence.definitions.models import (
-    ExperimentDefinitionTask,
-    ExperimentDefinitionTaskDependency,
-)
 from ergon_core.core.application.runtime import status as graph_status
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.application.runtime.models import MutationMeta
@@ -58,7 +54,7 @@ async def mark_task_ready(
         session,
         sample_id,
         task_id,
-        graph_status.PENDING,
+        graph_status.READY,
         graph_repo=graph_repo,
         graph_lookup=graph_lookup,
     )
@@ -107,23 +103,29 @@ async def mark_task_failed(
 async def get_initial_ready_tasks(
     session: Session,
     sample_id: UUID,
-    definition_id: UUID,
     *,
-    graph_repo: RuntimeGraphRepository,
-    graph_lookup: GraphNodeLookup,
+    graph_repo: RuntimeGraphRepository | None = None,
+    graph_lookup: GraphNodeLookup | None = None,
+    commit: bool = True,
 ) -> list[UUID]:
     """Return task IDs that have zero dependencies."""
-    all_tasks_stmt = select(ExperimentDefinitionTask.id).where(
-        ExperimentDefinitionTask.experiment_definition_id == definition_id,
+    graph_repo = graph_repo or RuntimeGraphRepository()
+    graph_lookup = graph_lookup or GraphNodeLookup(session, sample_id)
+    all_tasks_stmt = select(SampleGraphNode.task_id).where(
+        SampleGraphNode.sample_id == sample_id,
+    )
+    tasks_with_deps_stmt = select(SampleGraphEdge.target_task_id).where(
+        SampleGraphEdge.sample_id == sample_id,
     )
     all_task_ids = set(session.exec(all_tasks_stmt).all())
-
-    tasks_with_deps_stmt = select(ExperimentDefinitionTaskDependency.task_id).where(
-        ExperimentDefinitionTaskDependency.experiment_definition_id == definition_id,
-    )
     tasks_with_deps = set(session.exec(tasks_with_deps_stmt).all())
 
-    ready_ids = list(all_task_ids - tasks_with_deps)
+    ready_ids = []
+    for task_id in sorted(all_task_ids - tasks_with_deps):
+        node = session.get(SampleGraphNode, (sample_id, task_id))
+        if node is None or node.status != graph_status.PENDING:
+            continue
+        ready_ids.append(task_id)
 
     for task_id in ready_ids:
         await mark_task_ready(
@@ -134,7 +136,10 @@ async def get_initial_ready_tasks(
             graph_lookup=graph_lookup,
         )
 
-    session.commit()
+    if commit:
+        session.commit()
+    else:
+        session.flush()
     return ready_ids
 
 

@@ -5,7 +5,7 @@ from uuid import UUID
 from ergon_core.api.worker.results import WorkerOutput
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
-from sqlalchemy import func, update
+from sqlalchemy import update
 from sqlmodel import Session, col, select
 
 
@@ -25,8 +25,8 @@ class TaskExecutionRepository:
             select(SampleTaskAttempt)
             .where(SampleTaskAttempt.task_id == task_id)
             .order_by(
-                col(SampleTaskAttempt.attempt_number).desc(),
-                col(SampleTaskAttempt.started_at).desc(),
+                col(SampleTaskAttempt.created_at).desc(),
+                col(SampleTaskAttempt.id).desc(),
             )
             .limit(1)
         )
@@ -47,15 +47,6 @@ class TaskExecutionRepository:
             col(SampleTaskAttempt.task_id).in_(child_task_ids_stmt)
         )
         return list(session.exec(stmt).all())
-
-    def next_attempt_for_node(self, session: Session, sample_id: UUID, task_id: UUID) -> int:
-        count = session.exec(
-            select(func.count(SampleTaskAttempt.id)).where(
-                SampleTaskAttempt.sample_id == sample_id,
-                SampleTaskAttempt.task_id == task_id,
-            )
-        ).one()
-        return count + 1
 
     async def set_sandbox_id(
         self,

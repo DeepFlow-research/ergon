@@ -7,20 +7,18 @@ import { Group, Panel, Separator } from "react-resizable-panels";
 import { DAGCanvas } from "@/components/dag/DAGCanvas";
 import { StatusBadge } from "@/components/common/StatusBadge";
 
-import { SampleRuntimeSummaryHeader, type RunHeaderMetricValues } from "@/components/sample/SampleRuntimeSummaryHeader";
+import { SampleRuntimeSummaryHeader, type SampleHeaderMetricValues } from "@/components/sample/SampleRuntimeSummaryHeader";
 import { UnifiedEventStream } from "@/components/sample/UnifiedEventStream";
 import { TaskWorkspace } from "@/components/workspace/TaskWorkspace";
 import { ActivityStackTimeline } from "@/features/activity/components/ActivityStackTimeline";
-import { buildRunActivities } from "@/features/activity/buildRunActivities";
+import { buildSampleActivities } from "@/features/activity/buildSampleActivities";
 import { resolveActivitySnapshotSequence } from "@/features/activity/snapshotSequence";
-import type { RunActivity } from "@/features/activity/types";
-import {
-  parseGraphMutationDtoArray,
-  type GraphMutationDto,
-} from "@/features/graph/contracts/graphMutations";
+import type { SampleActivity } from "@/features/activity/types";
+import { sampleRuntimeEventsToGraphEvents } from "@/features/graph/sampleRuntimeEvents";
 import { useSampleWorkspaceState } from "@/hooks/useSampleWorkspaceState";
-import { buildRunEvents } from "@/lib/sampleEvents";
-import { RunLifecycleStatus, SerializedSampleWorkspaceState, TaskStatus, type SampleWorkspaceState } from "@/lib/types";
+import { buildSampleEvents } from "@/lib/sampleEvents";
+import { parseSampleEvents, type SampleRuntimeEventView } from "@/lib/contracts/rest";
+import { SampleLifecycleStatus, SerializedSampleWorkspaceState, TaskStatus, type SampleWorkspaceState } from "@/lib/types";
 import {
   nearestMutationAtOrBefore,
   useSampleDisplayState,
@@ -75,9 +73,13 @@ export function SampleWorkspacePage({
   } = useSamplePanelLayout();
   const { runState, isLoading, error, isSubscribed } = useSampleWorkspaceState(sampleId, initialRunState);
 
-  const [mutations, setMutations] = useState<GraphMutationDto[]>([]);
+  const [runtimeEvents, setRuntimeEvents] = useState<SampleRuntimeEventView[]>([]);
+  const mutations = useMemo(
+    () => sampleRuntimeEventsToGraphEvents(runtimeEvents),
+    [runtimeEvents],
+  );
   const requestedSequenceRef = useRef<number | null>(null);
-  const pendingActivityResolutionRef = useRef<RunActivity | null>(null);
+  const pendingActivityResolutionRef = useRef<SampleActivity | null>(null);
   const selectedActivityIdRef = useRef<string | null>(null);
   const mutationsLoadedRef = useRef(false);
 
@@ -95,18 +97,19 @@ export function SampleWorkspacePage({
     selectedActivityIdRef.current = selectedActivityId;
   }, [selectedActivityId]);
 
-  // Fetch mutations once per run load so snapshot selection is always ready.
+  // Fetch typed sample runtime events once per sample load so snapshot selection is always ready.
   useEffect(() => {
     let cancelled = false;
     mutationsLoadedRef.current = false;
     pendingActivityResolutionRef.current = null;
-    fetch(`/api/samples/${sampleId}/mutations`)
+    fetch(`/api/samples/${sampleId}/events`)
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
-        const parsed = parseGraphMutationDtoArray(data);
+        const events = parseSampleEvents(data).items;
+        const parsed = sampleRuntimeEventsToGraphEvents(events);
         mutationsLoadedRef.current = true;
-        setMutations(parsed);
+        setRuntimeEvents(events);
         const requestedSequence = requestedSequenceRef.current;
         requestedSequenceRef.current = null;
         if (requestedSequence !== null) {
@@ -129,7 +132,7 @@ export function SampleWorkspacePage({
         if (cancelled) return;
         mutationsLoadedRef.current = true;
         pendingActivityResolutionRef.current = null;
-        setMutations([]);
+        setRuntimeEvents([]);
       });
     return () => {
       cancelled = true;
@@ -157,7 +160,7 @@ export function SampleWorkspacePage({
     return { leafStatusCounts: empty, leafTotal: total };
   }, [displayState]);
 
-  const runHeaderMetrics: RunHeaderMetricValues = useMemo(() => {
+  const runHeaderMetrics: SampleHeaderMetricValues = useMemo(() => {
     const optionalMetrics = runState as (SampleWorkspaceState & OptionalRunMetrics) | null;
     return {
       tasks: {
@@ -174,14 +177,14 @@ export function SampleWorkspacePage({
   }, [leafStatusCounts, leafTotal, runState]);
 
   // D4: Unified event log for the replayed inspector view.
-  const events = useMemo(() => buildRunEvents(displayState), [displayState]);
+  const events = useMemo(() => buildSampleEvents(displayState), [displayState]);
   // Trace spans are an immutable map of the full run. Replay moves the cursor
   // over this map; it should not relayout or clip completed spans.
-  const traceEvents = useMemo(() => buildRunEvents(runState), [runState]);
+  const traceEvents = useMemo(() => buildSampleEvents(runState), [runState]);
 
   const activities = useMemo(
     () =>
-      buildRunActivities({
+      buildSampleActivities({
         runState,
         events: traceEvents,
         mutations,
@@ -236,7 +239,7 @@ export function SampleWorkspacePage({
   }, [displayState, selectedTaskId]);
 
   const status = runState?.status ?? "pending";
-  const experimentHref = runState?.definitionId ? `/experiments/${runState.definitionId}` : "/experiments";
+  const experimentHref = runState?.experimentId ? `/experiments/${runState.experimentId}` : "/experiments";
   const isInspectorOpen = selectedTaskId !== null;
 
   const handleTaskClick = (taskId: string) => {
@@ -253,7 +256,7 @@ export function SampleWorkspacePage({
     setSnapshotSequence(mutation?.sequence ?? sequence);
   };
 
-  const handleActivityClick = (activity: RunActivity) => {
+  const handleActivityClick = (activity: SampleActivity) => {
     setSelectionNotice(null);
     requestedSequenceRef.current = null;
     selectedActivityIdRef.current = activity.id;
@@ -289,7 +292,7 @@ export function SampleWorkspacePage({
             <h1 className="max-w-[340px] truncate font-mono text-xl font-semibold tracking-[-0.02em]">
               {runState?.name ?? sampleId}
             </h1>
-            <StatusBadge status={status as RunLifecycleStatus} />
+            <StatusBadge status={status as SampleLifecycleStatus} />
             <span className="rounded bg-[var(--paper-2)] px-2 py-0.5 font-mono text-xs text-[var(--muted)]">
               {snapshotSequence === null ? "live" : `snapshot · seq ${snapshotSequence}`} · {formatDuration(runState?.durationSeconds ?? null).value}
             </span>

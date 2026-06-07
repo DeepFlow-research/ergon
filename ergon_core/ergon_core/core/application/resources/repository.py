@@ -19,8 +19,8 @@ class SampleResourceRepository:
         stmt = select(SampleResource).where(SampleResource.sample_id == sample_id)
         return list(session.exec(stmt).all())
 
-    def list_by_execution(self, session: Session, task_execution_id: UUID) -> list[SampleResource]:
-        stmt = select(SampleResource).where(SampleResource.task_execution_id == task_execution_id)
+    def list_by_execution(self, session: Session, task_attempt_id: UUID) -> list[SampleResource]:
+        stmt = select(SampleResource).where(SampleResource.task_attempt_id == task_attempt_id)
         return list(session.exec(stmt).all())
 
     def list_for_run(
@@ -29,19 +29,19 @@ class SampleResourceRepository:
         *,
         sample_id: UUID,
         task_id: UUID | None = None,
-        task_execution_id: UUID | None = None,
+        task_attempt_id: UUID | None = None,
         kind: str | None = None,
         name: str | None = None,
     ) -> list[SampleResourceView]:
         stmt = select(SampleResource).where(SampleResource.sample_id == sample_id)
-        if task_execution_id is not None:
-            execution = session.get(SampleTaskAttempt, task_execution_id)
+        if task_attempt_id is not None:
+            execution = session.get(SampleTaskAttempt, task_attempt_id)
             if execution is None or execution.sample_id != sample_id:
                 raise ContainmentViolation(
                     parent_task_id=task_id,
-                    target_task_id=task_execution_id,
+                    target_task_id=task_attempt_id,
                 )
-            stmt = stmt.where(SampleResource.task_execution_id == task_execution_id)
+            stmt = stmt.where(SampleResource.task_attempt_id == task_attempt_id)
         if task_id is not None:
             node = session.get(SampleGraphNode, (sample_id, task_id))
             if node is None or node.sample_id != sample_id:
@@ -52,7 +52,7 @@ class SampleResourceRepository:
                     SampleTaskAttempt.task_id == task_id,
                 )
             ).all()
-            stmt = stmt.where(SampleResource.task_execution_id.in_(execution_ids))
+            stmt = stmt.where(SampleResource.task_attempt_id.in_(execution_ids))
         if kind is not None:
             stmt = stmt.where(SampleResource.kind == kind)
         if name is not None:
@@ -72,13 +72,13 @@ class SampleResourceRepository:
         self,
         session: Session,
         *,
-        task_execution_id: UUID,
+        task_attempt_id: UUID,
         file_path: str,
     ) -> SampleResource | None:
         stmt = (
             select(SampleResource)
             .where(
-                SampleResource.task_execution_id == task_execution_id,
+                SampleResource.task_attempt_id == task_attempt_id,
                 SampleResource.file_path == file_path,
             )
             .order_by(SampleResource.created_at.desc(), SampleResource.id.desc())
@@ -90,13 +90,13 @@ class SampleResourceRepository:
         self,
         session: Session,
         *,
-        task_execution_id: UUID,
+        task_attempt_id: UUID,
         content_hash: str,
     ) -> SampleResource | None:
         stmt = (
             select(SampleResource)
             .where(
-                SampleResource.task_execution_id == task_execution_id,
+                SampleResource.task_attempt_id == task_attempt_id,
                 SampleResource.content_hash == content_hash,
             )
             .limit(1)
@@ -108,7 +108,7 @@ class SampleResourceRepository:
         session: Session,
         *,
         sample_id: UUID,
-        task_execution_id: UUID,
+        task_attempt_id: UUID,
         kind: str,
         name: str,
         mime_type: str,
@@ -121,7 +121,7 @@ class SampleResourceRepository:
     ) -> SampleResource:
         row = SampleResource(
             sample_id=sample_id,
-            task_execution_id=task_execution_id,
+            task_attempt_id=task_attempt_id,
             kind=kind,
             name=name,
             mime_type=mime_type,

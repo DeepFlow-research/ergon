@@ -1,6 +1,6 @@
 """Experiment-group submission helper for canonical smoke drivers.
 
-POSTs ``/api/__danger__/test-harness/write/experiment-runs`` on the api container; returns the
+POSTs ``/api/__danger__/test-harness/write/experiment-samples`` on the api container; returns the
 sample_ids in the same order as the slots passed in.
 
 Tests are a pure black-box client of the stack: they do not import any
@@ -41,7 +41,7 @@ def _api_base() -> str:
 
 def build_experiment_payload(
     *,
-    benchmark_slug: str,
+    environment_slug: str,
     slots: list[tuple[str, str]],
     experiment: str,
     sandbox_slug: str,
@@ -49,7 +49,7 @@ def build_experiment_payload(
     model: str = "openai:gpt-4o",
 ) -> dict:
     return {
-        "benchmark_slug": benchmark_slug,
+        "environment_slug": environment_slug,
         "slots": [
             {"worker_slug": worker, "evaluator_slug": criterion} for worker, criterion in slots
         ],
@@ -60,9 +60,9 @@ def build_experiment_payload(
     }
 
 
-async def submit_experiment_runs(
+async def submit_experiment_samples(
     *,
-    benchmark_slug: str,
+    environment_slug: str,
     slots: list[tuple[str, str]],
     experiment: str,
     sandbox_slug: str,
@@ -73,7 +73,7 @@ async def submit_experiment_runs(
     """Submit one sample per slot under ``experiment``; return sample_ids in order.
 
     Args:
-        benchmark_slug:  e.g. ``"researchrubrics"``
+        environment_slug: e.g. ``"researchrubrics"``
         slots:           list of ``(worker_slug, criterion_slug)`` tuples
         experiment:      shared experiment tag (all runs group under this)
         sandbox_slug:    explicit sandbox manager slug for the run
@@ -84,7 +84,7 @@ async def submit_experiment_runs(
                          client-side timeout to propagate.
     """
     payload = build_experiment_payload(
-        benchmark_slug=benchmark_slug,
+        environment_slug=environment_slug,
         slots=slots,
         experiment=experiment,
         sandbox_slug=sandbox_slug,
@@ -93,7 +93,7 @@ async def submit_experiment_runs(
     )
     async with httpx.AsyncClient(base_url=_api_base(), timeout=30.0) as client:
         response = await client.post(
-            "/api/__danger__/test-harness/write/experiment-runs", json=payload
+            "/api/__danger__/test-harness/write/experiment-samples", json=payload
         )
         if response.status_code >= 400:
             pytest.fail(
@@ -106,4 +106,4 @@ async def submit_experiment_runs(
     return [UUID(sample_id) for sample_id in body["sample_ids"]]
 
 
-__all__ = ["build_experiment_payload", "smoke_experiment_key", "submit_experiment_runs"]
+__all__ = ["build_experiment_payload", "smoke_experiment_key", "submit_experiment_samples"]

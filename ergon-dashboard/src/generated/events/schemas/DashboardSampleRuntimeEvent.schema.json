@@ -44,45 +44,432 @@
         }
       ]
     },
-    "SampleRuntimeEventView": {
+    "SampleAnnotationDeletedEventView": {
       "properties": {
-        "id": {
+        "eventId": {
           "format": "uuid",
-          "title": "Id",
+          "title": "Eventid",
           "type": "string"
         },
-        "sample_id": {
+        "sampleId": {
           "format": "uuid",
-          "title": "Sample Id",
+          "title": "Sampleid",
           "type": "string"
         },
-        "event_timestamp": {
+        "timestamp": {
           "format": "date-time",
-          "title": "Event Timestamp",
+          "title": "Timestamp",
           "type": "string"
         },
-        "table": {
-          "enum": [
-            "sample_status_events",
-            "sample_task_events",
-            "sample_edge_events",
-            "sample_worker_events",
-            "sample_evaluator_events",
-            "sample_sandbox_events",
-            "sample_annotation_events"
+        "eventType": {
+          "const": "annotation.deleted",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "targetType": {
+          "title": "Targettype",
+          "type": "string"
+        },
+        "targetId": {
+          "format": "uuid",
+          "title": "Targetid",
+          "type": "string"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonObject",
+          "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+        }
+      },
+      "required": [
+        "eventId",
+        "sampleId",
+        "timestamp",
+        "eventType",
+        "targetType",
+        "targetId",
+        "key"
+      ],
+      "title": "SampleAnnotationDeletedEventView",
+      "type": "object"
+    },
+    "SampleAnnotationSetEventView": {
+      "properties": {
+        "eventId": {
+          "format": "uuid",
+          "title": "Eventid",
+          "type": "string"
+        },
+        "sampleId": {
+          "format": "uuid",
+          "title": "Sampleid",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "annotation.set",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "targetType": {
+          "title": "Targettype",
+          "type": "string"
+        },
+        "targetId": {
+          "format": "uuid",
+          "title": "Targetid",
+          "type": "string"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonObject",
+          "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+        }
+      },
+      "required": [
+        "eventId",
+        "sampleId",
+        "timestamp",
+        "eventType",
+        "targetType",
+        "targetId",
+        "key"
+      ],
+      "title": "SampleAnnotationSetEventView",
+      "type": "object"
+    },
+    "SampleAnnotationUpdatedEventView": {
+      "properties": {
+        "eventId": {
+          "format": "uuid",
+          "title": "Eventid",
+          "type": "string"
+        },
+        "sampleId": {
+          "format": "uuid",
+          "title": "Sampleid",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "annotation.updated",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "targetType": {
+          "title": "Targettype",
+          "type": "string"
+        },
+        "targetId": {
+          "format": "uuid",
+          "title": "Targetid",
+          "type": "string"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonObject",
+          "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+        }
+      },
+      "required": [
+        "eventId",
+        "sampleId",
+        "timestamp",
+        "eventType",
+        "targetType",
+        "targetId",
+        "key"
+      ],
+      "title": "SampleAnnotationUpdatedEventView",
+      "type": "object"
+    },
+    "SampleEdgeAddedEventView": {
+      "properties": {
+        "eventId": {
+          "format": "uuid",
+          "title": "Eventid",
+          "type": "string"
+        },
+        "sampleId": {
+          "format": "uuid",
+          "title": "Sampleid",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "edge.added",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "targetType": {
+          "const": "edge",
+          "title": "Targettype",
+          "type": "string"
+        },
+        "targetId": {
+          "format": "uuid",
+          "title": "Targetid",
+          "type": "string"
+        },
+        "sourceTaskId": {
+          "format": "uuid",
+          "title": "Sourcetaskid",
+          "type": "string"
+        },
+        "targetTaskId": {
+          "format": "uuid",
+          "title": "Targettaskid",
+          "type": "string"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
           ],
-          "title": "Table",
+          "default": null,
+          "title": "Status"
+        },
+        "edge": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "actor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonObject",
+          "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+        }
+      },
+      "required": [
+        "eventId",
+        "sampleId",
+        "timestamp",
+        "eventType",
+        "targetType",
+        "targetId",
+        "sourceTaskId",
+        "targetTaskId"
+      ],
+      "title": "SampleEdgeAddedEventView",
+      "type": "object"
+    },
+    "SampleEdgeRemovedEventView": {
+      "properties": {
+        "eventId": {
+          "format": "uuid",
+          "title": "Eventid",
           "type": "string"
         },
-        "event_type": {
-          "title": "Event Type",
+        "sampleId": {
+          "format": "uuid",
+          "title": "Sampleid",
           "type": "string"
         },
-        "target_type": {
-          "title": "Target Type",
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
           "type": "string"
         },
-        "target_id": {
+        "eventType": {
+          "const": "edge.removed",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "targetType": {
+          "const": "edge",
+          "title": "Targettype",
+          "type": "string"
+        },
+        "targetId": {
+          "format": "uuid",
+          "title": "Targetid",
+          "type": "string"
+        },
+        "sourceTaskId": {
+          "format": "uuid",
+          "title": "Sourcetaskid",
+          "type": "string"
+        },
+        "targetTaskId": {
+          "format": "uuid",
+          "title": "Targettaskid",
+          "type": "string"
+        },
+        "actor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonObject",
+          "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+        }
+      },
+      "required": [
+        "eventId",
+        "sampleId",
+        "timestamp",
+        "eventType",
+        "targetType",
+        "targetId",
+        "sourceTaskId",
+        "targetTaskId"
+      ],
+      "title": "SampleEdgeRemovedEventView",
+      "type": "object"
+    },
+    "SampleEdgeStatusChangedEventView": {
+      "properties": {
+        "eventId": {
+          "format": "uuid",
+          "title": "Eventid",
+          "type": "string"
+        },
+        "sampleId": {
+          "format": "uuid",
+          "title": "Sampleid",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "edge.status_changed",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "targetType": {
+          "const": "edge",
+          "title": "Targettype",
+          "type": "string"
+        },
+        "targetId": {
+          "format": "uuid",
+          "title": "Targetid",
+          "type": "string"
+        },
+        "sourceTaskId": {
+          "format": "uuid",
+          "title": "Sourcetaskid",
+          "type": "string"
+        },
+        "targetTaskId": {
+          "format": "uuid",
+          "title": "Targettaskid",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "actor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonObject",
+          "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+        }
+      },
+      "required": [
+        "eventId",
+        "sampleId",
+        "timestamp",
+        "eventType",
+        "targetType",
+        "targetId",
+        "sourceTaskId",
+        "targetTaskId",
+        "status"
+      ],
+      "title": "SampleEdgeStatusChangedEventView",
+      "type": "object"
+    },
+    "SampleEvaluatorAddedEventView": {
+      "properties": {
+        "eventId": {
+          "format": "uuid",
+          "title": "Eventid",
+          "type": "string"
+        },
+        "sampleId": {
+          "format": "uuid",
+          "title": "Sampleid",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "evaluator.added",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "targetType": {
+          "const": "task",
+          "title": "Targettype",
+          "type": "string"
+        },
+        "targetId": {
           "anyOf": [
             {
               "format": "uuid",
@@ -92,30 +479,835 @@
               "type": "null"
             }
           ],
-          "title": "Target Id"
+          "default": null,
+          "title": "Targetid"
+        },
+        "evaluatorSlug": {
+          "title": "Evaluatorslug",
+          "type": "string"
+        },
+        "evaluatorType": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evaluatortype"
+        },
+        "evaluator": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "actor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor"
         },
         "payload": {
           "$ref": "#/$defs/JsonObject",
-          "description": "Typed event payload copied from the source sample runtime WAL row."
+          "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
         }
       },
       "required": [
-        "id",
-        "sample_id",
-        "event_timestamp",
-        "table",
-        "event_type",
-        "target_type",
-        "target_id"
+        "eventId",
+        "sampleId",
+        "timestamp",
+        "eventType",
+        "targetType",
+        "evaluatorSlug"
       ],
-      "title": "SampleRuntimeEventView",
+      "title": "SampleEvaluatorAddedEventView",
+      "type": "object"
+    },
+    "SampleEvaluatorRemovedEventView": {
+      "properties": {
+        "eventId": {
+          "format": "uuid",
+          "title": "Eventid",
+          "type": "string"
+        },
+        "sampleId": {
+          "format": "uuid",
+          "title": "Sampleid",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "evaluator.removed",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "targetType": {
+          "const": "task",
+          "title": "Targettype",
+          "type": "string"
+        },
+        "targetId": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Targetid"
+        },
+        "evaluatorSlug": {
+          "title": "Evaluatorslug",
+          "type": "string"
+        },
+        "actor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonObject",
+          "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+        }
+      },
+      "required": [
+        "eventId",
+        "sampleId",
+        "timestamp",
+        "eventType",
+        "targetType",
+        "evaluatorSlug"
+      ],
+      "title": "SampleEvaluatorRemovedEventView",
+      "type": "object"
+    },
+    "SampleSandboxAddedEventView": {
+      "properties": {
+        "eventId": {
+          "format": "uuid",
+          "title": "Eventid",
+          "type": "string"
+        },
+        "sampleId": {
+          "format": "uuid",
+          "title": "Sampleid",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "sandbox.added",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "targetType": {
+          "const": "task",
+          "title": "Targettype",
+          "type": "string"
+        },
+        "targetId": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Targetid"
+        },
+        "sandboxSlug": {
+          "title": "Sandboxslug",
+          "type": "string"
+        },
+        "sandboxType": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sandboxtype"
+        },
+        "sandbox": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "actor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonObject",
+          "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+        }
+      },
+      "required": [
+        "eventId",
+        "sampleId",
+        "timestamp",
+        "eventType",
+        "targetType",
+        "sandboxSlug"
+      ],
+      "title": "SampleSandboxAddedEventView",
+      "type": "object"
+    },
+    "SampleSandboxRemovedEventView": {
+      "properties": {
+        "eventId": {
+          "format": "uuid",
+          "title": "Eventid",
+          "type": "string"
+        },
+        "sampleId": {
+          "format": "uuid",
+          "title": "Sampleid",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "sandbox.removed",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "targetType": {
+          "const": "task",
+          "title": "Targettype",
+          "type": "string"
+        },
+        "targetId": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Targetid"
+        },
+        "sandboxSlug": {
+          "title": "Sandboxslug",
+          "type": "string"
+        },
+        "actor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonObject",
+          "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+        }
+      },
+      "required": [
+        "eventId",
+        "sampleId",
+        "timestamp",
+        "eventType",
+        "targetType",
+        "sandboxSlug"
+      ],
+      "title": "SampleSandboxRemovedEventView",
+      "type": "object"
+    },
+    "SampleStatusChangedEventView": {
+      "properties": {
+        "eventId": {
+          "format": "uuid",
+          "title": "Eventid",
+          "type": "string"
+        },
+        "sampleId": {
+          "format": "uuid",
+          "title": "Sampleid",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "sample.status_changed",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "targetType": {
+          "const": "sample",
+          "title": "Targettype",
+          "type": "string"
+        },
+        "targetId": {
+          "format": "uuid",
+          "title": "Targetid",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "actor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonObject",
+          "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+        }
+      },
+      "required": [
+        "eventId",
+        "sampleId",
+        "timestamp",
+        "eventType",
+        "targetType",
+        "targetId",
+        "status"
+      ],
+      "title": "SampleStatusChangedEventView",
+      "type": "object"
+    },
+    "SampleTaskAddedEventView": {
+      "properties": {
+        "eventId": {
+          "format": "uuid",
+          "title": "Eventid",
+          "type": "string"
+        },
+        "sampleId": {
+          "format": "uuid",
+          "title": "Sampleid",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "task.added",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "targetType": {
+          "const": "task",
+          "title": "Targettype",
+          "type": "string"
+        },
+        "targetId": {
+          "format": "uuid",
+          "title": "Targetid",
+          "type": "string"
+        },
+        "taskSlug": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Taskslug"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "task": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "actor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonObject",
+          "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+        }
+      },
+      "required": [
+        "eventId",
+        "sampleId",
+        "timestamp",
+        "eventType",
+        "targetType",
+        "targetId"
+      ],
+      "title": "SampleTaskAddedEventView",
+      "type": "object"
+    },
+    "SampleTaskRemovedEventView": {
+      "properties": {
+        "eventId": {
+          "format": "uuid",
+          "title": "Eventid",
+          "type": "string"
+        },
+        "sampleId": {
+          "format": "uuid",
+          "title": "Sampleid",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "task.removed",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "targetType": {
+          "const": "task",
+          "title": "Targettype",
+          "type": "string"
+        },
+        "targetId": {
+          "format": "uuid",
+          "title": "Targetid",
+          "type": "string"
+        },
+        "taskSlug": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Taskslug"
+        },
+        "actor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonObject",
+          "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+        }
+      },
+      "required": [
+        "eventId",
+        "sampleId",
+        "timestamp",
+        "eventType",
+        "targetType",
+        "targetId"
+      ],
+      "title": "SampleTaskRemovedEventView",
+      "type": "object"
+    },
+    "SampleTaskStatusChangedEventView": {
+      "properties": {
+        "eventId": {
+          "format": "uuid",
+          "title": "Eventid",
+          "type": "string"
+        },
+        "sampleId": {
+          "format": "uuid",
+          "title": "Sampleid",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "task.status_changed",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "targetType": {
+          "const": "task",
+          "title": "Targettype",
+          "type": "string"
+        },
+        "targetId": {
+          "format": "uuid",
+          "title": "Targetid",
+          "type": "string"
+        },
+        "taskSlug": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Taskslug"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "actor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonObject",
+          "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+        }
+      },
+      "required": [
+        "eventId",
+        "sampleId",
+        "timestamp",
+        "eventType",
+        "targetType",
+        "targetId",
+        "status"
+      ],
+      "title": "SampleTaskStatusChangedEventView",
+      "type": "object"
+    },
+    "SampleWorkerAddedEventView": {
+      "properties": {
+        "eventId": {
+          "format": "uuid",
+          "title": "Eventid",
+          "type": "string"
+        },
+        "sampleId": {
+          "format": "uuid",
+          "title": "Sampleid",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "worker.added",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "targetType": {
+          "const": "task",
+          "title": "Targettype",
+          "type": "string"
+        },
+        "targetId": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Targetid"
+        },
+        "workerSlug": {
+          "title": "Workerslug",
+          "type": "string"
+        },
+        "workerType": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workertype"
+        },
+        "modelTarget": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Modeltarget"
+        },
+        "worker": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "actor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonObject",
+          "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+        }
+      },
+      "required": [
+        "eventId",
+        "sampleId",
+        "timestamp",
+        "eventType",
+        "targetType",
+        "workerSlug"
+      ],
+      "title": "SampleWorkerAddedEventView",
+      "type": "object"
+    },
+    "SampleWorkerRemovedEventView": {
+      "properties": {
+        "eventId": {
+          "format": "uuid",
+          "title": "Eventid",
+          "type": "string"
+        },
+        "sampleId": {
+          "format": "uuid",
+          "title": "Sampleid",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "worker.removed",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "targetType": {
+          "const": "task",
+          "title": "Targettype",
+          "type": "string"
+        },
+        "targetId": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Targetid"
+        },
+        "workerSlug": {
+          "title": "Workerslug",
+          "type": "string"
+        },
+        "actor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonObject",
+          "description": "Raw typed WAL payload retained for diagnostics and forward compatibility."
+        }
+      },
+      "required": [
+        "eventId",
+        "sampleId",
+        "timestamp",
+        "eventType",
+        "targetType",
+        "workerSlug"
+      ],
+      "title": "SampleWorkerRemovedEventView",
       "type": "object"
     }
   },
   "additionalProperties": true,
   "properties": {
     "event": {
-      "$ref": "#/$defs/SampleRuntimeEventView"
+      "discriminator": {
+        "mapping": {
+          "annotation.deleted": "#/$defs/SampleAnnotationDeletedEventView",
+          "annotation.set": "#/$defs/SampleAnnotationSetEventView",
+          "annotation.updated": "#/$defs/SampleAnnotationUpdatedEventView",
+          "edge.added": "#/$defs/SampleEdgeAddedEventView",
+          "edge.removed": "#/$defs/SampleEdgeRemovedEventView",
+          "edge.status_changed": "#/$defs/SampleEdgeStatusChangedEventView",
+          "evaluator.added": "#/$defs/SampleEvaluatorAddedEventView",
+          "evaluator.removed": "#/$defs/SampleEvaluatorRemovedEventView",
+          "sample.status_changed": "#/$defs/SampleStatusChangedEventView",
+          "sandbox.added": "#/$defs/SampleSandboxAddedEventView",
+          "sandbox.removed": "#/$defs/SampleSandboxRemovedEventView",
+          "task.added": "#/$defs/SampleTaskAddedEventView",
+          "task.removed": "#/$defs/SampleTaskRemovedEventView",
+          "task.status_changed": "#/$defs/SampleTaskStatusChangedEventView",
+          "worker.added": "#/$defs/SampleWorkerAddedEventView",
+          "worker.removed": "#/$defs/SampleWorkerRemovedEventView"
+        },
+        "propertyName": "eventType"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SampleStatusChangedEventView"
+        },
+        {
+          "$ref": "#/$defs/SampleTaskAddedEventView"
+        },
+        {
+          "$ref": "#/$defs/SampleTaskRemovedEventView"
+        },
+        {
+          "$ref": "#/$defs/SampleTaskStatusChangedEventView"
+        },
+        {
+          "$ref": "#/$defs/SampleEdgeAddedEventView"
+        },
+        {
+          "$ref": "#/$defs/SampleEdgeRemovedEventView"
+        },
+        {
+          "$ref": "#/$defs/SampleEdgeStatusChangedEventView"
+        },
+        {
+          "$ref": "#/$defs/SampleWorkerAddedEventView"
+        },
+        {
+          "$ref": "#/$defs/SampleWorkerRemovedEventView"
+        },
+        {
+          "$ref": "#/$defs/SampleEvaluatorAddedEventView"
+        },
+        {
+          "$ref": "#/$defs/SampleEvaluatorRemovedEventView"
+        },
+        {
+          "$ref": "#/$defs/SampleSandboxAddedEventView"
+        },
+        {
+          "$ref": "#/$defs/SampleSandboxRemovedEventView"
+        },
+        {
+          "$ref": "#/$defs/SampleAnnotationSetEventView"
+        },
+        {
+          "$ref": "#/$defs/SampleAnnotationUpdatedEventView"
+        },
+        {
+          "$ref": "#/$defs/SampleAnnotationDeletedEventView"
+        }
+      ],
+      "title": "Event"
     }
   },
   "required": [

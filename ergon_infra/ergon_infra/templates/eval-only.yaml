@@ -6,7 +6,8 @@
 #
 #   sky launch ergon_infra/ergon_infra/templates/eval-only.yaml -y \
 #     --env CHECKPOINT=s3://bucket/checkpoint-500 \
-#     --env BENCHMARK=gdpeval
+#     --env BENCHMARK=gdpeval \
+#     --env EVAL_COMMAND='python examples/my_eval_submit.py'
 
 name: ergon-eval
 
@@ -19,6 +20,7 @@ envs:
   BENCHMARK:
   EVALUATOR: ${EVALUATOR:-stub-rubric}
   EVAL_LIMIT: ${EVAL_LIMIT:-50}
+  EVAL_COMMAND:
 
 setup: |
   git clone https://github.com/DeepFlow-research/ergon.git /tmp/ergon
@@ -39,9 +41,15 @@ run: |
     sleep 1
   done
 
-  EXPERIMENT_ID="$(ergon experiment define "$BENCHMARK" \
-    --model "vllm:http://localhost:8000" \
-    --worker "training-stub" \
-    --evaluator "$EVALUATOR" \
-    --limit "$EVAL_LIMIT" 2>&1 | sed -n 's/^EXPERIMENT_ID=//p')"
-  ergon experiment run "$EXPERIMENT_ID"
+  if [ -z "$EVAL_COMMAND" ]; then
+    echo "EVAL_COMMAND must be a Python experiment submission command."
+    echo "The command receives MODEL_TARGET, BENCHMARK, EVALUATOR, EVAL_LIMIT, and CHECKPOINT."
+    exit 2
+  fi
+
+  export MODEL_TARGET="vllm:http://localhost:8000"
+  export ERGON_EVAL_MODEL_TARGET="$MODEL_TARGET"
+  export ERGON_EVAL_BENCHMARK="$BENCHMARK"
+  export ERGON_EVAL_EVALUATOR="$EVALUATOR"
+  export ERGON_EVAL_LIMIT="$EVAL_LIMIT"
+  eval "$EVAL_COMMAND"

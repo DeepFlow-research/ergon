@@ -1,8 +1,9 @@
-"""Identity-flow invariants from 02-persistence-layer.md §2.
+"""Runtime identity-flow invariants.
 
-task_id is born once and flows unchanged. (sample_id, task_id) is the
-canonical row key. execution_id is the per-attempt id. Sandbox identity
-is preserved across the worker → evaluate Inngest boundary.
+task_id is born during sample materialization and flows unchanged through
+SampleGraphNode, typed WAL, and inflated runtime Task instances. (sample_id,
+task_id) is the canonical row key. execution_id is the per-attempt id. Sandbox
+identity is preserved across the worker → evaluate Inngest boundary.
 
 These are observable-effect tests, not call-graph tests.
 
@@ -18,21 +19,18 @@ from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
-from ergon_core.api.benchmark.task import Task
+from ergon_core.api import Sample
+from ergon_core.api.task import Task
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import SpawnedTaskHandle
-from ergon_core.core.application.runtime.models import MutationMeta
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from ergon_core.core.application.runtime import inspection as inspection_module
 from ergon_core.core.application.runtime import management as management_module
 from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
 from ergon_core.core.application.runtime.task_management import TaskManagementService
-from ergon_core.core.persistence.definitions.models import (
-    ExperimentDefinition,
-    ExperimentDefinitionInstance,
-    ExperimentDefinitionTask,
-)
+from ergon_core.core.application.samples.materialization import materialize_sample
 from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.samples.models import SampleTaskEventRow
 from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
@@ -59,92 +57,73 @@ def _session() -> Session:
     return Session(engine)
 
 
-def _seed_definition(session: Session) -> tuple[UUID, UUID, set[UUID]]:
-    """Insert a definition with two tasks; return (definition_id, sample_id,
-    set_of_task_ids)."""
+def _seed_materialized_sample(session: Session) -> tuple[UUID, set[UUID]]:
+    """Materialize a sample with two tasks; return (sample_id, task_ids)."""
 
-    definition_id = uuid4()
-    instance_id = uuid4()
-    task_ids = {uuid4(), uuid4()}
     sample_id = uuid4()
-    session.add_all(
-        [
-            ExperimentDefinition(
-                id=definition_id, benchmark_type="test", name="test", metadata_json={}
-            ),
-            ExperimentDefinitionInstance(
-                id=instance_id,
-                experiment_definition_id=definition_id,
-                instance_key="sample-1",
-            ),
-        ]
+    sample_row = SampleRecord(
+        id=sample_id,
+        benchmark_type="test",
+        instance_key="sample-1",
+        worker_team_json={},
+        status=SampleStatus.EXECUTING,
     )
-    for i, task_id in enumerate(task_ids):
-        task_json = _IdentityTask(
-            task_slug=f"task-{i}",
-            instance_key="sample-1",
-            description=f"task {i}",
-            task_payload=_EmptyPayload(),
-            worker=EchoWorker(name="echo", model="test:none"),
-            sandbox=EchoSandbox(),
-        ).model_dump(mode="json")
-        session.add(
-            ExperimentDefinitionTask(
-                id=task_id,
-                experiment_definition_id=definition_id,
-                instance_id=instance_id,
+    session.add(sample_row)
+    session.flush()
+    sample = Sample.from_tasks(
+        name="identity-sample",
+        sample_key="sample-1",
+        environment_name="identity-env",
+        tasks=[
+            _IdentityTask(
                 task_slug=f"task-{i}",
+                instance_key="sample-1",
                 description=f"task {i}",
-                task_payload_json={},
-                task_json=task_json,
+                task_payload=_EmptyPayload(),
+                worker=EchoWorker(name="echo", model="test:none"),
+                sandbox=EchoSandbox(),
             )
-        )
-    session.add(
-        SampleRecord(
-            id=sample_id,
-            definition_id=definition_id,
-            benchmark_type="test",
-            instance_key="sample-1",
-            worker_team_json={},
-            status=SampleStatus.EXECUTING,
-        )
+            for i in range(2)
+        ],
     )
+    materialize_sample(session=session, sample=sample, sample_row=sample_row)
     session.commit()
-    return definition_id, sample_id, task_ids
+    task_ids = {
+        row.task_id
+        for row in session.exec(
+            select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)
+        )
+    }
+    return sample_id, task_ids
 
 
 # ── PR 1 invariant — GREEN today ─────────────────────────────────────
 
 
-def test_task_id_is_preserved_from_definition_to_run_tier() -> None:
-    """PR 1 invariant: the same UUID flows from
-    experiment_definition_tasks → sample_graph_nodes.
+def test_task_id_is_preserved_from_materialized_graph_to_typed_wal() -> None:
+    """The same UUID flows through sample_graph_nodes and typed task events.
 
     The runtime identity lives in ``task_id``.
     """
 
     session = _session()
-    definition_id, sample_id, defn_task_ids = _seed_definition(session)
-
-    repo = RuntimeGraphRepository()
-    repo.initialize_from_definition(
-        session,
-        sample_id=sample_id,
-        definition_id=definition_id,
-        initial_node_status="pending",
-        initial_edge_status="pending",
-        meta=MutationMeta(actor="test", reason="identity"),
-    )
+    sample_id, graph_task_ids = _seed_materialized_sample(session)
 
     rows = session.exec(select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)).all()
-    # Every task_id should appear on exactly one run-graph
-    # row.
     assert "task_id" in SampleGraphNode.model_fields
     assert "id" not in SampleGraphNode.model_fields
     seen = {row.task_id for row in rows}
-    assert seen == defn_task_ids, (
-        f"task_id did not survive prepare: definition={defn_task_ids}, run-tier={seen}"
-    )
+    assert seen == graph_task_ids
+
+    wal_task_ids = {
+        event.task_id
+        for event in session.exec(
+            select(SampleTaskEventRow)
+            .where(SampleTaskEventRow.sample_id == sample_id)
+            .where(SampleTaskEventRow.event_type == "task.added")
+        )
+    }
+    assert wal_task_ids == graph_task_ids
 
 
 # ── Future-PR invariants — xfailed pending implementation ────────────
@@ -154,21 +133,12 @@ def test_task_id_is_preserved_from_definition_to_run_tier() -> None:
 async def test_task_id_propagates_into_runtime_task_instance() -> None:
     """PR 2 invariant: Task.from_definition binds _task_id; reading
     `task.task_id` on the inflated instance returns the same UUID the
-    definition row had."""
+    materialized graph row has."""
 
     session = _session()
-    definition_id, sample_id, defn_task_ids = _seed_definition(session)
+    sample_id, graph_task_ids = _seed_materialized_sample(session)
 
     repo = RuntimeGraphRepository()
-    repo.initialize_from_definition(
-        session,
-        sample_id=sample_id,
-        definition_id=definition_id,
-        initial_node_status="pending",
-        initial_edge_status="pending",
-        meta=MutationMeta(actor="test", reason="identity"),
-    )
-
     nodes = session.exec(
         select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)
     ).all()
@@ -183,7 +153,7 @@ async def test_task_id_propagates_into_runtime_task_instance() -> None:
         canonical_id = row.task_id
         view = await repo.node(session, sample_id=sample_id, task_id=canonical_id)
         seen.add(view.task.task_id)
-    assert seen == defn_task_ids
+    assert seen == graph_task_ids
 
 
 def test_sandbox_identity_is_preserved_across_worker_to_evaluate_boundary() -> None:
@@ -236,17 +206,13 @@ def test_execution_id_is_unique_per_attempt_and_shared_across_evaluators() -> No
     that (a) ``TaskEvaluateRequest`` carries ``execution_id``, (b) the
     orchestrator's fanout reuses ``prepared.execution_id`` for every
     invoke (one execution_id, many evaluator_indices), and (c) a fresh
-    attempt mints a new execution_id via the existing
-    ``next_attempt_for_node`` path.
+    attempt mints a new execution_id without relying on a persisted attempt
+    ordinal.
     """
 
-    import inspect
     from pathlib import Path
 
     from ergon_core.core.jobs.task.evaluate.contract import TaskEvaluateRequest
-    from ergon_core.core.application.runtime.task_execution_repository import (
-        TaskExecutionRepository,
-    )
 
     # (a) execution_id is on the payload.
     assert "execution_id" in TaskEvaluateRequest.model_fields
@@ -269,9 +235,13 @@ def test_execution_id_is_unique_per_attempt_and_shared_across_evaluators() -> No
         "evaluator_index must vary across the parallel fanout (one execution, many indices)"
     )
 
-    # (c) a retry mints a new execution_id — the attempt counter on
-    # TaskExecutionRepository is the canonical source.
-    assert "next_attempt_for_node" in inspect.getsource(TaskExecutionRepository)
+    # (c) a retry mints a new execution_id via SampleTaskAttempt's UUID primary
+    # key. Ordering is derived from (created_at, id), not a persisted ordinal.
+    task_service = (
+        root / "ergon_core/ergon_core/core/application/runtime/task_execution.py"
+    ).read_text()
+    assert "SampleTaskAttempt(" in task_service
+    assert "attempt_number" not in task_service
 
 
 class _SessionContext:
@@ -303,7 +273,6 @@ def _seed_identity_parent(session: Session, *, sample_id: UUID) -> SampleGraphNo
     session.add(
         SampleRecord(
             id=sample_id,
-            definition_id=uuid4(),
             benchmark_type="test",
             instance_key="sample-1",
             worker_team_json={},
@@ -344,10 +313,6 @@ async def test_dynamic_task_id_has_no_definition_row(
     parent = _seed_identity_parent(session, sample_id=sample_id)
 
     _patch_get_session_identity(monkeypatch, session)
-    monkeypatch.setattr(
-        management_module, "definition_id_for_run", lambda _session, _run_id: uuid4()
-    )
-
     task_mgmt = TaskManagementService(
         dashboard_emitter=SimpleNamespace(graph_mutation=AsyncMock()),
         task_ready_dispatcher=AsyncMock(),
@@ -357,7 +322,6 @@ async def test_dynamic_task_id_has_no_definition_row(
         sample_id=sample_id,
         task_id=parent.task_id,
         execution_id=uuid4(),
-        definition_id=None,
         sandbox_id="sandbox-identity",
         task_mgmt=task_mgmt,
         task_inspect=task_inspect,
@@ -379,15 +343,10 @@ async def test_dynamic_task_id_has_no_definition_row(
 
     assert isinstance(handle, SpawnedTaskHandle)
 
-    # 2. The returned task_id must NOT appear in experiment_definition_tasks.
-    def_count = len(
-        session.exec(
-            select(ExperimentDefinitionTask).where(ExperimentDefinitionTask.id == handle.task_id)
-        ).all()
-    )
-    assert def_count == 0
+    # 2. Dynamic task creation must not depend on retired definition tables.
+    assert "experiment_definition_tasks" not in SQLModel.metadata.tables
 
-    # 3. It DOES appear as the task_id of exactly one sample_graph_nodes row.
+    # 3. The returned task_id appears as the task_id of exactly one sample_graph_nodes row.
     node_count = len(
         session.exec(select(SampleGraphNode).where(SampleGraphNode.task_id == handle.task_id)).all()
     )
@@ -397,7 +356,6 @@ async def test_dynamic_task_id_has_no_definition_row(
         sample_id=sample_id,
         task_id=handle.task_id,
         execution_id=uuid4(),
-        definition_id=None,
         sandbox_id="sandbox-child",
         task_mgmt=task_mgmt,
         task_inspect=task_inspect,

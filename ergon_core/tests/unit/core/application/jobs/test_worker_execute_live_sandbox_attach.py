@@ -6,7 +6,7 @@ import pytest
 
 from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.api.worker.results import WorkerOutput
-from ergon_core.core.jobs.task.worker_execute.contract import WorkerExecuteJobRequest
+from ergon_core.core.jobs.task.worker_execute.contract import WorkerExecuteRequest
 from ergon_core.core.jobs.task.worker_execute.job import run_worker_execute_job
 
 
@@ -71,9 +71,8 @@ async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch) -> 
     )
 
     result = await run_worker_execute_job(
-        WorkerExecuteJobRequest(
+        WorkerExecuteRequest(
             sample_id=uuid4(),
-            definition_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
             sandbox_id="sbx-live",
@@ -114,9 +113,8 @@ async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
 
     with pytest.raises(Exception, match="live sandbox"):
         await run_worker_execute_job(
-            WorkerExecuteJobRequest(
+            WorkerExecuteRequest(
                 sample_id=uuid4(),
-                definition_id=uuid4(),
                 task_id=uuid4(),
                 execution_id=uuid4(),
                 sandbox_id="sbx-live",
@@ -143,7 +141,6 @@ async def test_step_aware_task_management_sends_collected_ready_events(monkeypat
 
     task_id = uuid4()
     sample_id = uuid4()
-    definition_id = uuid4()
 
     async def _publish(_event):
         return None
@@ -156,7 +153,7 @@ async def test_step_aware_task_management_sends_collected_ready_events(monkeypat
     service = module._StepAwareTaskManagementService(SimpleNamespace(step=_Step()))
     await service._dispatch_collected_ready_events(
         "plan-subtasks-test",
-        [module._ReadyDispatch(sample_id=sample_id, definition_id=definition_id, task_id=task_id)],
+        [module._ReadyDispatch(sample_id=sample_id, task_id=task_id)],
     )
 
     assert len(sent) == 1
@@ -165,5 +162,5 @@ async def test_step_aware_task_management_sends_collected_ready_events(monkeypat
     payload = TaskReadyEvent.model_validate(event.data)
     assert event.name == TaskReadyEvent.name
     assert payload.sample_id == sample_id
-    assert payload.definition_id == definition_id
+    assert "definition_id" not in type(payload).model_fields
     assert payload.task_id == task_id

@@ -11,9 +11,9 @@
       "title": "Task Id",
       "type": "string"
     },
-    "task_execution_id": {
+    "task_attempt_id": {
       "format": "uuid",
-      "title": "Task Execution Id",
+      "title": "Task Attempt Id",
       "type": "string"
     },
     "resource_id": {
@@ -46,7 +46,7 @@
   "required": [
     "sample_id",
     "task_id",
-    "task_execution_id",
+    "task_attempt_id",
     "resource_id",
     "resource_name",
     "mime_type",

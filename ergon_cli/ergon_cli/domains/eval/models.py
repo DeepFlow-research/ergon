@@ -7,7 +7,7 @@ class EvalCommand(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     action: Literal["watch", "checkpoint"]
-    benchmark: str
+    environment: str
     evaluator: str
     model_base: str
     eval_limit: int | None = None

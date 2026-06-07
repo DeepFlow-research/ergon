@@ -197,8 +197,8 @@ export function CommunicationPanel({
                     <div className="mt-1 flex flex-wrap gap-2 break-all font-mono text-[10px] text-[var(--faint)]">
                       <span>#{message.sequenceNum}</span>
                       {message.taskId && <span className="break-all">task {message.taskId}</span>}
-                      {message.taskExecutionId && (
-                        <span className="break-all">exec {message.taskExecutionId}</span>
+                      {message.taskAttemptId && (
+                        <span className="break-all">exec {message.taskAttemptId}</span>
                       )}
                     </div>
                   </div>

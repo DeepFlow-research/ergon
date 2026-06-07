@@ -31,11 +31,11 @@ from tests.e2e._asserts import (
     _assert_thread_messages_ordered,
     wait_for_terminal_status,
 )
-from tests.e2e._submit import submit_experiment_runs
+from tests.e2e._submit import submit_experiment_samples
 
-# Benchmark slug is 'swebench-verified' (matches BENCHMARKS registry);
+# Environment slug is 'swebench-verified';
 # worker + criterion slugs use 'swebench' (shorter).  The per-env
-# Playwright spec file uses the benchmark slug so the CI matrix env id
+# Playwright spec file uses the environment slug so the CI matrix env id
 # maps 1:1 to the spec filename.
 ENV = "swebench-verified"
 WORKER_PREFIX = "swebench"
@@ -66,15 +66,15 @@ async def test_smoke_experiment_group(tmp_path: pathlib.Path) -> None:
     experiment = f"ci-smoke-{ENV}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}"
     smoke_slots = _smoke_slots(EXPERIMENT_GROUP_SIZE)
 
-    run_ids = await submit_experiment_runs(
-        benchmark_slug=ENV,
+    sample_ids = await submit_experiment_samples(
+        environment_slug=ENV,
         slots=[(worker, criterion) for _, worker, criterion in smoke_slots],
         experiment=experiment,
         sandbox_slug=ENV,
         dependency_extras=("none",),
         timeout=PER_RUN_TIMEOUT,
     )
-    assert len(run_ids) == len(smoke_slots)
+    assert len(sample_ids) == len(smoke_slots)
 
     await asyncio.gather(
         *(
@@ -83,17 +83,17 @@ async def test_smoke_experiment_group(tmp_path: pathlib.Path) -> None:
                 expected_statuses=frozenset({"completed"} if kind == "happy" else {"failed"}),
                 timeout_seconds=PER_RUN_TIMEOUT,
             )
-            for (kind, _, _), rid in zip(smoke_slots, run_ids, strict=True)
+            for (kind, _, _), rid in zip(smoke_slots, sample_ids, strict=True)
         ),
     )
 
-    for (kind, _, _), rid in zip(smoke_slots, run_ids, strict=True):
+    for (kind, _, _), rid in zip(smoke_slots, sample_ids, strict=True):
         if kind == "happy":
             _assert_happy_run(rid)
         else:
             _assert_sad_run(rid)
 
-    _assert_experiment_membership(experiment, run_ids)
+    _assert_experiment_membership(experiment, sample_ids)
 
     screenshot_dir_env = os.environ.get("SCREENSHOT_DIR")
     screenshot_dir = (
@@ -103,9 +103,9 @@ async def test_smoke_experiment_group(tmp_path: pathlib.Path) -> None:
     )
     _invoke_playwright(
         experiment=experiment,
-        experiment_runs=[
+        experiment_samples=[
             {"sample_id": str(rid), "kind": kind}
-            for (kind, _, _), rid in zip(smoke_slots, run_ids, strict=True)
+            for (kind, _, _), rid in zip(smoke_slots, sample_ids, strict=True)
         ],
         screenshot_dir=screenshot_dir,
     )
@@ -150,7 +150,7 @@ def _assert_sad_run(rid) -> None:
 def _invoke_playwright(
     *,
     experiment: str,
-    experiment_runs: list[dict[str, str]],
+    experiment_samples: list[dict[str, str]],
     screenshot_dir: pathlib.Path,
 ) -> None:
     screenshot_dir.mkdir(parents=True, exist_ok=True)
@@ -169,7 +169,7 @@ def _invoke_playwright(
             **os.environ,
             "EXPERIMENT_KEY": experiment,
             "SMOKE_ENV": ENV,
-            "SMOKE_EXPERIMENT_JSON": json.dumps(experiment_runs),
+            "SMOKE_EXPERIMENT_JSON": json.dumps(experiment_samples),
             "SCREENSHOT_DIR": str(screenshot_dir),
             "PLAYWRIGHT_LIVE": "1",
             "PLAYWRIGHT_BASE_URL": os.environ.get(

@@ -22,7 +22,6 @@ from tests.integration.propagation._helpers import (
     delete_typed_sample_wal,
     get_node_status,
     make_edge,
-    make_experiment_definition,
     make_node,
     make_run,
 )
@@ -45,13 +44,11 @@ async def test_8_blocked_node_cannot_be_restarted() -> None:
     raising TaskNotTerminalError for anything else.
     """
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="task-a-failed", status="failed")
         node_b = make_node(session, run.id, task_slug="task-b-blocked", status=BLOCKED)
         make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_b.task_id)
         sample_id = run.id
-        defn_id = defn.id
         node_b_id = node_b.task_id
         session.commit()
 
@@ -67,7 +64,7 @@ async def test_8_blocked_node_cannot_be_restarted() -> None:
                         RestartTaskCommand(sample_id=sample_id, task_id=node_b_id),
                     )
     finally:
-        cleanup_run(sample_id, defn_id)
+        cleanup_run(sample_id)
 
 
 @pytest.mark.asyncio
@@ -78,11 +75,9 @@ async def test_8b_restart_failed_node_re_enters_pending() -> None:
     so it can be re-scheduled for execution.
     """
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="task-a-to-restart", status="failed")
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         session.commit()
 
@@ -104,4 +99,4 @@ async def test_8b_restart_failed_node_re_enters_pending() -> None:
             )
 
     finally:
-        cleanup_run(sample_id, defn_id)
+        cleanup_run(sample_id)

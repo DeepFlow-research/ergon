@@ -9,18 +9,12 @@ from ergon_core.core.application.evaluation.service import (
     EvaluationService,
     EvaluationServiceResult,
 )
-from ergon_core.core.persistence.definitions.models import (
-    ExperimentDefinition,
-    ExperimentDefinitionEvaluator,
-    ExperimentDefinitionInstance,
-    ExperimentDefinitionTask,
-)
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
     SampleRecord,
-    SampleTaskEvaluation,
     SampleTaskAttempt,
+    SampleTaskEvaluation,
 )
 
 
@@ -35,44 +29,13 @@ def _session() -> Session:
 
 
 def _seed_inline_evaluator_run(session: Session) -> tuple:
-    definition_id = uuid4()
-    instance_id = uuid4()
     task_id = uuid4()
-    evaluator_id = uuid4()
     sample_id = uuid4()
     execution_id = uuid4()
     session.add_all(
         [
-            ExperimentDefinition(
-                id=definition_id,
-                benchmark_type="bench",
-                name="bench",
-                metadata_json={},
-            ),
-            ExperimentDefinitionInstance(
-                id=instance_id,
-                experiment_definition_id=definition_id,
-                instance_key="sample-1",
-            ),
-            ExperimentDefinitionTask(
-                id=task_id,
-                experiment_definition_id=definition_id,
-                instance_id=instance_id,
-                task_slug="root",
-                description="root task",
-                task_payload_json={},
-                task_json={},
-            ),
-            ExperimentDefinitionEvaluator(
-                id=evaluator_id,
-                experiment_definition_id=definition_id,
-                binding_key="judge",
-                evaluator_type="rubric",
-                snapshot_json={"name": "judge"},
-            ),
             SampleRecord(
                 id=sample_id,
-                definition_id=definition_id,
                 benchmark_type="bench",
                 instance_key="sample-1",
                 worker_team_json={},
@@ -95,22 +58,22 @@ def _seed_inline_evaluator_run(session: Session) -> tuple:
         ]
     )
     session.commit()
-    return sample_id, task_id, evaluator_id, execution_id
+    return sample_id, task_id, execution_id
 
 
 @pytest.mark.asyncio
-async def test_persist_success_links_inline_evaluator_definition_row(monkeypatch) -> None:
+async def test_persist_success_records_inline_evaluator_binding_key(monkeypatch) -> None:
     from ergon_core.core.application.evaluation import service as module
 
     session = _session()
     monkeypatch.setattr(module, "get_session", lambda: session)
     monkeypatch.setattr(session, "close", lambda: None)
-    sample_id, task_id, evaluator_id, execution_id = _seed_inline_evaluator_run(session)
+    sample_id, task_id, execution_id = _seed_inline_evaluator_run(session)
     service = EvaluationService()
 
     await service.persist_success(
         sample_id=sample_id,
-        task_execution_id=execution_id,
+        task_attempt_id=execution_id,
         task_id=task_id,
         binding_key="judge",
         service_result=EvaluationServiceResult(
@@ -127,22 +90,22 @@ async def test_persist_success_links_inline_evaluator_definition_row(monkeypatch
 
     rows = session.exec(select(SampleTaskEvaluation)).all()
     assert len(rows) == 1
-    assert rows[0].definition_evaluator_id == evaluator_id
+    assert rows[0].evaluator_slug == "judge"
 
 
 @pytest.mark.asyncio
-async def test_persist_failure_links_inline_evaluator_definition_row(monkeypatch) -> None:
+async def test_persist_failure_records_inline_evaluator_binding_key(monkeypatch) -> None:
     from ergon_core.core.application.evaluation import service as module
 
     session = _session()
     monkeypatch.setattr(module, "get_session", lambda: session)
     monkeypatch.setattr(session, "close", lambda: None)
-    sample_id, task_id, evaluator_id, execution_id = _seed_inline_evaluator_run(session)
+    sample_id, task_id, execution_id = _seed_inline_evaluator_run(session)
     service = EvaluationService()
 
     await service.persist_failure(
         sample_id=sample_id,
-        task_execution_id=execution_id,
+        task_attempt_id=execution_id,
         task_id=task_id,
         binding_key="judge",
         exc=RuntimeError("boom"),
@@ -150,42 +113,5 @@ async def test_persist_failure_links_inline_evaluator_definition_row(monkeypatch
 
     rows = session.exec(select(SampleTaskEvaluation)).all()
     assert len(rows) == 1
-    assert rows[0].definition_evaluator_id == evaluator_id
-
-
-@pytest.mark.asyncio
-async def test_persist_success_creates_dynamic_inline_evaluator_definition_row(
-    monkeypatch,
-) -> None:
-    from ergon_core.core.application.evaluation import service as module
-
-    session = _session()
-    monkeypatch.setattr(module, "get_session", lambda: session)
-    monkeypatch.setattr(session, "close", lambda: None)
-    sample_id, task_id, _evaluator_id, execution_id = _seed_inline_evaluator_run(session)
-    service = EvaluationService()
-
-    await service.persist_success(
-        sample_id=sample_id,
-        task_execution_id=execution_id,
-        task_id=task_id,
-        binding_key="dynamic-judge",
-        service_result=EvaluationServiceResult(
-            result=TaskEvaluationResult(
-                task_slug="root",
-                score=1.0,
-                passed=True,
-                evaluator_name="dynamic-judge",
-                criterion_results=[],
-            ),
-            specs=[],
-        ),
-    )
-
-    evaluator_row = session.exec(
-        select(ExperimentDefinitionEvaluator).where(
-            ExperimentDefinitionEvaluator.binding_key == "dynamic-judge"
-        )
-    ).one()
-    rows = session.exec(select(SampleTaskEvaluation)).all()
-    assert rows[-1].definition_evaluator_id == evaluator_row.id
+    assert rows[0].evaluator_slug == "judge"
+    assert rows[0].feedback == "RuntimeError: boom"

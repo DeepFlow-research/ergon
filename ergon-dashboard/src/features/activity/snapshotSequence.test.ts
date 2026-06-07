@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { GraphMutationDto } from "@/features/graph/contracts/graphMutations";
-import type { RunActivity } from "./types";
+import type { SampleGraphEventDto } from "@/features/graph/contracts/graphMutations";
+import type { SampleActivity } from "./types";
 import { resolveActivitySnapshotSequence } from "./snapshotSequence";
 
-function activity(overrides: Partial<RunActivity> = {}): RunActivity {
+function activity(overrides: Partial<SampleActivity> = {}): SampleActivity {
   return {
     id: "activity-1",
     kind: "execution",
@@ -19,13 +19,13 @@ function activity(overrides: Partial<RunActivity> = {}): RunActivity {
     actor: null,
     sourceKind: "execution.span",
     metadata: {},
-    lineage: { taskId: "task-1", taskExecutionId: "activity-1" },
+    lineage: { taskId: "task-1", taskAttemptId: "activity-1" },
     ...overrides,
     debug: overrides.debug ?? { source: "execution.span", payload: { id: "activity-1" } },
   };
 }
 
-function mutation(sequence: number, createdAt: string): GraphMutationDto {
+function mutation(sequence: number, createdAt: string): SampleGraphEventDto {
   return {
     id: "00000000-0000-4000-8000-000000000001",
     sample_id: "00000000-0000-4000-8000-000000000002",

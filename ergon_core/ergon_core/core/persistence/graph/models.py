@@ -33,10 +33,7 @@ class SampleGraphNode(SQLModel, table=True):
         description="Canonical runtime identity for this task within a run.",
     )
     instance_key: str = Field(
-        description=(
-            "Benchmark instance identifier for this node, such as a dataset row or "
-            "environment variant; maps to ExperimentDefinitionInstance.instance_key."
-        )
+        description="Dataset row, environment variant, or caller-provided sample grouping key."
     )
     task_slug: str = Field(
         index=True,
@@ -52,7 +49,7 @@ class SampleGraphNode(SQLModel, table=True):
         sa_column=Column(JSON, nullable=False, server_default="{}"),
         description=(
             "Run-tier snapshot of the authored Task. Static nodes copy "
-            "this from experiment_definition_tasks at prepare-run time; "
+            "this from the authored sample at materialization time; "
             "dynamic nodes write it directly at spawn time."
         ),
     )
@@ -61,10 +58,8 @@ class SampleGraphNode(SQLModel, table=True):
         default=False,
         sa_column=Column(Boolean, nullable=False, server_default="false"),
         description=(
-            "True when this node was spawned during a run (no row in "
-            "experiment_definition_tasks). Denormalized at insert time "
-            "per 02-persistence-layer.md §5 so the static-vs-dynamic "
-            "discriminator avoids a join."
+            "True when this node was spawned during execution. Denormalized "
+            "at insert time so the static-vs-dynamic discriminator avoids a join."
         ),
     )
 
@@ -115,10 +110,6 @@ class SampleGraphEdge(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     sample_id: UUID = Field(foreign_key="samples.id", index=True)
-    definition_dependency_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_definition_task_dependencies.id",
-    )
     source_task_id: UUID = Field(
         index=True,
     )

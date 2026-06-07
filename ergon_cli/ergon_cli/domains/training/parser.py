@@ -14,10 +14,10 @@ def register_train_parser(subparsers: argparse._SubParsersAction) -> None:
         default="http://localhost:9000/api",
         help="Ergon API URL (default: http://localhost:9000/api)",
     )
-    train_local.add_argument("--benchmark", required=True, help="Benchmark slug")
+    train_local.add_argument("--environment", required=True, help="Environment slug")
     train_local.add_argument("--evaluator", default="stub-rubric", help="Evaluator slug")
     train_local.add_argument("--limit", type=int, default=None, help="Max tasks per episode")
-    train_local.add_argument("--definition-id", default=None, help="ExperimentDefinition UUID")
+    train_local.add_argument("--experiment-id", default=None, help="Experiment UUID")
     train_local.add_argument("--model", default="Qwen/Qwen2.5-1.5B", help="HuggingFace model ID")
     train_local.add_argument(
         "--device", default="cuda", choices=["cpu", "cuda"], help="Device type"

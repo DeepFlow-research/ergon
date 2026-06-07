@@ -54,15 +54,8 @@ BUDGET = SuppressionCounts(
     # deleted with `_retired_workers.py`, decrement `slopcop_ignore` by ~3
     # (the v1 retired `Any` annotations) and update this comment to reflect
     # the post-PR-11 baseline.
-    # PR 6.5 net: persist_benchmark module-level function adds 1×no-typing-any
-    # (resolved_metadata dict[str,Any]) in definition_writer.py. The
-    # ExperimentService façade is gone (deleted persist_benchmark method
-    # contributed 1×no-typing-any + 1×guarded-function-import; the surviving
-    # module-level run_experiment hoists the launch import to top-level so
-    # no guarded-function-import is needed). api/experiment.py deletion
-    # contributed -1.
-    # +1 noqa (PR 6.5): noqa: C901 on persist_benchmark (complex by design,
-    # same as the persist_definition it supplements).
+    # Historical PR 6.5 experiment-authoring suppressions were retired with
+    # the sample-first experiment submission path.
     # +6 (PR 9 Task 2): WorkerContext injected services typed as ``Any``
     # to break the historical api → core → api import cycle. 3 PrivateAttr fields
     # (_task_mgmt, _task_inspect, _resource_repo) + 3 _for_job kwargs
@@ -109,7 +102,7 @@ BUDGET = SuppressionCounts(
     # `no-typing-any` (same kwargs reason). `benchmark.py`'s metadata
     # kwarg is typed `Mapping[str, Any]` matching the SWE-Bench /
     # ResearchRubrics constructor surface — but net total includes a
-    # corresponding reduction in `worker_factory.py` (deleted) so the
+    # corresponding reduction in deleted worker factory modules so the
     # arithmetic balances at +5. `noqa: C901` on `build_tools` is the
     # same structural-complexity exemption as the prior two verticals.
     # PR 10d-f net +20 slopcop_ignore. The late PR 10 stack adds the

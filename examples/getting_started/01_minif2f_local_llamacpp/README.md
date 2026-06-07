@@ -81,7 +81,7 @@ The plain Python script remains the source of benchmark behavior and is useful
 when you want to read or edit the example directly:
 
 ```bash
-uv run --project examples python examples/getting_started/01_minif2f_local_llamacpp/run.py
+uv run --project examples python examples/getting_started/01_minif2f_local_llamacpp/submit.py
 ```
 
 The script defaults to:
@@ -94,7 +94,7 @@ The script defaults to:
 You can override the same values on the command line:
 
 ```bash
-uv run --project examples python examples/getting_started/01_minif2f_local_llamacpp/run.py \
+uv run --project examples python examples/getting_started/01_minif2f_local_llamacpp/submit.py \
   --limit 3 \
   --base-url http://localhost:8080 \
   --model local-proof-model \
@@ -112,11 +112,11 @@ The script:
 1. Resolves `--base-model` from either a local path or Hugging Face GGUF ref.
 2. Starts `llama-server` for managed runs, then discovers the served model from `/v1/models`.
 3. Checks Ergon settings for `E2B_API_KEY` and verifies the llama.cpp endpoint.
-4. Builds `MiniF2FBenchmark(limit=3, worker_factory=make_worker)`.
-5. Binds `make_minif2f_worker(model="llamacpp:<base-url>", max_iterations=12)`.
-6. Persists the benchmark definition with `persist_benchmark`.
-7. Launches a sample with `launch_sample`.
-8. Prints the definition id, sample id, model target, and observation commands.
+4. Binds `make_minif2f_worker(model="llamacpp:<base-url>", max_iterations=12)`.
+5. Builds `MiniF2FEnvironment(name="mini-validation", limit=3, worker=...)`.
+6. Wraps that environment in `Experiment(name="minif2f-local-llamacpp", ...)`.
+7. Submits the experiment with `experiment.submit(...)`.
+8. Prints the experiment id, sample ids, model target, and observation commands.
 
 MiniF2F is a real theorem-proving benchmark. Local model quality, quantization,
 and context length strongly affect proof success. A terminal sample with failed
@@ -130,7 +130,7 @@ E2B account. They cover argument parsing, preflight failures, model-target
 construction, and launch wiring with monkeypatched Ergon APIs.
 
 When running against real services, these are expected setup or integration
-failures rather than successful benchmark launches:
+failures rather than successful environment launches:
 
 - Missing `E2B_API_KEY`: add it to Ergon's `.env` file or process environment.
 - Hugging Face download failure: check the `--base-model` repo/file ref, network
@@ -138,7 +138,7 @@ failures rather than successful benchmark launches:
 - Unreachable llama.cpp server: start `llama-server` and verify
   `GET http://localhost:8080/v1/models` returns a model id.
 - Missing MiniF2F Lean template or E2B provisioning failure: build/pin the
-  template with `uv run ergon benchmark setup minif2f`, then retry.
+  template with `uv run ergon environment setup minif2f`, then retry.
 - Model tool-call incompatibility: try a model and prompt configuration that can
   use OpenAI-compatible tool calls, or inspect the sample artifacts for the failed
   attempts.

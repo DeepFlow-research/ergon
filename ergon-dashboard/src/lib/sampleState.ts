@@ -1,12 +1,12 @@
 export {
   compareContextEvents,
   contextPartToUiPayload,
-  deserializeRunState,
-  hydrateRunSnapshot,
+  deserializeSampleState,
+  hydrateSampleSnapshot,
   normalizeContextEventPayload,
   serializeContextEvent,
-  serializeRunSnapshot,
-  serializeRunState,
+  serializeSampleSnapshot,
+  serializeSampleState,
   uiPayloadToContextPart,
 } from "@/lib/sample-state";
-export type { DashboardRunState, WireRunSnapshot } from "@/lib/sample-state";
+export type { DashboardSampleState, WireSampleSnapshot } from "@/lib/sample-state";

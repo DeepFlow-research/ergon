@@ -64,7 +64,7 @@ export type ContextEventPayload =
 export interface ContextEventState {
   id: string;
   sampleId: string;
-  taskExecutionId: string;
+  taskAttemptId: string;
   taskId: string;
   workerBindingKey: string;
   sequence: number;

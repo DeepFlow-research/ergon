@@ -10,7 +10,6 @@ Covers:
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.application.runtime.status import (
     CANCELLED,
@@ -27,7 +26,6 @@ from sqlmodel import select
 from tests.integration.propagation._helpers import (
     get_node_status,
     make_edge,
-    make_experiment_definition,
     make_node,
     make_run,
 )
@@ -48,8 +46,7 @@ async def test_completed_successor_is_cancelled_by_invalidation() -> None:
     be cancelled by _invalidate_downstream.
     """
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="task-a", status="completed")
         node_b = make_node(session, run.id, task_slug="task-b", status="completed")
         make_edge(
@@ -60,7 +57,6 @@ async def test_completed_successor_is_cancelled_by_invalidation() -> None:
             status=EDGE_SATISFIED,
         )
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
         session.commit()
@@ -89,7 +85,7 @@ async def test_completed_successor_is_cancelled_by_invalidation() -> None:
                 "Edge A→B must be reset to EDGE_PENDING so re-run of A can re-satisfy it"
             )
     finally:
-        cleanup_run(sample_id, defn_id)
+        cleanup_run(sample_id)
 
 
 @pytest.mark.asyncio
@@ -100,8 +96,7 @@ async def test_pending_successor_is_cancelled_but_cascade_stops_there() -> None:
     stops. C is not invalidated because B never completed.
     """
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="task-a", status="completed")
         node_b = make_node(session, run.id, task_slug="task-b", status="pending")
         node_c = make_node(session, run.id, task_slug="task-c", status="completed")
@@ -120,7 +115,6 @@ async def test_pending_successor_is_cancelled_but_cascade_stops_there() -> None:
             status=EDGE_SATISFIED,
         )
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
         node_c_id = node_c.task_id
@@ -150,7 +144,7 @@ async def test_pending_successor_is_cancelled_but_cascade_stops_there() -> None:
                 "C must remain COMPLETED — cascade does not recurse through non-terminal B"
             )
     finally:
-        cleanup_run(sample_id, defn_id)
+        cleanup_run(sample_id)
 
 
 @pytest.mark.asyncio
@@ -162,8 +156,7 @@ async def test_failed_and_cancelled_successors_are_skipped() -> None:
     are reset to EDGE_PENDING.
     """
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="task-a", status="completed")
         node_b = make_node(session, run.id, task_slug="task-b-failed", status="failed")
         node_c = make_node(session, run.id, task_slug="task-c-cancelled", status=CANCELLED)
@@ -182,7 +175,6 @@ async def test_failed_and_cancelled_successors_are_skipped() -> None:
             status=EDGE_SATISFIED,
         )
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
         node_c_id = node_c.task_id
@@ -218,7 +210,7 @@ async def test_failed_and_cancelled_successors_are_skipped() -> None:
                 "A→C edge must be reset to EDGE_PENDING so C can be retried later"
             )
     finally:
-        cleanup_run(sample_id, defn_id)
+        cleanup_run(sample_id)
 
 
 @pytest.mark.asyncio
@@ -229,8 +221,7 @@ async def test_cascade_invalidation_recurses_through_completed_chain() -> None:
     downstream chain is invalidated, not just the immediate successor.
     """
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="chain-a", status="completed")
         node_b = make_node(session, run.id, task_slug="chain-b", status="completed")
         node_c = make_node(session, run.id, task_slug="chain-c", status="completed")
@@ -249,7 +240,6 @@ async def test_cascade_invalidation_recurses_through_completed_chain() -> None:
             status=EDGE_SATISFIED,
         )
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
         node_c_id = node_c.task_id
@@ -284,4 +274,4 @@ async def test_cascade_invalidation_recurses_through_completed_chain() -> None:
                 "B→C edge must also be reset to EDGE_PENDING by the cascade"
             )
     finally:
-        cleanup_run(sample_id, defn_id)
+        cleanup_run(sample_id)

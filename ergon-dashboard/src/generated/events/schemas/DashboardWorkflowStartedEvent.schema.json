@@ -331,7 +331,7 @@
       "title": "ProviderTokenUsage",
       "type": "object"
     },
-    "RunCommunicationMessageDto": {
+    "SampleCommunicationMessageDto": {
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -362,7 +362,7 @@
           "default": null,
           "title": "Taskid"
         },
-        "taskExecutionId": {
+        "taskAttemptId": {
           "anyOf": [
             {
               "type": "string"
@@ -372,7 +372,7 @@
             }
           ],
           "default": null,
-          "title": "Taskexecutionid"
+          "title": "Taskattemptid"
         },
         "fromAgentId": {
           "title": "Fromagentid",
@@ -407,10 +407,10 @@
         "sequenceNum",
         "createdAt"
       ],
-      "title": "RunCommunicationMessageDto",
+      "title": "SampleCommunicationMessageDto",
       "type": "object"
     },
-    "RunCommunicationThreadDto": {
+    "SampleCommunicationThreadDto": {
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -469,7 +469,7 @@
         },
         "messages": {
           "items": {
-            "$ref": "#/$defs/RunCommunicationMessageDto"
+            "$ref": "#/$defs/SampleCommunicationMessageDto"
           },
           "title": "Messages",
           "type": "array"
@@ -484,10 +484,102 @@
         "createdAt",
         "updatedAt"
       ],
-      "title": "RunCommunicationThreadDto",
+      "title": "SampleCommunicationThreadDto",
       "type": "object"
     },
-    "RunEvaluationCriterionDto": {
+    "SampleContextEventDto": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "sampleId": {
+          "format": "uuid",
+          "title": "Sampleid",
+          "type": "string"
+        },
+        "taskAttemptId": {
+          "format": "uuid",
+          "title": "Taskattemptid",
+          "type": "string"
+        },
+        "taskId": {
+          "format": "uuid",
+          "title": "Taskid",
+          "type": "string"
+        },
+        "workerBindingKey": {
+          "title": "Workerbindingkey",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "eventType": {
+          "enum": [
+            "system_prompt",
+            "user_message",
+            "assistant_text",
+            "tool_call",
+            "tool_result",
+            "thinking"
+          ],
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ContextPartChunkLog"
+        },
+        "createdAt": {
+          "format": "date-time",
+          "title": "Createdat",
+          "type": "string"
+        },
+        "startedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Startedat"
+        },
+        "completedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completedat"
+        }
+      },
+      "required": [
+        "id",
+        "sampleId",
+        "taskAttemptId",
+        "taskId",
+        "workerBindingKey",
+        "sequence",
+        "eventType",
+        "payload",
+        "createdAt"
+      ],
+      "title": "SampleContextEventDto",
+      "type": "object"
+    },
+    "SampleEvaluationCriterionDto": {
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -657,10 +749,10 @@
         "score",
         "maxScore"
       ],
-      "title": "RunEvaluationCriterionDto",
+      "title": "SampleEvaluationCriterionDto",
       "type": "object"
     },
-    "RunExecutionAttemptDto": {
+    "SampleExecutionAttemptDto": {
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -792,10 +884,60 @@
         "attemptNumber",
         "status"
       ],
-      "title": "RunExecutionAttemptDto",
+      "title": "SampleExecutionAttemptDto",
       "type": "object"
     },
-    "RunSandboxCommandDto": {
+    "SampleResourceDto": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "taskAttemptId": {
+          "title": "Taskattemptid",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "mimeType": {
+          "title": "Mimetype",
+          "type": "string"
+        },
+        "filePath": {
+          "title": "Filepath",
+          "type": "string"
+        },
+        "sizeBytes": {
+          "title": "Sizebytes",
+          "type": "integer"
+        },
+        "createdAt": {
+          "format": "date-time",
+          "title": "Createdat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "taskId",
+        "taskAttemptId",
+        "name",
+        "mimeType",
+        "filePath",
+        "sizeBytes",
+        "createdAt"
+      ],
+      "title": "SampleResourceDto",
+      "type": "object"
+    },
+    "SampleSandboxCommandDto": {
       "additionalProperties": false,
       "properties": {
         "command": {
@@ -860,10 +1002,10 @@
         "command",
         "timestamp"
       ],
-      "title": "RunSandboxCommandDto",
+      "title": "SampleSandboxCommandDto",
       "type": "object"
     },
-    "RunSandboxDto": {
+    "SampleSandboxDto": {
       "additionalProperties": false,
       "properties": {
         "sandboxId": {
@@ -926,7 +1068,7 @@
         },
         "commands": {
           "items": {
-            "$ref": "#/$defs/RunSandboxCommandDto"
+            "$ref": "#/$defs/SampleSandboxCommandDto"
           },
           "title": "Commands",
           "type": "array"
@@ -939,149 +1081,7 @@
         "status",
         "createdAt"
       ],
-      "title": "RunSandboxDto",
-      "type": "object"
-    },
-    "SampleContextEventDto": {
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "format": "uuid",
-          "title": "Id",
-          "type": "string"
-        },
-        "sampleId": {
-          "format": "uuid",
-          "title": "Sampleid",
-          "type": "string"
-        },
-        "taskExecutionId": {
-          "format": "uuid",
-          "title": "Taskexecutionid",
-          "type": "string"
-        },
-        "taskId": {
-          "format": "uuid",
-          "title": "Taskid",
-          "type": "string"
-        },
-        "workerBindingKey": {
-          "title": "Workerbindingkey",
-          "type": "string"
-        },
-        "sequence": {
-          "title": "Sequence",
-          "type": "integer"
-        },
-        "eventType": {
-          "enum": [
-            "system_prompt",
-            "user_message",
-            "assistant_text",
-            "tool_call",
-            "tool_result",
-            "thinking"
-          ],
-          "title": "Eventtype",
-          "type": "string"
-        },
-        "payload": {
-          "$ref": "#/$defs/ContextPartChunkLog"
-        },
-        "createdAt": {
-          "format": "date-time",
-          "title": "Createdat",
-          "type": "string"
-        },
-        "startedAt": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Startedat"
-        },
-        "completedAt": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Completedat"
-        }
-      },
-      "required": [
-        "id",
-        "sampleId",
-        "taskExecutionId",
-        "taskId",
-        "workerBindingKey",
-        "sequence",
-        "eventType",
-        "payload",
-        "createdAt"
-      ],
-      "title": "SampleContextEventDto",
-      "type": "object"
-    },
-    "SampleResourceDto": {
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
-        "taskId": {
-          "title": "Taskid",
-          "type": "string"
-        },
-        "taskExecutionId": {
-          "title": "Taskexecutionid",
-          "type": "string"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "mimeType": {
-          "title": "Mimetype",
-          "type": "string"
-        },
-        "filePath": {
-          "title": "Filepath",
-          "type": "string"
-        },
-        "sizeBytes": {
-          "title": "Sizebytes",
-          "type": "integer"
-        },
-        "createdAt": {
-          "format": "date-time",
-          "title": "Createdat",
-          "type": "string"
-        }
-      },
-      "required": [
-        "id",
-        "taskId",
-        "taskExecutionId",
-        "name",
-        "mimeType",
-        "filePath",
-        "sizeBytes",
-        "createdAt"
-      ],
-      "title": "SampleResourceDto",
+      "title": "SampleSandboxDto",
       "type": "object"
     },
     "SampleSnapshotDto": {
@@ -1091,9 +1091,18 @@
           "title": "Id",
           "type": "string"
         },
-        "definitionId": {
-          "title": "Definitionid",
-          "type": "string"
+        "experimentId": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Experimentid"
         },
         "name": {
           "title": "Name",
@@ -1128,7 +1137,7 @@
         "executionsByTask": {
           "additionalProperties": {
             "items": {
-              "$ref": "#/$defs/RunExecutionAttemptDto"
+              "$ref": "#/$defs/SampleExecutionAttemptDto"
             },
             "type": "array"
           },
@@ -1144,7 +1153,7 @@
         },
         "sandboxesByTask": {
           "additionalProperties": {
-            "$ref": "#/$defs/RunSandboxDto"
+            "$ref": "#/$defs/SampleSandboxDto"
           },
           "title": "Sandboxesbytask",
           "type": "object"
@@ -1161,7 +1170,7 @@
         },
         "threads": {
           "items": {
-            "$ref": "#/$defs/RunCommunicationThreadDto"
+            "$ref": "#/$defs/SampleCommunicationThreadDto"
           },
           "title": "Threads",
           "type": "array"
@@ -1272,7 +1281,6 @@
       },
       "required": [
         "id",
-        "definitionId",
         "name",
         "status"
       ],
@@ -1542,7 +1550,7 @@
         },
         "criterionResults": {
           "items": {
-            "$ref": "#/$defs/RunEvaluationCriterionDto"
+            "$ref": "#/$defs/SampleEvaluationCriterionDto"
           },
           "title": "Criterionresults",
           "type": "array"
@@ -1736,11 +1744,6 @@
       "title": "Sample Id",
       "type": "string"
     },
-    "definition_id": {
-      "format": "uuid",
-      "title": "Definition Id",
-      "type": "string"
-    },
     "workflow_name": {
       "title": "Workflow Name",
       "type": "string"
@@ -1764,7 +1767,6 @@
   },
   "required": [
     "sample_id",
-    "definition_id",
     "workflow_name",
     "snapshot",
     "started_at",

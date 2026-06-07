@@ -9,7 +9,7 @@ from ergon_core.api.errors import DependencyError
 from ergon_core.api.rubric import Evaluator, Rubric
 from ergon_core.api.rubric.results import TaskEvaluationResult
 from ergon_core.api.worker import WorkerOutput
-from ergon_core.api.benchmark import Task
+from ergon_core.api.task import Task
 from ergon_core.core.application.evaluation.models import CriterionSpec
 from ergon_core.core.application.evaluation.service import (
     EvaluationService,

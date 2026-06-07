@@ -1,4 +1,4 @@
-"""ResearchGraphToolkit — run-scoped resource discovery for research workers.
+"""ResearchGraphToolkit — sample-scoped resource discovery for research workers.
 
 Six pydantic-ai tools backed by resource and task repositories
 traversal so workers can enumerate their own, children's, and descendants'
@@ -25,15 +25,15 @@ from ergon_builtins.toolkits.common.budgets import (
 
 
 class ResearchGraphToolkit:
-    """Graph observability tools for run-scoped resource discovery.
+    """Graph observability tools for sample-scoped resource discovery.
 
     Constructor takes explicit IDs — no ``WorkerContext``.  The worker
     subclass unpacks context and passes them in (§7.3 pattern).
     """
 
-    def __init__(self, *, sample_id: UUID, task_execution_id: UUID) -> None:
-        self._run_id = sample_id
-        self._task_execution_id = task_execution_id
+    def __init__(self, *, sample_id: UUID, task_attempt_id: UUID) -> None:
+        self._sample_id = sample_id
+        self._task_attempt_id = task_attempt_id
         self._resource_repo = SampleResourceRepository()
         self._task_repo = TaskExecutionRepository()
 
@@ -45,7 +45,7 @@ class ResearchGraphToolkit:
             self._list_my_resources(),
             self._list_child_resources(),
             self._list_descendant_resources(),
-            self._list_run_resources(),
+            self._list_sample_resources(),
             self._get_resource_by_logical_path(),
             self._get_resource_by_content_hash(),
         ]
@@ -55,16 +55,16 @@ class ResearchGraphToolkit:
     # ------------------------------------------------------------------
 
     def _list_my_resources(self) -> Tool[AgentToolBudgetDeps]:
-        sample_id = self._run_id
-        task_execution_id = self._task_execution_id
+        sample_id = self._sample_id
+        task_attempt_id = self._task_attempt_id
 
         async def list_my_resources(
             ctx: "RunContext[AgentToolBudgetDeps]",
         ) -> list[ResourceRef] | AgentToolBudgetExhaustedResult:
-            """List resources produced by my own task execution.
+            """List resources produced by my own task attempt.
 
             Returns resources in most-recently-created-first order.
-            Only resources belonging to this run are included.
+            Only resources belonging to this sample are included.
             """
             tool_budget = ctx.deps.tool_budget
             if (
@@ -73,7 +73,7 @@ class ResearchGraphToolkit:
             ):
                 return tool_budget.exhausted_result("non-workflow tool budget reached")
             with get_session() as session:
-                rows = self._resource_repo.list_by_execution(session, task_execution_id)
+                rows = self._resource_repo.list_by_execution(session, task_attempt_id)
             return _to_refs_sorted(
                 [r for r in rows if r.sample_id == sample_id],
             )
@@ -85,13 +85,13 @@ class ResearchGraphToolkit:
     # ------------------------------------------------------------------
 
     def _list_child_resources(self) -> Tool[AgentToolBudgetDeps]:
-        sample_id = self._run_id
-        task_execution_id = self._task_execution_id
+        sample_id = self._sample_id
+        task_attempt_id = self._task_attempt_id
 
         async def list_child_resources(
             ctx: "RunContext[AgentToolBudgetDeps]",
         ) -> list[ResourceRef] | AgentToolBudgetExhaustedResult:
-            """List resources produced by direct child task executions.
+            """List resources produced by direct child task attempts.
 
             Only returns resources from immediate children — not
             grandchildren or deeper descendants.
@@ -105,7 +105,7 @@ class ResearchGraphToolkit:
             with get_session() as session:
                 children = self._task_repo.list_children_of_execution(
                     session,
-                    task_execution_id,
+                    task_attempt_id,
                 )
             result: list[SampleResource] = []
             for child in children:
@@ -121,16 +121,16 @@ class ResearchGraphToolkit:
     # ------------------------------------------------------------------
 
     def _list_descendant_resources(self) -> Tool[AgentToolBudgetDeps]:
-        sample_id = self._run_id
-        task_execution_id = self._task_execution_id
+        sample_id = self._sample_id
+        task_attempt_id = self._task_attempt_id
 
         async def list_descendant_resources(
             ctx: "RunContext[AgentToolBudgetDeps]",
             max_depth: int = 3,
         ) -> list[ResourceRef] | AgentToolBudgetExhaustedResult:
-            """List resources from descendant task executions (BFS).
+            """List resources from descendant task attempts (BFS).
 
-            Traverses child task executions up to *max_depth* levels deep,
+            Traverses child task attempts up to *max_depth* levels deep,
             collecting all resources produced at each level.  Handles
             cycles gracefully via a visited set.
 
@@ -143,8 +143,8 @@ class ResearchGraphToolkit:
                 > tool_budget.max_other_tool_calls
             ):
                 return tool_budget.exhausted_result("non-workflow tool budget reached")
-            visited: set[UUID] = {task_execution_id}
-            frontier: list[UUID] = [task_execution_id]
+            visited: set[UUID] = {task_attempt_id}
+            frontier: list[UUID] = [task_attempt_id]
             result: list[SampleResource] = []
 
             for _depth in range(max_depth):
@@ -172,23 +172,23 @@ class ResearchGraphToolkit:
         return Tool(function=list_descendant_resources, takes_ctx=True)
 
     # ------------------------------------------------------------------
-    # list_run_resources
+    # list_sample_resources
     # ------------------------------------------------------------------
 
-    def _list_run_resources(self) -> Tool[AgentToolBudgetDeps]:
-        sample_id = self._run_id
+    def _list_sample_resources(self) -> Tool[AgentToolBudgetDeps]:
+        sample_id = self._sample_id
 
-        async def list_run_resources(
+        async def list_sample_resources(
             ctx: "RunContext[AgentToolBudgetDeps]",
         ) -> list[ResourceRef] | AgentToolBudgetExhaustedResult:
-            """List all resources in this run.
+            """List all resources in this sample.
 
-            Returns every resource row belonging to the current run,
+            Returns every resource row belonging to the current sample,
             in most-recently-created-first order.
             """
             tool_budget = ctx.deps.tool_budget
             if (
-                tool_budget.increment("list_run_resources", "other")
+                tool_budget.increment("list_sample_resources", "other")
                 > tool_budget.max_other_tool_calls
             ):
                 return tool_budget.exhausted_result("non-workflow tool budget reached")
@@ -196,14 +196,14 @@ class ResearchGraphToolkit:
                 rows = self._resource_repo.list_by_run(session, sample_id)
             return _to_refs_sorted(rows)
 
-        return Tool(function=list_run_resources, takes_ctx=True)
+        return Tool(function=list_sample_resources, takes_ctx=True)
 
     # ------------------------------------------------------------------
     # get_resource_by_logical_path
     # ------------------------------------------------------------------
 
     def _get_resource_by_logical_path(self) -> Tool[AgentToolBudgetDeps]:
-        sample_id = self._run_id
+        sample_id = self._sample_id
 
         async def get_resource_by_logical_path(
             ctx: "RunContext[AgentToolBudgetDeps]",
@@ -211,7 +211,7 @@ class ResearchGraphToolkit:
         ) -> ResourceRef | AgentToolBudgetExhaustedResult | None:
             """Look up the latest resource by its logical path (file_path).
 
-            Scoped to this run. Returns the most recently created resource
+            Scoped to this sample. Returns the most recently created resource
             with the given path, or null if none exists.
 
             Args:
@@ -238,7 +238,7 @@ class ResearchGraphToolkit:
     # ------------------------------------------------------------------
 
     def _get_resource_by_content_hash(self) -> Tool[AgentToolBudgetDeps]:
-        sample_id = self._run_id
+        sample_id = self._sample_id
 
         async def get_resource_by_content_hash(
             ctx: "RunContext[AgentToolBudgetDeps]",
@@ -246,7 +246,7 @@ class ResearchGraphToolkit:
         ) -> ResourceRef | AgentToolBudgetExhaustedResult | None:
             """Look up the latest resource by its content hash.
 
-            Scoped to this run. Returns the most recently created resource
+            Scoped to this sample. Returns the most recently created resource
             with the given hash, or null if none exists.
 
             Args:

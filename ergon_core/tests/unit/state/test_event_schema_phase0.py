@@ -16,13 +16,12 @@ from ergon_core.core.application.runtime.orchestration import (
 _TASK_ID_CASES = [
     (
         "TaskReadyEvent",
-        lambda: TaskReadyEvent(sample_id=uuid4(), definition_id=uuid4(), task_id=uuid4()),
+        lambda: TaskReadyEvent(sample_id=uuid4(), task_id=uuid4()),
     ),
     (
         "TaskFailedEvent",
         lambda: TaskFailedEvent(
             sample_id=uuid4(),
-            definition_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
             error="boom",
@@ -32,7 +31,6 @@ _TASK_ID_CASES = [
         "PrepareTaskExecutionCommand",
         lambda: PrepareTaskExecutionCommand(
             sample_id=uuid4(),
-            definition_id=uuid4(),
             task_id=uuid4(),
         ),
     ),
@@ -47,7 +45,6 @@ _TASK_ID_CASES = [
         "PropagateTaskCompletionCommand",
         lambda: PropagateTaskCompletionCommand(
             sample_id=uuid4(),
-            definition_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
         ),
@@ -57,7 +54,7 @@ _TASK_ID_CASES = [
 
 def test_task_ready_event_requires_task_id() -> None:
     with pytest.raises(ValueError):
-        TaskReadyEvent(sample_id=uuid4(), definition_id=uuid4())  # type: ignore[call-arg]
+        TaskReadyEvent(sample_id=uuid4())  # type: ignore[call-arg]
 
 
 @pytest.mark.parametrize("label,factory", _TASK_ID_CASES, ids=[c[0] for c in _TASK_ID_CASES])
@@ -74,7 +71,6 @@ def test_task_completed_event_uses_task_id() -> None:
     task_id = uuid4()
     event = TaskCompletedEvent(
         sample_id=uuid4(),
-        definition_id=uuid4(),
         task_id=task_id,
         execution_id=uuid4(),
         sandbox_id="sbx-123",

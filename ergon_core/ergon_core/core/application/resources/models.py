@@ -21,11 +21,11 @@ class SampleResourceView(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     id: UUID = Field(description="Primary key of the sample_resources row.")
-    sample_id: UUID = Field(description="The run this resource was produced in.")
-    task_execution_id: UUID | None = Field(
+    sample_id: UUID = Field(description="The sample this resource was produced in.")
+    task_attempt_id: UUID | None = Field(
         description=(
-            "The task execution that produced the resource, or ``None`` for "
-            "run-scoped resources (e.g. aggregate reports)."
+            "The task attempt that produced the resource, or ``None`` for "
+            "sample-scoped resources (e.g. aggregate reports)."
         ),
     )
     kind: SampleResourceKind = Field(
@@ -67,7 +67,7 @@ class SampleResourceView(BaseModel):
         return cls(
             id=row.id,
             sample_id=row.sample_id,
-            task_execution_id=row.task_execution_id,
+            task_attempt_id=row.task_attempt_id,
             kind=SampleResourceKind(row.kind),
             name=row.name,
             mime_type=row.mime_type,

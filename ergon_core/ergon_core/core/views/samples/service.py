@@ -1,28 +1,32 @@
-"""Read service for dashboard/API run snapshots and related views."""
+"""Read service for dashboard/API sample snapshots and related views."""
 
 import os
+from contextlib import AbstractContextManager
 from pathlib import Path
 from datetime import datetime
 from uuid import UUID
 
 from ergon_core.core.views.samples.models import (
+    SampleDetailView,
+    SampleEventsView,
+    SampleGraphEdgeView,
+    SampleGraphNodeView,
+    SampleGraphView,
+    SampleStateView,
     SampleSnapshotMetricsDto,
     SampleSummaryDto,
     SampleSnapshotDto,
 )
 from ergon_core.core.persistence.context.models import SampleContextEvent
-from ergon_core.core.persistence.definitions.models import (
-    ExperimentDefinition,
-    ExperimentDefinitionWorker,
-)
+from ergon_core.core.persistence.experiments.models import ExperimentEnvironmentRow
 from ergon_core.core.persistence.graph.models import (
     SampleGraphEdge,
     SampleGraphNode,
 )
-from ergon_core.core.application.samples.events import (
-    SampleRuntimeEventReadService,
+from ergon_core.core.application.samples.event_views import (
     SampleRuntimeEventView,
 )
+from ergon_core.core.application.samples.events import SampleRuntimeEventReadService
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import (
@@ -69,7 +73,6 @@ class SampleSnapshotReadService:
         *,
         limit: int = 20,
         status: str | None = None,
-        definition_id: UUID | None = None,
         experiment: str | None = None,
         offset: int = 0,
     ) -> list[SampleSummaryDto]:
@@ -77,25 +80,14 @@ class SampleSnapshotReadService:
             stmt = select(SampleRecord).order_by(col(SampleRecord.created_at).desc())
             if status:
                 stmt = stmt.where(SampleRecord.status == status)
-            if definition_id:
-                stmt = stmt.where(SampleRecord.definition_id == definition_id)
             if experiment:
                 stmt = stmt.where(SampleRecord.experiment == experiment)
             stmt = stmt.offset(offset).limit(limit)
             rows = list(session.exec(stmt).all())
-            definition_names = {
-                definition.id: definition.name
-                for definition in session.exec(
-                    select(ExperimentDefinition).where(
-                        col(ExperimentDefinition.id).in_([row.definition_id for row in rows])
-                    )
-                ).all()
-            }
             task_counts = _task_counts_by_sample(session, [row.id for row in rows])
         return [
             _run_summary(
                 row,
-                definition_name=definition_names.get(row.definition_id),
                 task_counts=task_counts.get(row.id),
             )
             for row in rows
@@ -112,11 +104,6 @@ class SampleSnapshotReadService:
             if run is None:
                 return None
 
-            definition = session.get(ExperimentDefinition, run.definition_id)
-            if definition is None:
-                return None
-
-            def_id = run.definition_id
             nodes = list(
                 session.exec(
                     select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)
@@ -125,13 +112,6 @@ class SampleSnapshotReadService:
             edges = list(
                 session.exec(
                     select(SampleGraphEdge).where(SampleGraphEdge.sample_id == sample_id)
-                ).all()
-            )
-            def_workers = list(
-                session.exec(
-                    select(ExperimentDefinitionWorker).where(
-                        ExperimentDefinitionWorker.experiment_definition_id == def_id
-                    )
                 ).all()
             )
             executions = list(
@@ -160,16 +140,12 @@ class SampleSnapshotReadService:
                     select(SampleContextEvent)
                     .where(SampleContextEvent.sample_id == sample_id)
                     .order_by(
-                        col(SampleContextEvent.task_execution_id),
+                        col(SampleContextEvent.task_attempt_id),
                         col(SampleContextEvent.sequence),
                     )
                 ).all()
             )
 
-        worker_by_id: dict[UUID, ExperimentDefinitionWorker] = {w.id: w for w in def_workers}
-        worker_by_binding: dict[str, ExperimentDefinitionWorker] = {
-            w.binding_key: w for w in def_workers
-        }
         timestamps = _task_timestamps(executions)
         (
             task_map,
@@ -180,7 +156,7 @@ class SampleSnapshotReadService:
             failed_tasks,
             running_tasks,
             cancelled_tasks,
-        ) = _build_task_map(nodes, edges, worker_by_binding, timestamps)
+        ) = _build_task_map(nodes, edges, timestamps)
 
         execution_task_map: dict[UUID, UUID] = {ex.id: ex.task_id for ex in executions}
 
@@ -198,12 +174,18 @@ class SampleSnapshotReadService:
         sample_id_str = str(run.id)
         run_summary = run.parsed_summary()
         aggregated_metrics = aggregate_run_metrics(context_events, summary=run_summary)
-        meta = definition.parsed_metadata()
-        run_name = str(meta.get("name", definition.benchmark_type))
+        assignment = run.parsed_assignment()
+        meta = assignment
+        run_name = str(
+            run_summary.get("name")
+            or assignment.get("sample_name")
+            or meta.get("name")
+            or run.benchmark_type
+        )
 
         return SampleSnapshotDto(
             id=sample_id_str,
-            definition_id=str(run.definition_id),
+            experiment_id=run.experiment_id,
             name=run_name,
             status=run.status,
             tasks=task_map,
@@ -214,7 +196,6 @@ class SampleSnapshotReadService:
             ),
             executions_by_task=_task_keyed_executions(
                 executions,
-                worker_by_id,
             ),
             evaluations_by_task=_task_keyed_evaluations(
                 evaluations,
@@ -283,6 +264,148 @@ class SampleSnapshotReadService:
         )
 
 
+class SampleReadService:
+    """Sample-centered read service backed by typed WAL and graph projections."""
+
+    def __init__(self, session: Session | None = None) -> None:
+        self._session = session
+
+    def get_sample_detail(self, sample_id: UUID) -> SampleDetailView | None:
+        with self._session_scope() as session:
+            sample = session.get(SampleRecord, sample_id)
+            if sample is None:
+                return None
+            environment = _sample_environment(session, sample)
+            return _sample_detail_view(sample, environment_name=environment.name)
+
+    def list_sample_events(self, sample_id: UUID) -> SampleEventsView | None:
+        with self._session_scope() as session:
+            if session.get(SampleRecord, sample_id) is None:
+                return None
+            events = SampleRuntimeEventReadService().list_events(session, sample_id)
+            return SampleEventsView(items=events)
+
+    def get_sample_graph(self, sample_id: UUID) -> SampleGraphView | None:
+        with self._session_scope() as session:
+            if session.get(SampleRecord, sample_id) is None:
+                return None
+            return _sample_graph_view(session, sample_id)
+
+    def get_sample_state(self, sample_id: UUID) -> SampleStateView | None:
+        with self._session_scope() as session:
+            sample = session.get(SampleRecord, sample_id)
+            if sample is None:
+                return None
+            environment = _sample_environment(session, sample)
+            detail = _sample_detail_view(sample, environment_name=environment.name)
+            events = SampleRuntimeEventReadService().list_events(session, sample_id)
+            graph = _sample_graph_view(session, sample_id)
+            return SampleStateView(
+                sample_id=sample.id,
+                experiment_id=detail.experiment_id,
+                environment_id=detail.environment_id,
+                environment_name=detail.environment_name,
+                detail=detail,
+                events=events,
+                graph=graph,
+            )
+
+    def _session_scope(self) -> AbstractContextManager[Session]:
+        if self._session is not None:
+            return _ExistingSessionScope(self._session)
+        return get_session()
+
+
+class _ExistingSessionScope:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def __enter__(self) -> Session:
+        return self._session
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+
+def _sample_environment(session: Session, sample: SampleRecord) -> ExperimentEnvironmentRow:
+    if sample.environment_id is None:
+        raise ValueError(f"Sample {sample.id} is missing environment provenance")
+    environment = session.get(ExperimentEnvironmentRow, sample.environment_id)
+    if environment is None:
+        raise ValueError(
+            f"Sample {sample.id} points at missing environment {sample.environment_id}"
+        )
+    return environment
+
+
+def _sample_detail_view(
+    sample: SampleRecord,
+    *,
+    environment_name: str,
+) -> SampleDetailView:
+    if sample.experiment_id is None or sample.environment_id is None:
+        raise ValueError(f"Sample {sample.id} is missing experiment/environment provenance")
+    assignment = sample.parsed_assignment()
+    source_metadata = assignment.get("source_metadata", {})
+    return SampleDetailView(
+        sample_id=sample.id,
+        experiment_id=sample.experiment_id,
+        environment_id=sample.environment_id,
+        environment_name=environment_name,
+        sample_key=sample.sample_key or sample.instance_key,
+        sample_ref=sample.sample_ref_json,
+        source_metadata=source_metadata if isinstance(source_metadata, dict) else {},
+        status=str(sample.status),
+        created_at=sample.created_at,
+        started_at=sample.started_at,
+        completed_at=sample.completed_at,
+    )
+
+
+def _sample_graph_view(session: Session, sample_id: UUID) -> SampleGraphView:
+    nodes = list(
+        session.exec(
+            select(SampleGraphNode)
+            .where(SampleGraphNode.sample_id == sample_id)
+            .order_by(col(SampleGraphNode.created_at), col(SampleGraphNode.task_id))
+        ).all()
+    )
+    edges = list(
+        session.exec(
+            select(SampleGraphEdge)
+            .where(SampleGraphEdge.sample_id == sample_id)
+            .order_by(col(SampleGraphEdge.created_at), col(SampleGraphEdge.id))
+        ).all()
+    )
+    return SampleGraphView(
+        nodes=[
+            SampleGraphNodeView(
+                task_id=node.task_id,
+                task_slug=node.task_slug,
+                description=node.description,
+                status=str(node.status),
+                parent_task_id=node.parent_task_id,
+                level=node.level,
+                assigned_worker_slug=node.assigned_worker_slug,
+                created_at=node.created_at,
+                updated_at=node.updated_at,
+            )
+            for node in nodes
+        ],
+        edges=[
+            SampleGraphEdgeView(
+                edge_id=edge.id,
+                source_task_id=edge.source_task_id,
+                target_task_id=edge.target_task_id,
+                status=str(edge.status),
+                created_at=edge.created_at,
+                updated_at=edge.updated_at,
+            )
+            for edge in edges
+        ],
+    )
+
+
 def _display_run_score(
     score_summary: EvaluationScoreSummary,
     run_status: str,
@@ -306,7 +429,6 @@ def _display_run_score(
 def _run_summary(
     run: SampleRecord,
     *,
-    definition_name: str | None = None,
     task_counts: dict[str, object] | None = None,
 ) -> SampleSummaryDto:
     summary = run.parsed_summary()
@@ -323,8 +445,7 @@ def _run_summary(
         completed_at=run.completed_at,
         latest_activity_at=_latest_activity(run, task_counts),
         duration_seconds=_duration_seconds(run),
-        definition_id=run.definition_id,
-        definition_name=definition_name,
+        experiment_id=run.experiment_id,
         experiment=run.experiment,
         benchmark_type=run.benchmark_type,
         instance_key=run.instance_key,

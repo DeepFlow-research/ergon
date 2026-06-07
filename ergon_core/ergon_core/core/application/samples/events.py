@@ -1,7 +1,9 @@
-"""Thin append helper and view DTOs for typed sample runtime WAL rows."""
+"""Thin append helper for typed sample runtime WAL rows."""
+
+from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 from uuid import UUID
 
 from ergon_core.core.persistence.samples.models import (
@@ -14,8 +16,11 @@ from ergon_core.core.persistence.samples.models import (
     SampleWorkerEventRow,
 )
 from ergon_core.core.shared.json_types import JsonObject
-from pydantic import BaseModel, Field
+from ergon_core.core.shared.utils import utcnow
 from sqlmodel import Session, select
+
+if TYPE_CHECKING:
+    from ergon_core.core.application.samples.event_views import SampleRuntimeEventView
 
 SampleStatusEventKind = Literal["sample.status_changed"]
 SampleTaskEventKind = Literal["task.added", "task.removed", "task.status_changed"]
@@ -38,30 +43,6 @@ SampleRuntimeEventRow = (
     | SampleSandboxEventRow
     | SampleAnnotationEventRow
 )
-
-
-class SampleRuntimeEventView(BaseModel):
-    model_config = {"frozen": True}
-
-    id: UUID
-    sample_id: UUID
-    event_timestamp: datetime
-    table: Literal[
-        "sample_status_events",
-        "sample_task_events",
-        "sample_edge_events",
-        "sample_worker_events",
-        "sample_evaluator_events",
-        "sample_sandbox_events",
-        "sample_annotation_events",
-    ]
-    event_type: str
-    target_type: str
-    target_id: UUID | None
-    payload: JsonObject = Field(
-        default_factory=dict,
-        description="Typed event payload copied from the source sample runtime WAL row.",
-    )
 
 
 class SampleRuntimeEventSubscriber(Protocol):
@@ -110,69 +91,43 @@ class SampleRuntimeEventAppender:
         return row
 
 
+def append_sample_status_changed(
+    session: Session,
+    *,
+    sample_id: UUID,
+    status: str,
+    actor: str,
+    event_timestamp: datetime | None = None,
+    payload: JsonObject | None = None,
+) -> SampleStatusEventRow:
+    return SampleRuntimeEventAppender(session).append_status_event(
+        SampleStatusEventRow(
+            sample_id=sample_id,
+            event_type="sample.status_changed",
+            status=status,
+            actor=actor,
+            event_timestamp=event_timestamp or utcnow(),
+            payload_json=dict(payload or {}),
+        )
+    )
+
+
 class SampleRuntimeEventReadService:
     def list_events(self, session: Session, sample_id: UUID) -> list[SampleRuntimeEventView]:
         rows: list[SampleRuntimeEventRow] = []
         for model in _EVENT_MODELS:
             rows.extend(session.exec(select(model).where(model.sample_id == sample_id)).all())
         rows.sort(key=lambda row: (row.event_timestamp, row.id))
-        return [sample_runtime_event_from_row(row) for row in rows]
+        return [sample_runtime_event_view_from_row(row) for row in rows]
 
 
-def sample_runtime_event_from_row(row: SampleRuntimeEventRow) -> SampleRuntimeEventView:
-    table = row.__tablename__
-    target_type, target_id = _target_for_row(row)
-    payload = _payload_for_row(row)
-    return SampleRuntimeEventView(
-        id=row.id,
-        sample_id=row.sample_id,
-        event_timestamp=row.event_timestamp,
-        table=table,
-        event_type=row.event_type,
-        target_type=target_type,
-        target_id=target_id,
-        payload=payload,
+def sample_runtime_event_view_from_row(row: SampleRuntimeEventRow) -> SampleRuntimeEventView:
+    """Convert a typed WAL row into the public sample runtime event view."""
+    from ergon_core.core.application.samples.event_views import (
+        sample_runtime_event_from_row,
     )
 
-
-def _target_for_row(row: SampleRuntimeEventRow) -> tuple[str, UUID | None]:
-    if isinstance(row, SampleStatusEventRow):
-        return "sample", row.sample_id
-    if isinstance(row, SampleTaskEventRow):
-        return "task", row.task_id
-    if isinstance(row, SampleEdgeEventRow):
-        return "edge", row.edge_id
-    if isinstance(row, (SampleWorkerEventRow, SampleEvaluatorEventRow, SampleSandboxEventRow)):
-        return "task", row.task_id
-    return row.target_type, row.target_id
-
-
-def _payload_for_row(row: SampleRuntimeEventRow) -> JsonObject:
-    payload = dict(row.payload_json)
-    if isinstance(row, SampleStatusEventRow):
-        payload.setdefault("status", row.status)
-    elif isinstance(row, SampleTaskEventRow):
-        if row.task_slug is not None:
-            payload.setdefault("task_slug", row.task_slug)
-        if row.status is not None:
-            payload.setdefault("status", row.status)
-        payload.setdefault("task", row.task_snapshot_json)
-    elif isinstance(row, SampleEdgeEventRow):
-        if row.status is not None:
-            payload.setdefault("status", row.status)
-        payload.setdefault("source_task_id", str(row.source_task_id))
-        payload.setdefault("target_task_id", str(row.target_task_id))
-        payload.setdefault("edge", row.edge_snapshot_json)
-    elif isinstance(row, SampleWorkerEventRow):
-        payload.setdefault("worker", row.worker_snapshot_json)
-        payload.setdefault("worker_slug", row.worker_slug)
-    elif isinstance(row, SampleEvaluatorEventRow):
-        payload.setdefault("evaluator", row.evaluator_snapshot_json)
-        payload.setdefault("evaluator_slug", row.evaluator_slug)
-    elif isinstance(row, SampleSandboxEventRow):
-        payload.setdefault("sandbox", row.sandbox_snapshot_json)
-        payload.setdefault("sandbox_slug", row.sandbox_slug)
-    return payload
+    return sample_runtime_event_from_row(row)
 
 
 _EVENT_MODELS = (

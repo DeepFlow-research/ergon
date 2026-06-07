@@ -1,6 +1,6 @@
 """Serializable toolkit config for builtin ReAct-style workers.
 
-Benchmark-specific toolkits subclass ``Toolkit`` to declare authoring-time
+Environment-specific toolkits subclass ``Toolkit`` to declare authoring-time
 config fields, then lazily build live runtime tools when a ``ReActWorker``
 executes. Toolkits are intentionally a builtins/ReAct concern, not a core
 authoring API concept.

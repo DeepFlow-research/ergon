@@ -1,7 +1,7 @@
-"""Real-LLM rollout harness for the ``researchrubrics`` benchmark.
+"""Real-LLM rollout harness for the ``researchrubrics`` environment.
 
-This test is a **trigger**, not an assertion suite.  It runs a real
-``ergon benchmark run researchrubrics`` end-to-end against a real LLM
+This test is a **trigger**, not an assertion suite.  It submits a real
+ResearchRubrics environment through the Python authoring API
 (Sonnet 4.6 via OpenRouter by default) and dumps an exhaustive
 rollout artifact — every persistence table, dashboard screenshots,
 and a stitched ``report.md`` — to
@@ -11,7 +11,7 @@ A reviewing agent (or human) then opens ``report.md`` and reasons
 about whether the agent succeeded, and what to iterate on in the
 model or simulator.
 
-The single assertion is that the benchmark reached a terminal status
+The single assertion is that the environment rollout reached a terminal status
 (``completed`` / ``failed`` / ``cancelled``).  ``failed`` is still a
 successful rollout from the harness's perspective — it is data.
 
@@ -24,15 +24,22 @@ Gated by:
 """
 
 import os
-import subprocess
+import json
 import time
 from datetime import datetime, timezone
 from uuid import UUID
 
 import pytest
+from ergon_builtins.agents.react.worker import ReActWorker
+from ergon_builtins.benchmarks.researchrubrics.dataset import load_researchrubrics_rows
+from ergon_builtins.benchmarks.researchrubrics.prompts import RESEARCH_SYSTEM_PROMPT
+from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
+from ergon_builtins.benchmarks.researchrubrics.sandbox import ResearchE2BSandbox
+from ergon_builtins.benchmarks.researchrubrics.sample import make_researchrubrics_sample
+from ergon_builtins.benchmarks.researchrubrics.toolkit import ResearchRubricsToolkit
+from ergon_core.api import Environment, Experiment, RandomSampler
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from ergon_core.core.persistence.telemetry.models import (
-    SampleRecord,
     SampleResource,
     SampleTaskEvaluation,
 )
@@ -58,7 +65,6 @@ _DEFAULT_MODEL = "openrouter:anthropic/claude-sonnet-4.6"
 # Wall-clock caps.  Real-LLM + real-sandbox rollouts are slow; keep
 # these generous enough to absorb E2B startup + Exa retries but bounded
 # so a wedged run surfaces instead of hanging a session.
-_CLI_TIMEOUT_SECONDS = 900
 _HARNESS_POLL_TIMEOUT_SECONDS = 900
 _POST_TERMINAL_ARTIFACT_TIMEOUT_SECONDS = 300
 
@@ -74,23 +80,48 @@ def _require_keys() -> None:
         )
 
 
-def _latest_run_id_since(since: datetime) -> UUID:
-    """Return the most recent SampleRecord.id created at or after ``since``."""
+async def _submit_researchrubrics_sample(
+    *,
+    model: str,
+    limit: int,
+    max_iterations: int,
+) -> tuple[UUID, dict[str, object]]:
+    """Submit one ResearchRubrics sample through Python composition."""
     ensure_db()
     with get_session() as session:
-        stmt = (
-            select(SampleRecord)
-            .where(SampleRecord.created_at >= since)
-            .order_by(SampleRecord.created_at.desc())
-            .limit(1)
+        worker = ReActWorker(
+            name="research-runner",
+            model=model,
+            system_prompt=RESEARCH_SYSTEM_PROMPT,
+            max_iterations=max_iterations,
+            toolkit=ResearchRubricsToolkit(),
         )
-        row = session.exec(stmt).first()
-        if row is None:
-            raise RuntimeError(
-                "no SampleRecord created since the harness started — "
-                "did the CLI subprocess actually dispatch a run?"
-            )
-        return row.id
+        environment = Environment.from_records(
+            name="researchrubrics-real-llm",
+            records=load_researchrubrics_rows(split="train", limit=limit),
+            make_sample=lambda row: make_researchrubrics_sample(
+                row,
+                environment_name="researchrubrics-real-llm",
+                split="train",
+                worker=worker,
+                evaluators=[ResearchRubricsRubric(name="researchrubrics-rubric")],
+                sandbox=ResearchE2BSandbox(),
+            ),
+        )
+        experiment = Experiment(
+            name=f"real-llm-researchrubrics-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}",
+            environments=[environment],
+            metadata={"source": "real-llm-harness"},
+        )
+        result = await experiment.submit(
+            session=session,
+            k=1,
+            candidate_pool_size=limit,
+            sampler=RandomSampler(seed=0),
+        )
+    if not result.sample_ids:
+        raise RuntimeError("ResearchRubrics submission returned no sample_ids")
+    return result.sample_ids[0], result.model_dump(mode="json")
 
 
 def _wait_for_post_terminal_artifacts(sample_id: UUID) -> None:
@@ -133,40 +164,23 @@ async def test_researchrubrics_rollout(
     state inside the time budget.
     """
     model = os.environ.get("ERGON_REAL_LLM_MODEL", _DEFAULT_MODEL)
-    benchmark = "researchrubrics"
-    worker = os.environ.get("ERGON_REAL_LLM_WORKER", "researchrubrics-researcher")
-    evaluator = "research-rubric"
-    limit = os.environ.get("ERGON_REAL_LLM_LIMIT", "1")
+    environment_name = "researchrubrics"
+    worker = "research-runner"
+    evaluator = "researchrubrics-rubric"
+    limit = int(os.environ.get("ERGON_REAL_LLM_LIMIT", "1"))
+    max_iterations = int(os.environ.get("ERGON_REAL_LLM_MAX_ITERATIONS", "16"))
 
     budget_before = (
         await openrouter_budget.remaining_usd() if openrouter_budget is not None else None
     )
     started_at = datetime.now(timezone.utc)
 
-    cli_proc = subprocess.run(
-        [
-            "uv",
-            "run",
-            "ergon",
-            "benchmark",
-            "run",
-            benchmark,
-            "--worker",
-            worker,
-            "--evaluator",
-            evaluator,
-            "--model",
-            model,
-            "--limit",
-            limit,
-        ],
-        timeout=_CLI_TIMEOUT_SECONDS,
-        capture_output=True,
-        text=True,
-        check=False,
+    sample_id, submission = await _submit_researchrubrics_sample(
+        model=model,
+        limit=limit,
+        max_iterations=max_iterations,
     )
 
-    sample_id = _latest_run_id_since(started_at)
     terminal_state = harness_client.wait_for_terminal(
         sample_id,
         timeout_s=_HARNESS_POLL_TIMEOUT_SECONDS,
@@ -175,10 +189,9 @@ async def test_researchrubrics_rollout(
 
     out_dir = rollout_dir(sample_id)
 
-    # Persist CLI stdout/stderr up front so a crashed DB dump still
+    # Persist submission metadata up front so a crashed DB dump still
     # leaves breadcrumbs for the reviewing agent.
-    (out_dir / "cli_stdout.txt").write_text(cli_proc.stdout or "")
-    (out_dir / "cli_stderr.txt").write_text(cli_proc.stderr or "")
+    (out_dir / "submission.json").write_text(json.dumps(submission, indent=2, default=str))
 
     table_counts = dump_rollout(sample_id, out_dir)
     screenshots = await capture_dashboard(sample_id, playwright_context, out_dir)
@@ -191,11 +204,11 @@ async def test_researchrubrics_rollout(
     manifest_path = write_manifest(
         out_dir,
         sample_id=sample_id,
-        benchmark=benchmark,
+        benchmark=environment_name,
         worker=worker,
         evaluator=evaluator,
         model=model,
-        cli_returncode=cli_proc.returncode,
+        cli_returncode=0,
         terminal_state=terminal_state,
         started_at=started_at,
         finished_at=finished_at,

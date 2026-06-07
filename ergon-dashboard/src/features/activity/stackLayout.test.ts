@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { RunActivity } from "./types";
+import type { SampleActivity } from "./types";
 import { stackActivities } from "./stackLayout";
 
 function activity(
@@ -9,7 +9,7 @@ function activity(
   startAt: string,
   endAt: string | null,
   actor: string | null = null,
-): RunActivity {
+): SampleActivity {
   return {
     id,
     kind: "execution",
@@ -23,12 +23,12 @@ function activity(
     actor,
     sourceKind: "execution.span",
     metadata: {},
-    lineage: { taskId: id, taskExecutionId: id },
+    lineage: { taskId: id, taskAttemptId: id },
     debug: { source: "execution.span", payload: { id } },
   };
 }
 
-function marker(id: string, startAt: string): RunActivity {
+function marker(id: string, startAt: string): SampleActivity {
   return {
     id,
     kind: "graph",

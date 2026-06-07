@@ -3,13 +3,13 @@
 from enum import Enum
 from typing import Literal
 
-from ergon_builtins.benchmarks.catalog import benchmark_cli_metadata
+from ergon_builtins.environments.catalog import environment_cli_metadata
 from pydantic import BaseModel, Field
 
 EnvKeyOwner = Literal[
     "core-runtime",
     "model-provider-runtime",
-    "benchmark-evaluation-runtime",
+    "environment-evaluation-runtime",
     "infra-training-runtime",
     "local-networking-dev",
 ]
@@ -52,8 +52,8 @@ ENV_KEY_OWNERS: dict[str, EnvKeyOwner] = {
     "ANTHROPIC_API_KEY": "model-provider-runtime",
     "GOOGLE_API_KEY": "model-provider-runtime",
     "OPENROUTER_API_KEY": "model-provider-runtime",
-    "E2B_API_KEY": "benchmark-evaluation-runtime",
-    "EXA_API_KEY": "benchmark-evaluation-runtime",
+    "E2B_API_KEY": "environment-evaluation-runtime",
+    "EXA_API_KEY": "environment-evaluation-runtime",
     "SHADEFORM_API_KEY": "infra-training-runtime",
     "LAMBDA_API_KEY": "infra-training-runtime",
     "RUNPOD_API_KEY": "infra-training-runtime",
@@ -62,14 +62,14 @@ ENV_KEY_OWNERS: dict[str, EnvKeyOwner] = {
 }
 
 
-def available_benchmark_slugs() -> list[str]:
-    return sorted(benchmark_cli_metadata())
+def available_environment_slugs() -> list[str]:
+    return sorted(environment_cli_metadata())
 
 
 class OnboardProfile(BaseModel):
     """Captures every user choice made during onboarding."""
 
-    benchmarks: list[str] = Field(default_factory=list)
+    environments: list[str] = Field(default_factory=list)
     llm_providers: list[LLMProvider] = Field(default_factory=list)
     training: bool = False
     gpu_provider: GPUProvider | None = None
@@ -78,7 +78,7 @@ class OnboardProfile(BaseModel):
 
     def required_keys(self) -> dict[str, str]:
         """Return {env_var: human_reason} derived purely from user choices."""
-        benchmarks = benchmark_cli_metadata()
+        environments = environment_cli_metadata()
 
         result: dict[str, str] = {}
 
@@ -86,12 +86,16 @@ class OnboardProfile(BaseModel):
             env_var = PROVIDER_KEY_MAP[provider]
             result[env_var] = f"{provider.value} API access"
 
-        if any("E2B_API_KEY" in benchmarks[b].env_keys for b in self.benchmarks if b in benchmarks):
-            result["E2B_API_KEY"] = "Sandboxed code execution for selected benchmarks"
+        if any(
+            "E2B_API_KEY" in environments[b].env_keys
+            for b in self.environments
+            if b in environments
+        ):
+            result["E2B_API_KEY"] = "Sandboxed code execution for selected environments"
 
-        for b in self.benchmarks:
-            if b in benchmarks:
-                for key in benchmarks[b].env_keys:
+        for b in self.environments:
+            if b in environments:
+                for key in environments[b].env_keys:
                     if key == "E2B_API_KEY":
                         continue
                     result.setdefault(key, f"Optional for {b}")
@@ -104,12 +108,12 @@ class OnboardProfile(BaseModel):
 
     def required_extras(self) -> list[str]:
         """Pip extras to install based on choices."""
-        benchmarks = benchmark_cli_metadata()
+        environments = environment_cli_metadata()
 
         extras: set[str] = set()
-        for benchmark in self.benchmarks:
-            if benchmark in benchmarks:
-                extras.update(benchmarks[benchmark].required_packages)
+        for environment in self.environments:
+            if environment in environments:
+                extras.update(environments[environment].required_packages)
         if self.training:
             extras.add("ergon-infra[training]")
         if self.gpu_provider and self.gpu_provider != GPUProvider.LOCAL:

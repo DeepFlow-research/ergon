@@ -13,13 +13,13 @@ def register_test_parser(subparsers: argparse._SubParsersAction) -> None:
     list_parser.add_argument("--dry-run", action="store_true", help=argparse.SUPPRESS)
     list_parser.add_argument("extra_args", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
 
-    smoke_parser = domain_sub.add_parser("smoke", help="Run canonical benchmark smoke tests")
+    smoke_parser = domain_sub.add_parser("smoke", help="Run canonical environment smoke tests")
     smoke_parser.add_argument(
         "test_suite",
         nargs="?",
         default="full",
         metavar="{full,researchrubrics,minif2f,swebench-verified}",
-        help="Benchmark smoke target",
+        help="Environment smoke target",
     )
     smoke_parser.add_argument(
         "--dry-run", action="store_true", help="Print command without running"

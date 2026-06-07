@@ -9,7 +9,7 @@ list_subtasks, get_subtask, and sandboxed bash.
 from collections.abc import Awaitable, Callable
 from uuid import UUID
 
-from ergon_core.api.benchmark import Task
+from ergon_core.api.task import Task
 from ergon_core.api.worker import WorkerContext
 from ergon_core.core.persistence.shared.types import (
     NodeId,
@@ -49,10 +49,9 @@ class SubtaskLifecycleToolkit:
     descendant before calling runtime task services, so the toolkit keeps
     only response-shaping and UUID parsing logic here.
 
-    ``definition_id`` is NOT captured here --- the service resolves it
-    from ``sample_id`` at dispatch time, keeping the tool surface
-    thin and eliminating a class of stale-id bugs when definitions are
-    reloaded mid-run.
+    The toolkit only captures sample and task identity. Component
+    bindings are read from the materialized sample graph at dispatch
+    time, keeping the tool surface thin and avoiding stale runtime state.
     """
 
     def __init__(

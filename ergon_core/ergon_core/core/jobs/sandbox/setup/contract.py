@@ -10,7 +10,6 @@ class SandboxSetupRequest(InngestEventContract):
     name: ClassVar[str] = "task/sandbox-setup"
 
     sample_id: UUID
-    definition_id: UUID
     task_id: UUID
     benchmark_type: str
     sandbox_slug: str | None = None

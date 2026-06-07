@@ -1,4 +1,4 @@
-export type { DashboardRunState, WireRunSnapshot } from "./domain";
+export type { DashboardSampleState, WireSampleSnapshot } from "./domain";
 export {
   compareContextEvents,
   contextPartToUiPayload,
@@ -6,7 +6,7 @@ export {
   serializeContextEvent,
   uiPayloadToContextPart,
 } from "./contextEvents";
-export { deserializeRunState, hydrateRunSnapshot } from "./hydrate";
+export { deserializeSampleState, hydrateSampleSnapshot } from "./hydrate";
 export { recalculateTaskMetrics } from "./metrics";
 export {
   applySandboxClosed,
@@ -14,4 +14,4 @@ export {
   applySandboxCreated,
   applyTaskStatusChanged,
 } from "./reducers";
-export { serializeRunSnapshot, serializeRunState } from "./serialize";
+export { serializeSampleSnapshot, serializeSampleState } from "./serialize";

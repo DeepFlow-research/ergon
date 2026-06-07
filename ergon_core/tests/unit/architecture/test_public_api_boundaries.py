@@ -229,10 +229,12 @@ def test_experiment_application_cluster_stays_in_new_core_layout() -> None:
         core_root / "application" / "experiments" / "__init__.py",
         core_root / "application" / "experiments" / "service.py",
         core_root / "application" / "experiments" / "models.py",
-        core_root / "application" / "experiments" / "definition_writer.py",
-        core_root / "application" / "experiments" / "launch.py",
+        core_root / "application" / "experiments" / "submission.py",
     ):
         assert new_path.exists()
+
+    assert not (core_root / "application" / "experiments" / "definition_writer.py").exists()
+    assert not (core_root / "application" / "experiments" / "launch.py").exists()
 
     offenders: list[str] = []
     checked_paths = [

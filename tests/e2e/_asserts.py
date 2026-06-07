@@ -243,7 +243,7 @@ def _assert_thread_messages_ordered(sample_id: UUID) -> None:
         f"from_agent_id slug set mismatch: {sorted(from_slugs)}"
     )
     assert all(m.to_agent_id == "parent" for m in msgs)
-    assert all(m.task_execution_id is not None for m in msgs)
+    assert all(m.task_attempt_id is not None for m in msgs)
 
 
 def _assert_blob_roundtrip(sample_id: UUID) -> None:
@@ -337,8 +337,6 @@ def _assert_temporal_ordering(sample_id: UUID) -> None:
     _after("l_3", ["l_2"])
 
 
-SMOKE_DIRECT_TASKS = EXPECTED_SUBTASK_SLUGS
-SMOKE_NESTED_TASKS = NESTED_LINE_SLUGS
 SMOKE_DIRECT_EDGES = (
     ("d_root", "d_left"),
     ("d_root", "d_right"),
@@ -362,9 +360,9 @@ def _assert_sample_runtime_event_stream(
     root_slug = sample_snapshot.tasks[sample_snapshot.root_task_id].name
 
     expected_task_slugs = (
-        (root_slug, *SMOKE_DIRECT_TASKS, *SMOKE_NESTED_TASKS)
+        (root_slug, *EXPECTED_SUBTASK_SLUGS, *NESTED_LINE_SLUGS)
         if profile == "happy"
-        else (root_slug, *SMOKE_DIRECT_TASKS)
+        else (root_slug, *EXPECTED_SUBTASK_SLUGS)
     )
     expected_edge_pairs = (
         (*SMOKE_DIRECT_EDGES, *SMOKE_NESTED_EDGES) if profile == "happy" else SMOKE_DIRECT_EDGES
@@ -437,7 +435,7 @@ def _assert_sample_runtime_event_order(
     }
 
     assert task_add_index[root_slug] < first_executing
-    for slug in SMOKE_DIRECT_TASKS:
+    for slug in EXPECTED_SUBTASK_SLUGS:
         assert task_add_index[slug] > first_executing
 
     for i, event in enumerate(ordered):
@@ -484,7 +482,7 @@ def _event_index(
 # =============================================================================
 
 
-def _assert_experiment_membership(experiment: str, run_ids: list[UUID]) -> None:
+def _assert_experiment_membership(experiment: str, sample_ids: list[UUID]) -> None:
     """Runs are visible via the experiment-group test-harness endpoint."""
     api_base = os.environ["ERGON_API_BASE_URL"]
     r = httpx.get(
@@ -494,7 +492,7 @@ def _assert_experiment_membership(experiment: str, run_ids: list[UUID]) -> None:
     r.raise_for_status()
     rows = r.json()
     returned = {UUID(row["sample_id"]) for row in rows}
-    expected = set(run_ids)
+    expected = set(sample_ids)
     assert expected <= returned, f"experiment group missing expected run ids: {expected - returned}"
 
 

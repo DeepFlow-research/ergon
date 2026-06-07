@@ -99,7 +99,7 @@ def _assert_task_has_no_model_post_init() -> None:
 
     import inspect
 
-    from ergon_core.api.benchmark.task import Task
+    from ergon_core.api.task import Task
 
     source = inspect.getsource(Task)
     assert "def model_post_init" not in source, (

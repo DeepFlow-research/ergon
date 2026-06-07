@@ -14,13 +14,13 @@ update this doc in the same PR.
 
 | Goal | Command |
 |---|---|
-| Populate **SANDBOX** panel (stdin/stdout events) with no LLM | `ergon experiment define researchrubrics-smoke --worker canonical-smoke --model stub:constant --limit 1 && ergon experiment run <experiment-id>` |
-| Populate **GENERATIONS** without calling a model | `ergon experiment define smoke-test --worker training-stub --model stub:constant --limit 1 && ergon experiment run <experiment-id>` |
-| Populate **EVALUATION** with a passing gate, no LLM | any benchmark + `--evaluator stub-rubric` |
-| Populate **EVALUATION** with varied scores (RL reward-shape test) | any benchmark + `--evaluator varied-stub-rubric` |
-| Test a real ReAct agent end-to-end | `ergon experiment define swebench-verified --worker swebench-react --model openai:gpt-4o --limit 1 && ergon experiment run <experiment-id>` |
-| Test manager → researcher delegation with a real LLM | `ergon experiment define researchrubrics-smoke --worker researchrubrics-researcher --model openai:gpt-4o --limit 1 && ergon experiment run <experiment-id>` |
-| Test Lean 4 proof verification | `ergon experiment define minif2f --worker minif2f-react --model openai:gpt-4o --limit 1 && ergon experiment run <experiment-id>` (needs Lean sandbox) |
+| Populate **SANDBOX** panel (stdin/stdout events) with no LLM | Use a Python submit script that builds a `ResearchRubricsEnvironment` with the canonical smoke worker and calls `Experiment.submit(...)`. |
+| Populate **GENERATIONS** without calling a model | Use a Python submit script with an environment bound to `TrainingStubWorker`; inspect with `ergon sample show <sample-id>`. |
+| Populate **EVALUATION** with a passing gate, no LLM | Bind `stub-rubric` in the environment's evaluator list. |
+| Populate **EVALUATION** with varied scores (RL reward-shape test) | Bind `varied-stub-rubric` in the environment's evaluator list. |
+| Test a real ReAct agent end-to-end | Build the relevant builtin environment in Python with the ReAct worker and submit it through `Experiment.submit(...)`. |
+| Test manager -> researcher delegation with a real LLM | Build `ResearchRubricsEnvironment` in Python with `researchrubrics-researcher` and submit it through `Experiment.submit(...)`. |
+| Test Lean 4 proof verification | Build `MiniF2FEnvironment` in Python with the MiniF2F worker/rubric and submit it through `Experiment.submit(...)` (needs Lean sandbox). |
 
 ---
 
@@ -36,8 +36,8 @@ Which worker emits what.  `—` = not applicable, `✗` = nothing emitted.
 | `minif2f-react` | ✓ | ✓ (proof artifact) | ✓ (Lean files) | ✓ |
 | `researchrubrics-researcher` | ✓ | ✓ (SampleResource kind=REPORT) | ✓ (writes `final_output/report.md`) | ✗ |
 
-EVALUATION is populated by whichever **evaluator** you pass with
-`--evaluator`; see table below.
+EVALUATION is populated by the **evaluators** bound to the submitted
+environment; see table below.
 
 ---
 
@@ -46,21 +46,21 @@ EVALUATION is populated by whichever **evaluator** you pass with
 | slug | class | requires | notes |
 |---|---|---|---|
 | `training-stub` | `workers/baselines/training_stub_worker.py` | none | Emits synthetic multi-turn data with fake logprobs/token_ids — exercises the RL extraction path without a real model. |
-| `canonical-smoke` | `workers/stubs/canonical_smoke_worker.py` | per-env leaf + its sandbox | Dispatches to a per-benchmark smoke leaf (`SweBenchSmokeRubric`, `ResearchRubricsSmokeRubric`, `MiniF2FSmokeRubric`) — the RFC 2026-04-21 canonical smoke path. |
+| `canonical-smoke` | `workers/stubs/canonical_smoke_worker.py` | per-env leaf + its sandbox | Dispatches to a per-environment smoke leaf (`SweBenchSmokeRubric`, `ResearchRubricsSmokeRubric`, `MiniF2FSmokeRubric`) — the RFC 2026-04-21 canonical smoke path. |
 | `react-v1` | `workers/baselines/react_worker.py` | LLM | Generic ReAct-style worker built on pydantic-ai.  Used by most real benchmarks. |
 | `minif2f-react` | `workers/baselines/minif2f_react_worker.py` | LLM + Lean 4 sandbox | ReAct pre-wired with `write_lean_file`, `check_lean_file`, `verify_lean_proof`.  Produces a proof artifact in `WorkerOutput`. |
 | `researchrubrics-researcher` | `workers/research_rubrics/researcher_worker.py` | LLM + E2B sandbox (`ResearchRubricsSandboxManager`) | Writes a research report to `/workspace/final_output/report.md` and publishes it as a SampleResource. |
 
 ---
 
-## Benchmarks
+## Environments
 
 | slug | class | task count | requires |
 |---|---|---|---|
-| `smoke-test` | `benchmarks/smoke_test/benchmark.py` | configurable DAG (single / linear / parallel / diamond) | none — generic orchestration fixture used by the integration tier |
-| `minif2f` | `benchmarks/minif2f/benchmark.py` | ~14k Lean 4 theorems from HuggingFace `minif2f-v2c` | Lean 4 sandbox |
-| `researchrubrics-smoke` | `benchmarks/researchrubrics/smoke.py` | 1 (instruction: "write a research report") | E2B sandbox |
-| `swebench-verified` | `benchmarks/swebench_verified/benchmark.py` | curated SWE-Bench instances | Docker sandbox (ships with repo snapshots) |
+| `minif2f` | `environments/minif2f.py` | ~14k Lean 4 theorems from HuggingFace `minif2f-v2c` | Lean 4 sandbox |
+| `researchrubrics` | `environments/researchrubrics.py` | ResearchRubrics dataset rows | E2B sandbox |
+| `swebench-verified` | `environments/swebench_verified.py` | curated SWE-Bench instances | Docker sandbox (ships with repo snapshots) |
+| `gdpeval` | `environments/gdpeval.py` | GDP document-processing tasks | E2B sandbox |
 
 ---
 

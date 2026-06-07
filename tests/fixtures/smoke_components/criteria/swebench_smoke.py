@@ -47,7 +47,7 @@ class SweBenchSmokeCriterion(SmokeCriterionBase):
                 resource = session.exec(
                     select(SampleResource)
                     .where(
-                        col(SampleResource.task_execution_id).in_(exec_ids),
+                        col(SampleResource.task_attempt_id).in_(exec_ids),
                     )
                     .where(
                         col(SampleResource.name).like("patch_%.py"),

@@ -3,7 +3,7 @@
 import argparse
 import inspect
 
-from ergon_cli.domains.benchmarks.parser import register_benchmark_parser
+from ergon_cli.domains.environments.parser import register_environment_parser
 from ergon_cli.domains.doctor.parser import register_doctor_parser
 from ergon_cli.domains.evaluators.parser import register_evaluator_parser
 from ergon_cli.domains.examples.parser import register_examples_parser
@@ -20,7 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ergon", description="Ergon experiment orchestration")
     subparsers = parser.add_subparsers(dest="command")
 
-    register_benchmark_parser(subparsers)
+    register_environment_parser(subparsers)
     register_experiment_parser(subparsers)
     register_sample_parser(subparsers)
     register_ingest_parser(subparsers)

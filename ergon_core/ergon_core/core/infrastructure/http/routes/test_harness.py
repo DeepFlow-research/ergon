@@ -6,42 +6,42 @@ coordinating a TS helper update.
 """
 
 from dataclasses import asdict
-from typing import Annotated
+from collections.abc import Iterator
+from typing import Annotated, Literal
 from uuid import UUID
 
-from ergon_core.core.application.experiments.models import (
-    ExperimentRunRequest,
-)
-from ergon_core.core.application.experiments.service import (
-    run_experiment as _run_experiment,
-)
+from ergon_core.api.experiment import Environment, Experiment, Sample
 from ergon_core.core.application.testing.test_harness_service import (
-    DefinitionNotFoundError,
     UnknownSampleStatusError,
     get_session_dep,
-    read_experiment_runs as _read_experiment_runs,
-    read_run_state as _read_run_state,
+    read_experiment_samples as _read_experiment_samples,
+    read_sample_state as _read_sample_state,
     reset_test_rows as _reset_test_rows,
-    seed_run as _seed_run,
+    seed_sample as _seed_sample,
 )
+from ergon_core.core.persistence.shared.db import get_session
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from tests.fixtures.smoke_components.benchmarks import (
-    GDPEvalSmokeBenchmark,
-    MiniF2FSmokeBenchmark,
-    ResearchRubricsSmokeBenchmark,
-    SweBenchSmokeBenchmark,
+    GDPEvalSmokeEnvironment,
+    MiniF2FSmokeEnvironment,
+    ResearchRubricsSmokeEnvironment,
+    SweBenchSmokeEnvironment,
 )
 
-router = APIRouter(prefix="/api/__danger__/test-harness", tags=["danger-test-harness"])
+router = APIRouter(
+    prefix="/api/__danger__/test-harness",
+    tags=["danger-test-harness"],
+    include_in_schema=False,
+)
 
-_SMOKE_BENCHMARKS = {
-    benchmark.type_slug: benchmark
-    for benchmark in (
-        GDPEvalSmokeBenchmark,
-        MiniF2FSmokeBenchmark,
-        ResearchRubricsSmokeBenchmark,
-        SweBenchSmokeBenchmark,
+_SMOKE_ENVIRONMENTS = {
+    environment.environment_slug: environment
+    for environment in (
+        GDPEvalSmokeEnvironment,
+        MiniF2FSmokeEnvironment,
+        ResearchRubricsSmokeEnvironment,
+        SweBenchSmokeEnvironment,
     )
 }
 
@@ -80,7 +80,7 @@ class TestExecutionDto(BaseModel):
     error: str | None
 
 
-class TestRunStateDto(BaseModel):
+class TestSampleStateDto(BaseModel):
     sample_id: UUID
     status: str
     graph_nodes: list[TestGraphNodeDto]
@@ -94,7 +94,7 @@ class TestRunStateDto(BaseModel):
     context_event_count: int
 
 
-class TestExperimentRunDto(BaseModel):
+class TestExperimentSampleDto(BaseModel):
     sample_id: UUID
     status: str
 
@@ -104,29 +104,29 @@ class TestExperimentRunDto(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-@router.get("/read/samples/{sample_id}/state", response_model=TestRunStateDto)
-def read_run_state(
+@router.get("/read/samples/{sample_id}/state", response_model=TestSampleStateDto)
+def read_sample_state(
     sample_id: UUID,
     session: Annotated[object, Depends(get_session_dep)],
-) -> TestRunStateDto:
-    state = _read_run_state(sample_id, session)  # type: ignore[arg-type]
+) -> TestSampleStateDto:
+    state = _read_sample_state(sample_id, session)  # type: ignore[arg-type]
     if state is None:
-        raise HTTPException(status_code=404, detail=f"run {sample_id} not found")
-    return TestRunStateDto(**asdict(state))
+        raise HTTPException(status_code=404, detail=f"sample {sample_id} not found")
+    return TestSampleStateDto(**asdict(state))
 
 
 @router.get(
     "/read/experiment/{experiment}/samples",
-    response_model=list[TestExperimentRunDto],
+    response_model=list[TestExperimentSampleDto],
 )
-def read_experiment_runs(
+def read_experiment_samples(
     experiment: str,
     session: Annotated[object, Depends(get_session_dep)],
-) -> list[TestExperimentRunDto]:
-    """List all runs attached to a v2 experiment grouping tag."""
+) -> list[TestExperimentSampleDto]:
+    """List all samples attached to a v2 experiment grouping tag."""
     return [
-        TestExperimentRunDto(sample_id=run.sample_id, status=run.status)
-        for run in _read_experiment_runs(experiment, session)  # type: ignore[arg-type]
+        TestExperimentSampleDto(sample_id=sample.sample_id, status=sample.status)
+        for sample in _read_experiment_samples(experiment, session)  # type: ignore[arg-type]
     ]
 
 
@@ -141,9 +141,8 @@ def read_experiment_runs(
 # callers must always specify what to nuke.
 
 
-class SeedRunRequest(BaseModel):
-    definition_id: UUID
-    benchmark_type: str = "test-harness"
+class SeedSampleRequest(BaseModel):
+    environment_type: str = "test-harness"
     instance_key: str = "seeded"
     worker_team: dict = Field(default_factory=lambda: {"primary": "test-harness-worker"})
     experiment: str = "_test_"
@@ -156,13 +155,12 @@ class ResetRequest(BaseModel):
 
 
 @router.post("/write/samples/seed", status_code=201)
-def seed_run(
-    body: SeedRunRequest,
+def seed_sample(
+    body: SeedSampleRequest,
 ) -> dict:
     try:
-        sample_id = _seed_run(
-            definition_id=body.definition_id,
-            benchmark_type=body.benchmark_type,
+        sample_id = _seed_sample(
+            benchmark_type=body.environment_type,
             instance_key=body.instance_key,
             worker_team=body.worker_team,
             experiment=body.experiment,
@@ -172,12 +170,7 @@ def seed_run(
     except UnknownSampleStatusError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"unknown run status: {body.status!r}",
-        ) from exc
-    except DefinitionNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"definition {body.definition_id} not found",
+            detail=f"unknown sample status: {body.status!r}",
         ) from exc
     return {"sample_id": str(sample_id)}
 
@@ -191,7 +184,7 @@ def reset_test_rows(
 
 
 # ---------------------------------------------------------------------------
-# Experiment-run submission endpoint — the single entry point for smoke drivers.
+# Experiment sample submission endpoint — the single entry point for smoke drivers.
 #
 # Moved here (rather than a separate /samples POST) because it's the test
 # harness that cares about grouped multi-run submission.  Host-side
@@ -202,14 +195,14 @@ def reset_test_rows(
 # ---------------------------------------------------------------------------
 
 
-class ExperimentRunSlotRequest(BaseModel):
+class ExperimentSampleSlotRequest(BaseModel):
     worker_slug: str
     evaluator_slug: str
 
 
-class SubmitExperimentRunsRequest(BaseModel):
-    benchmark_slug: str
-    slots: list[ExperimentRunSlotRequest]
+class SubmitExperimentSamplesRequest(BaseModel):
+    environment_slug: str
+    slots: list[ExperimentSampleSlotRequest]
     experiment: str
     sandbox_slug: str | None = None
     dependency_extras: tuple[str, ...] = ("none",)
@@ -219,52 +212,65 @@ class SubmitExperimentRunsRequest(BaseModel):
     limit: int = 1
 
 
-class SubmitExperimentRunsResponse(BaseModel):
+class SubmitExperimentSamplesResponse(BaseModel):
     sample_ids: list[UUID]
 
 
-@router.post("/write/experiment-runs", response_model=SubmitExperimentRunsResponse)
-async def submit_experiment_runs(
-    body: SubmitExperimentRunsRequest,
-) -> SubmitExperimentRunsResponse:
-    """Build + persist + dispatch N runs under one experiment tag.
+class _HarnessEnvironment(Environment):
+    samples: list[Sample]
+    source_mode: Literal["materialized"] = "materialized"
 
-    Per-slot flow persists the object-bound smoke ``Benchmark`` into the
-    immutable ``ExperimentDefinition`` tables. The v2 experiment grouping tag
-    is written into definition metadata and copied to ``SampleRecord.experiment``
-    by launch. Slots submit sequentially — typical N ≤ 3, so the
-    parallel-gather savings are negligible.
-    """
-    from ergon_core.core.application.experiments.service import persist_benchmark
+    def iter_samples(self) -> Iterator[Sample]:
+        return iter(self.samples)
+
+
+@router.post("/write/experiment-samples", response_model=SubmitExperimentSamplesResponse)
+async def submit_experiment_samples(
+    body: SubmitExperimentSamplesRequest,
+) -> SubmitExperimentSamplesResponse:
+    """Build + persist + dispatch samples under one experiment tag."""
 
     sample_ids: list[UUID] = []
     for slot in body.slots:
         try:
-            benchmark_cls = _SMOKE_BENCHMARKS[body.benchmark_slug]
+            environment_cls = _SMOKE_ENVIRONMENTS[body.environment_slug]
         except KeyError:
-            known = ", ".join(sorted(_SMOKE_BENCHMARKS))
+            known = ", ".join(sorted(_SMOKE_ENVIRONMENTS))
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unknown smoke benchmark {body.benchmark_slug!r}; known: {known}",
+                detail=f"Unknown smoke environment {body.environment_slug!r}; known: {known}",
             ) from None
-        benchmark_source = benchmark_cls(
+        environment = environment_cls(
             metadata={
-                "benchmark_slug": body.benchmark_slug,
+                "environment_slug": body.environment_slug,
                 "source": "test-harness",
                 "experiment": body.experiment,
                 "default_worker_team": {"primary": slot.worker_slug},
                 "default_evaluator_slug": slot.evaluator_slug,
                 "default_model_target": body.model,
-                "sandbox_slug": body.sandbox_slug or body.benchmark_slug,
+                "sandbox_slug": body.sandbox_slug or body.environment_slug,
                 "dependency_extras": list(body.dependency_extras),
             },
-            created_by="test-harness",
+            name=body.environment_slug,
+            worker_slug=slot.worker_slug,
+            model=body.model,
         )
-        setattr(benchmark_source, "worker_slug", slot.worker_slug)
-        setattr(benchmark_source, "model", body.model)
-        handle = persist_benchmark(benchmark_source)
+        experiment = Experiment(
+            name=body.experiment,
+            environments=[
+                _HarnessEnvironment(
+                    name=body.environment_slug,
+                    samples=list(environment.iter_samples())[: body.limit],
+                    metadata={"source": "test-harness"},
+                )
+            ],
+            metadata={"source": "test-harness"},
+        )
+        with get_session() as session:
+            result = await experiment.submit(
+                session=session,
+                k=body.limit,
+            )
+        sample_ids.extend(result.sample_ids)
 
-        launched = await _run_experiment(ExperimentRunRequest(definition_id=handle.definition_id))
-        sample_ids.extend(launched.sample_ids)
-
-    return SubmitExperimentRunsResponse(sample_ids=sample_ids)
+    return SubmitExperimentSamplesResponse(sample_ids=sample_ids)

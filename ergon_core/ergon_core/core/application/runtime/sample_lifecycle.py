@@ -3,13 +3,8 @@ from pathlib import PurePosixPath
 from typing import Literal, Protocol
 from uuid import UUID, uuid4
 
-from ergon_core.core.persistence.definitions.models import (
-    ExperimentDefinition,
-    ExperimentDefinitionTask,
-)
 from ergon_core.core.application.runtime import status as graph_status
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
-from ergon_core.core.persistence.samples.models import SampleStatusEventRow
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import (
     SampleResourceKind,
@@ -26,12 +21,7 @@ from ergon_core.core.application.runtime.events import (
     RuntimeEventDispatcher,
     TaskReadyDispatcher,
 )
-from ergon_core.core.application.runtime.sample_records import (
-    cancel_run,
-    create_run,
-    latest_run_for_definition,
-)
-from ergon_core.core.application.runtime.sample_identity import definition_id_for_run
+from ergon_core.core.application.runtime.sample_records import cancel_sample
 from ergon_core.core.application.runtime.graph_lookup import GraphNodeLookup
 from ergon_core.core.application.runtime.lifecycle import (
     get_initial_ready_tasks,
@@ -41,7 +31,7 @@ from ergon_core.core.application.runtime.lifecycle import (
 )
 from ergon_core.core.application.runtime.graph_traversal import descendant_ids
 from ergon_core.core.application.runtime.models import GraphEdgeDto, GraphNodeDto, MutationMeta
-from ergon_core.core.application.samples.events import SampleRuntimeEventAppender
+from ergon_core.core.application.samples.events import append_sample_status_changed
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from ergon_core.core.application.runtime.orchestration import (
     FinalizedWorkflowResult,
@@ -50,7 +40,7 @@ from ergon_core.core.application.runtime.orchestration import (
     InitializeWorkflowCommand,
     PropagateTaskCompletionCommand,
     PropagationResult,
-    RunCompletionData,
+    SampleCompletionData,
     TaskDescriptor,
     WorkflowTerminalState,
 )
@@ -105,78 +95,101 @@ class WorkflowService:
         self._task_execution_repo = TaskExecutionRepository()
         self._runtime_events = RuntimeEventDispatcher(task_ready_dispatcher)
 
-    async def initialize(self, command: InitializeWorkflowCommand) -> InitializedWorkflow:
-        """Load a definition, seed graph state, and return initially ready tasks."""
+    async def initialize(
+        self,
+        command: InitializeWorkflowCommand,
+        *,
+        session: Session | None = None,
+    ) -> InitializedWorkflow:
+        """Load materialized sample graph state and return initially ready tasks."""
+        if session is not None:
+            return await self._initialize_in_session(session, command, commit=False)
         with get_session() as session:
-            definition = require_not_none(
-                session.get(ExperimentDefinition, command.definition_id),
-                f"Definition {command.definition_id} not found",
-            )
-            all_tasks = list(
-                session.exec(
-                    select(ExperimentDefinitionTask).where(
-                        ExperimentDefinitionTask.experiment_definition_id == command.definition_id,
-                    )
-                ).all()
-            )
+            return await self._initialize_in_session(session, command, commit=True)
 
-            self._graph_repo.initialize_from_definition(
-                session,
-                command.sample_id,
-                command.definition_id,
-                initial_node_status=graph_status.PENDING,
-                initial_edge_status=graph_status.EDGE_PENDING,
-                meta=MutationMeta(actor="system:workflow_init"),
-            )
-            session.commit()
+    async def _initialize_in_session(
+        self,
+        session: Session,
+        command: InitializeWorkflowCommand,
+        *,
+        commit: bool,
+    ) -> InitializedWorkflow:
+        materialized_nodes = list(
+            session.exec(
+                select(SampleGraphNode).where(SampleGraphNode.sample_id == command.sample_id)
+            ).all()
+        )
+        if not materialized_nodes:
+            raise ValueError(f"Sample {command.sample_id} has no materialized graph")
+        return await self._initialize_materialized_sample(
+            session,
+            command,
+            nodes=materialized_nodes,
+            commit=commit,
+        )
 
-            task_descriptors = [
-                TaskDescriptor(
-                    task_id=t.id,
-                    task_slug=t.task_slug,
-                    parent_task_id=t.parent_task_id,
-                )
-                for t in all_tasks
-            ]
-            graph_lookup = GraphNodeLookup(session, command.sample_id)
-
-            run_record = require_not_none(
-                session.get(SampleRecord, command.sample_id),
-                f"SampleRecord {command.sample_id} not found",
-            )
+    async def _initialize_materialized_sample(
+        self,
+        session: Session,
+        command: InitializeWorkflowCommand,
+        *,
+        nodes: list[SampleGraphNode],
+        commit: bool,
+    ) -> InitializedWorkflow:
+        graph_lookup = GraphNodeLookup(session, command.sample_id)
+        run_record = require_not_none(
+            session.get(SampleRecord, command.sample_id),
+            f"SampleRecord {command.sample_id} not found",
+        )
+        if run_record.status == SampleStatus.PENDING:
             run_record.status = SampleStatus.EXECUTING
             run_record.started_at = utcnow()
             session.add(run_record)
-            SampleRuntimeEventAppender(session).append_status_event(
-                SampleStatusEventRow(
-                    sample_id=command.sample_id,
-                    event_type="sample.status_changed",
-                    status=SampleStatus.EXECUTING,
-                    actor="system:workflow_init",
-                    event_timestamp=run_record.started_at,
-                )
-            )
-            session.commit()
-
-            ready_ids = await get_initial_ready_tasks(
+            append_sample_status_changed(
                 session,
-                command.sample_id,
-                command.definition_id,
-                graph_repo=self._graph_repo,
-                graph_lookup=graph_lookup,
-            )
-            ready_id_set = set(ready_ids)
-            root_count = sum(1 for t in all_tasks if t.parent_task_id is None)
-
-            return InitializedWorkflow(
                 sample_id=command.sample_id,
-                definition_id=command.definition_id,
-                benchmark_type=definition.benchmark_type,
-                total_tasks=len(all_tasks),
-                total_root_tasks=root_count,
-                pending_tasks=task_descriptors,
-                initial_ready_tasks=[td for td in task_descriptors if td.task_id in ready_id_set],
+                status=SampleStatus.EXECUTING,
+                actor="system:workflow_init",
+                event_timestamp=run_record.started_at,
             )
+        ready_ids = await get_initial_ready_tasks(
+            session,
+            command.sample_id,
+            graph_repo=self._graph_repo,
+            graph_lookup=graph_lookup,
+            commit=commit,
+        )
+        if commit:
+            session.commit()
+        else:
+            session.flush()
+
+        ready_id_set = set(ready_ids)
+        dependency_target_ids = set(
+            session.exec(
+                select(SampleGraphEdge.target_task_id).where(
+                    SampleGraphEdge.sample_id == command.sample_id
+                )
+            ).all()
+        )
+        task_descriptors = [
+            TaskDescriptor(
+                task_id=node.task_id,
+                task_slug=node.task_slug,
+                parent_task_id=node.parent_task_id,
+            )
+            for node in sorted(
+                nodes, key=lambda node: (node.level, node.task_slug, str(node.task_id))
+            )
+        ]
+        return InitializedWorkflow(
+            sample_id=command.sample_id,
+            benchmark_type=run_record.benchmark_type,
+            total_tasks=len(nodes),
+            total_root_tasks=sum(1 for node in nodes if node.task_id not in dependency_target_ids),
+            pending_tasks=task_descriptors,
+            initial_ready_tasks=[td for td in task_descriptors if td.task_id in ready_id_set],
+        )
 
     def finalize(self, command: FinalizeWorkflowCommand) -> FinalizedWorkflowResult:
         """Aggregate evaluations and close the run."""
@@ -193,7 +206,7 @@ class WorkflowService:
                 ).all()
             )
             score_summary = EvaluationService.summarize_scores(evaluations)
-            completion = RunCompletionData(
+            completion = SampleCompletionData(
                 completed_at=utcnow(),
                 final_score=score_summary.final_score,
                 normalized_score=score_summary.normalized_score,
@@ -212,14 +225,12 @@ class WorkflowService:
                 "cost_observed": completion.cost_observed,
             }
             session.add(run_record)
-            SampleRuntimeEventAppender(session).append_status_event(
-                SampleStatusEventRow(
-                    sample_id=command.sample_id,
-                    event_type="sample.status_changed",
-                    status=SampleStatus.COMPLETED,
-                    actor="system:workflow_finalize",
-                    event_timestamp=completion.completed_at,
-                )
+            append_sample_status_changed(
+                session,
+                sample_id=command.sample_id,
+                status=SampleStatus.COMPLETED,
+                actor="system:workflow_finalize",
+                event_timestamp=completion.completed_at,
             )
             session.commit()
 
@@ -262,7 +273,6 @@ class WorkflowService:
 
             return PropagationResult(
                 sample_id=command.sample_id,
-                definition_id=command.definition_id,
                 completed_task_id=command.task_id,
                 ready_tasks=ready_descriptors,
                 workflow_terminal_state=terminal,
@@ -297,7 +307,6 @@ class WorkflowService:
 
             return PropagationResult(
                 sample_id=command.sample_id,
-                definition_id=command.definition_id,
                 completed_task_id=command.task_id,
                 workflow_terminal_state=terminal,
             )
@@ -431,7 +440,7 @@ class WorkflowService:
         )
         stmt = select(SampleResource).where(SampleResource.sample_id == sample_id)
         if execution_ids is not None:
-            stmt = stmt.where(col(SampleResource.task_execution_id).in_(execution_ids))
+            stmt = stmt.where(col(SampleResource.task_attempt_id).in_(execution_ids))
         if kind is not None:
             stmt = stmt.where(SampleResource.kind == kind)
         resources = list(session.exec(stmt).all())
@@ -489,7 +498,7 @@ class WorkflowService:
                 session.exec(
                     select(SampleResource)
                     .where(SampleResource.sample_id == sample_id)
-                    .where(SampleResource.task_execution_id == latest.id),
+                    .where(SampleResource.task_attempt_id == latest.id),
                 ).all(),
             )
             own_rows.sort(key=lambda resource: (resource.created_at, resource.id), reverse=True)
@@ -681,7 +690,7 @@ class WorkflowService:
 
         copy = SampleResource(
             sample_id=sample_id,
-            task_execution_id=current_execution_id,
+            task_attempt_id=current_execution_id,
             kind=SampleResourceKind.IMPORT.value,
             name=result.copied_name,
             mime_type=source.mime_type,
@@ -757,7 +766,7 @@ class WorkflowService:
         return WorkflowResourceRef(
             resource_id=resource.id,
             sample_id=resource.sample_id,
-            task_execution_id=resource.task_execution_id,
+            task_attempt_id=resource.task_attempt_id,
             task_id=producer.task_id if producer is not None else None,
             task_slug=producer.task_slug if producer is not None else None,
             kind=resource.kind,
@@ -775,7 +784,6 @@ class WorkflowService:
         return WorkflowExecutionRef(
             execution_id=execution.id,
             status=execution.status,
-            attempt_number=execution.attempt_number,
             final_assistant_message=execution.final_assistant_message,
         )
 
@@ -890,9 +898,9 @@ class WorkflowService:
         session: Session,
         resource: SampleResource,
     ) -> SampleGraphNode | None:
-        if resource.task_execution_id is None:
+        if resource.task_attempt_id is None:
             return None
-        execution = session.get(SampleTaskAttempt, resource.task_execution_id)
+        execution = session.get(SampleTaskAttempt, resource.task_attempt_id)
         if execution is None:
             return None
         return session.get(SampleGraphNode, (execution.sample_id, execution.task_id))

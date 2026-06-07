@@ -88,7 +88,7 @@ def main() -> int:
         "--env",
         required=True,
         choices=("researchrubrics", "minif2f", "swebench-verified"),
-        help="Benchmark env (kept for symmetry; only affects the label)",
+        help="Environment label",
     )
     p.add_argument(
         "--kind",

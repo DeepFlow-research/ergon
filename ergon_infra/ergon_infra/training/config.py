@@ -19,7 +19,7 @@ class TrainingConfig(BaseModel):
     benchmark: str
     evaluator: str = "stub-rubric"
     limit: int | None = None
-    definition_id: str | None = None
+    experiment_id: str | None = None
 
     # -- Model ----------------------------------------------------------------
     model: str = "Qwen/Qwen2.5-1.5B"
@@ -67,9 +67,7 @@ def _build_training_parser() -> argparse.ArgumentParser:
     p.add_argument("--benchmark", type=str, required=True, help="Benchmark slug")
     p.add_argument("--evaluator", type=str, default="stub-rubric", help="Evaluator slug")
     p.add_argument("--limit", type=int, default=None, help="Max tasks per episode")
-    p.add_argument(
-        "--definition-id", type=str, default=None, help="Existing ExperimentDefinition UUID"
-    )
+    p.add_argument("--experiment-id", type=str, default=None, help="Existing experiment UUID")
 
     p.add_argument("--model", type=str, default="Qwen/Qwen2.5-1.5B", help="HuggingFace model ID")
 
@@ -134,7 +132,7 @@ def training_config_from_args(argv: list[str] | None = None) -> TrainingConfig:
         benchmark=args.benchmark,
         evaluator=args.evaluator,
         limit=args.limit,
-        definition_id=args.definition_id,
+        experiment_id=args.experiment_id,
         model=args.model,
         device=args.device,
         vllm_mode=vllm_mode,

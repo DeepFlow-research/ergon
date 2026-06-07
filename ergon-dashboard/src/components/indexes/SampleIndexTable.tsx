@@ -10,10 +10,10 @@ import {
   formatNumber,
   formatPercent,
 } from "@/components/indexes/format";
-import type { RunSummary } from "@/lib/server-data/samples";
-import type { RunLifecycleStatus } from "@/lib/types";
+import type { SampleSummary } from "@/lib/server-data/samples";
+import type { SampleLifecycleStatus } from "@/lib/types";
 
-export function SampleIndexTable({ runs }: { runs: RunSummary[] }) {
+export function SampleIndexTable({ runs }: { runs: SampleSummary[] }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
 
@@ -23,7 +23,6 @@ export function SampleIndexTable({ runs }: { runs: RunSummary[] }) {
       const matchesStatus = status === "all" || run.status === status;
       const text = [
         run.name,
-        run.definition_name,
         run.experiment,
         run.benchmark_type,
         run.instance_key,
@@ -45,7 +44,7 @@ export function SampleIndexTable({ runs }: { runs: RunSummary[] }) {
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search runs"
+          placeholder="Search samples"
           className="h-9 w-full max-w-sm rounded-md border border-[var(--line)] bg-[var(--card)] px-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--ink-2)]"
         />
         <select
@@ -67,7 +66,7 @@ export function SampleIndexTable({ runs }: { runs: RunSummary[] }) {
         <table className="w-full min-w-[1180px] text-left text-[13px]">
           <thead className="border-b border-[var(--line)] bg-[var(--paper-2)] text-[11px] uppercase tracking-[0.08em] text-[var(--faint)]">
             <tr>
-              <th className="px-3 py-2 font-semibold">Run</th>
+              <th className="px-3 py-2 font-semibold">Sample</th>
               <th className="px-3 py-2 font-semibold">Experiment</th>
               <th className="px-3 py-2 font-semibold">Benchmark / Sample</th>
               <th className="px-3 py-2 font-semibold">Status</th>
@@ -96,13 +95,13 @@ export function SampleIndexTable({ runs }: { runs: RunSummary[] }) {
                 </td>
                 <td className="px-3 py-2.5">
                   <Link
-                    href={`/experiments/${run.definition_id}`}
+                    href={run.experiment_id ? `/experiments/${run.experiment_id}` : "/experiments"}
                     className="text-[var(--ink-2)] underline-offset-2 hover:underline"
                   >
-                    {run.definition_name ?? run.experiment ?? "Experiment"}
+                    {run.experiment ?? "Experiment"}
                   </Link>
                   <div className="mt-0.5 text-xs text-[var(--faint)]">
-                    {run.experiment ?? run.definition_id}
+                    {run.experiment_id ?? "-"}
                   </div>
                 </td>
                 <td className="px-3 py-2.5 font-mono text-xs text-[var(--ink-2)]">
@@ -110,7 +109,7 @@ export function SampleIndexTable({ runs }: { runs: RunSummary[] }) {
                   <div className="mt-0.5 text-[var(--faint)]">{run.sample_label}</div>
                 </td>
                 <td className="px-3 py-2.5">
-                  <StatusBadge status={run.status as RunLifecycleStatus} size="sm" />
+                  <StatusBadge status={run.status as SampleLifecycleStatus} size="sm" />
                   {run.error_message ? (
                     <div className="mt-1 max-w-[160px] truncate text-xs text-[var(--status-failed)]">
                       {run.error_message}
@@ -144,7 +143,7 @@ export function SampleIndexTable({ runs }: { runs: RunSummary[] }) {
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={10} className="px-3 py-8 text-center text-sm text-[var(--muted)]">
-                  No runs match the current filters.
+                  No samples match the current filters.
                 </td>
               </tr>
             ) : null}

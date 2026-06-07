@@ -22,8 +22,8 @@ E2B sandbox template for formal proof verification with Lean 4.
 
 ```bash
 export E2B_API_KEY=<your-runtime-key>
-ergon benchmark setup minif2f           # builds + pushes to E2B
-ergon benchmark setup minif2f --force   # rebuild even if registered
+ergon environment setup minif2f           # builds + pushes to E2B
+ergon environment setup minif2f --force   # rebuild even if registered
 ```
 
 Internally this uses the **E2B Python SDK** (`e2b.Template.build()`), not the

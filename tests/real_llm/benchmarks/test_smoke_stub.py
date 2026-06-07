@@ -3,38 +3,45 @@ actually spending tokens. Uses the researchrubrics smoke fixture + stub model.
 
 Validates:
   - docker stack up (or --assume-stack-up), stack fixture did not skip
-  - `ergon benchmark run` CLI path works
+  - Pythonic ResearchRubrics smoke environment submission works
   - /api/__danger__/test-harness/read/samples/{id}/state returns a terminal state
   - Postgres row exists with the right relationships
   - Playwright can find the run grouping in the dashboard
 """
 
-import os
-import subprocess
-from datetime import datetime, timezone
+from datetime import timezone, datetime
 
 import pytest
+from ergon_core.api import Experiment, RandomSampler
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
-from ergon_core.core.persistence.telemetry.models import SampleRecord
-from sqlmodel import select
+from tests.fixtures.smoke_components.benchmarks import ResearchRubricsSmokeEnvironment
 
 pytestmark = [pytest.mark.real_llm, pytest.mark.asyncio]
 
 
-def _latest_run_id_since(since: datetime) -> str:
-    """Query the most recent SampleRecord created at or after `since`."""
+async def _submit_smoke_sample() -> str:
+    """Submit the ResearchRubrics smoke sample through Python composition."""
     ensure_db()
     with get_session() as session:
-        stmt = (
-            select(SampleRecord)
-            .where(SampleRecord.created_at >= since)
-            .order_by(SampleRecord.created_at.desc())
-            .limit(1)
+        environment = ResearchRubricsSmokeEnvironment(
+            name="researchrubrics",
+            worker_slug="researchrubrics-smoke-worker",
+            model="stub:constant",
+            metadata={"source": "real-llm-canary"},
         )
-        row = session.exec(stmt).first()
-        if row is None:
-            raise RuntimeError("no SampleRecord found after canary CLI invocation")
-        return str(row.id)
+        experiment = Experiment(
+            name=f"real-llm-smoke-stub-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}",
+            environments=[environment],
+            metadata={"source": "real-llm-canary"},
+        )
+        result = await experiment.submit(
+            session=session,
+            k=1,
+            sampler=RandomSampler(seed=0),
+        )
+    if not result.sample_ids:
+        raise RuntimeError("smoke canary submission returned no sample_ids")
+    return str(result.sample_ids[0])
 
 
 async def test_harness_canary_smoke_stub(
@@ -42,43 +49,7 @@ async def test_harness_canary_smoke_stub(
     harness_client,
     playwright_context,
 ) -> None:
-    # Timestamp the boundary so we can filter for a run created *after* this point.
-    before = datetime.now(timezone.utc)
-
-    env = {
-        **os.environ,
-        "ERGON_DATABASE_URL": os.environ.get(
-            "ERGON_DATABASE_URL",
-            "postgresql://ergon:ergon_dev@127.0.0.1:5433/ergon",
-        ),
-    }
-    result = subprocess.run(
-        [
-            "uv",
-            "run",
-            "ergon",
-            "benchmark",
-            "run",
-            "researchrubrics",
-            "--model",
-            "stub:constant",
-            "--worker",
-            "researchrubrics-smoke-worker",
-            "--evaluator",
-            "researchrubrics-smoke-criterion",
-            "--limit",
-            "1",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=180,
-        env=env,
-    )
-    assert result.returncode == 0, (
-        f"CLI failed (rc={result.returncode}):\nstdout: {result.stdout}\nstderr: {result.stderr}"
-    )
-
-    sample_id = _latest_run_id_since(before)
+    sample_id = await _submit_smoke_sample()
 
     # Poll the harness until terminal.
     state = harness_client.wait_for_terminal(sample_id, timeout_s=120)

@@ -4,7 +4,7 @@ from uuid import UUID
 
 from ergon_core.core.application.events import TaskCancelledEvent
 from ergon_core.core.application.runtime.status import NodeStatus
-from ergon_core.core.persistence.shared.types import NodeId, RunId
+from ergon_core.core.persistence.shared.types import NodeId, SampleId
 from pydantic import BaseModel, Field
 
 
@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 class CancelTaskCommand(BaseModel):
     """Command to cancel a subtask."""
 
-    sample_id: RunId
+    sample_id: SampleId
     task_id: NodeId
 
     model_config = {"frozen": True}
@@ -36,7 +36,7 @@ class CancelTaskResult(BaseModel):
 class RefineTaskCommand(BaseModel):
     """Command to update description on a pending sub-task."""
 
-    sample_id: RunId
+    sample_id: SampleId
     task_id: NodeId
     new_description: str = Field(min_length=1)
 
@@ -64,7 +64,7 @@ class RestartTaskCommand(BaseModel):
     ``restart_task`` to put the node back in the scheduling queue.
     """
 
-    sample_id: RunId
+    sample_id: SampleId
     task_id: NodeId
 
     model_config = {"frozen": True}
@@ -112,7 +112,7 @@ class SubtaskInfo(BaseModel):
 class CleanupResult(BaseModel):
     """Result of cleaning up a cancelled task execution."""
 
-    sample_id: RunId
+    sample_id: SampleId
     task_id: NodeId
     execution_id: UUID | None
     sandbox_id: str | None = None

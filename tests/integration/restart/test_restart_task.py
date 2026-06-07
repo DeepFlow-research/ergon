@@ -10,7 +10,6 @@ Covers:
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.application.runtime.status import (
     CANCELLED,
@@ -32,7 +31,6 @@ from tests.integration.propagation._helpers import (
     assert_wal_has_status,
     get_node_status,
     make_edge,
-    make_experiment_definition,
     make_node,
     make_run,
 )
@@ -52,8 +50,7 @@ async def test_restart_completed_node_becomes_pending_and_resets_edge() -> None:
     that the return value reports the correct old_status.
     """
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="task-a", status="completed")
         node_b = make_node(session, run.id, task_slug="task-b", status="pending")
         make_edge(
@@ -64,7 +61,6 @@ async def test_restart_completed_node_becomes_pending_and_resets_edge() -> None:
             status=EDGE_SATISFIED,
         )
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         node_b_id = node_b.task_id
         session.commit()
@@ -93,18 +89,16 @@ async def test_restart_completed_node_becomes_pending_and_resets_edge() -> None:
                 f"Edge A→B must be reset to EDGE_PENDING after restart; got {edge_st!r}"
             )
     finally:
-        cleanup_run(sample_id, defn_id)
+        cleanup_run(sample_id)
 
 
 @pytest.mark.asyncio
 async def test_restart_failed_node_becomes_pending() -> None:
     """Restarting a FAILED node transitions it to PENDING."""
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="failed-task", status="failed")
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         session.commit()
 
@@ -123,18 +117,16 @@ async def test_restart_failed_node_becomes_pending() -> None:
         with get_session() as session:
             assert get_node_status(session, node_a_id) == TaskExecutionStatus.PENDING
     finally:
-        cleanup_run(sample_id, defn_id)
+        cleanup_run(sample_id)
 
 
 @pytest.mark.asyncio
 async def test_restart_cancelled_node_becomes_pending() -> None:
     """Restarting a CANCELLED node transitions it to PENDING."""
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="cancelled-task", status=CANCELLED)
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         session.commit()
 
@@ -153,18 +145,16 @@ async def test_restart_cancelled_node_becomes_pending() -> None:
         with get_session() as session:
             assert get_node_status(session, node_a_id) == TaskExecutionStatus.PENDING
     finally:
-        cleanup_run(sample_id, defn_id)
+        cleanup_run(sample_id)
 
 
 @pytest.mark.asyncio
 async def test_restart_pending_node_raises() -> None:
     """Restarting a PENDING node raises TaskNotTerminalError."""
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="pending-task", status="pending")
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         session.commit()
 
@@ -180,18 +170,16 @@ async def test_restart_pending_node_raises() -> None:
                         RestartTaskCommand(sample_id=sample_id, task_id=node_a_id),
                     )
     finally:
-        cleanup_run(sample_id, defn_id)
+        cleanup_run(sample_id)
 
 
 @pytest.mark.asyncio
 async def test_restart_running_node_raises() -> None:
     """Restarting a RUNNING node raises TaskNotTerminalError (RUNNING is non-terminal)."""
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="running-task", status="running")
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         session.commit()
 
@@ -207,18 +195,16 @@ async def test_restart_running_node_raises() -> None:
                         RestartTaskCommand(sample_id=sample_id, task_id=node_a_id),
                     )
     finally:
-        cleanup_run(sample_id, defn_id)
+        cleanup_run(sample_id)
 
 
 @pytest.mark.asyncio
 async def test_refine_task_non_pending_node_succeeds() -> None:
     """refine_task accepts a COMPLETED node — widened beyond PENDING for restart flow."""
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="refine-completed", status="completed")
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         session.commit()
 
@@ -239,18 +225,16 @@ async def test_refine_task_non_pending_node_succeeds() -> None:
 
         assert result.new_description == "Updated after restart"
     finally:
-        cleanup_run(sample_id, defn_id)
+        cleanup_run(sample_id)
 
 
 @pytest.mark.asyncio
 async def test_refine_task_running_node_raises() -> None:
     """refine_task raises TaskRunningError for a RUNNING node."""
     with get_session() as session:
-        defn = make_experiment_definition(session)
-        run = make_run(session, defn.id)
+        run = make_run(session)
         node_a = make_node(session, run.id, task_slug="refine-running", status="running")
         sample_id = run.id
-        defn_id = defn.id
         node_a_id = node_a.task_id
         session.commit()
 
@@ -270,4 +254,4 @@ async def test_refine_task_running_node_raises() -> None:
                         ),
                     )
     finally:
-        cleanup_run(sample_id, defn_id)
+        cleanup_run(sample_id)

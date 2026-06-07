@@ -28,7 +28,6 @@ async def test_cleanup_cancelled_task_marks_execution_without_releasing_sandbox(
     execution_id = uuid4()
     payload = TaskCancelledEvent(
         sample_id=sample_id,
-        definition_id=uuid4(),
         task_id=task_id,
         execution_id=execution_id,
         cause="manager_decision",

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { RunActivity } from "./types";
+import type { SampleActivity } from "./types";
 import { resolveCurrentActivityId } from "./currentActivity";
 
-function activity(id: string, startAt: string, sequence: number | null = null): RunActivity {
+function activity(id: string, startAt: string, sequence: number | null = null): SampleActivity {
   return {
     id,
     kind: "graph",

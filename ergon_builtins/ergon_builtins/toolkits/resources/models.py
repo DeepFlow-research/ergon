@@ -41,10 +41,9 @@ class ResourceRef(BaseModel):
     created_at: datetime = Field(
         description="Row insertion time -- used to disambiguate latest-wins reads.",
     )
-    producing_task_execution_id: UUID | None = Field(
+    producing_task_attempt_id: UUID | None = Field(
         description=(
-            "Task execution that produced the resource; ``None`` for "
-            "run-scoped (non-task) resources."
+            "Task attempt that produced the resource; ``None`` for sample-scoped resources."
         ),
     )
 
@@ -58,7 +57,7 @@ class ResourceRef(BaseModel):
             file_path=view.file_path,
             content_hash=view.content_hash,
             created_at=view.created_at,
-            producing_task_execution_id=view.task_execution_id,
+            producing_task_attempt_id=view.task_attempt_id,
         )
 
     @classmethod
@@ -71,21 +70,21 @@ class ResourceRef(BaseModel):
             file_path=row.file_path,
             content_hash=row.content_hash,
             created_at=row.created_at,
-            producing_task_execution_id=row.task_execution_id,
+            producing_task_attempt_id=row.task_attempt_id,
         )
 
 
-class TaskExecutionRef(BaseModel):
+class TaskAttemptRef(BaseModel):
     """Subset of ``SampleTaskAttempt`` surfaced to the LLM."""
 
     model_config = ConfigDict(frozen=True)
 
-    task_execution_id: UUID = Field(
-        description="Primary key of the ``run_task_executions`` row.",
+    task_attempt_id: UUID = Field(
+        description="Primary key of the ``sample_task_attempts`` row.",
     )
     status: str = Field(
         description=(
-            "Task execution status (e.g. ``pending``, ``running``, ``completed``, ``failed``)."
+            "Task attempt status (e.g. ``pending``, ``running``, ``completed``, ``failed``)."
         ),
     )
     started_at: datetime | None = Field(
@@ -98,10 +97,10 @@ class TaskExecutionRef(BaseModel):
     )
 
     @classmethod
-    def from_row(cls, row: SampleTaskAttempt) -> "TaskExecutionRef":
-        """Lift an ORM ``SampleTaskAttempt`` row to a ``TaskExecutionRef``."""
+    def from_row(cls, row: SampleTaskAttempt) -> "TaskAttemptRef":
+        """Lift an ORM ``SampleTaskAttempt`` row to a ``TaskAttemptRef``."""
         return cls(
-            task_execution_id=row.id,
+            task_attempt_id=row.id,
             status=str(row.status),
             started_at=row.started_at,
             ended_at=row.completed_at,

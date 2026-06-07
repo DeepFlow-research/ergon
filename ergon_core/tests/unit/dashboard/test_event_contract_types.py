@@ -16,8 +16,8 @@ from ergon_core.core.views.dashboard_events.contracts import (
     DashboardWorkflowStartedEvent,
 )
 from ergon_core.core.views.samples.models import (
-    RunCommunicationMessageDto,
-    RunCommunicationThreadDto,
+    SampleCommunicationMessageDto,
+    SampleCommunicationThreadDto,
     SampleSnapshotDto,
 )
 
@@ -42,24 +42,24 @@ def test_every_dashboard_event_contract_is_in_generated_schema_manifest() -> Non
 
 def test_thread_message_event_uses_dashboard_dtos() -> None:
     assert DashboardThreadMessageCreatedEvent.model_fields["thread"].annotation is (
-        RunCommunicationThreadDto
+        SampleCommunicationThreadDto
     )
     assert DashboardThreadMessageCreatedEvent.model_fields["message"].annotation is (
-        RunCommunicationMessageDto
+        SampleCommunicationMessageDto
     )
 
 
 def test_thread_message_dto_exposes_execution_identity() -> None:
-    assert "task_execution_id" in RunCommunicationMessageDto.model_fields
+    assert "task_attempt_id" in SampleCommunicationMessageDto.model_fields
 
 
 def test_thread_dto_exposes_summary_and_task_identity() -> None:
-    assert "summary" in RunCommunicationThreadDto.model_fields
-    assert "task_id" in RunCommunicationThreadDto.model_fields
-    assert "task_id" in RunCommunicationMessageDto.model_fields
+    assert "summary" in SampleCommunicationThreadDto.model_fields
+    assert "task_id" in SampleCommunicationThreadDto.model_fields
+    assert "task_id" in SampleCommunicationMessageDto.model_fields
 
 
-def test_workflow_started_event_embeds_run_snapshot_contract() -> None:
+def test_sample_started_event_embeds_run_snapshot_contract() -> None:
     assert "task_tree" not in DashboardWorkflowStartedEvent.model_fields
     assert DashboardWorkflowStartedEvent.model_fields["snapshot"].annotation is SampleSnapshotDto
 

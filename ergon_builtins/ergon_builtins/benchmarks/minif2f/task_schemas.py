@@ -13,7 +13,7 @@ class MiniF2FProblem(BaseModel):
 
 
 class MiniF2FTaskPayload(BaseModel):
-    """Structured payload carried inside ``BenchmarkTask.task_payload``."""
+    """Structured payload carried inside ``Task.task_payload``."""
 
     name: str
     informal_statement: str

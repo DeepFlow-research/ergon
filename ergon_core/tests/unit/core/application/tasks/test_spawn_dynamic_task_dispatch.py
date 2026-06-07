@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
+from ergon_core.api.task import EmptyTaskPayload, Task
 from ergon_core.core.application.runtime.task_management import TaskManagementService
 from ergon_core.test_support.task_factory import TestSandbox, TestWorker
 
@@ -55,10 +55,8 @@ async def test_spawn_dynamic_task_dispatches_ready_event_when_dependency_free(mo
     graph_repo = _FakeGraphRepo()
     dispatched: list[dict] = []
 
-    async def dispatch_task_ready(sample_id, definition_id, task_id):
-        dispatched.append(
-            {"sample_id": sample_id, "definition_id": definition_id, "task_id": task_id}
-        )
+    async def dispatch_task_ready(sample_id, task_id):
+        dispatched.append({"sample_id": sample_id, "task_id": task_id})
 
     service = TaskManagementService(
         graph_repo=graph_repo,
@@ -67,10 +65,10 @@ async def test_spawn_dynamic_task_dispatches_ready_event_when_dependency_free(mo
     )
 
     monkeypatch.setattr(module, "get_session", lambda: _session_factory(session))
-    monkeypatch.setattr(module, "definition_id_for_run", lambda _session, _run_id: uuid4())
+    sample_id = uuid4()
 
     handle = await service.spawn_dynamic_task(
-        sample_id=uuid4(),
+        sample_id=sample_id,
         parent_task_id=uuid4(),
         task=_DynamicTask(
             task_slug="child",
@@ -83,8 +81,7 @@ async def test_spawn_dynamic_task_dispatches_ready_event_when_dependency_free(mo
 
     assert dispatched == [
         {
-            "sample_id": dispatched[0]["sample_id"],
-            "definition_id": dispatched[0]["definition_id"],
+            "sample_id": sample_id,
             "task_id": handle.task_id,
         }
     ]
@@ -102,10 +99,8 @@ async def test_spawn_dynamic_task_with_dependencies_waits_for_propagation(monkey
     graph_repo = _FakeGraphRepo()
     dispatched: list[dict] = []
 
-    async def dispatch_task_ready(sample_id, definition_id, task_id):
-        dispatched.append(
-            {"sample_id": sample_id, "definition_id": definition_id, "task_id": task_id}
-        )
+    async def dispatch_task_ready(sample_id, task_id):
+        dispatched.append({"sample_id": sample_id, "task_id": task_id})
 
     service = TaskManagementService(
         graph_repo=graph_repo,

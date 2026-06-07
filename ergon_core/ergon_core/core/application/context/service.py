@@ -53,7 +53,7 @@ class ContextEventService:
     ) -> SampleContextEvent:
         return SampleContextEvent(
             sample_id=sample_id,
-            task_execution_id=execution_id,
+            task_attempt_id=execution_id,
             worker_binding_key=worker_binding_key,
             sequence=sequence,
             event_type=payload.part.part_kind,
@@ -132,7 +132,7 @@ class ContextEventService:
     def get_for_execution(self, session: Session, execution_id: UUID) -> list[SampleContextEvent]:
         stmt = (
             select(SampleContextEvent)
-            .where(SampleContextEvent.task_execution_id == execution_id)
+            .where(SampleContextEvent.task_attempt_id == execution_id)
             .order_by(SampleContextEvent.sequence)
         )
         return list(session.exec(stmt).all())
@@ -141,6 +141,6 @@ class ContextEventService:
         stmt = (
             select(SampleContextEvent)
             .where(SampleContextEvent.sample_id == sample_id)
-            .order_by(SampleContextEvent.task_execution_id, SampleContextEvent.sequence)
+            .order_by(SampleContextEvent.task_attempt_id, SampleContextEvent.sequence)
         )
         return list(session.exec(stmt).all())

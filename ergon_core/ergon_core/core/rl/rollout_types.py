@@ -7,40 +7,63 @@ HTTP adapters (client-side). Framework-agnostic — no TRL/veRL imports.
 from uuid import UUID
 
 from ergon_core.core.shared.rollout_status import RolloutStatus as BatchStatus
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class SubmitRequest(BaseModel):
-    """Trainer → Ergon: start a batch of episodes."""
-
-    definition_id: UUID
-    num_episodes: int = Field(ge=1)
-    policy_version: int | None = None
-    model_target_override: str | None = None
+def _to_camel(value: str) -> str:
+    parts = value.split("_")
+    return parts[0] + "".join(part.capitalize() for part in parts[1:])
 
 
-class SubmitResponse(BaseModel):
-    """Ergon → Trainer: batch accepted."""
+class TrainingRolloutRequest(BaseModel):
+    """Trainer → Ergon: select and launch samples from a persisted experiment."""
+
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
+
+    experiment_id: UUID
+    k: int = Field(ge=1)
+    sampler: str = "random"
+    sampler_config: dict[str, object] = Field(default_factory=dict)
+    candidate_pool_size: int | None = None
+
+
+class RolloutBatchSummary(BaseModel):
+    """Durable trainer batch membership exposed by sample id."""
+
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
 
     batch_id: UUID
     sample_ids: list[UUID]
-    status: BatchStatus = BatchStatus.PENDING
+    status: BatchStatus
+    experiment_id: UUID | None = None
+    sampler_invocation_id: UUID | None = None
 
 
-class Trajectory(BaseModel):
-    """One agent's extracted trajectory from a completed episode.
+class TrainerActorIdentity(BaseModel):
+    """Trace identity for one trainer-facing projected actor record."""
 
-    Maps 1:1 to AgentTrajectory from extraction.py, plus metadata.
-    """
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
+
+    actor_slug: str
+    base_worker_slug: str | None = None
+    parent_actor_slug: str | None = None
+    task_id: UUID | None = None
+    parent_task_id: UUID | None = None
+
+
+class TrainerTrainingRecord(BaseModel):
+    """One projected parent-visible training record for adapter examples."""
+
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
 
     sample_id: UUID
-    agent_id: str
-    prompt_ids: list[int]
-    completion_ids: list[int]
-    logprobs: list[float]
-    env_mask: list[int]
+    actor: TrainerActorIdentity
+    prompt_ids: list[int] = Field(default_factory=list)
+    completion_ids: list[int] = Field(default_factory=list)
+    logprobs: list[float] = Field(default_factory=list)
     reward: float
-    num_turns: int
+    task_id: UUID | None = None
+    task_attempt_id: UUID | None = None
 
 
 class EpisodeFailure(BaseModel):
@@ -51,13 +74,15 @@ class EpisodeFailure(BaseModel):
 
 
 class PollResponse(BaseModel):
-    """Ergon → Trainer: current batch status + trajectories if complete."""
+    """Ergon → Trainer: current batch status + projected records if complete."""
+
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
 
     batch_id: UUID
     status: BatchStatus
     completed: int = 0
     total: int = 0
-    trajectories: list[Trajectory] = Field(default_factory=list)
+    training_records: list[TrainerTrainingRecord] = Field(default_factory=list)
     failures: list[EpisodeFailure] = Field(default_factory=list)
 
 

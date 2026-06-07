@@ -8,7 +8,7 @@ import {
   type MetricDisplay,
 } from "@/lib/sample-state/formatters";
 
-export interface RunHeaderMetricValues {
+export interface SampleHeaderMetricValues {
   tasks: {
     completed: number;
     running: number;
@@ -59,7 +59,7 @@ function MetricTile({
   );
 }
 
-export function SampleRuntimeSummaryHeader({ metrics }: { metrics: RunHeaderMetricValues }) {
+export function SampleRuntimeSummaryHeader({ metrics }: { metrics: SampleHeaderMetricValues }) {
   return (
     <div className="hidden items-stretch gap-2 border-r border-[var(--line)] pr-3 xl:flex">
       <MetricTile

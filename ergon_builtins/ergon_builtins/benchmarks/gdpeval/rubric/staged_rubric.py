@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from typing import Any, ClassVar, Literal
 
 from ergon_core.api.criterion import Criterion
-from ergon_core.api.benchmark import Task
+from ergon_core.api.task import Task
 from ergon_core.api.criterion import CriterionOutcome
 from ergon_core.api.rubric import Rubric, TaskEvaluationResult
 from pydantic import (

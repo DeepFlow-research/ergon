@@ -6,12 +6,12 @@ from uuid import UUID
 
 from pydantic import AfterValidator, BaseModel, Field
 
-from ergon_core.api.benchmark.task import Task
+from ergon_core.api.task import Task
 from ergon_core.api.errors import ContainmentViolation
 from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.application.resources.models import SampleResourceView
 from ergon_core.core.application.runtime.task_models import SubtaskInfo
-from ergon_core.core.persistence.shared.types import NodeId, RunId
+from ergon_core.core.persistence.shared.types import NodeId, SampleId
 
 if TYPE_CHECKING:
     from sqlmodel import Session
@@ -71,15 +71,6 @@ class WorkerContext(BaseModel):
     task_id: UUID = Field(
         description="SampleGraphNode.task_id — canonical runtime task identity.",
     )
-    definition_id: UUID | None = Field(
-        default=None,
-        description=(
-            "ExperimentDefinition.id — the experiment template that governs "
-            "this run's worker bindings, evaluator bindings, and benchmark "
-            "config. Used by delegation tools to resolve assigned_worker_slug "
-            "to worker_type."
-        ),
-    )
     execution_id: UUID
     sandbox_id: str
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -109,7 +100,6 @@ class WorkerContext(BaseModel):
         sample_id: UUID,
         task_id: UUID,
         execution_id: UUID,
-        definition_id: UUID | None,
         sandbox_id: str,
         task_mgmt: TaskManagementServiceAlias,
         task_inspect: TaskInspectionServiceAlias,
@@ -127,7 +117,6 @@ class WorkerContext(BaseModel):
             sample_id=sample_id,
             task_id=task_id,
             execution_id=execution_id,
-            definition_id=definition_id,
             sandbox_id=sandbox_id,
             task_mgmt=task_mgmt,
             task_inspect=task_inspect,
@@ -168,7 +157,7 @@ class WorkerContext(BaseModel):
         with self.session_factory() as session:
             await self.task_mgmt.cancel_task(
                 session,
-                CancelTaskCommand(sample_id=RunId(self.sample_id), task_id=NodeId(task_id)),
+                CancelTaskCommand(sample_id=SampleId(self.sample_id), task_id=NodeId(task_id)),
             )
 
     async def refine_task(self, task_id: UUID, *, description: str) -> None:
@@ -182,7 +171,7 @@ class WorkerContext(BaseModel):
             await self.task_mgmt.refine_task(
                 session,
                 RefineTaskCommand(
-                    sample_id=RunId(self.sample_id),
+                    sample_id=SampleId(self.sample_id),
                     task_id=NodeId(task_id),
                     new_description=description,
                 ),
@@ -198,7 +187,7 @@ class WorkerContext(BaseModel):
         with self.session_factory() as session:
             result = await self.task_mgmt.restart_task(
                 session,
-                RestartTaskCommand(sample_id=RunId(self.sample_id), task_id=NodeId(task_id)),
+                RestartTaskCommand(sample_id=SampleId(self.sample_id), task_id=NodeId(task_id)),
             )
         return SpawnedTaskHandle(task_id=result.task_id)
 
@@ -259,7 +248,7 @@ class WorkerContext(BaseModel):
         return self.resource_service.list_for_run(
             sample_id=self.sample_id,
             task_id=task_id,
-            task_execution_id=execution_id,
+            task_attempt_id=execution_id,
             kind=kind,
             name=name,
         )

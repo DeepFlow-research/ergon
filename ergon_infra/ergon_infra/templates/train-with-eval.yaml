@@ -3,9 +3,10 @@
 #       file_mounts to sync local source (see /tmp/ac2-gpu-test.yaml pattern).
 #
 #   sky jobs launch ergon_infra/ergon_infra/templates/train-with-eval.yaml -y \
-#     --env DEFINITION_ID=<uuid> \
+#     --env EXPERIMENT_ID=<uuid> \
 #     --env MODEL=Qwen/Qwen2.5-7B \
-#     --env BENCHMARK=gdpeval
+#     --env BENCHMARK=gdpeval \
+#     --env EVAL_COMMAND='python examples/my_eval_submit.py'
 
 name: ergon-rl-full
 execution: parallel
@@ -22,7 +23,7 @@ file_mounts:
     mode: MOUNT_CACHED
 
 envs:
-  DEFINITION_ID:
+  EXPERIMENT_ID:
   MODEL:
   BENCHMARK: ${BENCHMARK:-smoke-test}
 
@@ -35,7 +36,7 @@ setup: |
 run: |
   ergon train local \
     --benchmark "$BENCHMARK" \
-    --definition-id "$DEFINITION_ID" \
+    --experiment-id "$EXPERIMENT_ID" \
     --model "$MODEL" \
     --vllm-mode server \
     --output-dir /checkpoints \
@@ -55,6 +56,7 @@ file_mounts:
 envs:
   BENCHMARK:
   EVALUATOR: ${EVALUATOR:-stub-rubric}
+  EVAL_COMMAND:
 
 setup: |
   git clone https://github.com/DeepFlow-research/ergon.git /tmp/ergon
@@ -68,4 +70,4 @@ run: |
     --benchmark "$BENCHMARK" \
     --evaluator "$EVALUATOR" \
     --poll-interval "${POLL_INTERVAL:-120}" \
-    --on-checkpoint "sky launch ergon_infra/ergon_infra/templates/eval-only.yaml -y --env CHECKPOINT={path} --env BENCHMARK=$BENCHMARK"
+    --on-checkpoint "sky launch ergon_infra/ergon_infra/templates/eval-only.yaml -y --env CHECKPOINT={path} --env BENCHMARK=$BENCHMARK --env EVALUATOR=$EVALUATOR --env EVAL_COMMAND='$EVAL_COMMAND'"

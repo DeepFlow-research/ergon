@@ -1,8 +1,9 @@
-"""Eval watcher: score checkpoints on Ergon benchmarks.
+"""Eval watcher: score checkpoints through Pythonic experiment submit scripts.
 
-Watches a checkpoint directory, detects new checkpoints, runs
-``ergon experiment define`` + ``ergon experiment run`` against each,
-and optionally reports results.
+Watches a checkpoint directory, detects new checkpoints, and delegates each
+checkpoint to an explicit command supplied by the caller. The CLI no longer
+constructs or submits experiment work itself; benchmark/environment composition
+stays in Python authoring code.
 
 The watcher runs on CPU.  For vLLM-based evaluation, use
 ``--on-checkpoint`` to spawn a SkyPilot GPU job per checkpoint.
@@ -10,17 +11,13 @@ The watcher runs on CPU.  For vLLM-based evaluation, use
 
 import asyncio
 import logging
-import re
 import shlex
 import subprocess
 
 from ergon_core.core.rl.checkpoint import CheckpointInfo, discover_checkpoints
 
 logger = logging.getLogger(__name__)
-_UUID_RE = re.compile(
-    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
-    re.IGNORECASE,
-)
+LOCAL_EVAL_UNSUPPORTED_EXIT_CODE = 2
 
 
 async def watch_and_evaluate(
@@ -103,83 +100,24 @@ async def _run_local_eval(
     model_base: str,
     eval_limit: int | None,
 ) -> int:
-    """Run checkpoint evaluation locally via the experiment CLI. Returns exit code.
+    """Reject local CLI-launched evaluation.
 
-    Uses the checkpoint path as the vLLM model target so each checkpoint
-    is actually evaluated (not just the base model).
+    The removed CLI launch path used to hide benchmark composition inside the
+    eval CLI. Callers should use ``--on-checkpoint`` with
+    a Python entrypoint that builds the desired Experiment/Environment/Sampler
+    objects and submits them directly.
     """
-    if eval_limit is None:
-        raise ValueError("--eval-limit is required for local checkpoint evaluation")
-
-    model_target = f"vllm:{ckpt.path}"
-
-    define_cmd = [
-        "ergon",
-        "experiment",
-        "define",
+    logger.error(
+        "Local checkpoint evaluation is no longer supported by the CLI. "
+        "Use --on-checkpoint with a Python experiment submission command "
+        "(checkpoint=%s benchmark=%s evaluator=%s model_base=%s eval_limit=%s).",
+        ckpt.path,
         benchmark_type,
-        "--worker",
-        "training-stub",
-        "--evaluator",
         evaluator_type,
-        "--model",
-        model_target,
-        "--limit",
-        str(eval_limit),
-    ]
-
-    logger.info("Defining local eval experiment for step %d: %s", ckpt.step, " ".join(define_cmd))
-
-    env = dict(__import__("os").environ)
-    env["ERGON_CHECKPOINT_STEP"] = str(ckpt.step)
-    env["ERGON_CHECKPOINT_PATH"] = ckpt.path
-
-    try:
-        define_proc = await asyncio.create_subprocess_exec(
-            *define_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
-        stdout, stderr = await define_proc.communicate()
-
-        exit_code = 0 if define_proc.returncode is None else define_proc.returncode
-        output = stdout.decode() + stderr.decode()
-        if exit_code != 0:
-            logger.warning(
-                "Eval experiment definition failed for step %d (exit %d): %s",
-                ckpt.step,
-                exit_code,
-                output[:500],
-            )
-            return exit_code
-
-        definition_id = _parse_uuid_line("EXPERIMENT_ID=", output)
-        run_cmd = ["ergon", "experiment", "run", definition_id]
-        logger.info("Running local eval for step %d: %s", ckpt.step, " ".join(run_cmd))
-
-        run_proc = await asyncio.create_subprocess_exec(
-            *run_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
-        _stdout, stderr = await run_proc.communicate()
-
-        exit_code = 0 if run_proc.returncode is None else run_proc.returncode
-        if exit_code == 0:
-            logger.info("Eval complete for step %d", ckpt.step)
-        else:
-            logger.warning(
-                "Eval failed for step %d (exit %d): %s",
-                ckpt.step,
-                exit_code,
-                stderr.decode()[:500],
-            )
-        return exit_code
-    except Exception:  # slopcop: ignore[no-broad-except]
-        logger.exception("Eval crashed for step %d", ckpt.step)
-        return 1
+        model_base,
+        eval_limit,
+    )
+    return LOCAL_EVAL_UNSUPPORTED_EXIT_CODE
 
 
 async def evaluate_checkpoint(
@@ -205,13 +143,3 @@ async def evaluate_checkpoint(
         model_base=model_base,
         eval_limit=eval_limit,
     )
-
-
-def _parse_uuid_line(prefix: str, output: str) -> str:
-    for line in output.splitlines():
-        if not line.startswith(prefix):
-            continue
-        match = _UUID_RE.search(line)
-        if match is not None:
-            return match.group(0)
-    raise RuntimeError(f"missing {prefix} line in CLI output:\n{output}")

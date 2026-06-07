@@ -1,4 +1,4 @@
-"""Eval subcommand: watch checkpoints and score them on benchmarks."""
+"""Eval subcommand: watch checkpoints and score them on environments."""
 
 from argparse import Namespace
 
@@ -17,7 +17,7 @@ async def handle_eval(args: Namespace) -> int:
         action=args.eval_action,
         checkpoint_dir=values.get("checkpoint_dir"),
         checkpoint=values.get("checkpoint"),
-        benchmark=args.benchmark,
+        environment=args.environment,
         evaluator=args.evaluator,
         model_base=args.model_base,
         poll_interval=values.get("poll_interval", 60),

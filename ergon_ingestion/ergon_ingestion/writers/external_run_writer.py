@@ -4,16 +4,11 @@ import hashlib
 import json
 import math
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session
 
-from ergon_core.core.persistence.definitions.models import (
-    ExperimentDefinition,
-    ExperimentDefinitionInstance,
-    ExperimentDefinitionTask,
-)
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.samples.models import SampleAnnotationEventRow
 from ergon_core.core.persistence.shared.enums import (
@@ -38,7 +33,7 @@ class WriteRunResult(BaseModel):
 
     sample_id: UUID
     task_id: UUID
-    task_execution_id: UUID
+    task_attempt_id: UUID
 
 
 class ExternalRunWriter:
@@ -48,45 +43,17 @@ class ExternalRunWriter:
         self._session = session
         self._source = source
         self._blob_root = blob_root
-        self._definition: ExperimentDefinition | None = None
 
     def write_run(self, parsed: ParsedRun) -> WriteRunResult:
-        definition = self._definition_row()
         observed_fields = _compact_for_db(_json_safe(parsed.observed_fields))
         missing_fields = _json_safe(parsed.missing_fields)
-        instance = ExperimentDefinitionInstance(
-            experiment_definition_id=definition.id,
-            instance_key=parsed.instance_key,
-            benchmark_instance_state={
-                "imported": True,
-                "source_run_id": parsed.source_run_id,
-                "schema_fit_class": parsed.schema_fit_class,
-                "observed_fields": observed_fields,
-                "missing_fields": missing_fields,
-            },
-        )
-        self._session.add(instance)
-        self._session.flush()
-
-        task = ExperimentDefinitionTask(
-            experiment_definition_id=definition.id,
-            instance_id=instance.id,
-            task_slug="imported-root",
-            task_type="imported",
-            description=parsed.description,
-            task_payload_json={
-                "field_provenance": "required-spine",
-                "source_run_id": parsed.source_run_id,
-            },
-        )
-        self._session.add(task)
-        self._session.flush()
+        task_id = uuid4()
 
         run = SampleRecord(
-            definition_id=definition.id,
             benchmark_type=f"imported:{self._source.dataset}",
             instance_key=parsed.instance_key,
             sample_id=parsed.source_run_id,
+            sample_key=parsed.instance_key,
             status=SampleStatus.COMPLETED,
             summary_json={
                 "imported": True,
@@ -103,7 +70,7 @@ class ExternalRunWriter:
 
         node = SampleGraphNode(
             sample_id=run.id,
-            task_id=task.id,
+            task_id=task_id,
             instance_key=parsed.instance_key,
             task_slug="imported-root",
             description=parsed.description,
@@ -143,39 +110,18 @@ class ExternalRunWriter:
         for resource in parsed.resources:
             self._session.add(self._resource_row(run.id, execution.id, resource))
 
-        return WriteRunResult(
-            sample_id=run.id, task_id=node.task_id, task_execution_id=execution.id
-        )
-
-    def _definition_row(self) -> ExperimentDefinition:
-        if self._definition is None:
-            self._definition = ExperimentDefinition(
-                benchmark_type=f"imported:{self._source.dataset}",
-                name=f"imported:{self._source.dataset}",
-                metadata_json={
-                    "imported": True,
-                    "source_slug": self._source.dataset,
-                    "import_batch_id": self._source.batch_id,
-                    "source_url": self._source.source_url,
-                    "source_version_ref": self._source.source_version_ref,
-                    "source_license": self._source.source_license,
-                    "redistribution_class": self._source.redistribution_class,
-                },
-            )
-            self._session.add(self._definition)
-            self._session.flush()
-        return self._definition
+        return WriteRunResult(sample_id=run.id, task_id=node.task_id, task_attempt_id=execution.id)
 
     def _resource_row(
         self,
         sample_id: UUID,
-        task_execution_id: UUID,
+        task_attempt_id: UUID,
         resource: ParsedResource,
     ) -> SampleResource:
         path, content_hash, size = self._materialize_resource(sample_id, resource)
         return SampleResource(
             sample_id=sample_id,
-            task_execution_id=task_execution_id,
+            task_attempt_id=task_attempt_id,
             kind=SampleResourceKind(resource.kind).value,
             name=resource.name,
             mime_type=resource.mime_type,

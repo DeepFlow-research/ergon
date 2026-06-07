@@ -61,7 +61,6 @@ async def test_persist_outputs_publishes_public_sandbox_through_resource_service
     result = await run_persist_outputs_job(
         PersistOutputsRequest(
             sample_id=uuid4(),
-            definition_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
             sandbox_id="sbx-live",

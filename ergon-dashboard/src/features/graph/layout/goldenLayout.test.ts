@@ -3,9 +3,10 @@ import test from "node:test";
 import type { Node } from "@xyflow/react";
 
 import fixture from "../../../../tests/fixtures/mas-samples/concurrent-mas-run.json";
-import { parseGraphMutationDtoArray } from "@/features/graph/contracts/graphMutations";
+import { sampleRuntimeEventsToGraphEvents } from "@/features/graph/sampleRuntimeEvents";
+import { parseSampleRuntimeEvents } from "@/lib/contracts/rest";
 import { createReplayInitialState, replayToSequence } from "@/features/graph/state/graphMutationReducer";
-import { deserializeRunState } from "@/lib/sampleState";
+import { deserializeSampleState } from "@/lib/sampleState";
 import { calculateExpandedContainers, computeHierarchicalLayout } from "./hierarchicalLayout";
 import { NODE_VARIANTS, getNodeVariant } from "./layoutTypes";
 
@@ -54,8 +55,8 @@ function overlappingSiblingPairs(nodes: Node[]): Array<[string, string]> {
 }
 
 test("golden layout renders the full recursive graph without overlapping sibling boxes", () => {
-  const runState = deserializeRunState(fixture.runState);
-  const mutations = parseGraphMutationDtoArray(fixture.mutations);
+  const runState = deserializeSampleState(fixture.runState);
+  const mutations = sampleRuntimeEventsToGraphEvents(parseSampleRuntimeEvents(fixture.events));
   const checkpoint = fixture.checkpoints.find((entry) => entry.sequence === 14);
   assert.ok(checkpoint);
   const displayState = replayToSequence(

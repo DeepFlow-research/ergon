@@ -2,15 +2,15 @@
 
 import { useMemo, useState } from "react";
 
-import type { GraphMutationDto } from "@/features/graph/contracts/graphMutations";
+import type { SampleGraphEventDto } from "@/features/graph/contracts/graphMutations";
 import { createReplayInitialState, replayToSequence } from "@/features/graph/state/graphMutationReducer";
 import type { SampleWorkspaceState } from "@/lib/types";
 
 export function nearestMutationAtOrBefore(
-  mutations: GraphMutationDto[],
+  mutations: SampleGraphEventDto[],
   sequence: number,
-): GraphMutationDto | null {
-  let selected: GraphMutationDto | null = null;
+): SampleGraphEventDto | null {
+  let selected: SampleGraphEventDto | null = null;
   for (const mutation of mutations) {
     if (mutation.sequence > sequence) break;
     selected = mutation;
@@ -20,7 +20,7 @@ export function nearestMutationAtOrBefore(
 
 export function useSampleDisplayState(
   runState: SampleWorkspaceState | null,
-  mutations: GraphMutationDto[],
+  mutations: SampleGraphEventDto[],
 ) {
   // Activities and trace rows are built from full live run state.
   // Inspector and graph may render replay display state.

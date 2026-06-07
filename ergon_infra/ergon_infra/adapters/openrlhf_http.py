@@ -4,7 +4,7 @@ Usage::
 
     # OpenRLHF CLI:
     --agent_func_path ergon_infra/adapters/openrlhf_http.py
-    --agent_func_kwargs '{"ergon_url": "http://macbook:9000/api", "definition_id": "<uuid>"}'
+    --agent_func_kwargs '{"ergon_url": "http://macbook:9000/api", "experiment_id": "<uuid>"}'
 """
 
 import asyncio
@@ -17,7 +17,9 @@ import httpx
 logger = logging.getLogger(__name__)
 
 _client: httpx.AsyncClient | None = None
-_definition_id: str = ""
+_experiment_id: str = ""
+_sampler: str = "random"
+_candidate_pool_size: int | None = None
 _poll_interval_s: float = 2.0
 _timeout_s: float = 300.0
 
@@ -28,14 +30,18 @@ class OpenRLHFCallbackContext(Protocol):
 
 def configure(
     ergon_url: str,
-    definition_id: str,
+    experiment_id: str,
+    sampler: str = "random",
+    candidate_pool_size: int | None = None,
     poll_interval_s: float = 2.0,
     timeout_s: float = 300.0,
 ) -> None:
     """Module-level configuration (called by OpenRLHF before agent_func)."""
-    global _client, _definition_id, _poll_interval_s, _timeout_s
+    global _client, _experiment_id, _sampler, _candidate_pool_size, _poll_interval_s, _timeout_s
     _client = httpx.AsyncClient(base_url=ergon_url, timeout=30.0)
-    _definition_id = definition_id
+    _experiment_id = experiment_id
+    _sampler = sampler
+    _candidate_pool_size = candidate_pool_size
     _poll_interval_s = poll_interval_s
     _timeout_s = timeout_s
 
@@ -54,10 +60,13 @@ async def agent_func(
         raise RuntimeError("Call configure() before agent_func()")
 
     resp = await _client.post(
-        "/rollouts/submit",
+        f"/rollouts/experiments/{_experiment_id}/rollout-batches",
         json={
-            "definition_id": _definition_id,
-            "num_episodes": 1,
+            "experimentId": _experiment_id,
+            "k": 1,
+            "sampler": _sampler,
+            "samplerConfig": {},
+            "candidatePoolSize": _candidate_pool_size,
         },
     )
     resp.raise_for_status()

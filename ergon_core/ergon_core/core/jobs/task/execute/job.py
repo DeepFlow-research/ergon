@@ -62,8 +62,8 @@ from ergon_core.core.jobs.sandbox.setup.contract import SandboxReadyResult, Sand
 from ergon_core.core.jobs.task.evaluate.contract import TaskEvaluateRequest
 from ergon_core.core.jobs.task.propagate.contract import TaskCompletedEvent, TaskFailedEvent
 from ergon_core.core.jobs.task.worker_execute.contract import (
-    WorkerExecuteJobRequest,
-    WorkerExecuteJobResult,
+    WorkerExecuteRequest,
+    WorkerExecuteResult,
 )
 from ergon_core.core.application.runtime.task_execution import TaskExecutionService
 from ergon_core.core.application.runtime.orchestration import (
@@ -96,7 +96,6 @@ async def _prepare_execution(
         return await svc.prepare(
             PrepareTaskExecutionCommand(
                 sample_id=payload.sample_id,
-                definition_id=payload.definition_id,
                 task_id=payload.task_id,
             )
         )
@@ -115,7 +114,6 @@ async def _invoke_sandbox_setup(
         function=sandbox_setup_function,
         data=SandboxSetupRequest(
             sample_id=payload.sample_id,
-            definition_id=payload.definition_id,
             task_id=payload.task_id,
             benchmark_type=prepared.benchmark_type,
             sandbox_slug=_load_sandbox_slug(payload.sample_id),
@@ -138,7 +136,7 @@ async def _invoke_worker_execute(
     prepared: PreparedTaskExecution,
     sandbox_result: SandboxReadyResult,
     worker_execute_function: Any,
-) -> WorkerExecuteJobResult:
+) -> WorkerExecuteResult:
     if prepared.assigned_worker_slug is None or prepared.worker_type is None:
         raise ContractViolationError(
             "prepared task execution is missing worker identity",
@@ -148,9 +146,8 @@ async def _invoke_worker_execute(
     return await ctx.step.invoke(
         "worker-execute",
         function=worker_execute_function,
-        data=WorkerExecuteJobRequest(
+        data=WorkerExecuteRequest(
             sample_id=payload.sample_id,
-            definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=prepared.execution_id,
             sandbox_id=sandbox_result.sandbox_id,
@@ -231,7 +228,6 @@ async def _invoke_persist_outputs(
         function=persist_outputs_function,
         data=PersistOutputsRequest(
             sample_id=payload.sample_id,
-            definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=prepared.execution_id,
             sandbox_id=sandbox_result.sandbox_id,
@@ -251,7 +247,6 @@ async def _emit_task_completed(
         TaskCompletedEvent.name,
         TaskCompletedEvent(
             sample_id=payload.sample_id,
-            definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=prepared.execution_id,
             sandbox_id=sandbox_id,
@@ -269,7 +264,6 @@ async def _emit_task_failed(
         TaskFailedEvent.name,
         TaskFailedEvent(
             sample_id=payload.sample_id,
-            definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=prepared.execution_id,
             error=error_message,
@@ -389,7 +383,6 @@ async def run_execute_task_job(
                 end_time=datetime.now(UTC),
                 attributes={
                     "sample_id": str(payload.sample_id),
-                    "definition_id": str(payload.definition_id),
                     "task_id": str(prepared.task_id),
                     "execution_id": str(prepared.execution_id),
                     "task_slug": prepared.task_slug,
@@ -455,7 +448,6 @@ async def run_execute_task_job(
                     status_message=truncate_text(error_msg),
                     attributes={
                         "sample_id": str(payload.sample_id),
-                        "definition_id": str(payload.definition_id),
                         "task_id": str(prepared.task_id),
                         "execution_id": str(prepared.execution_id),
                         "task_slug": prepared.task_slug,

@@ -8,19 +8,19 @@ change here that isn't regenerated will fail the CI drift check.
 """
 
 from datetime import datetime
-from typing import ClassVar
+from typing import Any, ClassVar
 from uuid import UUID
 
 from ergon_core.core.views.samples.models import (
-    RunCommunicationMessageDto,
-    RunCommunicationThreadDto,
+    SampleCommunicationMessageDto,
+    SampleCommunicationThreadDto,
     SampleSnapshotDto,
     SampleTaskEvaluationDto,
 )
 from ergon_core.core.shared.context_parts import ContextEventType, ContextPartChunkLog
 from ergon_core.core.application.events.base import InngestEventContract
 from ergon_core.core.application.runtime.status import NodeStatus
-from ergon_core.core.application.samples.events import SampleRuntimeEventView
+from ergon_core.core.application.samples.event_views import SampleRuntimeEventView
 from pydantic import Field
 
 # ---------------------------------------------------------------------------
@@ -32,7 +32,6 @@ class DashboardWorkflowStartedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/workflow.started"
 
     sample_id: UUID
-    definition_id: UUID
     workflow_name: str
     snapshot: SampleSnapshotDto
     started_at: datetime
@@ -91,7 +90,7 @@ class DashboardResourcePublishedEvent(InngestEventContract):
 
     sample_id: UUID
     task_id: UUID
-    task_execution_id: UUID
+    task_attempt_id: UUID
     resource_id: UUID
     resource_name: str
     mime_type: str
@@ -145,13 +144,13 @@ class DashboardSandboxClosedEvent(InngestEventContract):
 
 
 class DashboardThreadMessageCreatedEvent(InngestEventContract):
-    """Embeds full RunCommunicationThreadDto + RunCommunicationMessageDto."""
+    """Embeds full SampleCommunicationThreadDto + SampleCommunicationMessageDto."""
 
     name: ClassVar[str] = "dashboard/thread.message_created"
 
     sample_id: UUID
-    thread: RunCommunicationThreadDto
-    message: RunCommunicationMessageDto
+    thread: SampleCommunicationThreadDto
+    message: SampleCommunicationMessageDto
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +163,10 @@ class DashboardSampleRuntimeEvent(InngestEventContract):
 
     event: SampleRuntimeEventView
 
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        kwargs["by_alias"] = True
+        return super().model_dump(*args, **kwargs)
+
 
 class DashboardContextEventEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/context.event"
@@ -172,7 +175,7 @@ class DashboardContextEventEvent(InngestEventContract):
         description="SampleContextEvent.id used by the frontend as a stable deduplication key."
     )
     sample_id: UUID
-    task_execution_id: UUID
+    task_attempt_id: UUID
     task_id: UUID = Field(
         description=(
             "Graph task id resolved from the task execution by the dashboard emitter at "

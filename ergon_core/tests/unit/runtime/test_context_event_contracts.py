@@ -19,7 +19,7 @@ def test_rest_and_dashboard_context_events_share_typed_payload_shape() -> None:
     common = {
         "id": uuid4(),
         "sample_id": uuid4(),
-        "task_execution_id": uuid4(),
+        "task_attempt_id": uuid4(),
         "task_id": uuid4(),
         "worker_binding_key": "worker",
         "sequence": 1,
@@ -41,7 +41,7 @@ def test_dashboard_context_event_serializes_canonical_task_id_field() -> None:
     event = DashboardContextEventEvent(
         id=uuid4(),
         sample_id=uuid4(),
-        task_execution_id=uuid4(),
+        task_attempt_id=uuid4(),
         task_id=uuid4(),
         worker_binding_key="worker",
         sequence=1,
@@ -76,7 +76,7 @@ def test_context_event_row_mapper_uses_execution_task_map() -> None:
     row = SampleContextEvent(
         id=uuid4(),
         sample_id=sample_id,
-        task_execution_id=execution_id,
+        task_attempt_id=execution_id,
         worker_binding_key="worker",
         sequence=1,
         event_type="assistant_text",
@@ -91,7 +91,7 @@ def test_context_event_row_mapper_uses_execution_task_map() -> None:
     assert event == DashboardContextEventEvent(
         id=row.id,
         sample_id=sample_id,
-        task_execution_id=execution_id,
+        task_attempt_id=execution_id,
         task_id=task_id,
         worker_binding_key="worker",
         sequence=1,
@@ -107,7 +107,7 @@ def test_context_event_row_mapper_returns_none_for_unknown_execution() -> None:
     row = SampleContextEvent(
         id=uuid4(),
         sample_id=uuid4(),
-        task_execution_id=uuid4(),
+        task_attempt_id=uuid4(),
         worker_binding_key="worker",
         sequence=1,
         event_type="assistant_text",

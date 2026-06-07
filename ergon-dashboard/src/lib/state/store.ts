@@ -24,9 +24,9 @@ import {
   SampleWorkspaceState,
 } from "../types";
 import { applyGraphMutation as reduceGraphMutation } from "@/features/graph/state/graphMutationReducer";
-import type { DashboardGraphMutationData } from "@/lib/contracts/events";
-import type { RunSnapshot } from "@/lib/contracts/rest";
-import { hydrateRunSnapshot } from "@/lib/sample-state/hydrate";
+import type { DashboardSampleRuntimeEventData } from "@/lib/contracts/events";
+import type { SampleSnapshot } from "@/lib/contracts/rest";
+import { hydrateSampleSnapshot } from "@/lib/sample-state/hydrate";
 import {
   applySandboxClosed,
   applySandboxCommand,
@@ -49,22 +49,22 @@ class DashboardStore {
   // Queries
   // ==========================================================================
 
-  getRun(sampleId: string): SampleWorkspaceState | undefined {
+  getSample(sampleId: string): SampleWorkspaceState | undefined {
     return this.runs.get(sampleId);
   }
 
-  getAllRuns(): SampleWorkspaceState[] {
+  getAllSamples(): SampleWorkspaceState[] {
     return Array.from(this.runs.values());
   }
 
-  getActiveRuns(): SampleWorkspaceState[] {
-    return this.getAllRuns().filter(
+  getActiveSamples(): SampleWorkspaceState[] {
+    return this.getAllSamples().filter(
       (r) => r.status === "pending" || r.status === "executing" || r.status === "evaluating",
     );
   }
 
-  getRecentRuns(limit: number = 10): SampleWorkspaceState[] {
-    return this.getAllRuns()
+  getRecentSamples(limit: number = 10): SampleWorkspaceState[] {
+    return this.getAllSamples()
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
       .slice(0, limit);
   }
@@ -92,7 +92,7 @@ class DashboardStore {
     this.pendingSandboxCommands.clear();
   }
 
-  seedRun(run: SampleWorkspaceState): void {
+  seedSample(run: SampleWorkspaceState): void {
     this.runs.set(run.id, run);
   }
 
@@ -103,19 +103,17 @@ class DashboardStore {
   /**
    * Initialize a new workflow run from a workflow.started event.
    */
-  initializeRun(
+  initializeSample(
     sampleId: string,
-    definitionId: string,
     name: string,
-    snapshot: RunSnapshot,
+    snapshot: SampleSnapshot,
     startedAt: string,
     totalTasks: number,
     totalLeafTasks: number
   ): SampleWorkspaceState {
-    const hydrated = hydrateRunSnapshot({
+    const hydrated = hydrateSampleSnapshot({
       ...snapshot,
       id: sampleId,
-      definitionId,
       name,
       status: "executing",
       startedAt,
@@ -138,7 +136,7 @@ class DashboardStore {
   /**
    * Mark a workflow run as completed or failed.
    */
-  completeRun(
+  completeSample(
     sampleId: string,
     status: "completed" | "failed",
     completedAt: string,
@@ -305,7 +303,7 @@ class DashboardStore {
     this.runs.set(sampleId, applySandboxClosed(run, taskId, reason, timestamp));
   }
 
-  applyGraphMutation(sampleId: string, mutation: DashboardGraphMutationData): void {
+  applyGraphMutation(sampleId: string, mutation: DashboardSampleRuntimeEventData): void {
     const run = this.runs.get(sampleId);
     if (!run) return;
     const updated = reduceGraphMutation(run, mutation);
@@ -313,11 +311,11 @@ class DashboardStore {
   }
 
   /**
-   * Remove old completed runs to prevent memory growth.
+   * Remove old completed samples to prevent memory growth.
    * Keeps the most recent N runs.
    */
   pruneOldSamples(keepCount: number = config.maxSamplesToKeep): void {
-    const runs = this.getAllRuns();
+    const runs = this.getAllSamples();
     if (runs.length <= keepCount) return;
 
     // Sort by startedAt descending, keep the newest

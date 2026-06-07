@@ -35,7 +35,6 @@ def test_runtime_is_single_application_owner_for_graph_task_and_workflow_lifecyc
         "lifecycle.py",
         "models.py",
         "resources.py",
-        "sample_identity.py",
         "sample_lifecycle.py",
         "status.py",
         "task_cleanup.py",

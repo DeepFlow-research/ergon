@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import SampleRecord
-from ergon_core.core.jobs.run.cleanup.contract import SampleCleanupEvent
+from ergon_core.core.jobs.sample.cleanup.contract import SampleCleanupEvent
 from .contract import WorkflowCompletedEvent, WorkflowCompleteResult
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.application.runtime.orchestration import FinalizeWorkflowCommand
@@ -31,7 +31,6 @@ async def run_complete_workflow_job(payload: WorkflowCompletedEvent) -> Workflow
     finalized = svc.finalize(
         FinalizeWorkflowCommand(
             sample_id=payload.sample_id,
-            definition_id=payload.definition_id,
         )
     )
 
@@ -77,7 +76,6 @@ async def run_complete_workflow_job(payload: WorkflowCompletedEvent) -> Workflow
             end_time=datetime.now(UTC),
             attributes={
                 "sample_id": str(payload.sample_id),
-                "definition_id": str(payload.definition_id),
                 "final_score": finalized.final_score,
                 "normalized_score": finalized.normalized_score,
                 "evaluators_count": finalized.evaluators_count,
@@ -96,7 +94,6 @@ async def run_complete_workflow_job(payload: WorkflowCompletedEvent) -> Workflow
                     end_time=run.completed_at,
                     attributes={
                         "sample_id": str(payload.sample_id),
-                        "definition_id": str(payload.definition_id),
                         "status": run.status,
                         "final_score": finalized.final_score,
                         "normalized_score": finalized.normalized_score,

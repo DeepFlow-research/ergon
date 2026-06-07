@@ -1,6 +1,5 @@
 from ergon_core.core.application.runtime import status as graph_status
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.application.runtime import execution as task_execution_service
 from ergon_core.core.application.runtime.lifecycle import on_task_completed_or_failed
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
@@ -48,7 +47,6 @@ def test_propagation_result_does_not_expose_invalidated_targets() -> None:
 
 @pytest.mark.asyncio
 async def test_parent_completion_readies_dependency_free_dynamic_children() -> None:
-    _ = ExperimentDefinition
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},

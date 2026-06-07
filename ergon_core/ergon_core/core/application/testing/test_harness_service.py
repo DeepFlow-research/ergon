@@ -4,8 +4,9 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from uuid import UUID
 
+from sqlalchemy import or_
 from ergon_core.core.persistence.context.models import SampleContextEvent
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
+from ergon_core.core.persistence.experiments.models import ExperimentRow
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.db import get_engine
 from ergon_core.core.persistence.shared.enums import SampleStatus
@@ -21,11 +22,7 @@ from sqlmodel import Session, select
 
 
 class UnknownSampleStatusError(ValueError):
-    """Raised when a test seed request names an unknown run status."""
-
-
-class DefinitionNotFoundError(LookupError):
-    """Raised when a test seed request references an unknown definition."""
+    """Raised when a test seed request names an unknown sample status."""
 
 
 @dataclass(frozen=True)
@@ -62,7 +59,7 @@ class HarnessExecution:
 
 
 @dataclass(frozen=True)
-class HarnessRunState:
+class HarnessSampleState:
     sample_id: UUID
     status: str
     graph_nodes: list[HarnessGraphNode]
@@ -77,7 +74,7 @@ class HarnessRunState:
 
 
 @dataclass(frozen=True)
-class HarnessExperimentRun:
+class HarnessExperimentSample:
     sample_id: UUID
     status: str
 
@@ -88,9 +85,9 @@ def get_session_dep() -> Iterator[Session]:
         yield session
 
 
-def read_run_state(sample_id: UUID, session: Session) -> HarnessRunState | None:
-    run = session.exec(select(SampleRecord).where(SampleRecord.id == sample_id)).first()
-    if run is None:
+def read_sample_state(sample_id: UUID, session: Session) -> HarnessSampleState | None:
+    sample = session.exec(select(SampleRecord).where(SampleRecord.id == sample_id)).first()
+    if sample is None:
         return None
 
     nodes = list(
@@ -113,7 +110,7 @@ def read_run_state(sample_id: UUID, session: Session) -> HarnessRunState | None:
     event_rows = SampleRuntimeEventReadService().list_events(session, sample_id)
     events = [
         HarnessSampleRuntimeEvent(
-            table=event.table,
+            table=_sample_runtime_event_table(event.event_type),
             event_type=event.event_type,
             target_id=event.target_id,
             payload=dict(event.payload),
@@ -166,9 +163,9 @@ def read_run_state(sample_id: UUID, session: Session) -> HarnessRunState | None:
         )
     )
 
-    return HarnessRunState(
+    return HarnessSampleState(
         sample_id=sample_id,
-        status=run.status,
+        status=sample.status,
         graph_nodes=graph_nodes,
         events=events,
         evaluations=evaluations,
@@ -181,16 +178,21 @@ def read_run_state(sample_id: UUID, session: Session) -> HarnessRunState | None:
     )
 
 
-def read_experiment_runs(experiment: str, session: Session) -> list[HarnessExperimentRun]:
-    runs = list(
-        session.exec(select(SampleRecord).where(SampleRecord.experiment == experiment)).all(),
+def read_experiment_samples(experiment: str, session: Session) -> list[HarnessExperimentSample]:
+    samples = list(
+        session.exec(
+            select(SampleRecord)
+            .join(ExperimentRow, SampleRecord.experiment_id == ExperimentRow.id, isouter=True)
+            .where(or_(SampleRecord.experiment == experiment, ExperimentRow.name == experiment))
+        ).all(),
     )
-    return [HarnessExperimentRun(sample_id=r.id, status=r.status) for r in runs]
+    return [
+        HarnessExperimentSample(sample_id=sample.id, status=sample.status) for sample in samples
+    ]
 
 
-def seed_run(
+def seed_sample(
     *,
-    definition_id: UUID,
     benchmark_type: str,
     instance_key: str,
     worker_team: dict,
@@ -199,32 +201,27 @@ def seed_run(
     task_slugs: list[str],
 ) -> UUID:
     try:
-        run_status = SampleStatus(status)
+        sample_status = SampleStatus(status)
     except ValueError as exc:
         raise UnknownSampleStatusError(status) from exc
 
     with Session(get_engine()) as session:
-        definition = session.get(ExperimentDefinition, definition_id)
-        if definition is None:
-            raise DefinitionNotFoundError(str(definition_id))
-
-        run = SampleRecord(
-            definition_id=definition_id,
+        sample = SampleRecord(
             benchmark_type=benchmark_type,
             instance_key=instance_key,
             worker_team_json=worker_team,
             experiment=experiment,
-            status=run_status,
+            status=sample_status,
             summary_json={
                 "_test_seeded": True,
                 "_test_experiment": experiment,
                 "_test_task_slugs": task_slugs,
             },
         )
-        session.add(run)
+        session.add(sample)
         session.commit()
-        session.refresh(run)
-        return run.id
+        session.refresh(sample)
+        return sample.id
 
 
 def reset_test_rows(*, experiment_prefix: str) -> None:
@@ -232,13 +229,13 @@ def reset_test_rows(*, experiment_prefix: str) -> None:
         # Cannot SQL-filter on JSON prefix portably; load seeded rows and
         # filter in Python. Bounded by the seed endpoint being test-only.
         candidates = list(session.exec(select(SampleRecord)).all())
-        for run in candidates:
-            metadata = {} if run.summary_json is None else run.summary_json
+        for sample in candidates:
+            metadata = {} if sample.summary_json is None else sample.summary_json
             if not metadata.get("_test_seeded"):
                 continue
             tag = metadata.get("_test_experiment")
             if isinstance(tag, str) and tag.startswith(experiment_prefix):
-                session.delete(run)
+                session.delete(sample)
         session.commit()
 
 
@@ -251,3 +248,20 @@ def _execution_error_message(execution: SampleTaskAttempt) -> str | None:
         if isinstance(value, str):
             return value
     return str(error)
+
+
+def _sample_runtime_event_table(event_type: str) -> str:
+    prefix = event_type.split(".", maxsplit=1)[0]
+    table_by_prefix = {
+        "sample": "sample_status_events",
+        "task": "sample_task_events",
+        "edge": "sample_edge_events",
+        "worker": "sample_worker_events",
+        "evaluator": "sample_evaluator_events",
+        "sandbox": "sample_sandbox_events",
+        "annotation": "sample_annotation_events",
+    }
+    try:
+        return table_by_prefix[prefix]
+    except KeyError as exc:
+        raise ValueError(f"unknown sample runtime event type: {event_type!r}") from exc

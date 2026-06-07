@@ -11,7 +11,6 @@ class WorkerExecuteRequest(InngestEventContract):
     name: ClassVar[str] = "task/worker-execute"
 
     sample_id: UUID
-    definition_id: UUID
     task_id: UUID
     execution_id: UUID
     sandbox_id: str
@@ -30,7 +29,3 @@ class WorkerExecuteResult(BaseModel):
     final_assistant_message: str | None = None
     error: str | None = None
     error_json: JsonObject | None = None
-
-
-WorkerExecuteJobRequest = WorkerExecuteRequest
-WorkerExecuteJobResult = WorkerExecuteResult

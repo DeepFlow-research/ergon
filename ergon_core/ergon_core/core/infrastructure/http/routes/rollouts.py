@@ -1,7 +1,7 @@
 """Rollout-as-a-Service HTTP endpoints.
 
 Exposes ``RolloutService`` over HTTP so RL trainers on remote GPU nodes
-can submit episode batches and retrieve trajectories without importing
+can submit episode batches and retrieve projected training records without importing
 any Ergon internals.
 """
 
@@ -12,8 +12,8 @@ from uuid import UUID
 from ergon_core.core.rl.rollout_service import RolloutService
 from ergon_core.core.rl.rollout_types import (
     PollResponse,
-    SubmitRequest,
-    SubmitResponse,
+    RolloutBatchSummary,
+    TrainingRolloutRequest,
     WeightSyncRequest,
     WeightSyncResponse,
 )
@@ -41,13 +41,23 @@ def get_vllm_manager(request: Request) -> VLLMManager | None:
     return cast(VLLMManager, manager)
 
 
-@router.post("/submit", response_model=SubmitResponse, status_code=202)
-def submit_rollout(
-    request: SubmitRequest,
+@router.post(
+    "/experiments/{experiment_id}/rollout-batches",
+    response_model=RolloutBatchSummary,
+    status_code=202,
+)
+async def submit_experiment_rollout_batch(
+    experiment_id: UUID,
+    request: TrainingRolloutRequest,
     service: Annotated[RolloutService, Depends(get_rollout_service)],
-) -> SubmitResponse:
-    """Start a batch of episodes. Returns immediately with batch_id."""
-    return service.submit(request)
+) -> RolloutBatchSummary:
+    """Start a trainer batch from a persisted experiment candidate pool."""
+    if request.experiment_id != experiment_id:
+        raise HTTPException(400, "experiment_id mismatch")
+    try:
+        return await service.submit_experiment_batch(request)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @router.get("/{batch_id}", response_model=PollResponse)
@@ -55,8 +65,20 @@ def poll_rollout(
     batch_id: UUID,
     service: Annotated[RolloutService, Depends(get_rollout_service)],
 ) -> PollResponse:
-    """Poll batch status. Returns trajectories when complete."""
+    """Poll batch status. Returns projected training records when complete."""
     result = service.poll(batch_id)
+    if result is None:
+        raise HTTPException(404, f"Batch {batch_id} not found")
+    return result
+
+
+@router.get("/batches/{batch_id}", response_model=RolloutBatchSummary)
+def get_rollout_batch(
+    batch_id: UUID,
+    service: Annotated[RolloutService, Depends(get_rollout_service)],
+) -> RolloutBatchSummary:
+    """Load durable trainer batch membership by sample id."""
+    result = service.get_rollout_batch_by_id(batch_id)
     if result is None:
         raise HTTPException(404, f"Batch {batch_id} not found")
     return result

@@ -6,10 +6,10 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Mapping
-from dataclasses import dataclass
 from typing import cast
 
 from ergon_core.core.shared.settings import settings
+from pydantic import BaseModel, ConfigDict
 
 DEFAULT_LLAMA_CPP_BASE_URL = "http://localhost:8080"
 DEFAULT_MINIF2F_LIMIT = 3
@@ -21,9 +21,10 @@ class ExampleSetupError(RuntimeError):
     """Raised when a common local setup requirement is missing."""
 
 
-@dataclass(frozen=True)
-class PreflightResult:
+class PreflightResult(BaseModel):
     """Result of local model and sandbox setup checks."""
+
+    model_config = ConfigDict(frozen=True)
 
     discovered_model: str | None
 

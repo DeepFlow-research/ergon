@@ -7,7 +7,7 @@ test("top navigation only exposes current product surfaces", () => {
   const source = fs.readFileSync(path.join(process.cwd(), "src/components/shell/Topbar.tsx"), "utf8");
 
   assert.match(source, /label: "Experiments"/);
-  assert.match(source, /label: "Runs"/);
+  assert.match(source, /label: "Samples"/);
   assert.doesNotMatch(source, /label: "Models"/);
   assert.doesNotMatch(source, /label: "Settings"/);
 });

@@ -34,7 +34,7 @@ These land first because every workstream depends on them.
   type RunEvent =
     | { kind: "workflow.started"; at: string; runId: string; ... }
     | { kind: "task.status_changed"; at: string; taskId: string; from: TaskStatus; to: TaskStatus; trigger: TaskTrigger; ... }
-    | { kind: "generation.turn"; at: string; taskExecutionId: string; turnIndex: number; ... }
+    | { kind: "generation.turn"; at: string; taskAttemptId: string; turnIndex: number; ... }
     | { kind: "sandbox.command"; ... }
     | { kind: "thread.message"; ... }
     | { kind: "task.evaluation"; ... }

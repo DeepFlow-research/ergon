@@ -9,12 +9,6 @@ from ergon_core.core.application.evaluation.service import (
     EvaluationService,
     EvaluationServiceResult,
 )
-from ergon_core.core.persistence.definitions.models import (
-    ExperimentDefinition,
-    ExperimentDefinitionEvaluator,
-    ExperimentDefinitionInstance,
-    ExperimentDefinitionTask,
-)
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
@@ -35,44 +29,13 @@ def _session() -> Session:
 
 
 def _seed_run(session: Session) -> tuple:
-    definition_id = uuid4()
-    instance_id = uuid4()
     task_id = uuid4()
-    evaluator_id = uuid4()
     sample_id = uuid4()
     execution_id = uuid4()
     session.add_all(
         [
-            ExperimentDefinition(
-                id=definition_id,
-                benchmark_type="bench",
-                name="bench",
-                metadata_json={},
-            ),
-            ExperimentDefinitionInstance(
-                id=instance_id,
-                experiment_definition_id=definition_id,
-                instance_key="sample-1",
-            ),
-            ExperimentDefinitionTask(
-                id=task_id,
-                experiment_definition_id=definition_id,
-                instance_id=instance_id,
-                task_slug="root",
-                description="root task",
-                task_payload_json={},
-                task_json={},
-            ),
-            ExperimentDefinitionEvaluator(
-                id=evaluator_id,
-                experiment_definition_id=definition_id,
-                binding_key="judge",
-                evaluator_type="rubric",
-                snapshot_json={"name": "judge"},
-            ),
             SampleRecord(
                 id=sample_id,
-                definition_id=definition_id,
                 benchmark_type="bench",
                 instance_key="sample-1",
                 worker_team_json={},
@@ -95,7 +58,7 @@ def _seed_run(session: Session) -> tuple:
         ]
     )
     session.commit()
-    return sample_id, task_id, evaluator_id, execution_id
+    return sample_id, task_id, execution_id
 
 
 @pytest.mark.asyncio
@@ -105,11 +68,11 @@ async def test_persist_success_writes_evaluation_row_with_service_summary(monkey
     session = _session()
     monkeypatch.setattr(service_module, "get_session", lambda: session)
     monkeypatch.setattr(session, "close", lambda: None)
-    sample_id, task_id, evaluator_id, execution_id = _seed_run(session)
+    sample_id, task_id, execution_id = _seed_run(session)
 
     persisted = await EvaluationService().persist_success(
         sample_id=sample_id,
-        task_execution_id=execution_id,
+        task_attempt_id=execution_id,
         task_id=task_id,
         binding_key="judge",
         service_result=EvaluationServiceResult(
@@ -128,6 +91,6 @@ async def test_persist_success_writes_evaluation_row_with_service_summary(monkey
     assert row.summary_json == persisted.summary.model_dump(mode="json")
     assert row.score == 0.75
     assert row.passed is True
-    assert row.task_execution_id == execution_id
+    assert row.task_attempt_id == execution_id
     assert row.task_id == task_id
-    assert row.definition_evaluator_id == evaluator_id
+    assert row.evaluator_slug == "judge"

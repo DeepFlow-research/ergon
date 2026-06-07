@@ -23,10 +23,10 @@ def run_training(command: TrainingCommand) -> int:
 
     config = TrainingConfig(
         ergon_url=command.ergon_url,
-        benchmark=command.benchmark,
+        benchmark=command.environment,
         evaluator=command.evaluator,
         limit=command.limit,
-        definition_id=command.definition_id,
+        experiment_id=command.experiment_id,
         model=command.model,
         device=command.device,
         vllm_mode=None if command.device == "cpu" else command.vllm_mode,

@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import fixture from "../../../tests/fixtures/mas-samples/concurrent-mas-run.json";
-import { deserializeRunState } from "@/lib/sampleState";
+import { deserializeSampleState } from "@/lib/sampleState";
 import { filterTaskEvidenceForTime } from "./filterTaskEvidenceForTime";
 
 const searchTaskId = "10000000-0000-4000-8000-000000000002";
 
 test("filterTaskEvidenceForTime hides task evidence created after the selected timeline time", () => {
-  const runState = deserializeRunState(fixture.runState);
+  const runState = deserializeSampleState(fixture.runState);
   const filtered = filterTaskEvidenceForTime({
     resources: runState.resourcesByTask.get(searchTaskId) ?? [],
     executions: runState.executionsByTask.get(searchTaskId) ?? [],
@@ -26,7 +26,7 @@ test("filterTaskEvidenceForTime hides task evidence created after the selected t
 });
 
 test("filterTaskEvidenceForTime returns unfiltered task evidence in live mode", () => {
-  const runState = deserializeRunState(fixture.runState);
+  const runState = deserializeSampleState(fixture.runState);
   const filtered = filterTaskEvidenceForTime({
     resources: runState.resourcesByTask.get(searchTaskId) ?? [],
     executions: runState.executionsByTask.get(searchTaskId) ?? [],
@@ -42,7 +42,7 @@ test("filterTaskEvidenceForTime returns unfiltered task evidence in live mode", 
 });
 
 test("filterTaskEvidenceForTime keeps only thread messages visible at selected time", () => {
-  const runState = deserializeRunState(fixture.runState);
+  const runState = deserializeSampleState(fixture.runState);
   const thread = runState.threads[0];
   const filtered = filterTaskEvidenceForTime({
     resources: [],

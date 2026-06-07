@@ -18,7 +18,7 @@ import * as path from "node:path";
 
 import { expect, Locator, Page, test } from "@playwright/test";
 
-import { BackendHarnessClient, BackendRunState } from "../../helpers/backendHarnessClient";
+import { BackendHarnessClient, BackendSampleState } from "../../helpers/backendHarnessClient";
 import { EXPECTED_NESTED_SUBTASK_SLUGS, EXPECTED_SUBTASK_SLUGS } from "./expected";
 
 export interface SmokeSpecConfig {
@@ -74,10 +74,10 @@ function graphElementForTask(page: Page, taskId: string): Locator {
 
 async function selectRenderedGraphTask(
   page: Page,
-  state: BackendRunState,
+  state: BackendSampleState,
   sampleId: string,
   evaluatedTaskIds: Set<string>,
-): Promise<BackendRunState["graph_nodes"][number]> {
+): Promise<BackendSampleState["graph_nodes"][number]> {
   const candidates = [
     ...state.graph_nodes.filter((node) => node.level > 0 && node.task_slug === "d_root"),
     ...state.graph_nodes.filter((node) => node.level > 0 && evaluatedTaskIds.has(node.id)),
@@ -125,7 +125,7 @@ async function expectNoTimelinePlaybackControls(page: Page): Promise<void> {
 
 async function assertRunWorkspace(
   page: Page,
-  state: BackendRunState,
+  state: BackendSampleState,
   sampleId: string,
 ): Promise<void> {
   await expect(page.getByTestId("sample-header")).toBeVisible();
@@ -211,7 +211,7 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
   test.describe(`${cfg.env} canonical smoke`, () => {
     for (const { sample_id, kind } of experimentRuns) {
       test(`run ${sample_id} (${kind})`, async ({ page }) => {
-        const state = await client.getRunState(sample_id);
+        const state = await client.getSampleState(sample_id);
 
         // Backend-DTO assertions are the load-bearing contract.  The UI
         // assertions below use graph-canvas + page-load + screenshot
@@ -306,8 +306,8 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
     }
 
     test(`experiment ${experimentKey} grouping lists all runs`, async () => {
-      const groupedRuns = await client.getExperimentRuns(experimentKey);
-      expect(groupedRuns.length).toBeGreaterThanOrEqual(experimentRuns.length);
+      const groupedSamples = await client.getExperimentSamples(experimentKey);
+      expect(groupedSamples.length).toBeGreaterThanOrEqual(experimentRuns.length);
     });
   });
 }

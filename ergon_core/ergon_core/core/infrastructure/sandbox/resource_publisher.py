@@ -41,13 +41,13 @@ class SandboxResourcePublisher:
         *,
         sandbox: AsyncSandbox | Any,  # slopcop: ignore[no-typing-any]
         sample_id: UUID,
-        task_execution_id: UUID,
+        task_attempt_id: UUID,
         blob_root: Path = _DEFAULT_BLOB_ROOT,
         publish_dirs: tuple[tuple[str, SampleResourceKind], ...] | None = None,
     ) -> None:
         self._sandbox = sandbox
         self._sample_id = sample_id
-        self._task_execution_id = task_execution_id
+        self._task_attempt_id = task_attempt_id
         self._blob_root = blob_root
         self._publish_dirs = publish_dirs if publish_dirs is not None else self.DEFAULT_PUBLISH_DIRS
 
@@ -57,14 +57,14 @@ class SandboxResourcePublisher:
         *,
         sandbox: Any,  # slopcop: ignore[no-typing-any]
         sample_id: UUID,
-        task_execution_id: UUID,
+        task_attempt_id: UUID,
         blob_root: Path = _DEFAULT_BLOB_ROOT,
         publish_dirs: tuple[tuple[str, SampleResourceKind], ...] | None = None,
     ) -> "SandboxResourcePublisher":
         return cls(
             sandbox=sandbox,
             sample_id=sample_id,
-            task_execution_id=task_execution_id,
+            task_attempt_id=task_attempt_id,
             blob_root=blob_root,
             publish_dirs=publish_dirs,
         )
@@ -80,7 +80,7 @@ class SandboxResourcePublisher:
             reader=self,
             blob_store=self,
             sample_id=self._sample_id,
-            task_execution_id=self._task_execution_id,
+            task_attempt_id=self._task_attempt_id,
             publish_dirs=self._publish_dirs,
         )
 
@@ -101,7 +101,7 @@ class SandboxResourcePublisher:
         return SampleResourcePublishService().publish_value(
             blob_store=self,
             sample_id=self._sample_id,
-            task_execution_id=self._task_execution_id,
+            task_attempt_id=self._task_attempt_id,
             kind=kind,
             name=name,
             content=content,

@@ -4,7 +4,7 @@ Verifies the dynamic-spawn write path:
 
 - Exactly one row inserted into sample_graph_nodes with is_dynamic=True and
   the full Task snapshot in task_json.
-- Zero rows inserted into experiment_definition_tasks.
+- No definition persistence table is required.
 - Optional depends_on creates the dependency edge in sample_graph_edges.
 - Returned SpawnedTaskHandle.task_id matches the inserted node's task_id.
 """
@@ -14,12 +14,11 @@ from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
-from ergon_core.api.benchmark.task import Task
+from ergon_core.api.task import Task
 from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.jobs.task.worker_execute.job import _StepAwareTaskManagementService
 from ergon_core.core.application.runtime import management as management_module
 from ergon_core.core.application.runtime.task_management import TaskManagementService
-from ergon_core.core.persistence.definitions.models import ExperimentDefinitionTask
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord
@@ -65,7 +64,6 @@ def _seed_parent(session: Session, *, sample_id: UUID) -> SampleGraphNode:
     session.add(
         SampleRecord(
             id=sample_id,
-            definition_id=uuid4(),
             benchmark_type="test",
             instance_key="sample-1",
             worker_team_json={},
@@ -203,16 +201,16 @@ async def test_spawn_dynamic_task_inserts_dynamic_node_with_task_json(
 
 
 @pytest.mark.asyncio
-async def test_spawn_dynamic_task_does_not_write_definition_row(
+async def test_spawn_dynamic_task_does_not_require_definition_tables(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """experiment_definition_tasks count is unchanged before/after spawn."""
+    """Dynamic spawn writes run graph state without definition persistence."""
     session = _make_session()
     sample_id = uuid4()
     parent = _seed_parent(session, sample_id=sample_id)
     svc = _service(session, monkeypatch)
 
-    defs_before = session.exec(select(ExperimentDefinitionTask)).all()
+    assert "experiment_definition_tasks" not in SQLModel.metadata.tables
 
     await svc.spawn_dynamic_task(
         sample_id=sample_id,
@@ -220,8 +218,10 @@ async def test_spawn_dynamic_task_does_not_write_definition_row(
         task=_make_task(),
     )
 
-    defs_after = session.exec(select(ExperimentDefinitionTask)).all()
-    assert len(defs_before) == len(defs_after) == 0
+    nodes = session.exec(
+        select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)
+    ).all()
+    assert {node.task_slug for node in nodes} == {"parent", "child"}
 
 
 @pytest.mark.asyncio

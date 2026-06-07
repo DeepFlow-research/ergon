@@ -2,7 +2,6 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.persistence.shared.enums import (
     SampleResourceKind,
@@ -20,7 +19,6 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 
 def _session() -> Session:
-    _ = ExperimentDefinition
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -86,7 +84,7 @@ def _resource(
     path.write_bytes(content)
     return SampleResource(
         sample_id=sample_id,
-        task_execution_id=execution_id,
+        task_attempt_id=execution_id,
         kind=kind.value,
         name=name,
         mime_type="text/plain",
@@ -98,11 +96,9 @@ def _resource(
 
 def _run(session: Session) -> UUID:
     sample_id = uuid4()
-    definition_id = uuid4()
     session.add(
         SampleRecord(
             id=sample_id,
-            definition_id=definition_id,
             benchmark_type="ci-workflow-service",
             instance_key="sample-1",
             worker_team_json={"primary": "test-worker"},
@@ -265,14 +261,14 @@ async def test_materialize_resource_creates_current_task_owned_copy(tmp_path: Pa
     original = session.get(SampleResource, source.id)
 
     assert copy.id != source.id
-    assert copy.task_execution_id == consumer_exec.id
+    assert copy.task_attempt_id == consumer_exec.id
     assert copy.kind == SampleResourceKind.IMPORT.value
     assert copy.name == "paper (copy).pdf"
     assert copy.file_path == source.file_path
     assert copy.content_hash == source.content_hash
     assert copy.copied_from_resource_id == source.id
     assert original is not None
-    assert original.task_execution_id == producer_exec.id
+    assert original.task_attempt_id == producer_exec.id
     assert manager.uploads == [
         (consumer.task_id, source.file_path, "/workspace/imported/producer/paper (copy).pdf")
     ]

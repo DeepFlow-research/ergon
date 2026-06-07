@@ -8,8 +8,8 @@
 import { inngest } from "../client";
 import { store } from "@/lib/state/store";
 import {
-  broadcastRunStarted,
-  broadcastRunCompleted,
+  broadcastSampleStarted,
+  broadcastSampleCompleted,
   broadcastGraphMutation,
   broadcastTaskEvaluation,
   broadcastTaskStatus,
@@ -20,7 +20,8 @@ import {
   broadcastSandboxClosed,
 } from "@/lib/socket/server";
 import {
-  parseDashboardGraphMutationData,
+  isDashboardSampleRuntimeGraphEvent,
+  parseDashboardSampleRuntimeEventData,
   parseDashboardTaskEvaluationUpdatedData,
   parseDashboardThreadMessageCreatedData,
   parseDashboardWorkflowStartedData,
@@ -51,7 +52,6 @@ const onWorkflowStarted = inngest.createFunction(
     const payload = parseDashboardWorkflowStartedData(event.data);
     const {
       sample_id,
-      definition_id,
       workflow_name,
       snapshot,
       started_at,
@@ -66,9 +66,8 @@ const onWorkflowStarted = inngest.createFunction(
     });
 
     // Update store
-    store.initializeRun(
+    store.initializeSample(
       sample_id,
-      definition_id,
       workflow_name,
       snapshot,
       started_at,
@@ -77,13 +76,13 @@ const onWorkflowStarted = inngest.createFunction(
     );
     
     // Log store state after initialization
-    const allRuns = store.getAllRuns();
+    const allRuns = store.getAllSamples();
     console.log(`[Dashboard] Store now has ${allRuns.length} runs:`, allRuns.map(r => ({ id: r.id, name: r.name, status: r.status })));
 
     // Broadcast to all clients (new run appeared)
-    console.log("[Dashboard] About to call broadcastRunStarted...");
-    broadcastRunStarted(sample_id, workflow_name);
-    console.log("[Dashboard] broadcastRunStarted completed");
+    console.log("[Dashboard] About to call broadcastSampleStarted...");
+    broadcastSampleStarted(sample_id, workflow_name);
+    console.log("[Dashboard] broadcastSampleStarted completed");
 
     // Prune old runs to prevent memory growth
     store.pruneOldSamples();
@@ -116,7 +115,7 @@ const onWorkflowCompleted = inngest.createFunction(
     });
 
     // Update store
-    store.completeRun(
+    store.completeSample(
       sample_id,
       narrowedStatus,
       completed_at,
@@ -126,7 +125,7 @@ const onWorkflowCompleted = inngest.createFunction(
     );
 
     // Broadcast to run subscribers
-    broadcastRunCompleted(
+    broadcastSampleCompleted(
       sample_id,
       narrowedStatus,
       completed_at,
@@ -223,7 +222,7 @@ const onResourcePublished = inngest.createFunction(
     const {
       sample_id,
       task_id,
-      task_execution_id,
+      task_attempt_id,
       resource_id,
       resource_name,
       mime_type,
@@ -244,7 +243,7 @@ const onResourcePublished = inngest.createFunction(
     const resource: ResourceState = {
       id: resource_id,
       taskId: task_id,
-      taskExecutionId: task_execution_id,
+      taskAttemptId: task_attempt_id,
       name: resource_name,
       mimeType: mime_type,
       sizeBytes: size_bytes,
@@ -327,7 +326,7 @@ const onSandboxCommand = inngest.createFunction(
     });
 
     // Find the sample_id for this task
-    const runs = store.getAllRuns();
+    const runs = store.getAllSamples();
     let sampleId: string | null = null;
 
     for (const run of runs) {
@@ -378,7 +377,7 @@ const onSandboxClosed = inngest.createFunction(
     });
 
     // Find the sample_id for this task
-    const runs = store.getAllRuns();
+    const runs = store.getAllSamples();
     let sampleId: string | null = null;
 
     for (const run of runs) {
@@ -413,7 +412,10 @@ const onGraphMutation = inngest.createFunction(
   { id: "handle-sample-runtime-event", name: "Handle Sample Runtime Event" },
   { event: "dashboard/sample.runtime_event" },
   async ({ event }) => {
-    const mutation = parseDashboardGraphMutationData(event.data);
+    if (!isDashboardSampleRuntimeGraphEvent(event.data)) {
+      return { success: true, ignored: true };
+    }
+    const mutation = parseDashboardSampleRuntimeEventData(event.data);
     store.applyGraphMutation(mutation.sample_id, mutation);
     broadcastGraphMutation(mutation.sample_id, mutation);
     return { success: true };

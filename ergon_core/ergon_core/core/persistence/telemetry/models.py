@@ -1,8 +1,4 @@
-"""Run-scoped telemetry tables.
-
-Telemetry rows reference bound definition rows — they never become the source
-of truth for the definition itself.
-"""
+"""Sample-scoped telemetry tables."""
 
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -34,11 +30,24 @@ class SampleRecord(SQLModel, table=True):
     __tablename__ = "samples"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    definition_id: UUID = Field(
-        foreign_key="experiment_definitions.id",
+    experiment_id: UUID | None = Field(
+        default=None,
         index=True,
-        description="Canonical runtime ExperimentDefinition id for this run.",
+        description="Owning persisted experiment for this selected sample.",
     )
+    environment_id: UUID | None = Field(
+        default=None,
+        index=True,
+        description="Owning persisted environment that produced this sample.",
+    )
+    sampler_invocation_id: UUID | None = Field(default=None, index=True)
+    pool_entry_id: UUID | None = Field(default=None, index=True)
+    sample_key: str | None = Field(
+        default=None,
+        index=True,
+        description="Stable sample key within the owning environment.",
+    )
+    sample_ref_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     benchmark_type: str = Field(index=True)
     instance_key: str = Field(index=True)
     sample_id: str | None = Field(default=None, index=True)
@@ -53,10 +62,7 @@ class SampleRecord(SQLModel, table=True):
     evaluator_slug: str | None = Field(
         default=None,
         index=True,
-        description=(
-            "Compatibility/display-only evaluator slug; runtime evaluation "
-            "uses object-bound task snapshots and definition evaluator rows."
-        ),
+        description="Display-only evaluator slug; runtime evaluation uses task snapshots.",
     )
     model_target: str | None = None
     sandbox_slug: str | None = Field(
@@ -138,12 +144,7 @@ class SampleTaskAttempt(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     sample_id: UUID = Field(foreign_key="samples.id", index=True)
     task_id: UUID = Field(index=True)
-    definition_worker_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_definition_workers.id",
-        index=True,
-    )
-    attempt_number: int = 1
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
     status: TaskExecutionStatus = Field(index=True)
     started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
@@ -214,7 +215,7 @@ class SampleResource(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     sample_id: UUID = Field(foreign_key="samples.id", index=True)
-    task_execution_id: UUID | None = Field(
+    task_attempt_id: UUID | None = Field(
         default=None,
         foreign_key="sample_task_attempts.id",
     )
@@ -274,15 +275,12 @@ class SampleTaskEvaluation(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     sample_id: UUID = Field(foreign_key="samples.id", index=True)
-    task_execution_id: UUID = Field(
+    task_attempt_id: UUID = Field(
         foreign_key="sample_task_attempts.id",
         index=True,
     )
     task_id: UUID = Field(index=True)
-    definition_evaluator_id: UUID = Field(
-        foreign_key="experiment_definition_evaluators.id",
-        index=True,
-    )
+    evaluator_slug: str = Field(index=True)
     score: float | None = None
     passed: bool | None = None
     feedback: str | None = None
@@ -303,7 +301,7 @@ class SampleTaskEvaluation(SQLModel, table=True):
 
 class Thread(SQLModel, table=True):
     __tablename__ = "threads"
-    __table_args__ = (sa.UniqueConstraint("sample_id", "topic", name="uq_threads_run_topic"),)
+    __table_args__ = (sa.UniqueConstraint("sample_id", "topic", name="uq_threads_sample_topic"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     sample_id: UUID = Field(foreign_key="samples.id", index=True)
@@ -326,7 +324,7 @@ class ThreadMessage(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     thread_id: UUID = Field(foreign_key="threads.id", index=True)
     sample_id: UUID = Field(foreign_key="samples.id", index=True)
-    task_execution_id: UUID | None = Field(
+    task_attempt_id: UUID | None = Field(
         default=None,
         foreign_key="sample_task_attempts.id",
         index=True,
@@ -353,7 +351,8 @@ class RolloutBatch(SQLModel, table=True):
     __tablename__ = "rollout_batches"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    definition_id: UUID = Field(foreign_key="experiment_definitions.id", index=True)
+    experiment_id: UUID | None = Field(default=None, index=True)
+    sampler_invocation_id: UUID | None = Field(default=None, index=True)
     status: RolloutStatus = Field(default=RolloutStatus.PENDING, index=True)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
@@ -369,14 +368,17 @@ class RolloutBatch(SQLModel, table=True):
         return self
 
 
-class RolloutBatchRun(SQLModel, table=True):
-    """Join table: which runs belong to which batch."""
+class RolloutBatchSampleMembership(SQLModel, table=True):
+    """Join table: which samples belong to which rollout batch."""
 
-    __tablename__ = "rollout_batch_runs"
+    __tablename__ = "rollout_batch_sample_memberships"
 
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    batch_id: UUID = Field(foreign_key="rollout_batches.id", index=True)
-    sample_id: UUID = Field(foreign_key="samples.id", index=True)
+    batch_id: UUID = Field(foreign_key="rollout_batches.id", primary_key=True)
+    sample_id: UUID = Field(foreign_key="samples.id", primary_key=True)
+    ordinal: int = Field(index=True)
+    environment_id: UUID | None = Field(default=None, index=True)
+    pool_entry_id: UUID | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
 
 # ---------------------------------------------------------------------------

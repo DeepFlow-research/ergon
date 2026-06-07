@@ -70,6 +70,23 @@ rows and eagerly creates every statically-declared node and edge. Task
 payloads are attached as annotations in the core-reserved `"payload"`
 namespace.
 
+PR05 adds the public experiment submit path alongside that bridge:
+`Experiment.submit(...)` persists an experiment and candidate pool, records the
+sampler invocation, marks selected candidate rows, and creates one
+`SampleRecord` per selected sample. The materialization boundary is the authored
+`Sample`'s concrete `Task` objects: each task is persisted as
+`task.model_dump(mode="json")` into typed sample WAL rows and the
+`sample_graph_nodes.task_json` projection. Environment and experiment objects
+remain provenance rows; they are not serialized into the runtime replay
+contract. `workflow/started` may now carry only `sample_id` when the sample
+graph already exists, while the definition-backed initialization path remains as
+a temporary bridge.
+
+TODO(PR09): remove the definition-backed initialization bridge when runtime
+launch no longer reads `experiment_definitions`, `experiment_definition_tasks`,
+or definition worker/evaluator bindings. The remaining path should initialize
+from already-materialized sample graph/WAL rows only.
+
 ### Manager-spawned subtasks (dynamic graph growth)
 
 The graph is append-only at the row level: new nodes and edges can enter

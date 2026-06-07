@@ -6,7 +6,7 @@ from uuid import UUID
 from ergon_core.core.application.evaluation.summary import EvaluationSummary
 from ergon_core.core.persistence.telemetry.models import SampleTaskEvaluation
 from ergon_core.core.views.samples.models import (
-    RunEvaluationCriterionDto,
+    SampleEvaluationCriterionDto,
     SampleTaskEvaluationDto,
 )
 
@@ -21,7 +21,7 @@ def build_dashboard_evaluation_dto(
     summary: EvaluationSummary,
 ) -> SampleTaskEvaluationDto:
     criterion_results = [
-        RunEvaluationCriterionDto(
+        SampleEvaluationCriterionDto(
             id=f"{evaluation_id}-{i}",
             stage_num=cr.stage_num,
             stage_name=cr.stage_name,

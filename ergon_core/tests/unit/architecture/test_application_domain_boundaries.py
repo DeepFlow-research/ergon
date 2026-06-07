@@ -19,15 +19,17 @@ PUBLIC_CROSS_DOMAIN_MODULES = {"service", "models", "errors"}
 # views, read-only task inspection, and orchestration command/result DTOs each
 # have distinct collaborators.
 PUBLIC_CROSS_DOMAIN_MODULES_BY_DOMAIN = {
+    "events": {"runtime"},
     "runtime": {
         "orchestration",
         "resources",
         "sample_lifecycle",
+        "status",
         "task_execution",
         "task_inspection",
         "task_management",
     },
-    "samples": {"events", "state"},
+    "samples": {"events", "materialization", "state"},
 }
 APPROVED_DOMAIN_FILES = {
     "__init__.py",
@@ -46,7 +48,16 @@ LAYOUT_FILE_EXCEPTIONS = {
     "events": {"base.py", "runtime.py"},
     # Experiments exposes cross-domain application behavior through service.py.
     # These files are domain-internal implementation modules, not public subfacades.
-    "experiments": {"definition_writer.py", "handles.py", "launch.py"},
+    "experiments": {
+        "candidate_pool.py",
+        "definition_writer.py",
+        "handles.py",
+        "launch.py",
+        "persistence.py",
+        "repositories.py",
+        "results.py",
+        "submission.py",
+    },
     "ports": {"dashboard.py", "resources.py"},
     "resources": {"publishing.py"},
     "runtime": {
@@ -72,7 +83,7 @@ LAYOUT_FILE_EXCEPTIONS = {
         "workflow_errors.py",
         "workflow_models.py",
     },
-    "samples": {"events.py", "state.py"},
+    "samples": {"events.py", "event_views.py", "materialization.py", "state.py"},
     "testing": {"suppression_budget.py", "test_harness_service.py"},
 }
 LAYOUT_DIR_EXCEPTIONS: dict[str, set[str]] = {}

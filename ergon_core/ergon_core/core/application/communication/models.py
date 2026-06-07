@@ -20,7 +20,7 @@ class CreateMessageRequest(BaseModel):
         description="Optional human-readable summary set when the thread is first created.",
     )
     content: str
-    task_execution_id: UUID | None = None
+    task_attempt_id: UUID | None = None
 
 
 class MessageResponse(BaseModel):
@@ -32,7 +32,7 @@ class MessageResponse(BaseModel):
     to_agent_id: str
     content: str
     sequence_num: int
-    task_execution_id: UUID | None = None
+    task_attempt_id: UUID | None = None
     created_at: datetime
 
 

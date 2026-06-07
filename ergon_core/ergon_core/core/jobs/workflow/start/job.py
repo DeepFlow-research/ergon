@@ -3,12 +3,13 @@
 import logging
 from datetime import UTC, datetime
 
-from .contract import WorkflowStartedEvent, WorkflowStartResult
+from .contract import SampleStartedEvent, WorkflowStartResult
 from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.application.runtime.orchestration import InitializeWorkflowCommand
 from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
 from ergon_core.core.jobs._events import send_job_events
+from sqlmodel import Session
 from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     get_trace_sink,
@@ -21,17 +22,14 @@ from ergon_core.core.views.samples.service import SampleSnapshotReadService
 logger = logging.getLogger(__name__)
 
 
-async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStartResult:
-    logger.info(
-        "workflow-start sample_id=%s definition_id=%s", payload.sample_id, payload.definition_id
-    )
+async def run_start_workflow_job(payload: SampleStartedEvent) -> WorkflowStartResult:
+    logger.info("workflow-start sample_id=%s", payload.sample_id)
     span_start = datetime.now(UTC)
 
     svc = WorkflowService()
     initialized = await svc.initialize(
         InitializeWorkflowCommand(
             sample_id=payload.sample_id,
-            definition_id=payload.definition_id,
         )
     )
 
@@ -40,7 +38,6 @@ async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStart
             TaskReadyEvent.name,
             TaskReadyEvent(
                 sample_id=payload.sample_id,
-                definition_id=payload.definition_id,
                 task_id=td.task_id,
             ).model_dump(mode="json"),
         )
@@ -51,12 +48,11 @@ async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStart
 
     snapshot = SampleSnapshotReadService().build_snapshot(payload.sample_id)
     if snapshot is None:
-        raise RuntimeError(f"Run snapshot {payload.sample_id} not found after workflow start")
+        raise RuntimeError(f"Sample snapshot {payload.sample_id} not found after workflow start")
 
     await get_dashboard_event_publisher().publish(
         DashboardWorkflowStartedEvent(
             sample_id=payload.sample_id,
-            definition_id=payload.definition_id,
             workflow_name=initialized.benchmark_type,
             snapshot=snapshot,
             started_at=snapshot.started_at or utcnow(),
@@ -79,7 +75,6 @@ async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStart
             end_time=datetime.now(UTC),
             attributes={
                 "sample_id": str(payload.sample_id),
-                "definition_id": str(payload.definition_id),
                 "total_tasks": initialized.total_tasks,
                 "initial_ready_tasks": len(initialized.initial_ready_tasks),
             },
@@ -92,3 +87,22 @@ async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStart
         result.total_tasks,
     )
     return result
+
+
+async def run_workflow_start_job(
+    *,
+    session: Session,
+    event: SampleStartedEvent,
+) -> WorkflowStartResult:
+    svc = WorkflowService()
+    initialized = await svc.initialize(
+        InitializeWorkflowCommand(
+            sample_id=event.sample_id,
+        ),
+        session=session,
+    )
+    return WorkflowStartResult(
+        sample_id=event.sample_id,
+        initial_ready_tasks=len(initialized.initial_ready_tasks),
+        total_tasks=initialized.total_tasks,
+    )

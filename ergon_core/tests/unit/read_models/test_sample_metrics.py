@@ -19,7 +19,7 @@ from ergon_core.core.views.samples.metrics import (
 def _event(event_type: str, payload: ContextPartChunkLog) -> SampleContextEvent:
     return SampleContextEvent(
         sample_id=uuid4(),
-        task_execution_id=uuid4(),
+        task_attempt_id=uuid4(),
         worker_binding_key="worker",
         sequence=payload.sequence,
         event_type=event_type,

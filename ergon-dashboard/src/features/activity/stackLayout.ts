@@ -1,4 +1,4 @@
-import type { ActivityBand, ActivityStackLayout, RunActivity } from "./types";
+import type { ActivityBand, ActivityStackLayout, SampleActivity } from "./types";
 
 export interface StackActivityOptions {
   minMarkerWidthPct?: number;
@@ -7,7 +7,7 @@ export interface StackActivityOptions {
 }
 
 interface TimedActivity {
-  activity: RunActivity;
+  activity: SampleActivity;
   startMs: number;
   endMs: number;
 }
@@ -34,7 +34,7 @@ function parseTime(value: string): number {
 }
 
 function toTimedActivity(
-  activity: RunActivity,
+  activity: SampleActivity,
   markerDurationMs: number,
 ): TimedActivity {
   const startMs = parseTime(activity.startAt);
@@ -65,7 +65,7 @@ function computeMaxSpanConcurrency(timed: TimedActivity[]): number {
 }
 
 export function stackActivities(
-  activities: RunActivity[],
+  activities: SampleActivity[],
   options: StackActivityOptions = {},
 ): ActivityStackLayout {
   const minMarkerWidthPct = options.minMarkerWidthPct ?? DEFAULT_MIN_MARKER_WIDTH_PCT;

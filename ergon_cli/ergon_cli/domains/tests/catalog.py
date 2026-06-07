@@ -44,12 +44,12 @@ BACKEND_SMOKE = ("uv", "run", "pytest", "tests/integration/smokes", "-v", "--tim
 BACKEND_E2E = ("uv", "run", "pytest", "tests/e2e", "-v")
 REAL_LLM = ("uv", "run", "pytest", "tests/real_llm", "-v")
 DASHBOARD_SMOKE = ("pnpm", "-C", "ergon-dashboard", "run", "e2e:live")
-BENCHMARK_SMOKE_COMMANDS = {
+ENVIRONMENT_SMOKE_COMMANDS = {
     "researchrubrics": ("uv", "run", "pytest", "tests/e2e/test_researchrubrics_smoke.py", "-v"),
     "minif2f": ("uv", "run", "pytest", "tests/e2e/test_minif2f_smoke.py", "-v"),
     "swebench-verified": ("uv", "run", "pytest", "tests/e2e/test_swebench_smoke.py", "-v"),
 }
-BENCHMARK_SMOKE_ALL = (
+ENVIRONMENT_SMOKE_ALL = (
     "uv",
     "run",
     "pytest",

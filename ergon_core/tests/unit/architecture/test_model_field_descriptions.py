@@ -22,7 +22,7 @@ from ergon_core.core.application.runtime.models import (
     GraphEdgeDto,
     GraphNodeDto,
 )
-from ergon_core.core.application.samples.events import SampleRuntimeEventView
+from ergon_core.core.application.samples.event_views import SampleTaskAddedEventView
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import (
     SWEBenchInstance,
     SWEBenchTaskPayload,
@@ -57,7 +57,7 @@ def test_dashboard_context_event_field_docs_are_schema_metadata() -> None:
 def test_graph_dto_field_docs_are_schema_metadata() -> None:
     assert _description(GraphNodeDto, "status")
     assert _description(GraphEdgeDto, "status")
-    assert _description(SampleRuntimeEventView, "payload")
+    assert _description(SampleTaskAddedEventView, "payload")
 
 
 def test_sqlmodel_field_docs_are_schema_metadata() -> None:
@@ -73,10 +73,12 @@ def test_sqlmodel_field_docs_are_schema_metadata() -> None:
     assert _description(SampleTaskEventRow, "event_type")
     assert _description(SampleEdgeEventRow, "event_type")
     assert _description(SampleAnnotationEventRow, "event_type")
-    assert "Canonical runtime" in (_description(SampleRecord, "definition_id") or "")
+    assert "Owning persisted experiment" in (_description(SampleRecord, "experiment_id") or "")
+    assert "Owning persisted environment" in (_description(SampleRecord, "environment_id") or "")
+    assert "Stable sample key" in (_description(SampleRecord, "sample_key") or "")
     assert "Optional v2 experiment grouping tag" in (_description(SampleRecord, "experiment") or "")
     assert "Compatibility/display-only" in (_description(SampleRecord, "worker_team_json") or "")
-    assert "Compatibility/display-only" in (_description(SampleRecord, "evaluator_slug") or "")
+    assert "Display-only evaluator slug" in (_description(SampleRecord, "evaluator_slug") or "")
     assert "Compatibility/display-only" in (_description(SampleRecord, "sandbox_slug") or "")
     assert "Compatibility/display-only" in (
         _description(SampleRecord, "dependency_extras_json") or ""

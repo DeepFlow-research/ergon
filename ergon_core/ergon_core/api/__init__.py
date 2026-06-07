@@ -1,11 +1,6 @@
 """Beginner-facing Ergon authoring API surface."""
 
-from ergon_core.api.benchmark import (
-    Benchmark,
-    BenchmarkRequirements,
-    EmptyTaskPayload,
-    Task,
-)
+from ergon_core.api.task import EmptyTaskPayload, Task
 from ergon_core.api.criterion import (
     Criterion,
     CriterionContext,
@@ -21,7 +16,16 @@ from ergon_core.api.errors import (
     SandboxKindMismatch,
     SandboxNotLiveError,
 )
-from ergon_core.core.application.experiments.service import persist_benchmark
+from ergon_core.api.experiment import (
+    Environment,
+    Experiment,
+    ExperimentSubmitResult,
+    PersistedExperiment,
+    RandomSampler,
+    Sample,
+    Sampler,
+    SamplingContext,
+)
 from ergon_core.api.rubric import Evaluator, Rubric, TaskEvaluationResult
 from ergon_core.api.sandbox import Sandbox, SandboxRuntime
 from ergon_core.api.worker import (
@@ -43,8 +47,6 @@ from ergon_core.api.worker import (
 Task.model_rebuild()
 
 __all__ = [
-    "Benchmark",
-    "BenchmarkRequirements",
     "AwaitCompletionNotSupportedError",
     "ContainmentViolation",
     "Criterion",
@@ -54,15 +56,22 @@ __all__ = [
     "CriterionOutcome",
     "DependencyError",
     "EmptyTaskPayload",
+    "Environment",
+    "Experiment",
+    "ExperimentSubmitResult",
+    "PersistedExperiment",
     "Evaluator",
     "EvidenceMessage",
-    "persist_benchmark",
+    "RandomSampler",
     "Rubric",
+    "Sample",
     "Sandbox",
     "SandboxKindMismatch",
     "SandboxNotLiveError",
     "SandboxRuntime",
     "ScoreScale",
+    "Sampler",
+    "SamplingContext",
     "SpawnedTaskHandle",
     "Task",
     "TaskEvaluationResult",

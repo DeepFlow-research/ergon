@@ -162,7 +162,7 @@ async def _run_evaluation(
         )
         await _evaluation_persistence.persist_failure(
             sample_id=sample_id,
-            task_execution_id=execution_id,
+            task_attempt_id=execution_id,
             task_id=view.task_id,
             binding_key=binding_key,
             exc=exc,
@@ -176,7 +176,7 @@ async def _run_evaluation(
     result = service_result.result
     persisted = await _evaluation_persistence.persist_success(
         sample_id=sample_id,
-        task_execution_id=execution_id,
+        task_attempt_id=execution_id,
         task_id=view.task_id,
         binding_key=binding_key,
         service_result=service_result,
@@ -196,29 +196,23 @@ async def _run_evaluation(
         )
     )
 
-    # Trace span needs the evaluator_id for stable key derivation;
-    # reuse the persistence lookup so the span key matches the
-    # `sample_task_evaluations.definition_evaluator_id` FK on the
-    # row persist_success just wrote.
-    with get_session() as session:
-        evaluator_id = _evaluation_persistence.lookup_evaluator_id(
-            session,
-            sample_id,
-            binding_key,
-            evaluator_type=evaluator.type_slug,
-            snapshot_json=evaluator.model_dump(mode="json"),
-        )
+    evaluator_event_id = persisted.evaluation_id
     get_trace_sink().emit_span(
         CompletedSpan(
             name="evaluation.task",
-            context=evaluation_task_context(sample_id, view.task_id, execution_id, evaluator_id),
+            context=evaluation_task_context(
+                sample_id,
+                view.task_id,
+                execution_id,
+                evaluator_event_id,
+            ),
             start_time=span_start,
             end_time=datetime.now(UTC),
             attributes={
                 "sample_id": str(sample_id),
                 "task_id": str(view.task_id),
                 "execution_id": str(execution_id),
-                "evaluator_id": str(evaluator_id),
+                "evaluator_event_id": str(evaluator_event_id),
                 "evaluator_binding_key": binding_key,
                 "evaluator_type": type(evaluator).type_slug,
                 "evaluator_index": evaluator_index,

@@ -33,7 +33,6 @@ async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateRe
     propagation = await svc.propagate(
         PropagateTaskCompletionCommand(
             sample_id=payload.sample_id,
-            definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=payload.execution_id,
         )
@@ -44,7 +43,6 @@ async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateRe
             TaskReadyEvent.name,
             TaskReadyEvent(
                 sample_id=payload.sample_id,
-                definition_id=payload.definition_id,
                 task_id=td.task_id,
             ).model_dump(mode="json"),
         )
@@ -57,7 +55,6 @@ async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateRe
                 WorkflowCompletedEvent.name,
                 WorkflowCompletedEvent(
                     sample_id=payload.sample_id,
-                    definition_id=payload.definition_id,
                 ).model_dump(mode="json"),
             )
         )
@@ -67,7 +64,6 @@ async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateRe
                 WorkflowFailedEvent.name,
                 WorkflowFailedEvent(
                     sample_id=payload.sample_id,
-                    definition_id=payload.definition_id,
                     error="Workflow failed during task propagation",
                 ).model_dump(mode="json"),
             )
@@ -113,7 +109,6 @@ async def run_propagate_task_failure_job(payload: TaskFailedEvent) -> TaskPropag
     propagation = await svc.propagate_failure(
         PropagateTaskCompletionCommand(
             sample_id=payload.sample_id,
-            definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=payload.execution_id,
         )
@@ -128,7 +123,6 @@ async def run_propagate_task_failure_job(payload: TaskFailedEvent) -> TaskPropag
                 WorkflowFailedEvent.name,
                 WorkflowFailedEvent(
                     sample_id=payload.sample_id,
-                    definition_id=payload.definition_id,
                     error=payload.error,
                 ).model_dump(mode="json"),
             )

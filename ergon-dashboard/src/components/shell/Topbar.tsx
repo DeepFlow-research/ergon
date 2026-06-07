@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
   { label: "Experiments", href: "/experiments" },
-  { label: "Runs", href: "/samples" },
+  { label: "Samples", href: "/samples" },
 ] as const;
 
 function isActive(href: string, pathname: string): boolean {
@@ -74,7 +74,7 @@ export function Topbar() {
           data-testid="topbar-search"
         >
           <span className="opacity-50">⌕</span>
-          <span>Search experiments, runs, tasks…</span>
+          <span>Search experiments, samples, tasks…</span>
           <kbd className="ml-auto rounded border border-[var(--line)] bg-[var(--card)] px-1.5 py-0.5 font-mono text-[10px]">
             ⌘K
           </kbd>

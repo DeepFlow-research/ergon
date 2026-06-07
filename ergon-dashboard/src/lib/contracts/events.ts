@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { GraphMutationDtoSchema } from "@/features/graph/contracts/graphMutations";
+import { SampleGraphEventDtoSchema } from "@/features/graph/contracts/graphMutations";
 import {
   dashboardEventSchemas,
   DashboardContextEventEventSchema as GeneratedDashboardContextEventEventSchema,
@@ -14,21 +14,23 @@ import {
   DashboardWorkflowStartedEventSchema as GeneratedDashboardWorkflowStartedEventSchema,
 } from "@/generated/events";
 import {
-  parseRunCommunicationMessage,
-  parseRunCommunicationThread,
-  parseRunSandbox,
-  parseRunSandboxCommand,
-  parseRunSnapshot,
+  parseSampleCommunicationMessage,
+  parseSampleCommunicationThread,
+  parseSampleSandbox,
+  parseSampleSandboxCommand,
+  parseSampleSnapshot,
   parseSampleTaskEvaluation,
-  RunCommunicationMessageSchema,
-  RunCommunicationThreadSchema,
+  SampleRuntimeEventView,
+  SampleRuntimeEventViewSchema,
+  SampleCommunicationMessageSchema,
+  SampleCommunicationThreadSchema,
   SampleResourceSchema,
   SampleResource,
-  RunSandbox,
-  RunSandboxCommand,
-  RunSandboxCommandSchema,
-  RunSandboxSchema,
-  RunSnapshot,
+  SampleSandbox,
+  SampleSandboxCommand,
+  SampleSandboxCommandSchema,
+  SampleSandboxSchema,
+  SampleSnapshot,
   SampleTaskEvaluation,
   SampleTaskEvaluationSchema,
   TaskStatusSchema,
@@ -61,7 +63,6 @@ export type EvaluatorRef = z.infer<typeof EvaluatorRefSchema>;
 
 export const DashboardWorkflowStartedDataSchema = z.object({
   sample_id: z.string().uuid(),
-  definition_id: z.string().uuid(),
   workflow_name: z.string(),
   snapshot: z.unknown(),
   started_at: z.string().datetime({ offset: true }),
@@ -71,8 +72,8 @@ export const DashboardWorkflowStartedDataSchema = z.object({
 
 export const DashboardThreadMessageCreatedDataSchema = z.object({
   sample_id: z.string().uuid(),
-  thread: RunCommunicationThreadSchema,
-  message: RunCommunicationMessageSchema,
+  thread: SampleCommunicationThreadSchema,
+  message: SampleCommunicationMessageSchema,
 });
 
 export const DashboardTaskEvaluationUpdatedDataSchema = z.object({
@@ -81,7 +82,7 @@ export const DashboardTaskEvaluationUpdatedDataSchema = z.object({
   evaluation: SampleTaskEvaluationSchema,
 });
 
-export const RunListEntrySchema = z.object({
+export const SampleListEntrySchema = z.object({
   sampleId: z.string(),
   name: z.string(),
   status: z.enum(["pending", "executing", "evaluating", "completed", "failed", "cancelled"]),
@@ -92,8 +93,8 @@ export const RunListEntrySchema = z.object({
   error: z.string().nullable(),
 });
 
-export const SyncRunsSchema = z.array(RunListEntrySchema);
-export const RunCompletedSocketDataSchema = z.object({
+export const SyncSamplesSchema = z.array(SampleListEntrySchema);
+export const SampleCompletedSocketDataSchema = z.object({
   sampleId: z.string(),
   status: z.enum(["completed", "failed"]),
   completedAt: z.string(),
@@ -115,12 +116,12 @@ export const ResourceSocketDataSchema = z.object({
 });
 export const SandboxCreatedSocketDataSchema = z.object({
   sampleId: z.string(),
-  sandbox: RunSandboxSchema,
+  sandbox: SampleSandboxSchema,
 });
 export const SandboxCommandSocketDataSchema = z.object({
   sampleId: z.string(),
   taskId: z.string(),
-  command: RunSandboxCommandSchema,
+  command: SampleSandboxCommandSchema,
 });
 export const SandboxClosedSocketDataSchema = z.object({
   sampleId: z.string(),
@@ -132,9 +133,8 @@ export const SandboxClosedSocketDataSchema = z.object({
 export type TaskTrigger = z.infer<typeof TaskTriggerSchema>;
 export interface DashboardWorkflowStartedData {
   sample_id: string;
-  definition_id: string;
   workflow_name: string;
-  snapshot: RunSnapshot;
+  snapshot: SampleSnapshot;
   started_at: string;
   total_tasks: number;
   total_leaf_tasks: number;
@@ -148,16 +148,16 @@ export type DashboardSandboxCommandData = GeneratedDashboardSandboxCommandEvent;
 export type DashboardSandboxClosedData = GeneratedDashboardSandboxClosedEvent;
 export interface DashboardThreadMessageCreatedData {
   sample_id: string;
-  thread: ReturnType<typeof parseRunCommunicationThread>;
-  message: ReturnType<typeof parseRunCommunicationMessage>;
+  thread: ReturnType<typeof parseSampleCommunicationThread>;
+  message: ReturnType<typeof parseSampleCommunicationMessage>;
 }
 export interface DashboardTaskEvaluationUpdatedData {
   sample_id: string;
   task_id: string | null;
   evaluation: SampleTaskEvaluation;
 }
-export type RunListEntry = z.infer<typeof RunListEntrySchema>;
-export type RunCompletedSocketData = z.infer<typeof RunCompletedSocketDataSchema>;
+export type SampleListEntry = z.infer<typeof SampleListEntrySchema>;
+export type SampleCompletedSocketData = z.infer<typeof SampleCompletedSocketDataSchema>;
 export type TaskStatusSocketData = z.infer<typeof TaskStatusSocketDataSchema>;
 export interface ResourceSocketData {
   sampleId: string;
@@ -165,12 +165,12 @@ export interface ResourceSocketData {
 }
 export interface SandboxCreatedSocketData {
   sampleId: string;
-  sandbox: RunSandbox;
+  sandbox: SampleSandbox;
 }
 export interface SandboxCommandSocketData {
   sampleId: string;
   taskId: string;
-  command: RunSandboxCommand;
+  command: SampleSandboxCommand;
 }
 export type SandboxClosedSocketData = z.infer<typeof SandboxClosedSocketDataSchema>;
 
@@ -219,8 +219,8 @@ export function parseDashboardThreadMessageCreatedData(
   });
   return {
     sample_id: parsed.sample_id,
-    thread: parseRunCommunicationThread(parsed.thread),
-    message: parseRunCommunicationMessage(parsed.message),
+    thread: parseSampleCommunicationThread(parsed.thread),
+    message: parseSampleCommunicationMessage(parsed.message),
   };
 }
 
@@ -247,21 +247,20 @@ export function parseDashboardWorkflowStartedData(input: unknown): DashboardWork
   });
   return {
     sample_id: parsed.sample_id,
-    definition_id: parsed.definition_id,
     workflow_name: parsed.workflow_name,
-    snapshot: parseRunSnapshot(parsed.snapshot),
+    snapshot: parseSampleSnapshot(parsed.snapshot),
     started_at: parsed.started_at,
     total_tasks: parsed.total_tasks,
     total_leaf_tasks: parsed.total_leaf_tasks,
   };
 }
 
-export function parseSyncRuns(input: unknown): RunListEntry[] {
-  return SyncRunsSchema.parse(input);
+export function parseSyncSamples(input: unknown): SampleListEntry[] {
+  return SyncSamplesSchema.parse(input);
 }
 
-export function parseRunCompletedSocketData(input: unknown): RunCompletedSocketData {
-  return RunCompletedSocketDataSchema.parse(input);
+export function parseSampleCompletedSocketData(input: unknown): SampleCompletedSocketData {
+  return SampleCompletedSocketDataSchema.parse(input);
 }
 
 export function parseTaskStatusSocketData(input: unknown): TaskStatusSocketData {
@@ -280,7 +279,7 @@ export function parseSandboxCreatedSocketData(input: unknown): SandboxCreatedSoc
   const parsed = SandboxCreatedSocketDataSchema.parse(input);
   return {
     sampleId: parsed.sampleId,
-    sandbox: parseRunSandbox(parsed.sandbox),
+    sandbox: parseSampleSandbox(parsed.sandbox),
   };
 }
 
@@ -289,7 +288,7 @@ export function parseSandboxCommandSocketData(input: unknown): SandboxCommandSoc
   return {
     sampleId: parsed.sampleId,
     taskId: parsed.taskId,
-    command: parseRunSandboxCommand(parsed.command),
+    command: parseSampleSandboxCommand(parsed.command),
   };
 }
 
@@ -305,42 +304,142 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
 
-export const DashboardGraphMutationDataSchema = z.preprocess((input) => {
+export const DashboardSampleRuntimeEventDataSchema = z.preprocess((input) => {
   const outer = asRecord(input);
   if (outer.mutation !== undefined) {
     return outer.mutation;
   }
-  const event = outer.event === undefined ? outer : GeneratedDashboardSampleRuntimeEventSchema.parse(input).event;
-  const targetType = event.target_type === "task" ? "node" : event.target_type;
-  const mutationType = event.event_type
+  const event =
+    outer.event === undefined
+      ? SampleRuntimeEventViewSchema.parse(input)
+      : GeneratedDashboardSampleRuntimeEventSchema.parse(input).event;
+  const targetType = event.targetType === "task" ? "node" : event.targetType;
+  const rawMutationType = event.eventType
     .replace("task.", "node.")
     .replace("sample.", "node.");
+  const mutationType =
+    rawMutationType === "annotation.updated" ? "annotation.set" : rawMutationType;
   return {
-    id: event.id,
-    sample_id: event.sample_id,
+    id: event.eventId,
+    sample_id: event.sampleId,
     sequence: 0,
     mutation_type: mutationType,
     target_type: targetType,
-    target_id: event.target_id ?? event.sample_id,
+    target_id: event.targetId ?? event.sampleId,
     actor: "typed-sample-wal",
     old_value: null,
-    new_value: event.payload,
+    new_value: sampleRuntimeGraphMutationValue(event),
     reason: null,
-    created_at: event.event_timestamp,
+    created_at: event.timestamp,
   };
-}, GraphMutationDtoSchema);
+}, SampleGraphEventDtoSchema);
 
-export type DashboardGraphMutationData = z.infer<typeof DashboardGraphMutationDataSchema>;
+export type DashboardSampleRuntimeEventData = z.infer<typeof DashboardSampleRuntimeEventDataSchema>;
 
-export function parseDashboardGraphMutationData(input: unknown): DashboardGraphMutationData {
-  return DashboardGraphMutationDataSchema.parse(input);
+export function parseDashboardSampleRuntimeEventData(input: unknown): DashboardSampleRuntimeEventData {
+  return DashboardSampleRuntimeEventDataSchema.parse(input);
 }
 
-export const GraphMutationSocketDataSchema = z.object({
+const GRAPH_RUNTIME_EVENT_TYPES = new Set([
+  "task.added",
+  "task.removed",
+  "task.status_changed",
+  "edge.added",
+  "edge.removed",
+  "edge.status_changed",
+  "annotation.set",
+  "annotation.updated",
+  "annotation.deleted",
+]);
+
+export function isDashboardSampleRuntimeGraphEvent(input: unknown): boolean {
+  const outer = asRecord(input);
+  if (outer.mutation !== undefined) {
+    return true;
+  }
+  const parsed = GeneratedDashboardSampleRuntimeEventSchema.parse(input);
+  return GRAPH_RUNTIME_EVENT_TYPES.has(parsed.event.eventType);
+}
+
+function stringField(input: Record<string, unknown>, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = input[key];
+    if (typeof value === "string" && value.length > 0) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function jsonRecord(input: unknown): Record<string, unknown> {
+  return asRecord(input);
+}
+
+function annotationValue(input: unknown, namespace: string): Record<string, unknown> {
+  const value = jsonRecord(input);
+  const payload = jsonRecord(value.payload ?? value);
+  return {
+    namespace: stringField(value, "namespace") ?? namespace,
+    payload,
+  };
+}
+
+function sampleRuntimeGraphMutationValue(
+  event: SampleRuntimeEventView,
+): Record<string, unknown> {
+  switch (event.eventType) {
+    case "task.added": {
+      const task = jsonRecord(event.task);
+      const payload = jsonRecord(event.payload);
+      const taskSlug =
+        event.taskSlug ?? stringField(payload, "task_slug", "taskSlug") ?? event.targetId;
+      return {
+        task_slug: taskSlug,
+        instance_key:
+          stringField(task, "instance_key", "instanceKey") ??
+          stringField(payload, "instance_key", "instanceKey") ??
+          taskSlug,
+        description: stringField(task, "description") ?? "",
+        status: event.status ?? "pending",
+        assigned_worker_slug:
+          stringField(payload, "worker_slug", "workerSlug", "assigned_worker_slug") ?? null,
+      };
+    }
+    case "task.status_changed":
+      return { status: event.status };
+    case "edge.added":
+      return {
+        mutation_type: "edge.added",
+        source_task_id: event.sourceTaskId,
+        target_task_id: event.targetTaskId,
+        status: event.status ?? "pending",
+      };
+    case "edge.removed":
+      return {
+        mutation_type: "edge.removed",
+        source_task_id: event.sourceTaskId,
+        target_task_id: event.targetTaskId,
+        status: "removed",
+      };
+    case "edge.status_changed":
+      return { status: event.status };
+    case "annotation.set":
+    case "annotation.updated":
+      return annotationValue(event.value, event.key);
+    case "annotation.deleted":
+      return annotationValue(event.payload, event.key);
+    case "task.removed":
+      return {};
+    default:
+      return jsonRecord(event.payload);
+  }
+}
+
+export const SampleRuntimeEventSocketDataSchema = z.object({
   sampleId: z.string().uuid(),
-  mutation: DashboardGraphMutationDataSchema,
+  mutation: DashboardSampleRuntimeEventDataSchema,
 });
-export type GraphMutationSocketData = z.infer<typeof GraphMutationSocketDataSchema>;
+export type SampleRuntimeEventSocketData = z.infer<typeof SampleRuntimeEventSocketDataSchema>;
 
 // =============================================================================
 // Context Event Events

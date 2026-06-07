@@ -2,20 +2,20 @@
 
 import { useMemo, useState } from "react";
 
-import type { GraphMutationDto } from "@/features/graph/contracts/graphMutations";
+import type { SampleGraphEventDto } from "@/features/graph/contracts/graphMutations";
 import { ACTIVITY_BAND_ORDER, stackActivities } from "@/features/activity/stackLayout";
-import type { ActivityBand, RunActivity } from "@/features/activity/types";
+import type { ActivityBand, SampleActivity } from "@/features/activity/types";
 import { resolveCurrentActivityId } from "@/features/activity/currentActivity";
 import { formatClockTime } from "@/lib/timeFormat";
 import { ActivityBar, activityKindLegendLabel, activityKindColor } from "./ActivityBar";
 
 interface ActivityStackTimelineProps {
-  activities: RunActivity[];
-  mutations: GraphMutationDto[];
+  activities: SampleActivity[];
+  mutations: SampleGraphEventDto[];
   currentSequence: number | null;
   selectedTaskId: string | null;
   selectedActivityId: string | null;
-  onActivityClick: (activity: RunActivity) => void;
+  onActivityClick: (activity: SampleActivity) => void;
   onReturnToLive?: () => void;
 }
 
@@ -66,17 +66,17 @@ function lineageValueMatches(
   return Boolean(a && b && a === b);
 }
 
-function areActivitiesRelated(a: RunActivity, b: RunActivity): boolean {
+function areActivitiesRelated(a: SampleActivity, b: SampleActivity): boolean {
   if (a.id === b.id) return true;
   return (
-    lineageValueMatches(a.lineage.taskExecutionId, b.lineage.taskExecutionId) ||
+    lineageValueMatches(a.lineage.taskAttemptId, b.lineage.taskAttemptId) ||
     lineageValueMatches(a.lineage.sandboxId, b.lineage.sandboxId) ||
     lineageValueMatches(a.lineage.threadId, b.lineage.threadId) ||
     lineageValueMatches(a.lineage.taskId, b.lineage.taskId)
   );
 }
 
-function debugPreview(activity: RunActivity): string {
+function debugPreview(activity: SampleActivity): string {
   return JSON.stringify(
     {
       kind: activity.kind,
@@ -96,8 +96,8 @@ function ActivityLineageCard({
   activity,
   related,
 }: {
-  activity: RunActivity;
-  related: RunActivity[];
+  activity: SampleActivity;
+  related: SampleActivity[];
 }) {
   const relatedSummary = related
     .filter((candidate) => candidate.id !== activity.id)
@@ -118,7 +118,7 @@ function ActivityLineageCard({
         <span>Band: {activity.band}</span>
         <span>Source: {activity.debug.source}</span>
         <span>Task: {activity.lineage.taskId ?? "—"}</span>
-        <span>Execution: {activity.lineage.taskExecutionId ?? "—"}</span>
+        <span>Execution: {activity.lineage.taskAttemptId ?? "—"}</span>
         <span>Sandbox: {activity.lineage.sandboxId ?? "—"}</span>
         <span>Seq: {activity.sequence ?? "—"}</span>
       </div>

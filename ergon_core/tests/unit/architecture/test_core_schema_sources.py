@@ -439,13 +439,24 @@ def test_definition_and_composition_services_do_not_live_in_runtime_services() -
             old_spec = None
         assert old_spec is None
 
-    new_modules = (
-        "ergon_core.core.application.experiments.definition_writer",
+    surviving_modules = (
         "ergon_core.core.application.experiments.service",
         "ergon_core.core.application.experiments.models",
+        "ergon_core.core.application.experiments.submission",
     )
-    for module_name in new_modules:
+    for module_name in surviving_modules:
         assert importlib.util.find_spec(module_name) is not None
+
+    deleted_modules = (
+        "ergon_core.core.application.experiments.definition_writer",
+        "ergon_core.core.application.experiments.launch",
+    )
+    for module_name in deleted_modules:
+        try:
+            spec = importlib.util.find_spec(module_name)
+        except ModuleNotFoundError:
+            spec = None
+        assert spec is None
 
 
 def test_runtime_services_package_no_longer_contains_domain_modules() -> None:
@@ -652,22 +663,25 @@ def test_single_consumer_telemetry_repository_is_deleted() -> None:
     assert not repository_path.exists()
 
 
-def test_experiment_lifecycle_uses_module_level_functions() -> None:
+def test_experiment_lifecycle_uses_submission_service_only() -> None:
     service_path = ROOT / "ergon_core/ergon_core/core/application/experiments/service.py"
     service_text = service_path.read_text()
-    writer_path = ROOT / "ergon_core/ergon_core/core/application/experiments/definition_writer.py"
-    writer_text = writer_path.read_text()
+    submission_path = ROOT / "ergon_core/ergon_core/core/application/experiments/submission.py"
+    submission_text = submission_path.read_text()
 
-    # PR 6.5 cleanup: ExperimentService façade collapsed; persistence and
-    # launch are module-level functions matching the Benchmark-direct shape.
-    assert "async def run_experiment(" in service_text
-    assert "def persist_benchmark(" in writer_text
+    assert "ExperimentSubmissionService" in service_text
+    assert "class ExperimentSubmissionService" in submission_text
 
-    # define_benchmark_experiment, persist_definition, and the
-    # ExperimentService class itself must all be gone.
-    assert "def define_benchmark_experiment(" not in service_text
-    assert "def persist_definition(" not in service_text
-    assert "class ExperimentService" not in service_text
+    for retired in (
+        "def define_benchmark_experiment(",
+        "def persist_definition(",
+        "class ExperimentService",
+        "def persist_benchmark(",
+        "async def run_experiment(",
+        "def launch_run(",
+    ):
+        assert retired not in service_text
+        assert retired not in submission_text
 
     forbidden_class_names = (
         "class ExperimentService",
@@ -677,8 +691,7 @@ def test_experiment_lifecycle_uses_module_level_functions() -> None:
     )
     for path in (
         service_path,
-        writer_path,
-        ROOT / "ergon_core/ergon_core/core/application/experiments/launch.py",
+        submission_path,
     ):
         text = path.read_text()
         for class_name in forbidden_class_names:

@@ -7,12 +7,12 @@ import type {
   SampleWorkspaceState,
 } from "@/lib/types";
 import { TaskStatus } from "@/lib/types";
-import type { DashboardGraphMutationData } from "@/lib/contracts/events";
+import type { DashboardSampleRuntimeEventData } from "@/lib/contracts/events";
 import type {
   AnnotationValue,
   EdgeAddedValue,
   EdgeStatusChangedValue,
-  GraphMutationDto,
+  SampleGraphEventDto,
   NodeAddedValue,
   NodeFieldChangedValue,
   NodeStatusChangedValue,
@@ -34,7 +34,7 @@ const TERMINAL_STATUSES: Set<string> = new Set([
 ]);
 
 interface MutationContext {
-  /** Sequence number from the original GraphMutationDto, if available. */
+  /** Sequence number from the original SampleGraphEventDto, if available. */
   sequence: number | null;
   createdAt: string;
   mutationId: string | null;
@@ -42,7 +42,7 @@ interface MutationContext {
   reason: string | null;
 }
 
-function ctxFromMutation(mutation: DashboardGraphMutationData): MutationContext {
+function ctxFromMutation(mutation: DashboardSampleRuntimeEventData): MutationContext {
   const m = mutation as unknown as {
     sequence?: number | null;
     created_at?: string;
@@ -77,7 +77,7 @@ function ensureUnhandled(state: SampleWorkspaceState): UnhandledMutationRecord[]
 
 function recordUnhandled(
   state: SampleWorkspaceState,
-  mutation: DashboardGraphMutationData,
+  mutation: DashboardSampleRuntimeEventData,
   note: string,
 ): void {
   const ctx = ctxFromMutation(mutation);
@@ -108,7 +108,7 @@ function edgeId(sourceId: string, targetId: string): string {
  */
 export function applyGraphMutation(
   state: SampleWorkspaceState,
-  mutation: DashboardGraphMutationData,
+  mutation: DashboardSampleRuntimeEventData,
 ): SampleWorkspaceState {
   const next: SampleWorkspaceState = { ...state, tasks: new Map(state.tasks) };
   if (state.edges) next.edges = new Map(state.edges);
@@ -452,7 +452,7 @@ function recalculateMetrics(state: SampleWorkspaceState): void {
 const SNAPSHOT_INTERVAL = 50;
 
 function nodeIdsAddedAtOrBefore(
-  mutations: GraphMutationDto[],
+  mutations: SampleGraphEventDto[],
   upToSequence: number,
 ): Set<string> {
   const ids = new Set<string>();
@@ -466,7 +466,7 @@ function nodeIdsAddedAtOrBefore(
 }
 
 function initialNodeValueById(
-  mutations: GraphMutationDto[],
+  mutations: SampleGraphEventDto[],
   upToSequence: number,
 ): Map<string, NodeAddedValue> {
   const values = new Map<string, NodeAddedValue>();
@@ -502,7 +502,7 @@ function countStatus(
  */
 export function createReplayInitialState(
   runState: SampleWorkspaceState,
-  mutations: GraphMutationDto[],
+  mutations: SampleGraphEventDto[],
   upToSequence: number,
 ): SampleWorkspaceState {
   const includedNodeIds = nodeIdsAddedAtOrBefore(mutations, upToSequence);
@@ -561,7 +561,7 @@ export function createReplayInitialState(
  * `SNAPSHOT_INTERVAL` sequences for faster scrubbing.
  */
 export function replayToSequence(
-  mutations: GraphMutationDto[],
+  mutations: SampleGraphEventDto[],
   upToSequence: number,
   initialState: SampleWorkspaceState,
   snapshotCache?: Map<number, SampleWorkspaceState>,
@@ -588,7 +588,7 @@ export function replayToSequence(
     state = applyGraphMutation(state, {
       ...m,
       timestamp: m.created_at,
-    } as DashboardGraphMutationData);
+    } as DashboardSampleRuntimeEventData);
 
     if (snapshotCache && m.sequence % SNAPSHOT_INTERVAL === 0) {
       snapshotCache.set(m.sequence, { ...state, tasks: new Map(state.tasks) });

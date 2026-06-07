@@ -23,7 +23,7 @@ ALLOWLIST = {
     # Workflow lifecycle jobs still own small transactional updates.
     # New jobs should use repositories/services instead.
     Path("ergon_core/ergon_core/core/jobs/workflow/start/job.py"),
-    Path("ergon_core/ergon_core/core/jobs/run/cleanup/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/sample/cleanup/job.py"),
     Path("ergon_core/ergon_core/core/jobs/task/cleanup_cancelled/job.py"),
     Path("ergon_core/ergon_core/core/jobs/task/cancel_orphans/job.py"),
     Path("ergon_core/ergon_core/core/jobs/workflow/complete/job.py"),
@@ -70,7 +70,7 @@ def test_telemetry_models_do_not_define_application_command_dtos() -> None:
 def test_persistence_foreign_keys_reference_existing_columns() -> None:
     for module_name in (
         "ergon_core.core.persistence.context.models",
-        "ergon_core.core.persistence.definitions.models",
+        "ergon_core.core.persistence.experiments.models",
         "ergon_core.core.persistence.graph.models",
         "ergon_core.core.persistence.telemetry.models",
     ):
@@ -95,14 +95,40 @@ def test_persistence_import_reducer_models_are_absent() -> None:
     assert not imports_dir.exists()
 
 
-def test_run_record_uses_definition_id_as_single_runtime_definition_identity() -> None:
+def test_sample_record_does_not_use_definition_identity() -> None:
     from ergon_core.core.persistence.telemetry.models import SampleRecord
 
-    assert "definition_id" in SampleRecord.model_fields
+    assert "definition_id" not in SampleRecord.model_fields
     assert ("workflow" + "_definition_id") not in SampleRecord.model_fields
 
 
-def test_run_record_does_not_expose_legacy_definition_group_identity() -> None:
+def test_run_record_exposes_sample_experiment_provenance() -> None:
     from ergon_core.core.persistence.telemetry.models import SampleRecord
 
-    assert ("experiment" + "_id") not in SampleRecord.model_fields
+    assert ("experiment" + "_id") in SampleRecord.model_fields
+
+
+def test_sample_task_attempt_uses_timestamp_identity_not_attempt_number() -> None:
+    from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
+
+    assert "created_at" in SampleTaskAttempt.model_fields
+    assert "attempt_number" not in SampleTaskAttempt.model_fields
+
+
+def test_attempt_scoped_rows_use_task_attempt_id_naming() -> None:
+    from ergon_core.core.persistence.context.models import SampleContextEvent
+    from ergon_core.core.persistence.telemetry.models import (
+        SampleResource,
+        SampleTaskEvaluation,
+        ThreadMessage,
+    )
+
+    for model in (SampleContextEvent, SampleResource, SampleTaskEvaluation, ThreadMessage):
+        assert "task_attempt_id" in model.model_fields
+        assert ("task" + "_execution_id") not in model.model_fields
+
+
+def test_empty_component_persistence_package_is_absent() -> None:
+    components_dir = Path("ergon_core/ergon_core/core/persistence/components")
+
+    assert not components_dir.exists()

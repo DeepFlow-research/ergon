@@ -24,7 +24,7 @@ from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.core.jobs.task.execute import job as execute_task_module
 from ergon_core.core.jobs.resources.persist_outputs.contract import PersistOutputsResult
 from ergon_core.core.jobs.sandbox.setup.contract import SandboxReadyResult
-from ergon_core.core.jobs.task.worker_execute.contract import WorkerExecuteJobResult
+from ergon_core.core.jobs.task.worker_execute.contract import WorkerExecuteResult
 from ergon_core.core.application.runtime.task_execution import TaskExecutionService
 from ergon_core.core.application.runtime.orchestration import PreparedTaskExecution
 
@@ -54,7 +54,7 @@ class _OrderedFakeCtx:
         data: dict[str, object],
     ) -> object:
         # Return is polymorphic across step.invoke call sites
-        # (SandboxReadyResult, WorkerExecuteJobResult, EvaluateTaskRunResult,
+        # (SandboxReadyResult, WorkerExecuteResult, EvaluateTaskRunResult,
         # ...) — `object` is the honest bound for a test fake that
         # impersonates all of them. The tests below don't read the return.
         del function, data
@@ -76,7 +76,6 @@ class _OrderedFakeCtx:
 def _prepared(execution_id, task_id) -> PreparedTaskExecution:
     return PreparedTaskExecution(
         sample_id=uuid4(),
-        definition_id=uuid4(),
         task_id=task_id,
         execution_id=execution_id,
         task_slug="t",
@@ -89,10 +88,9 @@ def _prepared(execution_id, task_id) -> PreparedTaskExecution:
     )
 
 
-def _ready_event(sample_id, definition_id, task_id) -> TaskReadyEvent:
+def _ready_event(sample_id, task_id) -> TaskReadyEvent:
     return TaskReadyEvent(
         sample_id=sample_id,
-        definition_id=definition_id,
         task_id=task_id,
     )
 
@@ -119,12 +117,11 @@ async def test_execute_task_emits_completed_strictly_after_eval_gather(
     ctx = _OrderedFakeCtx(ordering)
 
     sample_id = uuid4()
-    definition_id = uuid4()
     task_id = uuid4()
     execution_id = uuid4()
 
     prepared = _prepared(execution_id, task_id)
-    payload = _ready_event(sample_id, definition_id, task_id)
+    payload = _ready_event(sample_id, task_id)
 
     async def fake_prepare(
         _ctx: inngest.Context,
@@ -149,9 +146,9 @@ async def test_execute_task_emits_completed_strictly_after_eval_gather(
         _prepared: PreparedTaskExecution,
         _sandbox: SandboxReadyResult,
         _fn: inngest.Function,
-    ) -> WorkerExecuteJobResult:
+    ) -> WorkerExecuteResult:
         ordering.append("invoke:worker-execute")
-        return WorkerExecuteJobResult(
+        return WorkerExecuteResult(
             success=True,
             final_assistant_message="ok",
             error=None,
@@ -246,7 +243,7 @@ async def test_execute_task_emits_failed_when_worker_fails(
 
     sample_id = uuid4()
     prepared = _prepared(uuid4(), uuid4())
-    payload = _ready_event(sample_id, uuid4(), prepared.task_id)
+    payload = _ready_event(sample_id, prepared.task_id)
 
     async def fake_prepare(
         _ctx: inngest.Context,
@@ -269,8 +266,8 @@ async def test_execute_task_emits_failed_when_worker_fails(
         _prepared: PreparedTaskExecution,
         _sandbox: SandboxReadyResult,
         _fn: inngest.Function,
-    ) -> WorkerExecuteJobResult:
-        return WorkerExecuteJobResult(
+    ) -> WorkerExecuteResult:
+        return WorkerExecuteResult(
             success=False,
             final_assistant_message=None,
             error="boom",

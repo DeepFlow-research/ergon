@@ -7,7 +7,7 @@ rather than inside any one job package.
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal
+from typing import Any, ClassVar, Literal
 from uuid import UUID
 
 from ergon_core.core.application.events.base import InngestEventContract
@@ -31,7 +31,6 @@ class TaskReadyEvent(InngestEventContract):
     name: ClassVar[str] = "task/ready"
 
     sample_id: UUID
-    definition_id: UUID
     task_id: UUID
 
 
@@ -39,7 +38,6 @@ class TaskStartedEvent(InngestEventContract):
     name: ClassVar[str] = "task/started"
 
     sample_id: UUID
-    definition_id: UUID
     task_id: UUID
     execution_id: UUID
 
@@ -58,7 +56,6 @@ class TaskCancelledEvent(InngestEventContract):
     name: ClassVar[str] = "task/cancelled"
 
     sample_id: UUID
-    definition_id: UUID
     task_id: UUID
     execution_id: UUID | None
     cause: CancelCause
@@ -70,7 +67,6 @@ class TaskCompletedEvent(InngestEventContract):
     name: ClassVar[str] = "task/completed"
 
     sample_id: UUID
-    definition_id: UUID
     task_id: UUID
     execution_id: UUID
     sandbox_id: str
@@ -80,30 +76,30 @@ class TaskFailedEvent(InngestEventContract):
     name: ClassVar[str] = "task/failed"
 
     sample_id: UUID
-    definition_id: UUID
     task_id: UUID
     execution_id: UUID
     error: str
     sandbox_id: str | None = None
 
 
-class WorkflowStartedEvent(InngestEventContract):
-    name: ClassVar[str] = "workflow/started"
+class SampleStartedEvent(InngestEventContract):
+    name: ClassVar[str] = "sample/started"
 
     sample_id: UUID
-    definition_id: UUID
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        kwargs.setdefault("exclude_none", True)
+        return super().model_dump(*args, **kwargs)
 
 
 class WorkflowCompletedEvent(InngestEventContract):
     name: ClassVar[str] = "workflow/completed"
 
     sample_id: UUID
-    definition_id: UUID
 
 
 class WorkflowFailedEvent(InngestEventContract):
     name: ClassVar[str] = "workflow/failed"
 
     sample_id: UUID
-    definition_id: UUID
     error: str

@@ -1,7 +1,7 @@
-"""Pydantic DTOs for the run detail API surface.
+"""Pydantic DTOs for the sample detail API surface.
 
 Task structure comes from SampleGraphNode + SampleGraphEdge rows (the live graph),
-not from ExperimentDefinitionTask. All task keys are SampleGraphNode.task_id.
+and all task keys are SampleGraphNode.task_id.
 
 """
 
@@ -10,6 +10,9 @@ from typing import Any
 from uuid import UUID
 
 from ergon_core.core.application.evaluation.summary import EvalCriterionStatus
+from ergon_core.core.application.samples.event_views import (
+    SampleRuntimeEventView as SampleEventView,
+)
 from ergon_core.core.shared.context_parts import ContextEventType, ContextPartChunkLog
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -29,13 +32,13 @@ class CamelModel(BaseModel):
     )
 
 
-class RunCommunicationMessageDto(CamelModel):
+class SampleCommunicationMessageDto(CamelModel):
     id: str
     thread_id: str
     thread_topic: str
     sample_id: str
     task_id: str | None = None
-    task_execution_id: str | None = None
+    task_attempt_id: str | None = None
     from_agent_id: str
     to_agent_id: str
     content: str
@@ -43,7 +46,7 @@ class RunCommunicationMessageDto(CamelModel):
     created_at: datetime
 
 
-class RunCommunicationThreadDto(CamelModel):
+class SampleCommunicationThreadDto(CamelModel):
     id: str
     sample_id: str
     task_id: str | None = None
@@ -53,7 +56,7 @@ class RunCommunicationThreadDto(CamelModel):
     agent_b_id: str
     created_at: datetime
     updated_at: datetime
-    messages: list[RunCommunicationMessageDto] = Field(default_factory=list)
+    messages: list[SampleCommunicationMessageDto] = Field(default_factory=list)
 
 
 class SampleTaskDto(CamelModel):
@@ -81,7 +84,7 @@ class SampleTaskDto(CamelModel):
 class SampleResourceDto(CamelModel):
     id: str
     task_id: str
-    task_execution_id: str
+    task_attempt_id: str
     name: str
     mime_type: str
     file_path: str
@@ -89,7 +92,7 @@ class SampleResourceDto(CamelModel):
     created_at: datetime
 
 
-class RunExecutionAttemptDto(CamelModel):
+class SampleExecutionAttemptDto(CamelModel):
     id: str
     task_id: str
     attempt_number: int
@@ -105,7 +108,7 @@ class RunExecutionAttemptDto(CamelModel):
     output_resource_ids: list[str] = Field(default_factory=list)
 
 
-class RunEvaluationCriterionDto(CamelModel):
+class SampleEvaluationCriterionDto(CamelModel):
     id: str
     stage_num: int
     stage_name: str
@@ -143,10 +146,10 @@ class SampleTaskEvaluationDto(CamelModel):
     stages_passed: int
     failed_gate: str | None = None
     created_at: datetime
-    criterion_results: list[RunEvaluationCriterionDto] = Field(default_factory=list)
+    criterion_results: list[SampleEvaluationCriterionDto] = Field(default_factory=list)
 
 
-class RunSandboxCommandDto(CamelModel):
+class SampleSandboxCommandDto(CamelModel):
     command: str
     stdout: str | None = None
     stderr: str | None = None
@@ -155,7 +158,7 @@ class RunSandboxCommandDto(CamelModel):
     timestamp: datetime
 
 
-class RunSandboxDto(CamelModel):
+class SampleSandboxDto(CamelModel):
     sandbox_id: str
     task_id: str
     template: str | None = None
@@ -164,13 +167,13 @@ class RunSandboxDto(CamelModel):
     created_at: datetime
     closed_at: datetime | None = None
     close_reason: str | None = None
-    commands: list[RunSandboxCommandDto] = Field(default_factory=list)
+    commands: list[SampleSandboxCommandDto] = Field(default_factory=list)
 
 
 class SampleContextEventDto(CamelModel):
     id: UUID
     sample_id: UUID
-    task_execution_id: UUID
+    task_attempt_id: UUID
     task_id: UUID
     worker_binding_key: str
     sequence: int
@@ -195,17 +198,17 @@ class SampleSnapshotMetricsDto(CamelModel):
 
 class SampleSnapshotDto(CamelModel):
     id: str
-    definition_id: str
+    experiment_id: UUID | None = None
     name: str
     status: str
     tasks: dict[str, SampleTaskDto] = Field(default_factory=dict)
     root_task_id: str = ""  # slopcop: ignore[no-str-empty-default]
     resources_by_task: dict[str, list[SampleResourceDto]] = Field(default_factory=dict)
-    executions_by_task: dict[str, list[RunExecutionAttemptDto]] = Field(default_factory=dict)
+    executions_by_task: dict[str, list[SampleExecutionAttemptDto]] = Field(default_factory=dict)
     evaluations_by_task: dict[str, SampleTaskEvaluationDto] = Field(default_factory=dict)
-    sandboxes_by_task: dict[str, RunSandboxDto] = Field(default_factory=dict)
+    sandboxes_by_task: dict[str, SampleSandboxDto] = Field(default_factory=dict)
     context_events_by_task: dict[str, list[SampleContextEventDto]] = Field(default_factory=dict)
-    threads: list[RunCommunicationThreadDto] = Field(default_factory=list)
+    threads: list[SampleCommunicationThreadDto] = Field(default_factory=list)
     started_at: datetime | None = None
     completed_at: datetime | None = None
     duration_seconds: float | None = None
@@ -231,8 +234,7 @@ class SampleSummaryDto(BaseModel):
     completed_at: datetime | None = None
     latest_activity_at: datetime | None = None
     duration_seconds: float | None = None
-    definition_id: UUID
-    definition_name: str | None = None
+    experiment_id: UUID | None = None
     experiment: str | None = None
     benchmark_type: str
     instance_key: str
@@ -250,3 +252,57 @@ class SampleSummaryDto(BaseModel):
     total_cost_usd: float | None = None
     error_message: str | None = None
     metrics: dict[str, Any] = Field(default_factory=dict)
+
+
+class SampleDetailView(CamelModel):
+    sample_id: UUID
+    experiment_id: UUID
+    environment_id: UUID
+    environment_name: str
+    sample_key: str
+    sample_ref: dict[str, Any] = Field(default_factory=dict)
+    source_metadata: dict[str, Any] = Field(default_factory=dict)
+    status: str
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class SampleGraphNodeView(CamelModel):
+    task_id: UUID
+    task_slug: str
+    description: str
+    status: str
+    parent_task_id: UUID | None = None
+    level: int = 0
+    assigned_worker_slug: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SampleGraphEdgeView(CamelModel):
+    edge_id: UUID
+    source_task_id: UUID
+    target_task_id: UUID
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class SampleGraphView(CamelModel):
+    nodes: list[SampleGraphNodeView] = Field(default_factory=list)
+    edges: list[SampleGraphEdgeView] = Field(default_factory=list)
+
+
+class SampleEventsView(CamelModel):
+    items: list[SampleEventView] = Field(default_factory=list)
+
+
+class SampleStateView(CamelModel):
+    sample_id: UUID
+    experiment_id: UUID
+    environment_id: UUID
+    environment_name: str
+    detail: SampleDetailView
+    events: list[SampleEventView] = Field(default_factory=list)
+    graph: SampleGraphView = Field(default_factory=SampleGraphView)

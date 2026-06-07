@@ -22,7 +22,7 @@ EXPECTED_JOB_PACKAGES = {
     "sandbox/setup",
     "sandbox/cleanup",
     "resources/persist_outputs",
-    "run/cleanup",
+    "sample/cleanup",
 }
 
 

@@ -1,29 +1,33 @@
 import { SampleIndexTable } from "@/components/indexes/SampleIndexTable";
-import { loadRunList, type RunSummary } from "@/lib/server-data/samples";
+import { loadSampleList, type SampleSummary } from "@/lib/server-data/samples";
 
-export default async function RunsPage() {
-  let runs: RunSummary[] = [];
+export default async function SamplesPage() {
+  let samples: SampleSummary[] = [];
   let error: string | null = null;
 
-  const result = await loadRunList({ limit: 100 });
+  const result = await loadSampleList({ limit: 100 });
   if (result.ok) {
-    runs = result.data;
+    samples = result.data;
   } else {
     const detail = (result.body as { detail?: string })?.detail;
     error = detail ?? `API returned ${result.status}`;
   }
 
-  const runningCount = runs.filter((run) => ["executing", "evaluating"].includes(run.status)).length;
-  const failedCount = runs.filter((run) => run.status === "failed" || run.failed_tasks > 0).length;
-  const completedCount = runs.filter((run) => run.status === "completed").length;
+  const runningCount = samples.filter((sample) =>
+    ["executing", "evaluating"].includes(sample.status),
+  ).length;
+  const failedCount = samples.filter(
+    (sample) => sample.status === "failed" || sample.failed_tasks > 0,
+  ).length;
+  const completedCount = samples.filter((sample) => sample.status === "completed").length;
 
   return (
     <main className="mx-auto w-full max-w-7xl px-6 py-8">
       <div className="mb-5">
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--faint)]">
-          Run Index
+          Sample Index
         </p>
-        <h1 className="mt-2 text-3xl font-semibold text-[var(--ink)]">Runs</h1>
+        <h1 className="mt-2 text-3xl font-semibold text-[var(--ink)]">Samples</h1>
       </div>
 
       {error ? (
@@ -47,7 +51,7 @@ export default async function RunsPage() {
         </div>
       </div>
 
-      <SampleIndexTable runs={runs} />
+      <SampleIndexTable runs={samples} />
     </main>
   );
 }

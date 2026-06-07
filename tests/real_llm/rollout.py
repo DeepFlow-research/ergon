@@ -6,7 +6,7 @@ a per-run directory so a future agent session (or a human) can read the
 artifacts and reason about whether the agent succeeded, and what to
 tweak in either the model or the simulator to iterate.
 
-The test asserts only that the benchmark reached a terminal status.
+The test asserts only that the environment rollout reached a terminal status.
 Everything else is captured as artifacts.
 
 Artifact layout:

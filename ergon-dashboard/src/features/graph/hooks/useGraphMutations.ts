@@ -1,5 +1,5 @@
 import { useRef, useCallback } from "react";
-import type { DashboardGraphMutationData } from "@/lib/contracts/events";
+import type { DashboardSampleRuntimeEventData } from "@/lib/contracts/events";
 import type { SampleWorkspaceState } from "@/lib/types";
 import { applyGraphMutation } from "@/features/graph/state/graphMutationReducer";
 
@@ -8,7 +8,7 @@ const DEBOUNCE_MS = 200;
 export function useGraphMutations(
   setRunState: React.Dispatch<React.SetStateAction<SampleWorkspaceState | null>>,
 ) {
-  const buffer = useRef<DashboardGraphMutationData[]>([]);
+  const buffer = useRef<DashboardSampleRuntimeEventData[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flush = useCallback(() => {
@@ -25,7 +25,7 @@ export function useGraphMutations(
   }, [setRunState]);
 
   const handleGraphMutation = useCallback(
-    (mutation: DashboardGraphMutationData) => {
+    (mutation: DashboardSampleRuntimeEventData) => {
       buffer.current.push(mutation);
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(flush, DEBOUNCE_MS);

@@ -16,17 +16,17 @@ export interface TestEvaluationDto {
   reason: string;
 }
 
-export interface TestGraphMutationDto {
+export interface TestSampleRuntimeEventDto {
   sequence: number;
-  mutation_type: string;
+  event_type: string;
   target_task_slug: string | null;
 }
 
-export interface TestRunStateDto {
+export interface TestSampleStateDto {
   sample_id: string;
   status: string;
   graph_nodes: TestGraphNodeDto[];
-  mutations: TestGraphMutationDto[];
+  events: TestSampleRuntimeEventDto[];
   evaluations: TestEvaluationDto[];
   executions: {
     task_slug: string | null;
@@ -34,7 +34,7 @@ export interface TestRunStateDto {
     error: string | null;
   }[];
   execution_count: number;
-  mutation_count: number;
+  event_count: number;
   resource_count: number;
   thread_count: number;
   context_event_count: number;
@@ -46,15 +46,15 @@ export class BackendHarnessClient {
     private readonly baseUrl: string,
   ) {}
 
-  async getRunState(sampleId: string): Promise<TestRunStateDto> {
+  async getSampleState(sampleId: string): Promise<TestSampleStateDto> {
     const response = await this.request.get(
       `${this.baseUrl}/api/__danger__/test-harness/read/samples/${sampleId}/state`,
     );
     if (!response.ok()) {
       throw new Error(
-        `BackendHarnessClient.getRunState failed: ${response.status()} ${await response.text()}`,
+        `BackendHarnessClient.getSampleState failed: ${response.status()} ${await response.text()}`,
       );
     }
-    return (await response.json()) as TestRunStateDto;
+    return (await response.json()) as TestSampleStateDto;
   }
 }

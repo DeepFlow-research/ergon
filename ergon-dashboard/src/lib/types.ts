@@ -4,19 +4,20 @@ export type { ContextEventState };
 import type {
   BenchmarkName as RestBenchmarkName,
   ExperimentDetail as RestExperimentDetail,
-  RunCommunicationMessage as RestRunCommunicationMessage,
-  RunCommunicationThread as RestRunCommunicationThread,
-  RunLifecycleStatus as RestRunLifecycleStatus,
-  RunSnapshot,
-  RunSnapshotMetrics,
+  SampleCommunicationMessage as RestSampleCommunicationMessage,
+  SampleCommunicationThread as RestSampleCommunicationThread,
+  SampleLifecycleStatus as RestSampleLifecycleStatus,
+  SampleSnapshot,
+  SampleSnapshotMetrics,
   SampleTaskEvaluation as RestSampleTaskEvaluation,
 } from "@/lib/contracts/rest";
+export type { SampleDashboardState } from "@/lib/sample-state/dashboard";
 import type {
-  DashboardGraphMutationData as GeneratedDashboardGraphMutationData,
+  DashboardSampleRuntimeEventData as GeneratedDashboardSampleRuntimeEventData,
   DashboardResourcePublishedData as GeneratedDashboardResourcePublishedData,
-  GraphMutationSocketData as GeneratedGraphMutationSocketData,
+  SampleRuntimeEventSocketData as GeneratedSampleRuntimeEventSocketData,
   ResourceSocketData,
-  RunCompletedSocketData,
+  SampleCompletedSocketData,
   DashboardSandboxClosedData as GeneratedDashboardSandboxClosedData,
   SandboxClosedSocketData,
   SandboxCommandSocketData,
@@ -28,7 +29,7 @@ import type {
   DashboardThreadMessageCreatedData as GeneratedDashboardThreadMessageCreatedData,
   DashboardWorkflowCompletedData as GeneratedDashboardWorkflowCompletedData,
   DashboardWorkflowStartedData as GeneratedDashboardWorkflowStartedData,
-  RunListEntry,
+  SampleListEntry,
   TaskStatusSocketData,
 } from "@/lib/contracts/events";
 
@@ -55,7 +56,7 @@ export enum TaskTrigger {
 }
 
 export type BenchmarkName = RestBenchmarkName;
-export type RunLifecycleStatus = RestRunLifecycleStatus;
+export type SampleLifecycleStatus = RestSampleLifecycleStatus;
 
 // =============================================================================
 // Event Names
@@ -90,8 +91,8 @@ export type DashboardResourcePublishedData = GeneratedDashboardResourcePublished
 export type DashboardSandboxCreatedData = GeneratedDashboardSandboxCreatedData;
 export type DashboardSandboxCommandData = GeneratedDashboardSandboxCommandData;
 export type DashboardSandboxClosedData = GeneratedDashboardSandboxClosedData;
-export type CommunicationMessageState = RestRunCommunicationMessage;
-export type CommunicationThreadState = RestRunCommunicationThread;
+export type CommunicationMessageState = RestSampleCommunicationMessage;
+export type CommunicationThreadState = RestSampleCommunicationThread;
 export type EvaluationCriterionState = NonNullable<RestSampleTaskEvaluation["criterionResults"]>[number];
 export type TaskEvaluationState = RestSampleTaskEvaluation;
 export type DashboardThreadMessageCreatedData = GeneratedDashboardThreadMessageCreatedData;
@@ -100,8 +101,8 @@ export type DashboardTaskEvaluationUpdatedData = GeneratedDashboardTaskEvaluatio
 import type { DashboardContextEventEventData as _GeneratedDashboardContextEventEventData } from "@/lib/contracts/events";
 export type DashboardContextEventEventData = _GeneratedDashboardContextEventEventData;
 
-export type DashboardGraphMutationData = GeneratedDashboardGraphMutationData;
-export type GraphMutationSocketData = GeneratedGraphMutationSocketData;
+export type DashboardSampleRuntimeEventData = GeneratedDashboardSampleRuntimeEventData;
+export type SampleRuntimeEventSocketData = GeneratedSampleRuntimeEventSocketData;
 
 // =============================================================================
 // Union Types for Inngest Event Handling
@@ -117,7 +118,7 @@ export type DashboardEventData =
   | DashboardSandboxClosedData
   | DashboardThreadMessageCreatedData
   | DashboardTaskEvaluationUpdatedData
-  | DashboardGraphMutationData
+  | DashboardSampleRuntimeEventData
   | DashboardContextEventEventData;
 
 // =============================================================================
@@ -134,7 +135,7 @@ export type DashboardEvents = {
   "dashboard/sandbox.closed": { data: DashboardSandboxClosedData };
   "dashboard/thread.message_created": { data: DashboardThreadMessageCreatedData };
   "dashboard/task.evaluation_updated": { data: DashboardTaskEvaluationUpdatedData };
-  "dashboard/sample.runtime_event": { data: DashboardGraphMutationData };
+  "dashboard/sample.runtime_event": { data: DashboardSampleRuntimeEventData };
   "dashboard/context.event": { data: DashboardContextEventEventData };
 };
 
@@ -209,7 +210,7 @@ export interface ExecutionAttemptState {
 export interface ResourceState {
   id: string;
   taskId: string;
-  taskExecutionId: string;
+  taskAttemptId: string;
   name: string;
   mimeType: string;
   sizeBytes: number;
@@ -292,9 +293,9 @@ export interface UnhandledMutationRecord {
  */
 export interface SampleWorkspaceState {
   id: string;
-  definitionId: string;
+  experimentId: string | null;
   name: string;
-  status: RunLifecycleStatus;
+  status: SampleLifecycleStatus;
 
   // Task DAG (flattened)
   tasks: Map<string, TaskState>;
@@ -330,7 +331,7 @@ export interface SampleWorkspaceState {
   runningTasks: number;
   failedTasks: number;
   cancelledTasks: number;
-  metrics?: RunSnapshotMetrics | null;
+  metrics?: SampleSnapshotMetrics | null;
 
   // Result
   finalScore: number | null;
@@ -354,8 +355,8 @@ export interface SampleWorkspaceState {
  * Events sent from server to client via Socket.io.
  */
 export interface ServerToClientEvents {
-  "run:started": (data: { sampleId: string; name: string }) => void;
-  "run:completed": (data: RunCompletedSocketData) => void;
+  "sample:started": (data: { sampleId: string; name: string }) => void;
+  "sample:completed": (data: SampleCompletedSocketData) => void;
   "task:status": (data: TaskStatusSocketData) => void;
   "resource:new": (data: ResourceSocketData) => void;
   "sandbox:created": (data: SandboxCreatedSocketData) => void;
@@ -363,18 +364,18 @@ export interface ServerToClientEvents {
   "sandbox:closed": (data: SandboxClosedSocketData) => void;
   "thread:message": (data: DashboardThreadMessageCreatedData) => void;
   "task:evaluation": (data: DashboardTaskEvaluationUpdatedData) => void;
-  "graph:mutation": (data: GraphMutationSocketData) => void;
+  "sample:runtime-event": (data: SampleRuntimeEventSocketData) => void;
   "context:event": (data: { sampleId: string; taskId: string; event: ContextEventState }) => void;
   // Sync event - sends all current runs to a client on request
-  "sync:runs": (runs: RunListEntry[]) => void;
-  // Sync event - sends full state for a specific run
-  "sync:run": (run: SerializedSampleWorkspaceState | null) => void;
+  "sync:samples": (runs: SampleListEntry[]) => void;
+  // Sync event - sends full state for a specific sample
+  "sync:sample": (run: SerializedSampleWorkspaceState | null) => void;
 }
 
 /**
  * Validated run snapshot payload used over REST and Socket.io sync.
  */
-export type SerializedSampleWorkspaceState = RunSnapshot;
+export type SerializedSampleWorkspaceState = SampleSnapshot;
 
 /**
  * Events sent from client to server via Socket.io.
@@ -382,6 +383,6 @@ export type SerializedSampleWorkspaceState = RunSnapshot;
 export interface ClientToServerEvents {
   subscribe: (sampleId: string) => void;
   unsubscribe: (sampleId: string) => void;
-  "request:runs": () => void;
-  "request:run": (sampleId: string) => void;
+  "request:samples": () => void;
+  "request:sample": (sampleId: string) => void;
 }

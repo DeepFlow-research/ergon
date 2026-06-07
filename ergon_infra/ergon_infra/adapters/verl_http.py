@@ -6,7 +6,7 @@ Usage::
     agent_loop: ergon
     agent_loop_kwargs:
       ergon_url: http://macbook:9000/api
-      definition_id: <uuid>
+      experiment_id: <uuid>
 """
 
 import logging
@@ -26,23 +26,30 @@ try:
         def __init__(
             self,
             ergon_url: str,
-            definition_id: str,
+            experiment_id: str,
+            sampler: str = "random",
+            candidate_pool_size: int | None = None,
             poll_interval_s: float = 2.0,
             timeout_s: float = 300.0,
             **kwargs: object,
         ) -> None:
             super().__init__(**kwargs)
             self._client = httpx.AsyncClient(base_url=ergon_url, timeout=30.0)
-            self._definition_id = definition_id
+            self._experiment_id = experiment_id
+            self._sampler = sampler
+            self._candidate_pool_size = candidate_pool_size
             self._poll_interval_s = poll_interval_s
             self._timeout_s = timeout_s
 
         async def run(self, sampling_params: dict, **kwargs: object) -> AgentLoopOutput:
             resp = await self._client.post(
-                "/rollouts/submit",
+                f"/rollouts/experiments/{self._experiment_id}/rollout-batches",
                 json={
-                    "definition_id": self._definition_id,
-                    "num_episodes": 1,
+                    "experimentId": self._experiment_id,
+                    "k": 1,
+                    "sampler": self._sampler,
+                    "samplerConfig": {},
+                    "candidatePoolSize": self._candidate_pool_size,
                 },
             )
             resp.raise_for_status()
