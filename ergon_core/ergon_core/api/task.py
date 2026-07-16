@@ -151,28 +151,26 @@ class Task(BaseModel, Generic[PayloadT]):
             for k, v in task_json.items()
             if k not in {"_type", "worker", "sandbox", "evaluators"}
         }
-        instance = cast("Task", TaskCls.model_construct(**scalar_fields))
-
         worker_json = task_json.get("worker")
         if not isinstance(worker_json, dict):
             raise ValueError(
                 f"Task snapshot for {task_id} has no object-bound worker (_type={task_type!r})."
             )
-        instance.worker = Worker.from_definition(worker_json)
+        worker = Worker.from_definition(worker_json)
 
         sandbox_json = task_json.get("sandbox")
         if not isinstance(sandbox_json, dict):
             raise ValueError(
                 f"Task snapshot for {task_id} has no object-bound sandbox (_type={task_type!r})."
             )
-        instance.sandbox = await Sandbox.from_definition(
+        sandbox = await Sandbox.from_definition(
             sandbox_json,
             sandbox_id=sandbox_id,
         )
 
         evaluators_json = task_json.get("evaluators")
+        inflated: list[Evaluator] = []
         if isinstance(evaluators_json, list) and evaluators_json:
-            inflated: list[Evaluator] = []
             for ev_json in evaluators_json:
                 if not isinstance(ev_json, dict):
                     raise ValueError(
@@ -180,7 +178,18 @@ class Task(BaseModel, Generic[PayloadT]):
                         f"dict, got {type(ev_json).__name__}."
                     )
                 inflated.append(Evaluator.from_definition(ev_json))
-            instance.evaluators = tuple(inflated)
+
+        instance = cast(
+            "Task",
+            TaskCls.model_validate(
+                {
+                    **scalar_fields,
+                    "worker": worker,
+                    "sandbox": sandbox,
+                    "evaluators": tuple(inflated),
+                }
+            ),
+        )
 
         instance._task_id = task_id
         return instance

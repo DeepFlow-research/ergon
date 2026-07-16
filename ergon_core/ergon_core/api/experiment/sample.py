@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_serializer, model_validator
 
 from ergon_core.api.task import Task
 
@@ -43,6 +44,15 @@ class Sample(BaseModel):
             source_metadata=dict(source_metadata or {}),
             metadata=dict(metadata or {}),
         )
+
+    @model_serializer(mode="wrap")
+    def _serialize_concrete_tasks(
+        self,
+        handler: Callable[..., dict[str, Any]],
+    ) -> dict[str, Any]:
+        payload = handler(self)
+        payload["tasks"] = [task.model_dump(mode="json") for task in self.tasks]
+        return payload
 
     @model_validator(mode="after")
     def _validate_on_create(self) -> "Sample":
