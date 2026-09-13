@@ -49,7 +49,7 @@ def materialize_sample(
         task_json = task.model_dump(mode="json")
         worker_snapshot = task.worker.model_dump(mode="json")
         sandbox_snapshot = task.sandbox.model_dump(mode="json")
-        worker_slug = task.worker.type_slug
+        worker_slug = task.worker.binding_key
         sandbox_type = _snapshot_type(
             sandbox_snapshot,
             fallback=_component_type_path(task.sandbox),

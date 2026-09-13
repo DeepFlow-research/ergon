@@ -113,6 +113,22 @@ transaction as the originating `node.added` entry.
 
 ## 4. Invariants
 
+Native message writes lock the thread before computing its next sequence and
+checking an optional idempotency key. The database enforces unique
+`(thread_id, sequence)` and `(thread_id, idempotency_key)` pairs. Reusing a key
+with different participants, content or metadata fails. Migration `00000004`
+repairs historical duplicate sequence numbers in stable order before adding
+constraints; `00000005` adds non-null message metadata. Both tolerate a fresh
+database whose baseline metadata already includes these fields.
+
+Worker replay compares context events already stored at the attempt's cursor:
+equal content/usage/token data advances the cursor without another insert;
+different content raises `ContextReplayMismatch`. Actor binding keys remain
+separate from concrete Worker type discriminators. Evaluator summaries retain
+criterion metadata and nullable normalized scores for opted-in incomplete
+evaluations. MAG uses these records for human workload and frozen score input;
+there is no additional MAG execution or fatigue table.
+
 - **Mutation log is append-only with dense, monotonic sequence.** Every
   DAG state change writes a new row; no gaps, no updates, no deletes. Old
   and new values round-trip so the diary is reconstructible, but

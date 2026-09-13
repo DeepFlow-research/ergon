@@ -1,0 +1,4 @@
+# Reuse the normal stack with a stable worker process during long evaluations.
+services:
+  api:
+    command: uvicorn ergon_cli.api_app:app --host 0.0.0.0 --port 9000 --timeout-graceful-shutdown 5

@@ -11,4 +11,5 @@ class SampleCleanupResult(BaseModel):
     status: str | None = None
     sandbox_terminated: bool = False
     sandbox_id: str | None = None
+    sandbox_ids: tuple[str, ...] = ()
     error: str | None = None

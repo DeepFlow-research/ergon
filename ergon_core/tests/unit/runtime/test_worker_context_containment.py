@@ -33,6 +33,7 @@ from ergon_core.core.application.runtime import management as management_module
 from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
 from ergon_core.core.application.runtime.task_management import TaskManagementService
 from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -80,6 +81,12 @@ def _seed_node(
     level: int = 0,
     status: str = "RUNNING",
 ) -> SampleGraphNode:
+    if session.get(SampleRecord, sample_id) is None:
+        session.add(
+            SampleRecord(
+                id=sample_id, instance_key="sample-1", benchmark_type="test", status="executing"
+            )
+        )
     node = SampleGraphNode(
         sample_id=sample_id,
         instance_key="sample-1",

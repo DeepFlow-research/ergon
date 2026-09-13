@@ -4,6 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+from ergon_core.core.shared.json_types import JsonObject
 
 
 class CreateMessageRequest(BaseModel):
@@ -20,6 +21,8 @@ class CreateMessageRequest(BaseModel):
         description="Optional human-readable summary set when the thread is first created.",
     )
     content: str
+    metadata: JsonObject = Field(default_factory=dict)
+    idempotency_key: str | None = Field(default=None, min_length=1)
     task_attempt_id: UUID | None = None
 
 
@@ -31,6 +34,7 @@ class MessageResponse(BaseModel):
     from_agent_id: str
     to_agent_id: str
     content: str
+    metadata: JsonObject = Field(default_factory=dict)
     sequence_num: int
     task_attempt_id: UUID | None = None
     created_at: datetime

@@ -32,6 +32,8 @@ from ergon_core.core.application.runtime.status import (
     TERMINAL_STATUSES,
 )
 from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.enums import TERMINAL_SAMPLE_STATUSES
+from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.core.application.runtime.events import (
     RuntimeEventDispatcher,
     TaskReadyDispatcher,
@@ -125,7 +127,13 @@ class TaskManagementService:
         """
         dispatch: tuple[UUID, UUID] | None = None
         with get_session() as session:
+            await self._graph_repo.lock_sample(session, sample_id)
             parent = self._graph_repo.get_node(session, sample_id=sample_id, task_id=parent_task_id)
+            if parent.status in TERMINAL_STATUSES:
+                raise TaskAlreadyTerminalError(parent_task_id, parent.status)
+            sample = session.get(SampleRecord, sample_id)
+            if sample is None or sample.status in TERMINAL_SAMPLE_STATUSES:
+                raise ValueError("Cannot spawn work in a missing or terminal sample")
             node = await self._graph_repo.add_node(
                 session,
                 sample_id,
@@ -133,7 +141,7 @@ class TaskManagementService:
                 instance_key=task.instance_key,
                 description=task.description,
                 status=PENDING,
-                assigned_worker_slug=task.worker.type_slug,
+                assigned_worker_slug=task.worker.binding_key,
                 parent_task_id=parent_task_id,
                 level=parent.level + 1,
                 task_json=task.model_dump(mode="json"),
@@ -150,7 +158,7 @@ class TaskManagementService:
                     meta=MutationMeta(actor="worker-context", reason="spawn dependency"),
                 )
             task_id = node.task_id
-            if not depends_on:
+            if self._graph_repo.dependencies_complete(session, sample_id, task_id):
                 dispatch = (sample_id, task_id)
             session.commit()
 
@@ -174,6 +182,7 @@ class TaskManagementService:
         Uses only_if_not_terminal to avoid races. Counts non-terminal
         descendants so the caller knows the cascade scope.
         """
+        await self._graph_repo.lock_sample(session, command.sample_id)
         node = self._graph_repo.get_node(
             session, sample_id=command.sample_id, task_id=command.task_id
         )
@@ -316,6 +325,7 @@ class TaskManagementService:
         The graph node's description is the single source of truth --
         no definition row to keep in sync.
         """
+        await self._graph_repo.lock_sample(session, command.sample_id)
         node = self._graph_repo.get_node(
             session, sample_id=command.sample_id, task_id=command.task_id
         )
@@ -323,6 +333,11 @@ class TaskManagementService:
 
         if node.status == RUNNING:
             raise TaskRunningError(command.task_id, node.status)
+
+        if command.replacement is not None or command.depends_on is not None:
+            if node.status in TERMINAL_STATUSES:
+                raise TaskAlreadyTerminalError(command.task_id, node.status)
+            await self._refine_configuration(session, command)
 
         await self._graph_repo.update_node_field(
             session,
@@ -332,7 +347,14 @@ class TaskManagementService:
             value=command.new_description,
             meta=_MANAGER_META,
         )
+        ready = command.depends_on is not None and self._graph_repo.dependencies_complete(
+            session, command.sample_id, command.task_id
+        )
         session.commit()
+        if ready:
+            await self._runtime_events.dispatch_task_ready(
+                sample_id=command.sample_id, task_id=command.task_id
+            )
 
         logger.info(
             "refine_task: node %s description updated",
@@ -344,6 +366,41 @@ class TaskManagementService:
             old_description=old_description,
             new_description=command.new_description,
         )
+
+    async def _refine_configuration(self, session: Session, command: RefineTaskCommand) -> None:
+        node = self._graph_repo.get_node(
+            session, sample_id=command.sample_id, task_id=command.task_id
+        )
+        if command.replacement is not None and (node.task_slug, node.instance_key) != (
+            command.replacement.task_slug,
+            command.replacement.instance_key,
+        ):
+            raise ValueError("Refinement cannot change task identity")
+        if command.depends_on is not None:
+            await self._graph_repo.replace_dependencies(
+                session,
+                sample_id=command.sample_id,
+                task_id=command.task_id,
+                depends_on=command.depends_on,
+                meta=_MANAGER_META,
+            )
+        if command.replacement is not None:
+            replacement = command.replacement.model_copy(
+                update={"description": command.new_description}
+            )
+            row = session.get(SampleGraphNode, (command.sample_id, command.task_id))
+            if row is None:
+                raise ValueError("Task disappeared during refinement")
+            row.task_json = replacement.model_dump(mode="json")
+            session.add(row)
+            await self._graph_repo.update_node_field(
+                session,
+                sample_id=command.sample_id,
+                task_id=command.task_id,
+                field="assigned_worker_slug",
+                value=replacement.worker.binding_key,
+                meta=_MANAGER_META,
+            )
 
     # ── restart_task ─────────────────────────────────────────
 
@@ -363,6 +420,7 @@ class TaskManagementService:
         cancels non-terminal downstream targets (stale input) and
         recurses into COMPLETED downstream targets (stale output).
         """
+        await self._graph_repo.lock_sample(session, command.sample_id)
         node = self._graph_repo.get_node(
             session, sample_id=command.sample_id, task_id=command.task_id
         )

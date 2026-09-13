@@ -40,6 +40,21 @@ downward along parent->subtask links" invariant.
 
 ## Current behavior (as of 2026-04-17)
 
+**September 2026 native composition update:** evaluator failure policy is now
+explicit. `zero` preserves historical behavior; `incomplete` persists a null
+normalized score plus failure metadata through jobs, storage, REST/events and
+dashboard selectors. MAG opts into incomplete: missing criteria, snapshot
+mismatch, exhausted judge/worker failures or execution deadlines cannot become
+a numeric utility. Invalid manager actions and policy-cancelled dependencies
+remain benchmark outcomes. Source random/bulk manager baselines retain their
+documented model-error fallback with the error recorded in the action result.
+
+Expected native mutation rejections survive workflow checkpointing as typed
+errors; a manager can record a failed action and continue. Replay mismatches
+in previously persisted context raise instead of being silently ignored. An
+exception before a model checkpoint may still lose that call's transcript and
+usage; this is a capture limitation, not proof no model work occurred.
+
 1. Task COMPLETED, dependents with all deps satisfied -> PENDING.
    Correct.
 2. Task FAILED or CANCELLED, MANAGED subtask dependents
@@ -184,3 +199,7 @@ Three movements to keep straight:
   behavior. When the RFC lands, flip those tests; audit for tests that
   implicitly depend on auto-cancel as a shortcut to reach workflow
   terminal.
+
+## Cancellation is terminal
+
+A late worker response must not overwrite a cancelled attempt with success or failure. Invoked workers stop on task/sample cancellation, and terminal samples cannot admit or claim new work. The sample cleanup job covers attempts whose per-task cleanup handler was interrupted by sample cancellation.

@@ -65,6 +65,11 @@ select = [
 max-complexity = 10
 
 [tool.ruff.lint.per-file-ignores]
+# Pinned upstream MAG content: preserve authoring factories and rubric closures
+# for comparison with source-manifest.json. Native adapter code has no exemption.
+"ergon_builtins/ergon_builtins/benchmarks/manager_gym/scenarios/**" = ["C901", "ANN001", "ANN201"]
+"ergon_builtins/ergon_builtins/benchmarks/manager_gym/definitions/**" = ["C901", "ANN001"]
+"ergon_builtins/ergon_builtins/benchmarks/manager_gym/source_types.py" = ["C901"]
 # Pre-existing complexity debt — tracked for future refactor PRs, not introduced now.
 "tests/real_llm/spikes/logprob_splitting.py" = ["C901"]
 # persist_definition (28): orchestrates full experiment graph persistence in one method
@@ -93,6 +98,14 @@ max-complexity = 10
 # Per-rule excludes only when a rule is wrong for the whole repo (do not disable no-print / no-typing-any globally).
 
 [tool.slopcop.per-file-ignores]
+# Pinned MAG source retains its scoring/authoring fallback behavior. Narrowing
+# these catches changes benchmark outcomes. These exemptions do not cover the
+# native manager, workers, transport, messaging, rubric adapter or Ergon core.
+"ergon_builtins/ergon_builtins/benchmarks/manager_gym/scenarios/**" = ["no-broad-except", "no-pass-except"]
+"ergon_builtins/ergon_builtins/benchmarks/manager_gym/definitions/**" = ["no-broad-except"]
+"ergon_builtins/ergon_builtins/benchmarks/manager_gym/source_types.py" = ["no-broad-except", "no-pass-except"]
+# Random/bulk policies explicitly preserve upstream's recorded model fallback.
+"ergon_builtins/ergon_builtins/benchmarks/manager_gym/baselines.py" = ["no-broad-except"]
 # Print is acceptable in tests and narrowly-scoped command entrypoints.
 "tests/**" = ["no-print"]
 "ergon_core/ergon_core/core/application/testing/suppression_budget.py" = ["no-print"]

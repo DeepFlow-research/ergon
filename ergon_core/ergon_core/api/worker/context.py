@@ -1,15 +1,27 @@
 """Per-execution runtime state passed to Worker.execute()."""
 
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Annotated, Any, ContextManager, TypeAlias
+import asyncio
+import math
+from datetime import timedelta
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Annotated, Any, ContextManager, TypeAlias, TypeVar
 from uuid import UUID
 
-from pydantic import AfterValidator, BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field, PrivateAttr
 
 from ergon_core.api.task import Task
 from ergon_core.api.errors import ContainmentViolation
-from ergon_core.api.worker.results import SpawnedTaskHandle
+from ergon_core.api.worker.results import SpawnedTaskHandle, TaskCompletion
+from ergon_core.core.application.runtime.task_models import (
+    CancelTaskCommand,
+    RefineTaskCommand,
+    RestartTaskCommand,
+)
 from ergon_core.core.application.resources.models import SampleResourceView
+from ergon_core.core.application.resources.publishing import (
+    CheckpointReference,
+    WorkerCheckpointStore,
+)
 from ergon_core.core.application.runtime.task_models import SubtaskInfo
 from ergon_core.core.persistence.shared.types import NodeId, SampleId
 
@@ -55,6 +67,9 @@ SessionFactoryDependency: TypeAlias = Annotated[
 ]
 
 
+T = TypeVar("T", bound=BaseModel)
+
+
 class WorkerContext(BaseModel):
     """Runtime context for a single worker execution.
 
@@ -92,6 +107,9 @@ class WorkerContext(BaseModel):
         repr=False,
     )
     session_factory: SessionFactoryDependency = Field(exclude=True, repr=False)
+    steps: Any | None = Field(default=None, exclude=True, repr=False)
+    checkpoint_store: WorkerCheckpointStore | None = Field(default=None, exclude=True, repr=False)
+    _wait_index: int = PrivateAttr(default=0)
 
     @classmethod
     def _for_job(
@@ -105,6 +123,8 @@ class WorkerContext(BaseModel):
         task_inspect: TaskInspectionServiceAlias,
         resource_service: SampleResourceReadServiceAlias,
         session_factory: SessionFactory,
+        steps: Any | None = None,
+        checkpoint_store: WorkerCheckpointStore | None = None,
     ) -> "WorkerContext":
         """Construct the job runtime ``WorkerContext``.
 
@@ -122,6 +142,8 @@ class WorkerContext(BaseModel):
             task_inspect=task_inspect,
             resource_service=resource_service,
             session_factory=session_factory,
+            steps=steps,
+            checkpoint_store=checkpoint_store,
         )
 
     # ── facade methods ─────────────────────────────────────────────────
@@ -134,12 +156,78 @@ class WorkerContext(BaseModel):
     ) -> SpawnedTaskHandle:
         """Spawn a child task under this context's task_id."""
 
-        return await self.task_mgmt.spawn_dynamic_task(
+        handle = await self.task_mgmt.spawn_dynamic_task(
             sample_id=self.sample_id,
             parent_task_id=self.task_id,
             task=task,
             depends_on=depends_on,
         )
+        return handle.model_copy(update={"waiter": self.wait_for_task})
+
+    async def run_step(
+        self, name: str, operation: Callable[[], Awaitable[T]], *, output_type: type[T]
+    ) -> T:
+        """Checkpoint JSON-compatible computation using the native workflow step.
+
+        Use stable names and return a typed result. Do not call task tools or
+        other workflow steps inside the operation; execute those after it.
+        Runtime jobs retain results as native resource artifacts and checkpoint
+        compact references, avoiding the workflow engine's aggregate state limit.
+        A call without a workflow context executes directly (e.g. unit tests).
+        """
+        if self.steps is None:
+            return await operation()
+        store = self.checkpoint_store
+        if store is None:
+            return await self.steps.run(name, operation, output_type=output_type)
+
+        async def retain() -> CheckpointReference:
+            result = await operation()
+            return await asyncio.to_thread(store.save, name, result)
+
+        reference = await self.steps.run(name, retain, output_type=CheckpointReference)
+        data = await asyncio.to_thread(store.load, reference)
+        return output_type.model_validate_json(data)
+
+    async def wait_for_task(self, task_id: UUID, *, timeout_seconds: float = 300) -> TaskCompletion:
+        """Wait durably; recheck persisted state to tolerate missed terminal events."""
+        if not math.isfinite(timeout_seconds) or timeout_seconds < 0:
+            raise ValueError("Task wait timeout must be finite and nonnegative")
+        await self._assert_descendant(task_id)
+        if task_id == self.task_id:
+            raise ValueError("A task cannot wait for itself")
+        index = self._wait_index
+        self._wait_index += 1
+        prefix = f"wait-{task_id}-{index}"
+
+        async def inspect() -> TaskCompletion:
+            with self.session_factory() as session:
+                return self.task_inspect.completion(
+                    session, sample_id=self.sample_id, task_id=task_id
+                )
+
+        state = await self.run_step(f"{prefix}-state-0", inspect, output_type=TaskCompletion)
+        deadline = state.checked_at + max(0, timeout_seconds)
+        iteration = 0
+        while state.status not in {"completed", "failed", "cancelled", "blocked"}:
+            remaining = deadline - state.checked_at
+            if remaining <= 0:
+                return state.model_copy(update={"timed_out": True})
+            seconds = min(5, remaining)
+            if self.steps is None:
+                await asyncio.sleep(seconds)
+            else:
+                await self.steps.wait_for_event(
+                    f"{prefix}-event-{iteration}",
+                    event="task/completed",
+                    if_exp=f"async.data.task_id == '{task_id}' && async.data.sample_id == '{self.sample_id}'",
+                    timeout=timedelta(seconds=seconds),
+                )
+            iteration += 1
+            state = await self.run_step(
+                f"{prefix}-state-{iteration}", inspect, output_type=TaskCompletion
+            )
+        return state
 
     async def cancel_task(self, task_id: UUID, *, reason: str | None = None) -> None:
         """Cancel a descendant task.
@@ -151,22 +239,23 @@ class WorkerContext(BaseModel):
 
         del reason
         await self._assert_descendant(task_id)
-        # reason: keep runtime task command imports out of public API module import time.
-        from ergon_core.core.application.runtime.task_models import CancelTaskCommand
-
         with self.session_factory() as session:
             await self.task_mgmt.cancel_task(
                 session,
                 CancelTaskCommand(sample_id=SampleId(self.sample_id), task_id=NodeId(task_id)),
             )
 
-    async def refine_task(self, task_id: UUID, *, description: str) -> None:
+    async def refine_task(
+        self,
+        task_id: UUID,
+        *,
+        description: str,
+        replacement: Task | None = None,
+        depends_on: tuple[UUID, ...] | None = None,
+    ) -> None:
         """Refine a descendant task's description. Raises ``ContainmentViolation`` otherwise."""
 
         await self._assert_descendant(task_id)
-        # reason: keep runtime task command imports out of public API module import time.
-        from ergon_core.core.application.runtime.task_models import RefineTaskCommand
-
         with self.session_factory() as session:
             await self.task_mgmt.refine_task(
                 session,
@@ -174,6 +263,8 @@ class WorkerContext(BaseModel):
                     sample_id=SampleId(self.sample_id),
                     task_id=NodeId(task_id),
                     new_description=description,
+                    replacement=replacement,
+                    depends_on=depends_on,
                 ),
             )
 
@@ -181,15 +272,12 @@ class WorkerContext(BaseModel):
         """Restart a descendant task. Raises ``ContainmentViolation`` otherwise."""
 
         await self._assert_descendant(task_id)
-        # reason: keep runtime task command imports out of public API module import time.
-        from ergon_core.core.application.runtime.task_models import RestartTaskCommand
-
         with self.session_factory() as session:
             result = await self.task_mgmt.restart_task(
                 session,
                 RestartTaskCommand(sample_id=SampleId(self.sample_id), task_id=NodeId(task_id)),
             )
-        return SpawnedTaskHandle(task_id=result.task_id)
+        return SpawnedTaskHandle(task_id=result.task_id, waiter=self.wait_for_task)
 
     async def subtasks(self) -> tuple[SubtaskInfo, ...]:
         """Return the direct children of this context's task_id."""

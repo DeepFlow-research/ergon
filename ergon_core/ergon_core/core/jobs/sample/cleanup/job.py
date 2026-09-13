@@ -6,10 +6,22 @@ Terminates sandbox after sample completion/failure and ensures sample status is 
 import logging
 from functools import partial
 from uuid import UUID
+from sqlmodel import Session, select
 
+from ergon_core.core.application.runtime.task_management import TaskManagementService
+from ergon_core.core.application.runtime.task_cleanup import TaskCleanupService
+from ergon_core.core.application.runtime.task_models import CancelTaskCommand
+from ergon_core.core.application.runtime.task_errors import TaskAlreadyTerminalError
+from ergon_core.core.application.runtime.status import TERMINAL_STATUSES
+from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.types import SampleId, NodeId
 from ergon_core.core.persistence.shared.enums import SampleStatus
-from ergon_core.core.persistence.telemetry.models import SampleRecord
+from ergon_core.core.persistence.telemetry.models import (
+    SampleRecord,
+    SampleTaskAttempt,
+    SandboxEvent,
+)
 from ergon_core.core.infrastructure.inngest.errors import ConfigurationError, DataIntegrityError
 from ergon_core.core.jobs.sandbox._lifecycle import terminate_external_sandbox
 from .contract import SampleCleanupEvent, SampleCleanupResult
@@ -57,10 +69,11 @@ async def _cleanup_sample(
             raise DataIntegrityError("SampleRecord", sample_id)
 
         sandbox_id = run.parsed_summary().get("sandbox_id")
-        sandbox_result = await terminate_external_sandbox(
-            sandbox_id if isinstance(sandbox_id, str) else None
-        )
-        sandbox_terminated = sandbox_result.terminated
+        sandbox_ids = {sandbox_id} if isinstance(sandbox_id, str) else set()
+        if status == "cancelled":
+            sandbox_ids.update(await _cancel_sample_work(session, sample_id))
+        terminations = [await terminate_external_sandbox(key) for key in sorted(sandbox_ids)]
+        sandbox_terminated = bool(terminations) and all(r.terminated for r in terminations)
 
         if sandbox_id is not None and not isinstance(sandbox_id, str):
             logger.warning(
@@ -84,4 +97,44 @@ async def _cleanup_sample(
         status=status,
         sandbox_terminated=sandbox_terminated,
         sandbox_id=sandbox_id if isinstance(sandbox_id, str) else None,
+        sandbox_ids=tuple(sorted(sandbox_ids)),
     )
+
+
+async def _cancel_sample_work(session: Session, sample_id: UUID) -> set[str]:
+    """Finish cancellation through the existing task and cleanup owners.
+
+    Sample cancellation stops orchestration handlers, including task cleanup
+    already in flight. This surviving sample cleanup must cover every attempt,
+    not just the historical sample-summary sandbox pointer.
+    """
+    management = TaskManagementService()
+    for node in session.exec(
+        select(SampleGraphNode).where(SampleGraphNode.sample_id == sample_id)
+    ).all():
+        if node.status not in TERMINAL_STATUSES:
+            try:
+                await management.cancel_task(
+                    session,
+                    CancelTaskCommand(sample_id=SampleId(sample_id), task_id=NodeId(node.task_id)),
+                )
+            except TaskAlreadyTerminalError:
+                pass  # A native cascade won the same cancellation race.
+    cleanup = TaskCleanupService()
+    sandbox_ids = set()
+    for attempt in session.exec(
+        select(SampleTaskAttempt).where(SampleTaskAttempt.sample_id == sample_id)
+    ).all():
+        result = cleanup.cleanup(
+            session, sample_id=sample_id, task_id=attempt.task_id, execution_id=attempt.id
+        )
+        if result.sandbox_id:
+            sandbox_ids.add(result.sandbox_id)
+    sandbox_ids.update(
+        session.exec(
+            select(SandboxEvent.sandbox_id).where(
+                SandboxEvent.sample_id == sample_id, SandboxEvent.kind == "sandbox_created"
+            )
+        ).all()
+    )
+    return sandbox_ids

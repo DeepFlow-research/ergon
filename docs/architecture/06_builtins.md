@@ -88,6 +88,15 @@ runnable — not a catalog of registered implementations.
 
 ## 3. Control flow — adding a benchmark
 
+Manager Agent Gym lives in `benchmarks/manager_gym/`. Its explicit 20-scenario
+catalog, `EpisodeConfig` records and `make_manager_gym_sample` factory compose
+through `Environment.from_records` and `Experiment.submit`; no custom
+Environment class or alternate loader registry is required. The package owns
+manager/AI/human/stakeholder Workers, native communication tools and terminal
+rubric factories. Every task binds the existing `E2BSandbox`. See
+[the architecture](09_manager_gym.md) and
+[the runbook](../../examples/manager_gym/README.md).
+
 At concept level, adding a benchmark means:
 
 1. Create a subpackage under `ergon_builtins/benchmarks/<slug>/` that

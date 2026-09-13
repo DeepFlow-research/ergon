@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
@@ -43,6 +43,7 @@ class Evaluator(BaseModel, ABC):
     install_hint: ClassVar[str | None] = None
 
     name: str
+    failure_policy: Literal["zero", "incomplete"] = "zero"
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @abstractmethod

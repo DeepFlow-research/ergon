@@ -95,7 +95,7 @@ EXPECTED_FUNCTION_METADATA = {
     },
     "worker-execute": {
         "retries": 0,
-        "cancel": (),
+        "cancel": (*RUN_CANCEL, *TASK_CANCEL),
         "concurrency": (),
         "output": "WorkerExecuteResult",
     },

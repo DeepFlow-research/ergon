@@ -406,5 +406,5 @@ def test_context_requires_facade_services_at_construction() -> None:
 
 @pytest.mark.asyncio
 async def test_spawned_task_handle_wait_has_public_deferred_error() -> None:
-    with pytest.raises(AwaitCompletionNotSupportedError, match="deferred in v2"):
+    with pytest.raises(AwaitCompletionNotSupportedError, match="bound to a WorkerContext"):
         await SpawnedTaskHandle(task_id=uuid4()).wait()

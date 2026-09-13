@@ -158,7 +158,7 @@ async def test_dynamic_prepare_uses_node_worker_slug_and_task_model_without_defi
     ).one()
 
     assert prepared.assigned_worker_slug == "swebench-react"
-    assert prepared.worker_type == "swebench-react"
+    assert prepared.worker_type == task.worker.type_slug
     assert prepared.model_target == "test:none"
     assert execution.task_id == task_id
     assert "experiment_definition_workers" not in SQLModel.metadata.tables

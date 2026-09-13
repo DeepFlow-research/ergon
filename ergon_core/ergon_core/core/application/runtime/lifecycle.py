@@ -249,6 +249,7 @@ async def on_task_completed_or_failed(
     graph_repo: RuntimeGraphRepository,
 ) -> list[UUID]:
     """Handle a task reaching COMPLETED, FAILED, or CANCELLED."""
+    await graph_repo.lock_sample(session, sample_id)
     is_success = terminal_status == graph_status.COMPLETED
 
     outgoing = list(
@@ -300,7 +301,11 @@ async def on_task_completed_or_failed(
         status = candidate_node.status
         is_managed_subtask = candidate_node.parent_task_id is not None
         is_pending = status == graph_status.PENDING
-        is_reactivatable_cancelled = status == graph_status.CANCELLED and is_managed_subtask
+        is_reactivatable_cancelled = (
+            status == graph_status.CANCELLED
+            and is_managed_subtask
+            and graph_repo.cancelled_for_invalidation(session, sample_id, candidate_id)
+        )
 
         if not (is_pending or is_reactivatable_cancelled):
             continue

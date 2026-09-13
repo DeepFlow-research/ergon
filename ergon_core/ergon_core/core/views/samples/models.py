@@ -139,9 +139,9 @@ class SampleTaskEvaluationDto(CamelModel):
     task_id: str | None = None
     evaluator_name: str
     aggregation_rule: str
-    total_score: float
+    total_score: float | None
     max_score: float
-    normalized_score: float
+    normalized_score: float | None
     stages_evaluated: int
     stages_passed: int
     failed_gate: str | None = None

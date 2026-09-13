@@ -49,6 +49,15 @@ Data movement notes:
 
 ## 4. Invariants
 
+The E2B adapter reads bytes explicitly and local-handle detachment is a no-op
+for the installed SDK (which has no `AsyncSandbox.close`). Remote kill remains
+owned by native terminal/cancellation cleanup. The MAG contract checks sandbox
+absence through E2B after the sample becomes terminal; it does not substitute
+a manual kill for autonomous cleanup evidence. All MAG executable tasks bind
+E2B, including the manager. Its many checkpointed decisions share that task's
+sandbox. The observed acceptance account permits at most 3,600 seconds, so
+decision, drain and evaluation time must fit the real sandbox lifetime.
+
 1. **Sandbox lives until all criteria for the task have completed.** Teardown runs after `check_evaluators` finishes, NOT at task completion, NOT during `finalize_success`. Confirm by reading the teardown call at `check_evaluators.py:82`. This was a point of confusion in earlier drafts of this doc — the correction is that teardown follows criteria, not the other way around.
 2. **Sandbox timeout on creation MUST be at least `task_timeout + max_criterion_timeout`.** Criteria running against a timed-out sandbox is a data-loss bug: the criterion reconnects, the sandbox is dead, the score is lost. Pending enforcement in RFC 2026-04-17-sandbox-lifetime-covers-criteria. Today this is a convention — managers set a generous timeout by inspection, not by formula.
 3. **Criteria MUST reconnect via the manager, never by constructing `AsyncSandbox` directly.** Direct construction loses template pinning, loses event emission, and creates a fresh container that cannot see the worker's on-disk state. Enforced end-to-end by the smoke tier on every PR: `DefaultCriterionRuntime.ensure_sandbox` prefers `manager.reconnect(sandbox_id)` over `manager.create(...)` when a task sandbox_id is available, and the smoke criterion `_verify_sandbox_setup` hooks run their env health checks through `context.runtime.run_command(...)` — never via `AsyncSandbox.connect`.
@@ -92,3 +101,11 @@ A subclass that needs non-standard teardown timing (e.g., to inspect sandbox sta
 - `docs/rfcs/active/2026-04-17-sandbox-lifetime-covers-criteria.md` — enforce the timeout invariant (`task_timeout + max_criterion_timeout`); add `reconnect(sandbox_id)` to `BaseSandboxManager` if the method is missing in the form criteria need.
 - `docs/rfcs/active/2026-04-17-cleanup-cancelled-task-release-sandbox.md` — replace the stubbed `release-sandbox` step with a real `Manager.close(sandbox_id)` call.
 - `docs/rfcs/active/2026-04-17-criterion-runtime-di-container.md` — add `CriterionRuntime.get_sandbox()` so criteria attach via the manager, and `CriterionRuntime.read_resource(name)` so they read published outputs via a stable API instead of ad-hoc `RunResource` DB reads.
+
+## Sample cancellation coverage
+
+The surviving sample cleanup job cancels remaining graph tasks through TaskManagementService, marks attempts through TaskCleanupService, and closes every owned sandbox from attempts and sandbox-created telemetry. It retains the legacy sample-summary pointer for compatibility. This fixes a live manager that spawned after cancellation and reopened E2B resources. The delayed-spawn probe waits beyond the original manager sleep before checking closure.
+
+The worker job stamps its live sandbox ID on the attempt before invoking user
+worker code. Cancellation must be able to find a sandbox during inference or
+a durable wait; recording it only with successful worker output is too late.

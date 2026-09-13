@@ -6,6 +6,7 @@ The toolkit can inject it without granting write access.
 
 import logging
 from uuid import UUID
+from ergon_core.api.worker.results import TaskCompletion, WorkerOutput
 
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.application.runtime.graph_traversal import descendants
@@ -31,6 +32,26 @@ class TaskInspectionService:
     def __init__(self, graph_repo: RuntimeGraphRepository | None = None) -> None:
         self._task_execution_repo = TaskExecutionRepository()
         self._graph_repo = graph_repo or RuntimeGraphRepository()
+
+    def completion(self, session: Session, *, sample_id: UUID, task_id: UUID) -> TaskCompletion:
+        node = self._graph_repo.get_node(session, sample_id=sample_id, task_id=task_id)
+        attempt = self._task_execution_repo.latest_for_node(session, task_id)
+        output = None
+        if (
+            node.status == COMPLETED
+            and attempt is not None
+            and attempt.worker_output_json is not None
+        ):
+            output = WorkerOutput.model_validate(attempt.worker_output_json)
+        return TaskCompletion(
+            task_id=task_id,
+            status=node.status,
+            execution_id=attempt.id if attempt else None,
+            output=output,
+            error=str(attempt.error_json) if attempt and attempt.error_json else None,
+            started_at=attempt.started_at if attempt else None,
+            completed_at=attempt.completed_at if attempt else None,
+        )
 
     def list_subtasks(
         self,

@@ -8,7 +8,7 @@ from ergon_core.core.application.events.service import get_dashboard_event_publi
 from ergon_core.core.application.runtime import status as graph_status
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
+from ergon_core.core.persistence.shared.enums import TaskExecutionStatus, TERMINAL_SAMPLE_STATUSES
 from ergon_core.core.persistence.telemetry.models import SampleRecord, SampleTaskAttempt
 from ergon_core.core.infrastructure.inngest.errors import ConfigurationError
 from ergon_core.api.worker.results import WorkerOutput
@@ -142,6 +142,7 @@ class TaskExecutionService:
     ) -> PreparedTaskExecution:
         lookup_id = command.task_id
         with get_session() as session:
+            await self._graph_repo.lock_sample(session, command.sample_id)
             view = await self._graph_repo.node(
                 session, sample_id=command.sample_id, task_id=lookup_id
             )
@@ -163,6 +164,27 @@ class TaskExecutionService:
                 assigned_worker_slug=assigned_worker_slug,
             )
             benchmark_type = run_record.benchmark_type
+            if (
+                run_record.status in TERMINAL_SAMPLE_STATUSES
+                or node.status
+                not in {
+                    graph_status.PENDING,
+                    graph_status.READY,
+                }
+                or not self._graph_repo.dependencies_complete(
+                    session, command.sample_id, view.task_id
+                )
+            ):
+                return PreparedTaskExecution(
+                    sample_id=command.sample_id,
+                    task_id=view.task_id,
+                    task_slug=view.task.task_slug,
+                    task_description=view.task.description,
+                    benchmark_type=benchmark_type,
+                    execution_id=None,
+                    skipped=True,
+                    skip_reason="Sample/task is terminal, task is claimed, or dependencies are incomplete",
+                )
 
             execution = SampleTaskAttempt(
                 sample_id=command.sample_id,
@@ -215,6 +237,8 @@ class TaskExecutionService:
                 session.get(SampleTaskAttempt, command.execution_id),
                 f"SampleTaskAttempt {command.execution_id} not found",
             )
+            if await self._cancelled(session, execution):
+                return
             execution.status = TaskExecutionStatus.COMPLETED
             execution.completed_at = utcnow()
             execution.final_assistant_message = command.final_assistant_message
@@ -239,6 +263,8 @@ class TaskExecutionService:
                 session.get(SampleTaskAttempt, command.execution_id),
                 f"SampleTaskAttempt {command.execution_id} not found",
             )
+            if await self._cancelled(session, execution):
+                return
             execution.status = TaskExecutionStatus.FAILED
             execution.completed_at = utcnow()
             execution.error_json = command.error_json or {"message": command.error_message}
@@ -264,6 +290,17 @@ class TaskExecutionService:
                 old_status=graph_status.RUNNING,
             )
 
+    async def _cancelled(self, session: Session, execution: SampleTaskAttempt) -> bool:
+        await self._graph_repo.lock_sample(session, execution.sample_id)
+        session.refresh(execution)
+        node = self._graph_repo.get_node(
+            session, sample_id=execution.sample_id, task_id=execution.task_id
+        )
+        return (
+            execution.status == TaskExecutionStatus.CANCELLED
+            or node.status == graph_status.CANCELLED
+        )
+
 
 async def _resolve_sample_worker_config(
     task_json: dict,
@@ -272,4 +309,4 @@ async def _resolve_sample_worker_config(
     assigned_worker_slug: str | None,
 ) -> tuple[str, str]:
     task = await Task.from_definition(task_json, task_id=task_id)
-    return assigned_worker_slug or task.worker.type_slug, task.worker.model
+    return task.worker.type_slug, task.worker.model
