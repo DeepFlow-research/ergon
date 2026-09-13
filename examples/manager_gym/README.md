@@ -122,9 +122,10 @@ score. Cancelled prerequisites are valid policy outcomes. Serial grading can
 exhaust the remaining lifetime on slow deployments; the acceptance result must
 expose that failure rather than silently reduce rubric coverage.
 
-Final responses use schema-validated prompted JSON in a single system message.
-Provider JSON constraints are disabled to preserve ordinary communication tools;
-the resolved inference profile records this choice.
+Final responses use PydanticAI output tools with strict argument schemas.
+Ordinary communication tools stay enabled; the resolved inference profile
+records this choice. Preflight checks a required tool round trip and all role
+schemas. Invalid or truncated responses still consume the bounded retry budget.
 
 Inference uses at most 32,768 output tokens and a 2,048-token thinking budget, 300 seconds per request,
 12 requests per structured operation, two validation retries and a 600-second

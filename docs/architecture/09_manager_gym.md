@@ -135,14 +135,15 @@ source exception handling to satisfy a style rule.
 
 ### Structured output and communication
 
-MAG uses PydanticAI prompted JSON output with the schema in its single leading
-system message. Ordinary communication tools stay enabled; the final response
-is validated against the same typed output model with two validation retries.
-The adapter disables provider JSON constraints for this profile. Live probes
-showed constrained JSON bypassing a required tool, while the default final-output
-tool returned empty arguments in two banking AI tasks. Prompted JSON preserved
-the tool round trip and its returned reference. A native HTTP-contract test covers
-tool execution, an invalid final answer, validation feedback and a valid retry.
+MAG uses PydanticAI output tools with strict argument schemas. Ordinary
+communication tools stay enabled; the final response is validated against the
+same typed output model with two validation retries. Live probes rejected native
+constrained JSON because it skipped a required tool. Prompted JSON passed small
+probes but exhausted request and validation budgets in actual pilots. Strict
+output tools passed a small tool round trip and a larger public banking fixture;
+the latter still needed retries after truncated responses. A native HTTP-contract
+test covers tool execution, strict schema transmission, an invalid final answer,
+validation feedback and a valid retry.
 Preflight requires the same tool round trip as well as all seven role schemas.
 This is an explicitly recorded inference profile change, not evidence of score
 parity with upstream models or a guarantee against future model failures.

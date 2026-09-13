@@ -14,7 +14,7 @@ from ergon_builtins.llm.resolution import ResolvedModel
 
 
 @pytest.mark.asyncio
-async def test_final_json_preserves_tools_and_validates_retries(monkeypatch):
+async def test_strict_output_preserves_tools_and_validates_retries(monkeypatch):
     requests, lookups = [], []
     final = {
         "reasoning": "Read the policy",
@@ -33,8 +33,26 @@ async def test_final_json_preserves_tools_and_validates_retries(monkeypatch):
                 }
             ],
         },
-        {"role": "assistant", "content": "{}"},
-        {"role": "assistant", "content": json.dumps(final)},
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "final-bad",
+                    "type": "function",
+                    "function": {"name": "final_result", "arguments": "{}"},
+                }
+            ],
+        },
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "final-good",
+                    "type": "function",
+                    "function": {"name": "final_result", "arguments": json.dumps(final)},
+                }
+            ],
+        },
     ]
 
     def respond(request):
@@ -43,8 +61,11 @@ async def test_final_json_preserves_tools_and_validates_retries(monkeypatch):
         assert "response_format" not in body
         assert [m["role"] for m in body["messages"]].count("system") == 1
         assert body["messages"][0]["role"] == "system"
-        assert "AITaskOutput" in body["messages"][0]["content"]
-        assert [t["function"]["name"] for t in body["tools"]] == ["lookup_policy"]
+        assert body["tool_choice"] == "required"
+        functions = {t["function"]["name"]: t["function"] for t in body["tools"]}
+        assert set(functions) == {"lookup_policy", "final_result"}
+        assert functions["final_result"]["strict"] is True
+        assert set(functions["final_result"]["parameters"]["required"]) == set(final)
         message = messages[len(requests) - 1]
         return httpx.Response(
             200,
