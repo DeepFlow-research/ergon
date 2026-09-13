@@ -34,7 +34,7 @@ billing has not been established as zero. Simulated wages are benchmark metrics.
 
 ## Verified before catalog acceptance
 
-- Full Python unit suite: **1,006 passed**, one skipped, one expected failure.
+- Full Python unit suite: **1,038 passed**, one skipped, one expected failure.
   The expected failure demonstrates why uncheckpointed policy code reexecutes
   on workflow replay; it is not an unimplemented port requirement.
 - Full PostgreSQL/Inngest integration suite: **45 passed**, including concurrent
@@ -94,6 +94,11 @@ billing has not been established as zero. Simulated wages are benchmark metrics.
    retained bytes and fails on corruption or loss without repeating inference.
    The original failed samples are `d50be19e-a0a6-4c67-8523-e8e9caa0860c`
    and `8d82f2ac-ec79-4fd9-86d3-ba8546e88bd7`.
+
+9. Existing smoke leaf workers used a custom constructor that rejected the new
+   optional `actor_key` field on JSON reload. The shared fixture now forwards it;
+   32 roundtrip cases cover every registered smoke worker with default and explicit
+   identities. This is a fixture compatibility repair, not a scheduler change.
 
 ## Evidence and interpretation
 

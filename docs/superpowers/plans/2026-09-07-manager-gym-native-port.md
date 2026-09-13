@@ -272,6 +272,7 @@ ergon/
       unit/
         api/
           worker/
+            test_smoke_worker_serialization.py # add: verify native MAG contracts, compatibility and failure behavior
             test_worker_context_facade.py # edit: verify native MAG contracts, compatibility and failure behavior
         architecture/
           test_single_alembic_head.py # edit: verify native MAG contracts, compatibility and failure behavior
@@ -305,6 +306,9 @@ ergon/
     fixtures/
       mag_contract.py # add: verify native MAG contracts, compatibility and failure behavior
       mag_preport.py # add: verify native MAG contracts, compatibility and failure behavior
+      smoke_components/
+        smoke_base/
+          leaf_base.py # edit: verify native MAG contracts, compatibility and failure behavior
     integration/
       restart/
         test_reactivation.py # edit: verify native MAG contracts, compatibility and failure behavior

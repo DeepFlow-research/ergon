@@ -238,7 +238,8 @@ within the constraints the invariants below impose.
 `Worker.actor_key` optionally supplies a configured actor identity across task
 invocations; `Worker.binding_key` falls back to `type_slug`. The worker type
 remains the serialization/execution discriminator. Do not replace a code type
-with a person's identifier.
+with a person's identifier. Custom Worker constructors must accept and forward
+base model fields, including optional `actor_key`, so persisted JSON can reload.
 
 `WorkerContext.spawn_task` returns a bound `SpawnedTaskHandle`. Its `wait` (or
 `context.wait_for_task`) durably observes a descendant's persisted status and
