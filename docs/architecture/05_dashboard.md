@@ -98,6 +98,14 @@ pipeline shape but has no live call sites yet; see Follow-ups.
 
 ## 4. Invariants
 
+An evaluator summary with `normalized_score: null` is incomplete, not an empty
+or zero-scoring evaluation. REST and event schemas preserve nullable totals;
+evaluation selectors expose the error state and display “Incomplete”. A
+container rollup that includes such an evaluation remains null instead of
+silently averaging only numeric children. Existing numerical summaries retain
+their normal behavior. Raw criterion metadata remains available for benchmark
+utility recomputation.
+
 - The dashboard is event-driven end-to-end for the surfaces that are
   wired. No polling from the backend. No SSE.
 - Every persistent backend state change on a wired surface must have a

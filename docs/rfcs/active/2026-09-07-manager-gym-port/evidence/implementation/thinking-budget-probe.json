@@ -1,0 +1,48 @@
+[
+  {
+    "requested_thinking_budget": 32,
+    "finish_reason": "stop",
+    "usage": {
+      "completion_tokens": 169,
+      "prompt_tokens": 89,
+      "total_tokens": 258,
+      "completion_tokens_details": {
+        "accepted_prediction_tokens": null,
+        "audio_tokens": null,
+        "reasoning_tokens": 31,
+        "rejected_prediction_tokens": null
+      },
+      "prompt_tokens_details": {
+        "audio_tokens": null,
+        "cached_tokens": 0,
+        "created_cache_tokens": 0,
+        "multimodal_tokens": null
+      }
+    },
+    "reasoning_characters": 164,
+    "content_characters": 708
+  },
+  {
+    "requested_thinking_budget": 2048,
+    "finish_reason": "stop",
+    "usage": {
+      "completion_tokens": 555,
+      "prompt_tokens": 89,
+      "total_tokens": 644,
+      "completion_tokens_details": {
+        "accepted_prediction_tokens": null,
+        "audio_tokens": null,
+        "reasoning_tokens": 408,
+        "rejected_prediction_tokens": null
+      },
+      "prompt_tokens_details": {
+        "audio_tokens": null,
+        "cached_tokens": 0,
+        "created_cache_tokens": 0,
+        "multimodal_tokens": null
+      }
+    },
+    "reasoning_characters": 1983,
+    "content_characters": 754
+  }
+]

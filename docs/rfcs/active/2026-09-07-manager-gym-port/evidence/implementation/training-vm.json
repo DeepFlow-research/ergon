@@ -1,0 +1,22 @@
+{
+  "instance_id": "i-0ea72f8c6632a73fb",
+  "training_account": "211125782317",
+  "region": "us-west-2",
+  "instance_type": "m6i.xlarge",
+  "vcpus": 4,
+  "memory_gib": 16,
+  "root_disk_gib": 100,
+  "root_disk_type": "gp3",
+  "encrypted": true,
+  "delete_on_termination": true,
+  "ami": "ami-04678417fc39d7171",
+  "os": "Ubuntu 24.04",
+  "launched_at": "2026-09-13T18:13:33+00:00",
+  "role": null,
+  "ssh_scope": "operator address /32",
+  "gpu": false,
+  "docker_image": "ergon-mag-native:acceptance",
+  "initial_image_digest": "sha256:b4ec4912196e6991dfabd04eea4871098f7497d9df9e1bc59bbf00e549b520af",
+  "source_mounts": true,
+  "billing": "CPU VM/EBS/E2B billing is not established as zero. Inference uses the standing internal service."
+}

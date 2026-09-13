@@ -5,6 +5,7 @@ from contextlib import nullcontext
 from datetime import datetime
 from uuid import UUID
 
+from ergon_core.api.worker import Worker
 from ergon_core.core.persistence.context.models import SampleContextEvent
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.samples.models import SampleWorkerEventRow
@@ -81,7 +82,7 @@ class SampleActorReadService:
             actors.append(
                 RlActorRecord(
                     actor_slug=actor_slug,
-                    base_worker_slug=actor_slug,
+                    base_worker_slug=_base_worker_slug(node, actor_slug),
                     parent_actor_slug=parent_actor_slug,
                     task_id=node.task_id,
                     parent_task_id=node.parent_task_id,
@@ -200,3 +201,10 @@ def _build_topology(actors: list[RlActorRecord]) -> list[RlActorTopologyNode]:
         else:
             roots.append(node)
     return roots
+
+
+def _base_worker_slug(node: SampleGraphNode, fallback: str) -> str:
+    snapshot = node.task_json.get("worker")
+    if isinstance(snapshot, dict) and snapshot.get("actor_key"):
+        return Worker.from_definition(snapshot).type_slug
+    return fallback

@@ -1,0 +1,18 @@
+{
+  "sample_id": "052644bc-f7be-4053-bf08-51a1d6512ba4",
+  "source_sample_id": "5f4d0886-f0c5-4ecc-96fc-87cbf7155b95",
+  "snapshot_hash": "a4ec4a95d4dbdd1dced3791af5e3124d710db031a1cdceca6eeb9f7ea9296f05",
+  "code_digest": "0bd62a9743347179d5303a7236ccdb595bbcefcbbff788306f4066683d8c20af",
+  "checks": {
+    "all_criteria_saved": true,
+    "numeric_complete_evaluation": true,
+    "utility_recomputes": true,
+    "one_frozen_snapshot": true,
+    "source_link": true,
+    "no_work_reexecution": true,
+    "sample_completed": true,
+    "sandboxes_closed": true
+  },
+  "accepted": true,
+  "score": 0.6615606280819918
+}

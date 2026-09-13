@@ -1,0 +1,20 @@
+{
+  "started_at": "2026-09-13T16:47:02.638506+00:00",
+  "scope": "real E2B backend and cleanup boundary; not full Inngest task lifecycle",
+  "sandbox_timeout_seconds": 300,
+  "provisioned": true,
+  "sandbox_id": "iuubaa74dhoz70egtxexg",
+  "read_return_type": "str",
+  "byte_read_contract": false,
+  "initial_content_matches": true,
+  "reattach_read_write": true,
+  "detach": false,
+  "detach_error_type": "AttributeError",
+  "cross_process_output_visible": true,
+  "native_cleanup": {
+    "sandbox_id": "iuubaa74dhoz70egtxexg",
+    "terminated": true,
+    "reason": "terminated"
+  },
+  "finished_at": "2026-09-13T16:47:06.338839+00:00"
+}

@@ -18,7 +18,7 @@ export function combineEvaluationStatuses(statuses: EvalRollupStatus[]): EvalRol
 }
 
 export function evaluationToRollup(evaluation: TaskEvaluationState | undefined): EvaluationRollup | null {
-  if (!evaluation || evaluation.criterionResults.length === 0) return null;
+  if (!evaluation || (evaluation.criterionResults.length === 0 && evaluation.normalizedScore !== null)) return null;
 
   const criterionStatuses = evaluation.criterionResults.map(
     (criterion) => criterion.status as EvalCriterionStatus,
@@ -29,7 +29,7 @@ export function evaluationToRollup(evaluation: TaskEvaluationState | undefined):
   const skipped = criterionStatuses.filter((status) => status === "skipped").length;
 
   return {
-    status: combineEvaluationStatuses(criterionStatuses.map(criterionStatusToRollupStatus)),
+    status: evaluation.normalizedScore === null ? "errored" : combineEvaluationStatuses(criterionStatuses.map(criterionStatusToRollupStatus)),
     totalCriteria: criterionStatuses.length,
     passed,
     failed,
@@ -119,13 +119,13 @@ export function evaluationToViewModel(
     summary: {
       evaluatorName: evaluation.evaluatorName,
       status: rollup.status,
-      scoreLabel: formatScore(evaluation.normalizedScore).value,
+      scoreLabel: evaluation.normalizedScore === null ? "Incomplete" : formatScore(evaluation.normalizedScore).value,
       criteriaLabel,
       failedGateLabel: evaluation.failedGate ?? "None",
     },
     composition: {
       aggregationRule: evaluation.aggregationRule,
-      totalScoreLabel: `${evaluation.totalScore} / ${evaluation.maxScore}`,
+      totalScoreLabel: evaluation.totalScore === null ? "Incomplete" : `${evaluation.totalScore} / ${evaluation.maxScore}`,
       stagesLabel: `${evaluation.stagesPassed} / ${evaluation.stagesEvaluated}`,
     },
     counts: {
@@ -177,7 +177,7 @@ export function buildContainerEvaluationRollup(
   const totalCriteria = rollups.reduce((sum, rollup) => sum + rollup.totalCriteria, 0);
   const maxScore = rollups.reduce((sum, rollup) => sum + rollup.maxScore, 0);
   const weightedScore = rollups.reduce(
-    (sum, rollup) => sum + rollup.normalizedScore * rollup.maxScore,
+    (sum, rollup) => sum + (rollup.normalizedScore ?? 0) * rollup.maxScore,
     0,
   );
 
@@ -188,7 +188,7 @@ export function buildContainerEvaluationRollup(
     failed: rollups.reduce((sum, rollup) => sum + rollup.failed, 0),
     errored: rollups.reduce((sum, rollup) => sum + rollup.errored, 0),
     skipped: rollups.reduce((sum, rollup) => sum + rollup.skipped, 0),
-    normalizedScore: maxScore > 0 ? weightedScore / maxScore : 0,
+    normalizedScore: rollups.some((rollup) => rollup.normalizedScore === null) ? null : maxScore > 0 ? weightedScore / maxScore : 0,
     maxScore,
     evaluatorNames: Array.from(new Set(rollups.flatMap((rollup) => rollup.evaluatorNames))).sort(),
     attachedTaskIds: Array.from(new Set(rollups.flatMap((rollup) => rollup.attachedTaskIds))).sort(),

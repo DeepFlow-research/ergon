@@ -1,0 +1,12 @@
+{
+  "sample_id": "a2a04693-89f6-4988-9eaa-9d92db6f87f7",
+  "thread_id": "70334477-7f2e-4e72-b766-fcc73ba4f682",
+  "database": "PostgreSQL 15.19 (Debian 15.19-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+  "method": "native service, two threads/connections, barrier after both max(sequence) reads",
+  "concurrent_sequences": [
+    2,
+    2
+  ],
+  "unique_sequences": false,
+  "persisted_message_count": 3
+}

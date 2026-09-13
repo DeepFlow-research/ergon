@@ -1,0 +1,154 @@
+{
+  "started_at": "2026-09-13T16:51:39.789912+00:00",
+  "sample_id": "a2a04693-89f6-4988-9eaa-9d92db6f87f7",
+  "scope": "real Inngest/Postgres/E2B native lifecycle; deterministic worker and criterion",
+  "sample_status": "failed",
+  "nodes": [
+    {
+      "task_id": "052852d3-e60c-4272-8620-61cf3e9d429f",
+      "status": "failed"
+    }
+  ],
+  "attempts": [
+    {
+      "id": "085703be-db6a-4930-995d-9b6ab14a7d4e",
+      "status": "failed",
+      "sandbox_id": "is7ruuuztlb4q2xh0k51l",
+      "worker_output": {
+        "output": "native-proof",
+        "success": true,
+        "metadata": {
+          "actor_key": "alice",
+          "simulated_hours": 1
+        }
+      },
+      "error": {
+        "message": "'AsyncSandbox' object has no attribute 'close'",
+        "exception_type": "StepError"
+      }
+    }
+  ],
+  "evaluations": [
+    {
+      "score": 1.0,
+      "passed": true,
+      "summary": {
+        "evaluator_name": "proof",
+        "max_score": 1.0,
+        "normalized_score": 1.0,
+        "stages_evaluated": 1,
+        "stages_passed": 1,
+        "failed_gate": null,
+        "metadata": {},
+        "criterion_results": [
+          {
+            "criterion_slug": "proof",
+            "criterion_name": "proof",
+            "criterion_type": "mag-preport-proof",
+            "stage_num": 0,
+            "stage_name": "default",
+            "criterion_num": 0,
+            "status": "passed",
+            "score": 1.0,
+            "max_score": 1.0,
+            "passed": true,
+            "weight": 1.0,
+            "contribution": 1.0,
+            "criterion_description": "proof",
+            "feedback": "sandbox read type=str; worker output and artifact checked",
+            "model_reasoning": null,
+            "skipped_reason": null,
+            "evaluation_input": null,
+            "evaluated_action_ids": [],
+            "evaluated_resource_ids": [],
+            "observation": null,
+            "error": null
+          }
+        ]
+      }
+    },
+    {
+      "score": 1.0,
+      "passed": true,
+      "summary": {
+        "evaluator_name": "proof",
+        "max_score": 1.0,
+        "normalized_score": 1.0,
+        "stages_evaluated": 1,
+        "stages_passed": 1,
+        "failed_gate": null,
+        "metadata": {},
+        "criterion_results": [
+          {
+            "criterion_slug": "proof",
+            "criterion_name": "proof",
+            "criterion_type": "mag-preport-proof",
+            "stage_num": 0,
+            "stage_name": "default",
+            "criterion_num": 0,
+            "status": "passed",
+            "score": 1.0,
+            "max_score": 1.0,
+            "passed": true,
+            "weight": 1.0,
+            "contribution": 1.0,
+            "criterion_description": "proof",
+            "feedback": "sandbox read type=str; worker output and artifact checked",
+            "model_reasoning": null,
+            "skipped_reason": null,
+            "evaluation_input": null,
+            "evaluated_action_ids": [],
+            "evaluated_resource_ids": [],
+            "observation": null,
+            "error": null
+          }
+        ]
+      }
+    }
+  ],
+  "resources": [
+    {
+      "name": "native-proof.txt",
+      "size_bytes": 12,
+      "error": null
+    }
+  ],
+  "cleanup_check": [
+    {
+      "sandbox_id": "is7ruuuztlb4q2xh0k51l",
+      "terminated": true,
+      "reason": "terminated"
+    }
+  ],
+  "finished_at": "2026-09-13T16:52:17.677847+00:00",
+  "task_events": [
+    {
+      "event_type": "task.added",
+      "timestamp": "2026-09-13 16:51:39.728445+00:00",
+      "status": "pending"
+    },
+    {
+      "event_type": "task.status_changed",
+      "timestamp": "2026-09-13 16:51:40.524019+00:00",
+      "status": "ready"
+    },
+    {
+      "event_type": "task.status_changed",
+      "timestamp": "2026-09-13 16:51:40.881384+00:00",
+      "status": "running"
+    },
+    {
+      "event_type": "task.status_changed",
+      "timestamp": "2026-09-13 16:52:10.930341+00:00",
+      "status": "failed"
+    }
+  ],
+  "sandbox_events": [],
+  "artifact_checks": [
+    {
+      "name": "native-proof.txt",
+      "sha256": "b80346ee39239c60010083643dcf01ca4c07530ab061c3d507644677b1049020",
+      "exact_content_matches": true
+    }
+  ]
+}

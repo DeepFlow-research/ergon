@@ -1,0 +1,12 @@
+{
+  "pydantic_ai_slim": "1.87.0",
+  "tool_calls": 1,
+  "nodes": [
+    "UserPromptNode",
+    "ModelRequestNode",
+    "CallToolsNode",
+    "ModelRequestNode",
+    "CallToolsNode",
+    "End"
+  ]
+}

@@ -1,0 +1,516 @@
+{
+  "configuration": {
+    "code_digest": "3a245165d0c69b3f8bd595fda22b19263c2925416bc184967b95cf3687369aea",
+    "model": "openai-compatible:https://api.training.hcompany.ai/v1/models/qwen3-8-27b-28#qwen3-8-27b-28",
+    "max_decisions": 50,
+    "seed": 0,
+    "benchmark_version": "mag-native-v1",
+    "source_revision": "3f7a5d4af1d31abaedbedd525a0090452926fef4"
+  },
+  "machine": "Linux-7.0.0-1012-aws-x86_64-with-glibc2.41",
+  "started_at": "2026-09-13T20:08:47.112171+00:00",
+  "observed_at": "2026-09-13T20:46:22.806381+00:00",
+  "samples": [
+    {
+      "scenario": "contract",
+      "sample_id": "c6b22727-917f-43d9-bb81-d1615d8a6ee9",
+      "accepted": true,
+      "status": "completed",
+      "score": 1.0,
+      "checks": {
+        "native_contract": true,
+        "criteria_saved": true,
+        "sample_completed": true,
+        "artifacts_saved": true,
+        "owned_sandboxes_closed": true
+      },
+      "node_statuses": {
+        "completed": 6,
+        "cancelled": 1
+      },
+      "attempt_statuses": {
+        "completed": 6
+      },
+      "actor_bindings": {
+        "mag-contract-gate": 1,
+        "records_manager": 3,
+        "stakeholder_balanced": 1,
+        "manager_agent": 1,
+        "ediscovery_engineer": 1
+      },
+      "criteria_count": 1,
+      "criterion_kinds": {
+        "contract": 1
+      },
+      "criterion_ids_sha256": "b04a7a9380e76dbd60d1935f9a64be793397be6599e95854bbea470c18f20dc0",
+      "preference_groups": {},
+      "snapshot_hash": null,
+      "decision_count": null,
+      "resources": 5,
+      "messages": 5,
+      "owned_sandboxes": 6,
+      "all_owned_sandboxes_closed": true,
+      "elapsed_seconds": 88.500789,
+      "worker_usage": {
+        "manager_agent": {
+          "recorded_operations": 1,
+          "input_tokens": 1377,
+          "output_tokens": 3592,
+          "max_operation_input_tokens": 1377
+        },
+        "ediscovery_engineer": {
+          "recorded_operations": 1,
+          "input_tokens": 5360,
+          "output_tokens": 1186,
+          "max_operation_input_tokens": 5360
+        },
+        "records_manager": {
+          "recorded_operations": 3,
+          "input_tokens": 14785,
+          "output_tokens": 5138,
+          "max_operation_input_tokens": 8345
+        },
+        "stakeholder_balanced": {
+          "recorded_operations": 1,
+          "input_tokens": 4491,
+          "output_tokens": 1737,
+          "max_operation_input_tokens": 4491
+        }
+      },
+      "judge_usage": {
+        "recorded_criteria": 0,
+        "input_tokens": 0,
+        "output_tokens": 0
+      },
+      "inference_profile": null,
+      "raw_records_sha256": "5c3dde3855da4d9bb41fea7dae88e63f6fef35b1bccebc1bb4cab8d085284e7a"
+    },
+    {
+      "scenario": "legal_litigation_ediscovery",
+      "sample_id": "5f4d0886-f0c5-4ecc-96fc-87cbf7155b95",
+      "accepted": true,
+      "status": "completed",
+      "score": 0.6400869438714655,
+      "checks": {
+        "all_criteria_saved": true,
+        "numeric_complete_evaluation": true,
+        "utility_recomputes": true,
+        "one_frozen_snapshot": true,
+        "native_team_work": true,
+        "sample_completed": true,
+        "artifacts_saved": true,
+        "owned_sandboxes_closed": true
+      },
+      "node_statuses": {
+        "completed": 13
+      },
+      "attempt_statuses": {
+        "completed": 13
+      },
+      "actor_bindings": {
+        "ediscovery_engineer": 3,
+        "supervising_attorney": 2,
+        "production_specialist": 2,
+        "records_manager": 2,
+        "manager_agent": 1,
+        "review_analyst": 3
+      },
+      "criteria_count": 48,
+      "criterion_kinds": {
+        "preference": 12,
+        "diagnostic": 36
+      },
+      "criterion_ids_sha256": "f819d638b23a9b2b73b7f914f66f868ae69d66bcd51d4eb876537f7aebc32d80",
+      "preference_groups": {
+        "quality": {
+          "raw": 14.142222222222221,
+          "maximum": 19.0,
+          "weight": 0.2
+        },
+        "compliance": {
+          "raw": 13.860000000000001,
+          "maximum": 24.0,
+          "weight": 0.25
+        },
+        "confidentiality": {
+          "raw": 3.96,
+          "maximum": 6.0,
+          "weight": 0.25
+        },
+        "speed": {
+          "raw": 0.9948192744859129,
+          "maximum": 1.0,
+          "weight": 0.1
+        },
+        "cost": {
+          "raw": 4.941871160811047,
+          "maximum": 12.0,
+          "weight": 0.2
+        }
+      },
+      "snapshot_hash": "a4ec4a95d4dbdd1dced3791af5e3124d710db031a1cdceca6eeb9f7ea9296f05",
+      "decision_count": 50,
+      "resources": 48,
+      "messages": 104,
+      "owned_sandboxes": 13,
+      "all_owned_sandboxes_closed": true,
+      "elapsed_seconds": 1182.758539,
+      "worker_usage": {
+        "ediscovery_engineer": {
+          "recorded_operations": 3,
+          "input_tokens": 39765,
+          "output_tokens": 43525,
+          "max_operation_input_tokens": 22939
+        },
+        "manager_agent": {
+          "recorded_operations": 50,
+          "input_tokens": 1488099,
+          "output_tokens": 95568,
+          "max_operation_input_tokens": 95238
+        },
+        "records_manager": {
+          "recorded_operations": 2,
+          "input_tokens": 19927,
+          "output_tokens": 16695,
+          "max_operation_input_tokens": 14356
+        },
+        "supervising_attorney": {
+          "recorded_operations": 2,
+          "input_tokens": 104613,
+          "output_tokens": 35040,
+          "max_operation_input_tokens": 98428
+        },
+        "review_analyst": {
+          "recorded_operations": 3,
+          "input_tokens": 95952,
+          "output_tokens": 46897,
+          "max_operation_input_tokens": 37101
+        },
+        "production_specialist": {
+          "recorded_operations": 2,
+          "input_tokens": 155981,
+          "output_tokens": 34704,
+          "max_operation_input_tokens": 124169
+        }
+      },
+      "judge_usage": {
+        "recorded_criteria": 34,
+        "input_tokens": 613885,
+        "output_tokens": 75106
+      },
+      "inference_profile": {
+        "request_settings": {
+          "temperature": 0.0,
+          "max_tokens": 32768,
+          "timeout": 300,
+          "extra_body": {
+            "thinking_token_budget": 2048
+          }
+        },
+        "role_temperatures": {
+          "manager": 0,
+          "ai": 0,
+          "human": 0.7,
+          "stakeholder": 0,
+          "estimator": 0,
+          "decomposer": 1,
+          "judge": 0
+        },
+        "validation_retries": 2,
+        "request_limit": 12,
+        "operation_timeout_seconds": 600
+      },
+      "raw_records_sha256": "9043e0a6d9c9c0064d904766e6502ea203073d6712bff332e52eb1311419d2e4"
+    },
+    {
+      "scenario": "icaap",
+      "sample_id": "d50be19e-a0a6-4c67-8523-e8e9caa0860c",
+      "accepted": false,
+      "status": "failed",
+      "score": null,
+      "checks": {
+        "one_terminal_evaluation": false,
+        "sample_completed": false,
+        "artifacts_saved": true,
+        "owned_sandboxes_closed": true
+      },
+      "node_statuses": {
+        "completed": 28,
+        "failed": 1
+      },
+      "attempt_statuses": {
+        "completed": 28,
+        "failed": 1
+      },
+      "actor_bindings": {
+        "documentation_lead": 7,
+        "op_risk_analyst": 5,
+        "credit_risk_modeler": 5,
+        "irrbb_analyst": 3,
+        "stress_testing_designer": 3,
+        "capital_planner": 5,
+        "manager_agent": 1
+      },
+      "criteria_count": 0,
+      "criterion_kinds": {},
+      "criterion_ids_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "preference_groups": {},
+      "snapshot_hash": null,
+      "decision_count": null,
+      "resources": 68,
+      "messages": 30,
+      "owned_sandboxes": 29,
+      "all_owned_sandboxes_closed": true,
+      "elapsed_seconds": 827.099505,
+      "worker_usage": {
+        "documentation_lead": {
+          "recorded_operations": 7,
+          "input_tokens": 65939,
+          "output_tokens": 82494,
+          "max_operation_input_tokens": 30806
+        },
+        "manager_agent": {
+          "recorded_operations": 48,
+          "input_tokens": 2361842,
+          "output_tokens": 115326,
+          "max_operation_input_tokens": 124488
+        },
+        "op_risk_analyst": {
+          "recorded_operations": 5,
+          "input_tokens": 73027,
+          "output_tokens": 92804,
+          "max_operation_input_tokens": 40468
+        },
+        "credit_risk_modeler": {
+          "recorded_operations": 5,
+          "input_tokens": 31347,
+          "output_tokens": 54961,
+          "max_operation_input_tokens": 13526
+        },
+        "irrbb_analyst": {
+          "recorded_operations": 3,
+          "input_tokens": 80521,
+          "output_tokens": 50733,
+          "max_operation_input_tokens": 28314
+        },
+        "stress_testing_designer": {
+          "recorded_operations": 3,
+          "input_tokens": 61924,
+          "output_tokens": 38079,
+          "max_operation_input_tokens": 27309
+        },
+        "capital_planner": {
+          "recorded_operations": 5,
+          "input_tokens": 83471,
+          "output_tokens": 63371,
+          "max_operation_input_tokens": 38075
+        }
+      },
+      "judge_usage": {
+        "recorded_criteria": 0,
+        "input_tokens": 0,
+        "output_tokens": 0
+      },
+      "inference_profile": {
+        "request_settings": {
+          "temperature": 0.0,
+          "max_tokens": 32768,
+          "timeout": 300,
+          "extra_body": {
+            "thinking_token_budget": 2048
+          }
+        },
+        "role_temperatures": {
+          "manager": 0,
+          "ai": 0,
+          "human": 0.7,
+          "stakeholder": 0,
+          "estimator": 0,
+          "decomposer": 1,
+          "judge": 0
+        },
+        "validation_retries": 2,
+        "request_limit": 12,
+        "operation_timeout_seconds": 600
+      },
+      "raw_records_sha256": "5543a37f947a164dae9afb1d0d4b0a68926910fecb6b9aa73d6f2da9948b3591"
+    },
+    {
+      "scenario": "marketing_campaign",
+      "sample_id": "8d82f2ac-ec79-4fd9-86d3-ba8546e88bd7",
+      "accepted": false,
+      "status": "failed",
+      "score": null,
+      "checks": {
+        "one_terminal_evaluation": false,
+        "sample_completed": false,
+        "artifacts_saved": true,
+        "owned_sandboxes_closed": true
+      },
+      "node_statuses": {
+        "completed": 32,
+        "failed": 1
+      },
+      "attempt_statuses": {
+        "completed": 32,
+        "failed": 1
+      },
+      "actor_bindings": {
+        "consent_compliance_ai": 2,
+        "creative_director_ai": 3,
+        "campaign_planner_ai": 4,
+        "seo_analyst_ai": 1,
+        "analytics_ai": 7,
+        "pr_lead": 2,
+        "media_buyer_ai": 3,
+        "vp_marketing": 1,
+        "web_lead": 1,
+        "accessibility_checker_ai": 1,
+        "crm_ops_ai": 3,
+        "partnerships_manager": 1,
+        "events_manager": 1,
+        "data_analyst": 1,
+        "manager_agent": 1,
+        "social_listener_ai": 1
+      },
+      "criteria_count": 0,
+      "criterion_kinds": {},
+      "criterion_ids_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "preference_groups": {},
+      "snapshot_hash": null,
+      "decision_count": null,
+      "resources": 90,
+      "messages": 119,
+      "owned_sandboxes": 33,
+      "all_owned_sandboxes_closed": true,
+      "elapsed_seconds": 967.200809,
+      "worker_usage": {
+        "manager_agent": {
+          "recorded_operations": 50,
+          "input_tokens": 2653698,
+          "output_tokens": 121117,
+          "max_operation_input_tokens": 165872
+        },
+        "campaign_planner_ai": {
+          "recorded_operations": 4,
+          "input_tokens": 39418,
+          "output_tokens": 48504,
+          "max_operation_input_tokens": 22318
+        },
+        "social_listener_ai": {
+          "recorded_operations": 1,
+          "input_tokens": 3018,
+          "output_tokens": 5477,
+          "max_operation_input_tokens": 3018
+        },
+        "analytics_ai": {
+          "recorded_operations": 7,
+          "input_tokens": 97788,
+          "output_tokens": 75680,
+          "max_operation_input_tokens": 19494
+        },
+        "creative_director_ai": {
+          "recorded_operations": 3,
+          "input_tokens": 64946,
+          "output_tokens": 48965,
+          "max_operation_input_tokens": 48331
+        },
+        "consent_compliance_ai": {
+          "recorded_operations": 2,
+          "input_tokens": 16663,
+          "output_tokens": 25967,
+          "max_operation_input_tokens": 8598
+        },
+        "seo_analyst_ai": {
+          "recorded_operations": 1,
+          "input_tokens": 7120,
+          "output_tokens": 20943,
+          "max_operation_input_tokens": 7120
+        },
+        "pr_lead": {
+          "recorded_operations": 2,
+          "input_tokens": 15530,
+          "output_tokens": 28801,
+          "max_operation_input_tokens": 7770
+        },
+        "accessibility_checker_ai": {
+          "recorded_operations": 1,
+          "input_tokens": 8407,
+          "output_tokens": 10881,
+          "max_operation_input_tokens": 8407
+        },
+        "web_lead": {
+          "recorded_operations": 1,
+          "input_tokens": 26369,
+          "output_tokens": 15716,
+          "max_operation_input_tokens": 26369
+        },
+        "media_buyer_ai": {
+          "recorded_operations": 3,
+          "input_tokens": 59513,
+          "output_tokens": 38785,
+          "max_operation_input_tokens": 21279
+        },
+        "crm_ops_ai": {
+          "recorded_operations": 3,
+          "input_tokens": 61872,
+          "output_tokens": 36575,
+          "max_operation_input_tokens": 26755
+        },
+        "partnerships_manager": {
+          "recorded_operations": 1,
+          "input_tokens": 36001,
+          "output_tokens": 13772,
+          "max_operation_input_tokens": 36001
+        },
+        "events_manager": {
+          "recorded_operations": 1,
+          "input_tokens": 21012,
+          "output_tokens": 14034,
+          "max_operation_input_tokens": 21012
+        },
+        "vp_marketing": {
+          "recorded_operations": 1,
+          "input_tokens": 41484,
+          "output_tokens": 16038,
+          "max_operation_input_tokens": 41484
+        },
+        "data_analyst": {
+          "recorded_operations": 1,
+          "input_tokens": 16146,
+          "output_tokens": 14795,
+          "max_operation_input_tokens": 16146
+        }
+      },
+      "judge_usage": {
+        "recorded_criteria": 0,
+        "input_tokens": 0,
+        "output_tokens": 0
+      },
+      "inference_profile": {
+        "request_settings": {
+          "temperature": 0.0,
+          "max_tokens": 32768,
+          "timeout": 300,
+          "extra_body": {
+            "thinking_token_budget": 2048
+          }
+        },
+        "role_temperatures": {
+          "manager": 0,
+          "ai": 0,
+          "human": 0.7,
+          "stakeholder": 0,
+          "estimator": 0,
+          "decomposer": 1,
+          "judge": 0
+        },
+        "validation_retries": 2,
+        "request_limit": 12,
+        "operation_timeout_seconds": 600
+      },
+      "raw_records_sha256": "598686bdf62a214092a1a1a91f165857f5f98bd2415158c247437579f9793b57"
+    }
+  ],
+  "complete_catalog": false
+}

@@ -1,8 +1,8 @@
 """Integration tests — CANCELLED managed-subtask re-activation after dep re-satisfies.
 
-Propagation re-activates a CANCELLED node to PENDING when all its incoming
-dependencies are COMPLETED — but only if the node is a *managed subtask*
-(parent_task_id is not None). Static workflow nodes stay CANCELLED.
+Propagation re-activates a managed subtask only when its recorded cancellation
+was caused by downstream invalidation and all dependencies are COMPLETED.
+Explicitly cancelled tasks and static workflow nodes stay CANCELLED.
 
 Covered here:
 - CANCELLED managed subtask with all deps complete → re-activates to PENDING
@@ -12,6 +12,9 @@ Covered here:
 """
 
 import pytest
+from uuid import UUID
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime.models import MutationMeta
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.application.runtime.status import CANCELLED, EDGE_PENDING
 from ergon_core.core.persistence.shared.db import get_session
@@ -19,7 +22,7 @@ from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.core.application.runtime.orchestration import PropagateTaskCompletionCommand
 from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
-from sqlmodel import select
+from sqlmodel import Session, select
 
 from tests.integration.propagation._helpers import (
     get_node_status,
@@ -32,8 +35,22 @@ from tests.integration.restart._helpers import cleanup_run
 pytestmark = pytest.mark.integration
 
 
+async def cancel_with_reason(session: Session, sample_id: UUID, task_id: UUID, reason: str) -> None:
+    await RuntimeGraphRepository().update_node_status(
+        session,
+        sample_id=sample_id,
+        task_id=task_id,
+        new_status=CANCELLED,
+        meta=MutationMeta(actor="manager-worker", reason=reason),
+    )
+
+
 @pytest.mark.asyncio
-async def test_cancelled_managed_subtask_reactivates_when_dep_completes() -> None:
+@pytest.mark.parametrize(
+    ("reason", "expected"),
+    [("downstream_invalidation", "pending"), ("manager_cancel", "cancelled"), (None, "cancelled")],
+)
+async def test_cancelled_managed_subtask_reactivates_when_dep_completes(reason, expected) -> None:
     """CANCELLED managed subtask (parent_task_id set) re-activates when all deps complete.
 
     Simulates the state after restart_task ran and _invalidate_downstream
@@ -44,14 +61,16 @@ async def test_cancelled_managed_subtask_reactivates_when_dep_completes() -> Non
         run = make_run(session)
         root = make_node(session, run.id, task_slug="root", status="running")
         node_a = make_node(session, run.id, task_slug="task-a", status="completed")
-        # node_b is a managed subtask — parent_task_id makes it eligible for re-activation
+        # Parentage alone is insufficient: the native status event records the cause.
         node_b = make_node(
             session,
             run.id,
             task_slug="task-b",
-            status=CANCELLED,
+            status="pending" if reason else CANCELLED,
             parent_task_id=root.task_id,
         )
+        if reason is not None:
+            await cancel_with_reason(session, run.id, node_b.task_id, reason)
         # Edge is EDGE_PENDING: reset by restart_task / _invalidate_downstream
         make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_b.task_id)
         sample_id = run.id
@@ -71,10 +90,7 @@ async def test_cancelled_managed_subtask_reactivates_when_dep_completes() -> Non
 
         with get_session() as session:
             b_status = get_node_status(session, node_b_id)
-            assert b_status == TaskExecutionStatus.PENDING, (
-                f"CANCELLED managed subtask must re-activate to PENDING when all deps complete; "
-                f"got {b_status!r}"
-            )
+            assert b_status == expected, f"Cancellation reason {reason!r}: got {b_status!r}"
     finally:
         cleanup_run(sample_id)
 
@@ -136,9 +152,10 @@ async def test_fan_in_managed_subtask_reactivates_only_when_all_deps_complete() 
             session,
             run.id,
             task_slug="fan-c",
-            status=CANCELLED,
+            status="pending",
             parent_task_id=root.task_id,
         )
+        await cancel_with_reason(session, run.id, node_c.task_id, "downstream_invalidation")
         make_edge(session, run.id, source_task_id=node_a.task_id, target_task_id=node_c.task_id)
         make_edge(session, run.id, source_task_id=node_b.task_id, target_task_id=node_c.task_id)
         sample_id = run.id

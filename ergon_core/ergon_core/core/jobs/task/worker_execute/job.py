@@ -23,11 +23,20 @@ from ergon_core.core.application.resources.service import SampleResourceReadServ
 from ergon_core.core.application.runtime.task_execution import TaskExecutionService
 from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
 from ergon_core.core.application.runtime.task_management import TaskManagementService
+from ergon_core.core.application.runtime.task_models import (
+    CancelTaskCommand,
+    CancelTaskResult,
+    RefineTaskCommand,
+    RefineTaskResult,
+    RestartTaskCommand,
+    RestartTaskResult,
+)
 from ergon_core.core.shared.context_parts import ContextPartChunk
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.application.context.service import ContextEventService
+from ergon_core.core.application.context.service import ContextEventService, ContextReplayMismatch
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.persistence.context.models import SampleContextEvent
+from .composition import worker_checkpoint_store
 from .contract import WorkerExecuteRequest
 from .contract import WorkerExecuteResult
 from ergon_core.core.infrastructure.tracing import (
@@ -37,7 +46,13 @@ from ergon_core.core.infrastructure.tracing import (
 )
 from ergon_core.core.persistence.context.models import SampleContextEvent
 from ergon_core.core.views.dashboard_events.context_events import context_event_to_dashboard_event
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from ergon_core.core.application.runtime.errors import GraphError
+from ergon_core.core.application.runtime.task_errors import (
+    TaskRunningError,
+    TaskAlreadyTerminalError,
+    TaskNotTerminalError,
+)
 from sqlmodel import Session
 
 logger = logging.getLogger(__name__)
@@ -81,6 +96,14 @@ async def run_worker_execute_job(
         )
     worker.validate_runtime_deps()
 
+    # Cancellation needs the live sandbox identity while the worker is running,
+    # including when inference fails or a durable wait never produces output.
+    with get_session() as session:
+        await task_execution.attach_sandbox_to_execution(
+            session, execution_id=payload.execution_id, sandbox_id=payload.sandbox_id
+        )
+        session.commit()
+
     worker_context = WorkerContext._for_job(
         sample_id=payload.sample_id,
         task_id=payload.task_id,
@@ -90,6 +113,8 @@ async def run_worker_execute_job(
         task_inspect=TaskInspectionService(),
         resource_service=SampleResourceReadService(),
         session_factory=get_session,
+        steps=None if ctx is None else cast(Any, ctx).step,
+        checkpoint_store=worker_checkpoint_store(task.sandbox, payload),
     )
 
     context_event_repo = ContextEventService()
@@ -140,7 +165,7 @@ async def run_worker_execute_job(
             },
         )
 
-    # Persist worker output + stamp sandbox_id BEFORE returning to the
+    # Persist worker output BEFORE returning to the
     # orchestrator. The orchestrator's next step is the per-evaluator
     # fanout (`execute_task._fan_out_evaluators`); each eval worker
     # receives only a thin `TaskEvaluateRequest` and reloads everything
@@ -150,18 +175,13 @@ async def run_worker_execute_job(
     #   live sandbox_id   ← session.get(SampleTaskAttempt, ...).sandbox_id
     #                       (then fed to load_task_view(..., sandbox_id=))
     #
-    # Both reads happen *after* the orchestrator's gather starts, so
-    # both writes have to commit before this function returns.
+    # The sandbox identity was committed before executing the worker. Output
+    # must also commit before the evaluator fanout reads this attempt.
     with get_session() as session:
         await task_execution.persist_worker_output(
             session,
             execution_id=payload.execution_id,
             output=output,
-        )
-        await task_execution.attach_sandbox_to_execution(
-            session,
-            execution_id=payload.execution_id,
-            sandbox_id=payload.sandbox_id,
         )
         session.commit()
 
@@ -217,6 +237,35 @@ class _SpawnTaskStepResult(BaseModel):
     ready: list[_ReadyDispatch]
 
 
+class _MutationRejection(BaseModel):
+    kind: str
+    message: str
+    task_id: UUID | None = None
+    current_status: str | None = None
+
+    def raise_error(self) -> None:
+        status_errors = {
+            "TaskRunningError": TaskRunningError,
+            "TaskAlreadyTerminalError": TaskAlreadyTerminalError,
+            "TaskNotTerminalError": TaskNotTerminalError,
+        }
+        if (
+            self.kind in status_errors
+            and self.task_id is not None
+            and self.current_status is not None
+        ):
+            raise status_errors[self.kind](self.task_id, self.current_status)
+        if self.kind == "ValueError":
+            raise ValueError(self.message)
+        raise GraphError(self.message)
+
+
+class _MutationStepResult(BaseModel):
+    result: CancelTaskResult | RefineTaskResult | RestartTaskResult | None = None
+    ready: list[_ReadyDispatch] = Field(default_factory=list)
+    rejection: _MutationRejection | None = None
+
+
 class _StepAwareTaskManagementService(TaskManagementService):
     """Task management facade for workers running inside an Inngest function.
 
@@ -228,6 +277,7 @@ class _StepAwareTaskManagementService(TaskManagementService):
     def __init__(self, ctx: Any) -> None:
         self._ctx = ctx
         self._spawn_task_call_index = 0
+        self._mutation_call_index = 0
         self._active_ready_dispatches: list[_ReadyDispatch] | None = None
         super().__init__(task_ready_dispatcher=self._collect_ready_dispatch)
 
@@ -266,6 +316,62 @@ class _StepAwareTaskManagementService(TaskManagementService):
         )
         await self._dispatch_collected_ready_events(step_id, spawned.ready)
         return spawned.handle
+
+    async def _memoized_mutation(
+        self,
+        name: str,
+        operation: Callable[[], Awaitable[CancelTaskResult | RefineTaskResult | RestartTaskResult]],
+    ) -> _MutationStepResult:
+        index = self._mutation_call_index
+        self._mutation_call_index += 1
+        step_id = f"{name}-{index}"
+
+        async def mutate() -> _MutationStepResult:
+            previous = self._active_ready_dispatches
+            ready: list[_ReadyDispatch] = []
+            self._active_ready_dispatches = ready
+            try:
+                result = await operation()
+            except (GraphError, ValueError) as error:
+                rejection = _MutationRejection(kind=type(error).__name__, message=str(error))
+                if isinstance(
+                    error, (TaskRunningError, TaskAlreadyTerminalError, TaskNotTerminalError)
+                ):
+                    rejection.task_id = error.task_id
+                    rejection.current_status = error.current_status
+                return _MutationStepResult(rejection=rejection)
+            finally:
+                self._active_ready_dispatches = previous
+            return _MutationStepResult(result=result, ready=ready)
+
+        saved = await self._ctx.step.run(step_id, mutate, output_type=_MutationStepResult)
+        if saved.rejection is not None:
+            saved.rejection.raise_error()
+        await self._dispatch_collected_ready_events(step_id, saved.ready)
+        return saved
+
+    async def refine_task(self, session: Session, command: RefineTaskCommand) -> RefineTaskResult:
+        async def mutate() -> RefineTaskResult:
+            return await super(_StepAwareTaskManagementService, self).refine_task(session, command)
+
+        saved = await self._memoized_mutation(f"refine-{command.task_id}", mutate)
+        return cast(RefineTaskResult, saved.result)
+
+    async def cancel_task(self, session: Session, command: CancelTaskCommand) -> CancelTaskResult:
+        async def mutate() -> CancelTaskResult:
+            return await super(_StepAwareTaskManagementService, self).cancel_task(session, command)
+
+        saved = await self._memoized_mutation(f"cancel-{command.task_id}", mutate)
+        return cast(CancelTaskResult, saved.result)
+
+    async def restart_task(
+        self, session: Session, command: RestartTaskCommand
+    ) -> RestartTaskResult:
+        async def mutate() -> RestartTaskResult:
+            return await super(_StepAwareTaskManagementService, self).restart_task(session, command)
+
+        saved = await self._memoized_mutation(f"restart-{command.task_id}", mutate)
+        return cast(RestartTaskResult, saved.result)
 
     async def _collect_ready_dispatch(
         self,
@@ -345,7 +451,10 @@ async def _persist_context_events(
                 execution_id=payload.execution_id,
                 worker_binding_key=payload.assigned_worker_slug,
                 chunk=chunk,
+                replay=True,
             )
+    except ContextReplayMismatch:
+        raise
     except Exception:  # slopcop: ignore[no-broad-except]
         logger.warning(
             "context event persist failed for execution %s chunk %d",

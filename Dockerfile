@@ -11,32 +11,18 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip install uv
 
-# Install ergon_core package
-COPY ergon_core/pyproject.toml ergon_core/
-COPY ergon_core/ergon_core/ ergon_core/ergon_core/
-RUN cd ergon_core && uv pip install --system -e ".[dev]"
-
-# Install ergon_builtins package WITH [data] extra.  ``registry_core.py``
-# imports ``SweBenchVerifiedBenchmark`` / ``MiniF2FBenchmark`` /
-# ``StagedRubric`` at module-level (per the registry-lazy-import
-# refactor); those modules transitively require ``datasets``,
-# ``huggingface_hub``, and ``pandas`` respectively.  Without ``[data]``
-# the api container fails to import on startup.
-COPY ergon_builtins/pyproject.toml ergon_builtins/
-COPY ergon_builtins/ergon_builtins/ ergon_builtins/ergon_builtins/
-RUN cd ergon_builtins && uv pip install --system -e ".[data]"
-
-# Install ergon_ingestion before ergon_cli.  The CLI imports the ingest command
-# at startup, and export subcommands need the package's data dependencies.
-COPY ergon_ingestion/pyproject.toml ergon_ingestion/
-COPY ergon_ingestion/ergon_ingestion/ ergon_ingestion/ergon_ingestion/
-RUN cd ergon_ingestion && uv pip install --system -e ".[data]"
-
-# Install ergon_cli for API-container smoke parity. The package is a thin
-# shell over ergon_core / ergon_builtins which are already installed above.
-COPY ergon_cli/pyproject.toml ergon_cli/
-COPY ergon_cli/ergon_cli/ ergon_cli/ergon_cli/
-RUN cd ergon_cli && uv pip install --system -e "."
+# Resolve the API/CLI and their dependencies from the same workspace lock as tests.
+# Copy all member manifests because uv validates the workspace even when selecting
+# just the CLI package. No credentials or local virtual environment enter the image.
+COPY pyproject.toml uv.lock ./
+COPY ergon_core/ ergon_core/
+COPY ergon_builtins/ ergon_builtins/
+COPY ergon_cli/ ergon_cli/
+COPY ergon_infra/ ergon_infra/
+COPY ergon_ingestion/ ergon_ingestion/
+COPY examples/ examples/
+RUN uv sync --frozen --no-dev --package ergon-cli
+ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 9000
 

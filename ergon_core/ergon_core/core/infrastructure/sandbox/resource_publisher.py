@@ -9,6 +9,7 @@ import logging
 import os
 from pathlib import Path, PurePosixPath
 from typing import Any, ClassVar
+from tempfile import NamedTemporaryFile
 from uuid import UUID
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
@@ -123,9 +124,11 @@ class SandboxResourcePublisher:
         if path.exists():
             return path
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_bytes(content_bytes)
-        tmp.rename(path)  # atomic on POSIX
+        with NamedTemporaryFile(dir=path.parent, delete=False) as temporary:
+            temporary.write(content_bytes)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        Path(temporary.name).replace(path)  # atomic, concurrent writers have distinct temp files
         return path
 
     def blob_path(self, content_hash: str) -> Path:

@@ -2,7 +2,9 @@
 
 import json
 import logging
+import os
 import urllib.error
+from urllib.parse import urlsplit
 import urllib.request
 
 from pydantic_ai.models.openai import OpenAIChatModel
@@ -44,8 +46,8 @@ def resolve_openai_compatible_target(
     endpoint, target_model_name = _endpoint_and_model_name(target)
     resolved_name = model_name or target_model_name or discover_model_name(endpoint, backend_label)
     provider = OpenAIProvider(
-        base_url=f"{endpoint}/v1",
-        api_key=api_key or "not-needed",
+        base_url=_api_base_url(endpoint),
+        api_key=api_key or os.environ.get("ERGON_OPENAI_COMPATIBLE_API_KEY") or "not-needed",
     )
     model = OpenAIChatModel(model_name=resolved_name, provider=provider)
     logger.info(
@@ -60,7 +62,7 @@ def resolve_openai_compatible_target(
 
 def discover_model_name(endpoint: str, backend_label: str = "OpenAI-compatible") -> str:
     """Query ``/v1/models`` to discover the served model name."""
-    url = f"{endpoint}/v1/models"
+    url = f"{_api_base_url(endpoint)}/models"
     try:
         with urllib.request.urlopen(url, timeout=_MODEL_DISCOVERY_TIMEOUT_SECONDS) as resp:
             body = json.loads(resp.read())
@@ -87,6 +89,11 @@ def discover_model_name(endpoint: str, backend_label: str = "OpenAI-compatible")
             url,
         )
     return "default"
+
+
+def _api_base_url(endpoint: str) -> str:
+    """Keep complete API/gateway paths; preserve the existing host-root shorthand."""
+    return endpoint if "v1" in urlsplit(endpoint).path.split("/") else f"{endpoint}/v1"
 
 
 def _endpoint_and_model_name(target: str) -> tuple[str, str | None]:

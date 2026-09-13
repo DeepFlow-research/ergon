@@ -14,6 +14,9 @@ class _DynamicTask(Task[EmptyTaskPayload]):
 
 
 class _Session:
+    def get(self, model, key):
+        return SimpleNamespace(status="executing")
+
     def commit(self) -> None:
         pass
 
@@ -27,7 +30,15 @@ class _FakeGraphRepo:
     def __init__(self) -> None:
         self.added_nodes: list[dict] = []
         self.added_edges: list[dict] = []
-        self.parent = SimpleNamespace(task_id=uuid4(), instance_key="sample-1", level=2)
+        self.parent = SimpleNamespace(
+            task_id=uuid4(), instance_key="sample-1", level=2, status="running"
+        )
+
+    async def lock_sample(self, session, sample_id):
+        pass
+
+    def dependencies_complete(self, session, sample_id, task_id):
+        return not self.added_edges
 
     def add_runtime_event_listener(self, listener) -> None:
         del listener

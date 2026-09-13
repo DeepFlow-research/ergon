@@ -16,7 +16,7 @@ def build_dashboard_evaluation_dto(
     evaluation_id: UUID,
     sample_id: UUID,
     task_id: UUID,
-    total_score: float,
+    total_score: float | None,
     created_at: datetime,
     summary: EvaluationSummary,
 ) -> SampleTaskEvaluationDto:
@@ -70,7 +70,7 @@ def evaluation_row_to_dto(evaluation: SampleTaskEvaluation) -> SampleTaskEvaluat
         evaluation_id=evaluation.id,
         sample_id=evaluation.sample_id,
         task_id=evaluation.task_id,
-        total_score=0.0 if evaluation.score is None else evaluation.score,
+        total_score=evaluation.score,
         created_at=evaluation.created_at,
         summary=summary,
     )

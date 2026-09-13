@@ -1,0 +1,173 @@
+{
+  "started_at": "2026-09-13T17:38:10.311237+00:00",
+  "sample_id": "5fb47948-9006-4ab7-bbaf-46205346d584",
+  "scope": "real Inngest/Postgres/E2B native lifecycle; deterministic worker and criterion",
+  "sample_status": "completed",
+  "nodes": [
+    {
+      "task_id": "bcb6632f-a518-41b5-89f2-d0305d6c430d",
+      "status": "completed"
+    },
+    {
+      "task_id": "5b0768f8-bfd1-4896-93f5-0b2bd19c3828",
+      "status": "completed"
+    },
+    {
+      "task_id": "2c5a656e-3204-42c1-b39d-53848ab55dc2",
+      "status": "completed"
+    }
+  ],
+  "attempts": [
+    {
+      "id": "195b1eaf-2513-496d-91fb-4d3048428db0",
+      "status": "completed",
+      "sandbox_id": "icga4q6luf6miouoppn7s",
+      "worker_output": {
+        "output": "native-proof",
+        "success": true,
+        "metadata": {
+          "actor_key": "alice",
+          "simulated_hours": 1
+        }
+      },
+      "error": null
+    },
+    {
+      "id": "4d101f06-114b-4d57-80bb-2935f986dc21",
+      "status": "completed",
+      "sandbox_id": "i8frllv2dmflvo6krcepo",
+      "worker_output": {
+        "output": "native-proof",
+        "success": true,
+        "metadata": {
+          "actor_key": "alice",
+          "simulated_hours": 1
+        }
+      },
+      "error": null
+    },
+    {
+      "id": "c82b8e94-e966-472c-80f0-e44cc687dcdc",
+      "status": "completed",
+      "sandbox_id": "ikxqip7t7ttpvrrvn85lb",
+      "worker_output": {
+        "output": "native-proof",
+        "success": true,
+        "metadata": {
+          "children": [
+            {
+              "task_id": "bcb6632f-a518-41b5-89f2-d0305d6c430d",
+              "status": "completed",
+              "execution_id": "195b1eaf-2513-496d-91fb-4d3048428db0",
+              "output": {
+                "output": "native-proof",
+                "success": true,
+                "metadata": {
+                  "actor_key": "alice",
+                  "simulated_hours": 1
+                }
+              },
+              "error": null,
+              "timed_out": false,
+              "checked_at": 1789321103.224323
+            },
+            {
+              "task_id": "2c5a656e-3204-42c1-b39d-53848ab55dc2",
+              "status": "completed",
+              "execution_id": "4d101f06-114b-4d57-80bb-2935f986dc21",
+              "output": {
+                "output": "native-proof",
+                "success": true,
+                "metadata": {
+                  "actor_key": "alice",
+                  "simulated_hours": 1
+                }
+              },
+              "error": null,
+              "timed_out": false,
+              "checked_at": 1789321106.6231365
+            }
+          ],
+          "model_input_tokens": 349,
+          "model_output_tokens": 121
+        }
+      },
+      "error": null
+    }
+  ],
+  "evaluations": [
+    {
+      "score": 1.0,
+      "passed": true,
+      "summary": {
+        "evaluator_name": "proof",
+        "max_score": 1.0,
+        "normalized_score": 1.0,
+        "stages_evaluated": 1,
+        "stages_passed": 1,
+        "failed_gate": null,
+        "metadata": {},
+        "criterion_results": [
+          {
+            "criterion_slug": "proof",
+            "criterion_name": "proof",
+            "criterion_type": "mag-preport-proof",
+            "stage_num": 0,
+            "stage_name": "default",
+            "criterion_num": 0,
+            "status": "passed",
+            "score": 1.0,
+            "max_score": 1.0,
+            "passed": true,
+            "weight": 1.0,
+            "contribution": 1.0,
+            "criterion_description": "proof",
+            "feedback": "sandbox read type=bytearray; worker output and artifact checked",
+            "model_reasoning": null,
+            "skipped_reason": null,
+            "evaluation_input": null,
+            "evaluated_action_ids": [],
+            "evaluated_resource_ids": [],
+            "observation": null,
+            "error": null
+          }
+        ]
+      }
+    }
+  ],
+  "resources": [
+    {
+      "name": "native-proof.txt",
+      "size_bytes": 12,
+      "error": null
+    },
+    {
+      "name": "native-proof.txt",
+      "size_bytes": 12,
+      "error": null
+    },
+    {
+      "name": "native-proof.txt",
+      "size_bytes": 12,
+      "error": null
+    }
+  ],
+  "cleanup_check": [
+    {
+      "sandbox_id": "i8frllv2dmflvo6krcepo",
+      "terminated": true,
+      "reason": "terminated"
+    },
+    {
+      "sandbox_id": "icga4q6luf6miouoppn7s",
+      "terminated": true,
+      "reason": "terminated"
+    },
+    {
+      "sandbox_id": "ikxqip7t7ttpvrrvn85lb",
+      "terminated": true,
+      "reason": "terminated"
+    }
+  ],
+  "finished_at": "2026-09-13T17:38:31.788533+00:00"
+}

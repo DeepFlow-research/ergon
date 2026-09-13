@@ -1,0 +1,32 @@
+{
+  "started_at": "2026-09-13T16:50:23.035679+00:00",
+  "deployment": "qwen3-8-27b-28",
+  "base_url": "https://api.training.hcompany.ai/v1/models/qwen3-8-27b-28",
+  "credential_present": true,
+  "health": {
+    "status": 200
+  },
+  "native_models_route": {
+    "status": 404
+  },
+  "ergon_models_route": {
+    "status": 404
+  },
+  "existing_ergon_resolver": {
+    "error_type": "ModelHTTPError",
+    "status": 404,
+    "tool_calls": []
+  },
+  "direct_provider_control": {
+    "output": {
+      "actor": "alice",
+      "fatigue": 0.25
+    },
+    "tool_calls": [
+      "alice"
+    ],
+    "usage": "RunUsage(input_tokens=863, output_tokens=71, details={'reasoning_tokens': 0}, requests=2, tool_calls=1)",
+    "passed": true
+  },
+  "finished_at": "2026-09-13T16:50:29.705676+00:00"
+}

@@ -1,0 +1,944 @@
+{
+  "mag_commit": "3f7a5d4af1d31abaedbedd525a0090452926fef4",
+  "python": "3.13.13",
+  "versions": {
+    "pydantic": "2.10.5",
+    "openai-agents": "0.2.4",
+    "instructor": "1.11.3",
+    "litellm": "1.60.8"
+  },
+  "scenarios": [
+    {
+      "scenario": "icaap",
+      "initial_registry_tasks": 15,
+      "unique_tasks_including_nested": 39,
+      "atomic_tasks": 30,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 12,
+      "team_additions": 10,
+      "team_removals": 0,
+      "human_additions": 4,
+      "ai_additions": 6,
+      "team_change_ticks": [
+        0,
+        15,
+        40,
+        70,
+        85
+      ],
+      "preference_change_ticks": [
+        0,
+        10,
+        30,
+        60
+      ],
+      "preferences": 5,
+      "preference_rubrics": 39,
+      "preference_llm_rubrics": 26,
+      "workflow_rubrics": 38,
+      "workflow_llm_rubrics": 28,
+      "final_selected_llm_rubrics": 54,
+      "worker_models": [
+        "gpt-4.1"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "marketing_campaign",
+      "initial_registry_tasks": 16,
+      "unique_tasks_including_nested": 51,
+      "atomic_tasks": 37,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 22,
+      "team_additions": 29,
+      "team_removals": 3,
+      "human_additions": 17,
+      "ai_additions": 12,
+      "team_change_ticks": [
+        0,
+        5,
+        10,
+        14,
+        18,
+        20,
+        22,
+        28,
+        35,
+        45,
+        55
+      ],
+      "preference_change_ticks": [
+        0,
+        20,
+        45
+      ],
+      "preferences": 4,
+      "preference_rubrics": 15,
+      "preference_llm_rubrics": 7,
+      "workflow_rubrics": 38,
+      "workflow_llm_rubrics": 28,
+      "final_selected_llm_rubrics": 35,
+      "worker_models": [
+        "gpt-4.1"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "data_science_analytics",
+      "initial_registry_tasks": 16,
+      "unique_tasks_including_nested": 21,
+      "atomic_tasks": 19,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 17,
+      "team_additions": 6,
+      "team_removals": 0,
+      "human_additions": 2,
+      "ai_additions": 4,
+      "team_change_ticks": [
+        0,
+        10,
+        20,
+        40,
+        50
+      ],
+      "preference_change_ticks": [
+        0,
+        10,
+        60
+      ],
+      "preferences": 7,
+      "preference_rubrics": 29,
+      "preference_llm_rubrics": 16,
+      "workflow_rubrics": 36,
+      "workflow_llm_rubrics": 26,
+      "final_selected_llm_rubrics": 42,
+      "worker_models": [
+        "gpt-4.1"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "orsa",
+      "initial_registry_tasks": 16,
+      "unique_tasks_including_nested": 30,
+      "atomic_tasks": 25,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 23,
+      "team_additions": 22,
+      "team_removals": 3,
+      "human_additions": 13,
+      "ai_additions": 9,
+      "team_change_ticks": [
+        0,
+        5,
+        10,
+        14,
+        20,
+        26,
+        30,
+        35,
+        40,
+        45,
+        50
+      ],
+      "preference_change_ticks": [
+        0,
+        20,
+        40
+      ],
+      "preferences": 4,
+      "preference_rubrics": 16,
+      "preference_llm_rubrics": 8,
+      "workflow_rubrics": 38,
+      "workflow_llm_rubrics": 28,
+      "final_selected_llm_rubrics": 36,
+      "worker_models": [
+        "gpt-4.1"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "legal_contract_negotiation",
+      "initial_registry_tasks": 7,
+      "unique_tasks_including_nested": 23,
+      "atomic_tasks": 18,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 6,
+      "team_additions": 11,
+      "team_removals": 0,
+      "human_additions": 4,
+      "ai_additions": 7,
+      "team_change_ticks": [
+        0,
+        5,
+        10,
+        15
+      ],
+      "preference_change_ticks": [
+        10,
+        20,
+        30,
+        40
+      ],
+      "preferences": 6,
+      "preference_rubrics": 26,
+      "preference_llm_rubrics": 17,
+      "workflow_rubrics": 33,
+      "workflow_llm_rubrics": 23,
+      "final_selected_llm_rubrics": 40,
+      "worker_models": [
+        "gpt-4.1"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "supply_chain_planning",
+      "initial_registry_tasks": 16,
+      "unique_tasks_including_nested": 25,
+      "atomic_tasks": 22,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 22,
+      "team_additions": 11,
+      "team_removals": 3,
+      "human_additions": 5,
+      "ai_additions": 4,
+      "team_change_ticks": [
+        0,
+        5,
+        8,
+        12,
+        16,
+        22,
+        30
+      ],
+      "preference_change_ticks": [
+        0,
+        12,
+        30
+      ],
+      "preferences": 4,
+      "preference_rubrics": 19,
+      "preference_llm_rubrics": 9,
+      "workflow_rubrics": 39,
+      "workflow_llm_rubrics": 29,
+      "final_selected_llm_rubrics": 38,
+      "worker_models": [
+        "gpt-4.1",
+        "o3"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "legal_litigation_ediscovery",
+      "initial_registry_tasks": 4,
+      "unique_tasks_including_nested": 14,
+      "atomic_tasks": 10,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 3,
+      "team_additions": 5,
+      "team_removals": 0,
+      "human_additions": 2,
+      "ai_additions": 3,
+      "team_change_ticks": [
+        0,
+        6,
+        12,
+        14
+      ],
+      "preference_change_ticks": [
+        0,
+        15,
+        30,
+        45
+      ],
+      "preferences": 5,
+      "preference_rubrics": 18,
+      "preference_llm_rubrics": 8,
+      "workflow_rubrics": 36,
+      "workflow_llm_rubrics": 26,
+      "final_selected_llm_rubrics": 34,
+      "worker_models": [
+        "gpt-4.1"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "legal_m_and_a",
+      "initial_registry_tasks": 15,
+      "unique_tasks_including_nested": 17,
+      "atomic_tasks": 16,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 25,
+      "team_additions": 23,
+      "team_removals": 4,
+      "human_additions": 12,
+      "ai_additions": 11,
+      "team_change_ticks": [
+        0,
+        6,
+        12,
+        18,
+        25,
+        35,
+        45,
+        55
+      ],
+      "preference_change_ticks": [
+        0,
+        35,
+        70
+      ],
+      "preferences": 2,
+      "preference_rubrics": 13,
+      "preference_llm_rubrics": 7,
+      "workflow_rubrics": 38,
+      "workflow_llm_rubrics": 28,
+      "final_selected_llm_rubrics": 35,
+      "worker_models": [
+        "gpt-4.1"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "global_product_recall",
+      "initial_registry_tasks": 15,
+      "unique_tasks_including_nested": 49,
+      "atomic_tasks": 37,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 14,
+      "team_additions": 24,
+      "team_removals": 0,
+      "human_additions": 11,
+      "ai_additions": 13,
+      "team_change_ticks": [
+        0,
+        1,
+        3,
+        5,
+        8,
+        12,
+        20,
+        30,
+        40
+      ],
+      "preference_change_ticks": [
+        0,
+        10,
+        25,
+        40,
+        60
+      ],
+      "preferences": 7,
+      "preference_rubrics": 39,
+      "preference_llm_rubrics": 29,
+      "workflow_rubrics": 40,
+      "workflow_llm_rubrics": 30,
+      "final_selected_llm_rubrics": 59,
+      "worker_models": [
+        "gpt-4.1"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "brand_crisis_management",
+      "initial_registry_tasks": 14,
+      "unique_tasks_including_nested": 40,
+      "atomic_tasks": 29,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 14,
+      "team_additions": 16,
+      "team_removals": 0,
+      "human_additions": 8,
+      "ai_additions": 8,
+      "team_change_ticks": [
+        0,
+        2,
+        4,
+        6,
+        10
+      ],
+      "preference_change_ticks": [
+        0,
+        5,
+        15,
+        25
+      ],
+      "preferences": 6,
+      "preference_rubrics": 35,
+      "preference_llm_rubrics": 24,
+      "workflow_rubrics": 38,
+      "workflow_llm_rubrics": 28,
+      "final_selected_llm_rubrics": 52,
+      "worker_models": [
+        "gpt-4.1"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "banking_license_application",
+      "initial_registry_tasks": 18,
+      "unique_tasks_including_nested": 58,
+      "atomic_tasks": 44,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 17,
+      "team_additions": 21,
+      "team_removals": 0,
+      "human_additions": 10,
+      "ai_additions": 11,
+      "team_change_ticks": [
+        0,
+        5,
+        10,
+        15,
+        20,
+        25,
+        30,
+        35
+      ],
+      "preference_change_ticks": [
+        0,
+        15,
+        30,
+        45
+      ],
+      "preferences": 8,
+      "preference_rubrics": 50,
+      "preference_llm_rubrics": 39,
+      "workflow_rubrics": 38,
+      "workflow_llm_rubrics": 28,
+      "final_selected_llm_rubrics": 67,
+      "worker_models": [
+        "gpt-4.1"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "tech_company_acquisition",
+      "initial_registry_tasks": 13,
+      "unique_tasks_including_nested": 43,
+      "atomic_tasks": 32,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 15,
+      "team_additions": 16,
+      "team_removals": 0,
+      "human_additions": 8,
+      "ai_additions": 8,
+      "team_change_ticks": [
+        0,
+        6,
+        12,
+        18,
+        25
+      ],
+      "preference_change_ticks": [
+        0,
+        8,
+        15,
+        25
+      ],
+      "preferences": 6,
+      "preference_rubrics": 34,
+      "preference_llm_rubrics": 24,
+      "workflow_rubrics": 32,
+      "workflow_llm_rubrics": 22,
+      "final_selected_llm_rubrics": 46,
+      "worker_models": [
+        "gpt-4.1"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "legal_global_data_breach",
+      "initial_registry_tasks": 14,
+      "unique_tasks_including_nested": 36,
+      "atomic_tasks": 29,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 16,
+      "team_additions": 12,
+      "team_removals": 4,
+      "human_additions": 6,
+      "ai_additions": 4,
+      "team_change_ticks": [
+        0,
+        4,
+        8,
+        12,
+        16,
+        20,
+        24,
+        28,
+        32
+      ],
+      "preference_change_ticks": [
+        0,
+        12,
+        28
+      ],
+      "preferences": 4,
+      "preference_rubrics": 12,
+      "preference_llm_rubrics": 4,
+      "workflow_rubrics": 38,
+      "workflow_llm_rubrics": 28,
+      "final_selected_llm_rubrics": 32,
+      "worker_models": [
+        "gpt-4.1",
+        "o3"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "enterprise_saas_negotiation_pipeline",
+      "initial_registry_tasks": 16,
+      "unique_tasks_including_nested": 33,
+      "atomic_tasks": 27,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 18,
+      "team_additions": 12,
+      "team_removals": 3,
+      "human_additions": 6,
+      "ai_additions": 4,
+      "team_change_ticks": [
+        0,
+        4,
+        8,
+        14,
+        18,
+        22,
+        26,
+        32
+      ],
+      "preference_change_ticks": [
+        0,
+        18,
+        26
+      ],
+      "preferences": 4,
+      "preference_rubrics": 19,
+      "preference_llm_rubrics": 5,
+      "workflow_rubrics": 38,
+      "workflow_llm_rubrics": 28,
+      "final_selected_llm_rubrics": 33,
+      "worker_models": [
+        "gpt-4.1",
+        "o3"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "mnc_workforce_restructuring",
+      "initial_registry_tasks": 16,
+      "unique_tasks_including_nested": 41,
+      "atomic_tasks": 33,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 22,
+      "team_additions": 12,
+      "team_removals": 4,
+      "human_additions": 6,
+      "ai_additions": 4,
+      "team_change_ticks": [
+        0,
+        5,
+        10,
+        14,
+        18,
+        22,
+        26,
+        30,
+        34
+      ],
+      "preference_change_ticks": [
+        0,
+        18,
+        26
+      ],
+      "preferences": 5,
+      "preference_rubrics": 15,
+      "preference_llm_rubrics": 6,
+      "workflow_rubrics": 38,
+      "workflow_llm_rubrics": 28,
+      "final_selected_llm_rubrics": 34,
+      "worker_models": [
+        "gpt-4.1",
+        "o3"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "genai_feature_launch",
+      "initial_registry_tasks": 10,
+      "unique_tasks_including_nested": 42,
+      "atomic_tasks": 32,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 9,
+      "team_additions": 16,
+      "team_removals": 0,
+      "human_additions": 7,
+      "ai_additions": 9,
+      "team_change_ticks": [
+        0,
+        5,
+        12,
+        18,
+        25,
+        28
+      ],
+      "preference_change_ticks": [
+        0,
+        8,
+        15,
+        25
+      ],
+      "preferences": 5,
+      "preference_rubrics": 32,
+      "preference_llm_rubrics": 20,
+      "workflow_rubrics": 31,
+      "workflow_llm_rubrics": 21,
+      "final_selected_llm_rubrics": 41,
+      "worker_models": [
+        "gpt-4.1"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "ipo_readiness_program",
+      "initial_registry_tasks": 9,
+      "unique_tasks_including_nested": 26,
+      "atomic_tasks": 20,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 11,
+      "team_additions": 16,
+      "team_removals": 0,
+      "human_additions": 8,
+      "ai_additions": 8,
+      "team_change_ticks": [
+        0,
+        8,
+        15,
+        20,
+        25,
+        28,
+        30
+      ],
+      "preference_change_ticks": [
+        5,
+        15,
+        25
+      ],
+      "preferences": 6,
+      "preference_rubrics": 31,
+      "preference_llm_rubrics": 21,
+      "workflow_rubrics": 38,
+      "workflow_llm_rubrics": 28,
+      "final_selected_llm_rubrics": 49,
+      "worker_models": [
+        "gpt-4.1"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "pharmaceutical_product_launch",
+      "initial_registry_tasks": 9,
+      "unique_tasks_including_nested": 30,
+      "atomic_tasks": 23,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 9,
+      "team_additions": 17,
+      "team_removals": 0,
+      "human_additions": 9,
+      "ai_additions": 8,
+      "team_change_ticks": [
+        0,
+        12,
+        20,
+        28,
+        35,
+        42,
+        48,
+        55
+      ],
+      "preference_change_ticks": [
+        10,
+        25,
+        40
+      ],
+      "preferences": 7,
+      "preference_rubrics": 32,
+      "preference_llm_rubrics": 21,
+      "workflow_rubrics": 36,
+      "workflow_llm_rubrics": 26,
+      "final_selected_llm_rubrics": 47,
+      "worker_models": [
+        "gpt-4.1"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "uk_university_accreditation",
+      "initial_registry_tasks": 9,
+      "unique_tasks_including_nested": 36,
+      "atomic_tasks": 27,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 12,
+      "team_additions": 15,
+      "team_removals": 0,
+      "human_additions": 8,
+      "ai_additions": 7,
+      "team_change_ticks": [
+        0,
+        8,
+        12,
+        16,
+        20,
+        24,
+        28,
+        30
+      ],
+      "preference_change_ticks": [
+        0,
+        10,
+        20,
+        30
+      ],
+      "preferences": 6,
+      "preference_rubrics": 31,
+      "preference_llm_rubrics": 21,
+      "workflow_rubrics": 38,
+      "workflow_llm_rubrics": 28,
+      "final_selected_llm_rubrics": 49,
+      "worker_models": [
+        "gpt-4.1"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    },
+    {
+      "scenario": "airline_launch_program",
+      "initial_registry_tasks": 9,
+      "unique_tasks_including_nested": 40,
+      "atomic_tasks": 31,
+      "initial_resources": 0,
+      "initial_registry_dependency_edges": 13,
+      "team_additions": 18,
+      "team_removals": 0,
+      "human_additions": 10,
+      "ai_additions": 8,
+      "team_change_ticks": [
+        0,
+        5,
+        10,
+        15,
+        20,
+        25,
+        30,
+        35
+      ],
+      "preference_change_ticks": [
+        0,
+        15,
+        25,
+        35
+      ],
+      "preferences": 7,
+      "preference_rubrics": 35,
+      "preference_llm_rubrics": 23,
+      "workflow_rubrics": 40,
+      "workflow_llm_rubrics": 30,
+      "final_selected_llm_rubrics": 53,
+      "worker_models": [
+        "gpt-4.1"
+      ],
+      "configured_judge_models": [
+        "o3"
+      ],
+      "required_rubric_context": [
+        "communications_by_sender",
+        "manager_actions"
+      ]
+    }
+  ],
+  "characterization": {
+    "rubric_model_forwarding": {
+      "requested": "sentinel-model",
+      "called": [
+        "o3"
+      ]
+    },
+    "preference_history": {
+      "t0_before": {
+        "quality": 0.5,
+        "speed": 0.5
+      },
+      "t0_after_scheduling_t10": {
+        "quality": 0.9,
+        "speed": 0.1
+      },
+      "t10": {
+        "quality": 0.9,
+        "speed": 0.1
+      }
+    },
+    "capacity": {
+      "configured_capacity": 1,
+      "running_after_one_tick": 2
+    },
+    "scheduled_agent_tools": {
+      "credit_risk_modeler": [
+        "send_message",
+        "broadcast_message",
+        "get_recent_messages",
+        "get_conversation_with",
+        "get_task_messages",
+        "send_message",
+        "broadcast_message",
+        "get_recent_messages",
+        "end_workflow"
+      ],
+      "irrbb_analyst": [
+        "send_message",
+        "broadcast_message",
+        "get_recent_messages",
+        "get_conversation_with",
+        "get_task_messages",
+        "send_message",
+        "broadcast_message",
+        "get_recent_messages",
+        "end_workflow"
+      ],
+      "op_risk_analyst": [
+        "send_message",
+        "broadcast_message",
+        "get_recent_messages",
+        "get_conversation_with",
+        "get_task_messages",
+        "send_message",
+        "broadcast_message",
+        "get_recent_messages",
+        "end_workflow"
+      ],
+      "documentation_lead": [
+        "send_message",
+        "broadcast_message",
+        "get_recent_messages",
+        "get_conversation_with",
+        "get_task_messages",
+        "send_message",
+        "broadcast_message",
+        "get_recent_messages",
+        "end_workflow"
+      ]
+    }
+  }
+}

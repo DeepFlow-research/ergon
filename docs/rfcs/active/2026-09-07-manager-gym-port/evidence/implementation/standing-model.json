@@ -1,0 +1,18 @@
+{
+  "observed_at": "2026-09-13T18:26:29.694166+00:00",
+  "endpoint": "https://api.training.hcompany.ai/v1/models/qwen3-8-27b-28",
+  "served_model": "qwen3-8-27b-28",
+  "deployment_generation": 68,
+  "replicas": 5,
+  "ready_replicas": 5,
+  "gpu_per_replica": "4",
+  "image": "vllm/vllm-openai:v0.28.0",
+  "observed_image_digest": "sha256:61fc8a896b0a4fbbbdc063bc4b0dbc25ce98e02b5050c24aeb7830ac02039b14",
+  "weight_location": "s3://hai-dev-deployed-models/Qwen_Qwen3.8-27B",
+  "immutable_weight_digest": null,
+  "max_model_len": 256000,
+  "tensor_parallel_size": 4,
+  "changes_made_to_standing_deployment": false,
+  "slack_source": "https://hcompany-groupe.slack.com/archives/C089LDR72GG/p1789144219269809?thread_ts=1789143776.095039&cid=C089LDR72GG",
+  "caveat": "The endpoint and weight location are mutable. No immutable digest of weight bytes was established."
+}
