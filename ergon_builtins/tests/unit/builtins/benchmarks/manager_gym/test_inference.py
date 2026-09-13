@@ -112,6 +112,9 @@ async def test_strict_output_preserves_tools_and_validates_retries(monkeypatch):
     assert result.output["resources"][0]["content"] == "LARCH-6281"
     assert result.input_tokens == 30 and result.output_tokens == 15
     assert result.chunks
+    assert any(
+        chunk.part.part_kind == "tool_result" and chunk.part.is_error for chunk in result.chunks
+    )
 
 
 @pytest.mark.asyncio

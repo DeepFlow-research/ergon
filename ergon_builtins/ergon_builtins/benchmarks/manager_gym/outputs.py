@@ -4,7 +4,15 @@ Agent output data models for different agent types.
 
 import json
 from pydantic import BaseModel, Field, field_validator
-from .source_types import Resource
+
+
+class ResourceDraft(BaseModel):
+    """Model-authored content; native work publication assigns its identity."""
+
+    name: str = Field(description="Human-readable resource name")
+    description: str = Field(description="What this resource contains and how it is used")
+    content: str | None = Field(default=None, description="The resource's inline deliverable")
+    content_type: str = Field(default="text/plain", description="The resource's MIME type")
 
 
 class ResourceOutput(BaseModel):
@@ -22,7 +30,7 @@ class AITaskOutput(ResourceOutput):
     """
 
     reasoning: str
-    resources: list[Resource] = Field(
+    resources: list[ResourceDraft] = Field(
         description="Resources created by the AI agent. There MUST BE AT LEAST ONE RESOURCE."
     )
     confidence: float
@@ -33,7 +41,7 @@ class HumanWorkOutput(ResourceOutput):
     """Structured output format for human work simulation."""
 
     reasoning: str
-    resources: list[Resource] = Field(
+    resources: list[ResourceDraft] = Field(
         description="Resources created by the human agent. There MUST BE AT LEAST ONE RESOURCE."
     )
     work_process: str

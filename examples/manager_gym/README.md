@@ -58,7 +58,8 @@ before continuing. The scripted contract proves dependency order, repeated
 human fatigue, pending refinement/reassignment, cancellation, live messaging,
 decomposition, E2B artifacts and grading. It is not a MAG quality score.
 The cancellation probe stops two running E2B attempts and waits past a delayed spawn to prove the manager cannot reopen work.
-The four autonomous pilots precede the remaining catalog. Completed pilots
+A failed pilot stops further admissions; already-admitted samples finish and
+are exported. The four autonomous pilots precede the remaining catalog. Completed pilots
 are reused only under the same source digest, model, seed and limits.
 
 The runner writes `acceptance.json` and, for every terminal sample,
@@ -125,7 +126,8 @@ expose that failure rather than silently reduce rubric coverage.
 
 Final responses use PydanticAI output tools with strict argument schemas.
 Ordinary communication tools stay enabled; the resolved inference profile
-records this choice. Preflight checks a required tool round trip and all role
+records this choice. Resource drafts contain content fields; native code assigns
+resource IDs. Preflight checks a required tool round trip and all role
 schemas. Invalid or truncated responses still consume the bounded retry budget.
 
 Inference uses at most 32,768 output tokens and a 2,048-token thinking budget, 300 seconds per request,

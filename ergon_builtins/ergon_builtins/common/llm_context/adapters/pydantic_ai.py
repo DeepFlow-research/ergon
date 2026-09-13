@@ -17,6 +17,7 @@ from ergon_core.core.shared.context_parts import (
 from ergon_core.core.persistence.context.models import SampleContextEvent
 from pydantic import BaseModel
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse
+from pydantic_ai.messages import RetryPromptPart as PydanticRetryPromptPart
 from pydantic_ai.messages import ModelRequestPart as PydanticModelRequestPart
 from pydantic_ai.messages import ModelResponsePart as PydanticModelResponsePart
 from pydantic_ai.messages import SystemPromptPart as PydanticSystemPromptPart
@@ -130,6 +131,20 @@ def _chunks_from_request(request: ModelRequest) -> list[ContextPartChunk]:
             chunks.append(ContextPartChunk(part=SystemPromptPart(content=part.content)))
         elif isinstance(part, PydanticUserPromptPart) and isinstance(part.content, str):
             chunks.append(ContextPartChunk(part=UserMessagePart(content=part.content)))
+        elif isinstance(part, PydanticRetryPromptPart):
+            if part.tool_name is None:
+                chunks.append(ContextPartChunk(part=UserMessagePart(content=part.model_response())))
+            else:
+                chunks.append(
+                    ContextPartChunk(
+                        part=ToolResultPart(
+                            tool_call_id=part.tool_call_id,
+                            tool_name=part.tool_name,
+                            content=part.model_response(),
+                            is_error=True,
+                        )
+                    )
+                )
         elif isinstance(part, PydanticToolReturnPart):
             chunks.append(
                 ContextPartChunk(

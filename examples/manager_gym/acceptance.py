@@ -320,6 +320,12 @@ async def main() -> None:
     }
     deadline = monotonic() + args.timeout_seconds
     while pending or active:
+        if args.stage == "pilot" and any(
+            row.get("accepted") is False
+            for name, row in ledger["samples"].items()
+            if name in PILOTS
+        ):
+            pending.clear()
         while pending and len(active) < args.concurrency:
             scenario = pending.pop(0)
             sample_id = await submit(scenario, args)
@@ -340,7 +346,7 @@ async def main() -> None:
             )
         if active:
             await asyncio.sleep(5)
-    if not all(ledger["samples"][s]["accepted"] for s in scenarios):
+    if not all(ledger["samples"].get(s, {}).get("accepted") for s in scenarios):
         raise SystemExit(1)
 
 

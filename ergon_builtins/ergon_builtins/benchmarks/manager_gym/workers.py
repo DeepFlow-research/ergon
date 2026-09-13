@@ -258,19 +258,21 @@ class MAGWorkWorker(Worker):
             temperature=0.7 if isinstance(actor, HumanAgentConfig) else 0,
         )
         output = output_type.model_validate(inference.output)
-        resources = output.resources
+        resources = [
+            Resource(id=uuid5(planned.id, f"output/{index}"), **draft.model_dump())
+            for index, draft in enumerate(output.resources)
+        ]
         if not resources:
             if actor.agent_type != "ai":
                 raise ValueError("Human/stakeholder generated no resources")
             resources = [
                 Resource(
+                    id=uuid5(planned.id, "output/0"),
                     name=f"Completed: {planned.name}",
                     description=planned.description,
                     content=json.dumps(inference.output),
                 )
             ]
-        for index, resource in enumerate(resources):
-            resource.id = uuid5(planned.id, f"output/{index}")
         if isinstance(actor, HumanAgentConfig):
             cost = hours * actor.hourly_rate
             human_output = HumanWorkOutput.model_validate(inference.output)

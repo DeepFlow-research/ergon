@@ -169,3 +169,11 @@ notes retained by normal native error tracebacks: finish reasons, token counts,
 tool names and argument sizes. No prompts or tool argument content are copied
 into these diagnostics. A request that fails before a response is returned may
 still have unavailable usage; full failed transcripts are not reconstructed.
+
+Model resource output schemas describe content drafts without identifiers.
+The worker constructs each native Resource with its existing deterministic
+UUID from the planned task and output index. Previously, a strict schema forced
+the model to generate UUIDs only for the worker to replace them, causing avoidable
+validation retries. Original scenario resource identities remain unchanged.
+PydanticAI retry feedback is retained as an error tool result (or a user message
+for a retry without a tool), preserving the feedback the next model call saw.
