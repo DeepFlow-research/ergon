@@ -200,7 +200,9 @@ Replay loads by that immutable reference and verifies both values; missing or
 corrupt bytes fail the run rather than repeat a completed provider operation.
 Stable worker-authored names still identify step calls; this internal replay
 reference does not change the public named resource API. Concurrent writes to
-the same blob use distinct temporary files before atomic replacement.
+the same blob use distinct, exclusively created temporary files before atomic
+replacement, preserving ordinary file/umask permissions for existing host-side
+readers of the shared artifact volume.
 
 Keep the existing blob volume with PostgreSQL and Inngest state during restarts.
 There is no new storage backend, task scheduler, sandbox execution path or GC.

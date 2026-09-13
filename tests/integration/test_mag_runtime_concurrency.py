@@ -116,6 +116,25 @@ async def test_graph_lock_does_not_block_the_event_loop(sample):
         second.close()
 
 
+@pytest.mark.asyncio
+async def test_graph_lock_allows_evaluation_summary_writes(sample):
+    with get_session() as graph_session:
+        await RuntimeGraphRepository.lock_sample(graph_session, sample)
+
+        def persist_summary():
+            with get_session() as evaluation_session:
+                evaluation_session.execute(text("SET LOCAL lock_timeout = '1s'"))
+                row = evaluation_session.get(SampleRecord, sample)
+                assert row is not None
+                row.summary_json = {"final_score": 1.0}
+                evaluation_session.add(row)
+                evaluation_session.commit()
+
+        # The old sample-row graph lock blocks this ordinary evaluator write,
+        # freezing the API when both run on the same async event loop.
+        await asyncio.to_thread(persist_summary)
+
+
 def test_historical_duplicate_messages_migrate_without_loss():
 
     schema = "mag_migration_" + uuid4().hex

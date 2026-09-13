@@ -115,9 +115,17 @@ Dashboard delivery hangs off state mutation (see `05_dashboard.md`); it is not a
 
 ### 4.1 Known limits
 
-Graph mutation and task claim share a sample-row lock. PostgreSQL uses
-`FOR NO KEY UPDATE`, acquired off the event loop so a lock waiter cannot freeze
-the coroutine holding it. A duplicate or stale ready event is skipped before
+Graph mutation, task claim and explicit sample cancellation share a PostgreSQL
+transaction advisory lock keyed by sample UUID. Graph acquisition runs off the
+event loop so a lock waiter cannot freeze the coroutine holding it. The lock
+does not touch the sample row: evaluation summaries and other telemetry can
+commit while a graph operation awaits a notification. Commit/rollback releases
+the lock; SQLite keeps its existing transaction behavior.
+PostgreSQL Sessions use SQLAlchemy `NullPool`: the synchronous queue-pool checkout
+otherwise blocks the async event loop when lock waiters occupy its connections.
+PostgreSQL supplies the connection ceiling; the current acceptance runs two
+episodes concurrently. Higher concurrency requires async database Sessions or
+a measured database connection budget, not an unbounded runtime claim. A duplicate or stale ready event is skipped before
 creating an attempt when the task is no longer pending/ready or prerequisites
 are incomplete. Late-created dependents of already-completed work are
 dispatched by the existing task service. Pending executable/dependency edits

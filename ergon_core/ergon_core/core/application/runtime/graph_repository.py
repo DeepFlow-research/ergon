@@ -18,7 +18,7 @@ from typing import Literal
 from uuid import UUID, uuid4
 
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
-from ergon_core.core.persistence.telemetry.models import SampleRecord
+from ergon_core.core.persistence.shared.db import lock_sample_transaction
 from ergon_core.core.persistence.samples.models import (
     SampleAnnotationEventRow,
     SampleEdgeEventRow,
@@ -86,19 +86,12 @@ class RuntimeGraphRepository:
     async def lock_sample(session: Session, sample_id: UUID) -> None:
         # ponytail: serialize graph transactions per sample; use ordered node
         # locks only if measured graph-write contention warrants the complexity.
-        def acquire() -> None:
-            session.exec(
-                select(SampleRecord.id)
-                .where(SampleRecord.id == sample_id)
-                .with_for_update(key_share=True)
-            ).first()
-
         # A blocking driver lock must not freeze the event loop while its owner
         # awaits a notification. Use this Session sequentially, never concurrently.
         if session.get_bind().dialect.name == "postgresql":
-            await asyncio.to_thread(acquire)
+            await asyncio.to_thread(lock_sample_transaction, session, sample_id)
         else:
-            acquire()
+            lock_sample_transaction(session, sample_id)
 
     def dependencies_complete(self, session: Session, sample_id: UUID, task_id: UUID) -> bool:
         return all(

@@ -7,11 +7,14 @@ Call ``ensure_db()`` once per process to apply pending migrations.
 import logging
 from functools import lru_cache
 from pathlib import Path
+from uuid import UUID
 
 from alembic import command
 from alembic.config import Config
 from ergon_core.core.shared.settings import Settings
-from sqlalchemy import Engine
+from sqlalchemy import Engine, text
+from sqlalchemy.engine import make_url
+from sqlalchemy.pool import NullPool
 from sqlmodel import Session, create_engine
 
 logger = logging.getLogger(__name__)
@@ -23,6 +26,11 @@ _ALEMBIC_INI = _ERGON_CORE_ROOT / "alembic.ini"
 @lru_cache(maxsize=1)
 def get_engine() -> Engine:
     url = Settings().database_url
+    if make_url(url).get_backend_name() == "postgresql":
+        # ponytail: these synchronous Sessions span async notifications. A full
+        # QueuePool blocks the event loop needed by current connection owners.
+        # Let PostgreSQL bound connections; use async Sessions for higher scale.
+        return create_engine(url, poolclass=NullPool)
     return create_engine(url)
 
 
@@ -48,3 +56,14 @@ def ensure_db() -> None:
 
 def get_session() -> Session:
     return Session(get_engine())
+
+
+def lock_sample_transaction(session: Session, sample_id: UUID) -> None:
+    """Serialize sample graph changes without locking unrelated sample telemetry."""
+    if session.get_bind().dialect.name == "postgresql":
+        # PostgreSQL releases this lock at commit/rollback. A UUID key collision
+        # only serializes unrelated samples; it cannot weaken mutual exclusion.
+        session.execute(
+            text("SELECT pg_advisory_xact_lock(CAST(:sample_key AS BIGINT))"),
+            {"sample_key": sample_id.int & ((1 << 63) - 1)},
+        )

@@ -97,3 +97,6 @@ def test_concurrent_identical_blob_writes_are_atomic(tmp_path):
         paths = list(executor.map(lambda _: blobs.write_blob(data, digest), range(8)))
     assert all(path.read_bytes() == data for path in paths)
     assert list(paths[0].parent.iterdir()) == [paths[0]]
+    reference = tmp_path / "regular-artifact"
+    reference.write_bytes(data)
+    assert paths[0].stat().st_mode & 0o777 == reference.stat().st_mode & 0o777
