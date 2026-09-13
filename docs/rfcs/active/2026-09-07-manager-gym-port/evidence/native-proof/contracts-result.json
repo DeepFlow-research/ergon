@@ -1,0 +1,146 @@
+{
+  "strict_xfail": [
+    {
+      "name": "test_preport_dependency_created_before_completion_releases",
+      "status": "passed",
+      "message": null,
+      "properties": {}
+    },
+    {
+      "name": "test_preport_dependency_created_after_completion_releases",
+      "status": "xfail",
+      "message": "Late dependent is not dispatched when its prerequisite is already complete",
+      "properties": {}
+    },
+    {
+      "name": "test_preport_explicit_cancellation_stays_cancelled",
+      "status": "xfail",
+      "message": "Explicitly cancelled dependent is reactivated by upstream completion",
+      "properties": {}
+    },
+    {
+      "name": "test_preport_refinement_reaches_executable_task",
+      "status": "xfail",
+      "message": "Description refinement does not update the Task snapshot loaded for execution",
+      "properties": {}
+    },
+    {
+      "name": "test_preport_prepare_rechecks_dependencies",
+      "status": "xfail",
+      "message": "Prepare creates an attempt without rejecting an unfinished prerequisite",
+      "properties": {}
+    },
+    {
+      "name": "test_preport_same_class_people_have_distinct_bindings",
+      "status": "xfail",
+      "message": "Configured people are assigned the same class-derived Worker slug",
+      "properties": {}
+    },
+    {
+      "name": "test_preport_inline_manager_does_not_repeat_policy",
+      "status": "xfail",
+      "message": "SDK replay repeats uncheckpointed policy work even though spawning itself is memoized",
+      "properties": {
+        "policy_calls": "5"
+      }
+    },
+    {
+      "name": "test_preport_existing_sdk_step_can_checkpoint_policy",
+      "status": "passed",
+      "message": null,
+      "properties": {}
+    },
+    {
+      "name": "test_preport_full_output_and_actor_context_already_persist",
+      "status": "passed",
+      "message": null,
+      "properties": {}
+    },
+    {
+      "name": "test_preport_message_retries_currently_make_two_rows",
+      "status": "passed",
+      "message": null,
+      "properties": {}
+    },
+    {
+      "name": "test_preport_evaluator_failure_has_no_valid_score",
+      "status": "xfail",
+      "message": "Evaluator exception is persisted as a valid numeric zero",
+      "properties": {}
+    }
+  ],
+  "desired_contracts": [
+    {
+      "name": "test_preport_dependency_created_before_completion_releases",
+      "status": "passed",
+      "message": null,
+      "properties": {}
+    },
+    {
+      "name": "test_preport_dependency_created_after_completion_releases",
+      "status": "failed",
+      "message": "AssertionError: assert UUID('ed24a751-cbf4-4b28-a931-548f1a4852f0') in []\n +  where UUID('ed24a751-cbf4-4b28-a931-548f1a4852f0') = SpawnedTaskHandle(task_id=UUID('ed24a751-cbf4-4b28-a931-548f1a4852f0')).task_id",
+      "properties": {}
+    },
+    {
+      "name": "test_preport_explicit_cancellation_stays_cancelled",
+      "status": "failed",
+      "message": "AssertionError: assert (UUID('093796a0-14d5-4e4d-b0cc-9d14a1e74454') not in [UUID('093796a0-14d5-4e4d-b0cc-9d14a1e74454')])\n +  where UUID('093796a0-14d5-4e4d-b0cc-9d14a1e74454') = SpawnedTaskHandle(task_id=UUID('093796a0-14d5-4e4d-b0cc-9d14a1e74454')).task_id",
+      "properties": {}
+    },
+    {
+      "name": "test_preport_refinement_reaches_executable_task",
+      "status": "failed",
+      "message": "AssertionError: assert 'spawned child' == 'revised instructions'\n  \n  - revised instructions\n  + spawned child",
+      "properties": {}
+    },
+    {
+      "name": "test_preport_prepare_rechecks_dependencies",
+      "status": "failed",
+      "message": "AssertionError: assert not [SampleTaskAttempt(sample_id=UUID('034af2e6-6b65-45c6-b400-f57aa319c8a6'), id=UUID('4f070854-a8c7-49d4-a268-32a511b6d9...ime.datetime(2026, 9, 13, 16, 44, 11, 325030), final_assistant_message=None, error_json=None, worker_output_json=None)]\n +  where [SampleTaskAttempt(sample_id=UUID('034af2e6-6b65-45c6-b400-f57aa319c8a6'), id=UUID('4f070854-a8c7-49d4-a268-32a511b6d9...ime.datetime(2026, 9, 13, 16, 44, 11, 325030), final_assistant_message=None, error_json=None, worker_output_json=None)] = all()\n +    where all = <sqlalchemy.engine.result.ScalarResult object at 0x1158b9180>.all\n +      where <sqlalchemy.engine.result.ScalarResult object at 0x1158b9180> = exec(<sqlmodel.sql._expression_select_cls.SelectOfScalar object at 0x115bbed50>)\n +        where exec = <sqlmodel.orm.session.Session object at 0x1159929e0>.exec\n +        and   <sqlmodel.sql._expression_select_cls.SelectOfScalar object at 0x115bbed50> = where(<sqlalchemy.orm.attributes.InstrumentedAttribute object at 0x1090e9620> == UUID('9eb4bb48-1af2-405f-bc13-68c12a3914bb'))\n +          where where = <sqlmodel.sql._expression_select_cls.SelectOfScalar object at 0x115bbec30>.where\n +            where <sqlmodel.sql._expression_select_cls.SelectOfScalar object at 0x115bbec30> = select(SampleTaskAttempt)\n +          and   <sqlalchemy.orm.attributes.InstrumentedAttribute object at 0x1090e9620> = SampleTaskAttempt.task_id\n +          and   UUID('9eb4bb48-1af2-405f-bc13-68c12a3914bb') = SpawnedTaskHandle(task_id=UUID('9eb4bb48-1af2-405f-bc13-68c12a3914bb')).task_id",
+      "properties": {}
+    },
+    {
+      "name": "test_preport_same_class_people_have_distinct_bindings",
+      "status": "failed",
+      "message": "AssertionError: assert 'echo' != 'echo'\n +  where 'echo' = SampleGraphNode(sample_id=UUID('21a14730-e2a1-4f9a-9c67-19ceca0e998b'), task_slug='a', task_json={'task_slug': 'a', 'i..., is_dynamic=True, assigned_worker_slug='echo', level=1, updated_at=datetime.datetime(2026, 9, 13, 16, 44, 11, 453661)).assigned_worker_slug\n +    where SampleGraphNode(sample_id=UUID('21a14730-e2a1-4f9a-9c67-19ceca0e998b'), task_slug='a', task_json={'task_slug': 'a', 'i..., is_dynamic=True, assigned_worker_slug='echo', level=1, updated_at=datetime.datetime(2026, 9, 13, 16, 44, 11, 453661)) = node((<sqlmodel.orm.session.Session object at 0x115a179b0>, UUID('21a14730-e2a1-4f9a-9c67-19ceca0e998b'), SampleGraphNode(), <ergon_core.core.application.runtime.task_management.TaskManagementService object at 0x115a17650>), UUID('7a07490c-9a0d-4759-8356-6a026ad2ffcc'))\n +      where UUID('7a07490c-9a0d-4759-8356-6a026ad2ffcc') = SpawnedTaskHandle(task_id=UUID('7a07490c-9a0d-4759-8356-6a026ad2ffcc')).task_id\n +  and   'echo' = SampleGraphNode(sample_id=UUID('21a14730-e2a1-4f9a-9c67-19ceca0e998b'), task_slug='b', task_json={'task_slug': 'b', 'i..., is_dynamic=True, assigned_worker_slug='echo', level=1, updated_at=datetime.datetime(2026, 9, 13, 16, 44, 11, 469679)).assigned_worker_slug\n +    where SampleGraphNode(sample_id=UUID('21a14730-e2a1-4f9a-9c67-19ceca0e998b'), task_slug='b', task_json={'task_slug': 'b', 'i..., is_dynamic=True, assigned_worker_slug='echo', level=1, updated_at=datetime.datetime(2026, 9, 13, 16, 44, 11, 469679)) = node((<sqlmodel.orm.session.Session object at 0x115a179b0>, UUID('21a14730-e2a1-4f9a-9c67-19ceca0e998b'), SampleGraphNode(), <ergon_core.core.application.runtime.task_management.TaskManagementService object at 0x115a17650>), UUID('57e021e0-3e1c-454a-b84b-59514858977c'))\n +      where UUID('57e021e0-3e1c-454a-b84b-59514858977c') = SpawnedTaskHandle(task_id=UUID('57e021e0-3e1c-454a-b84b-59514858977c')).task_id",
+      "properties": {}
+    },
+    {
+      "name": "test_preport_inline_manager_does_not_repeat_policy",
+      "status": "failed",
+      "message": "AssertionError: policy calls=5 for one decision and one spawned node\nassert 5 == 1",
+      "properties": {
+        "policy_calls": "5"
+      }
+    },
+    {
+      "name": "test_preport_existing_sdk_step_can_checkpoint_policy",
+      "status": "passed",
+      "message": null,
+      "properties": {}
+    },
+    {
+      "name": "test_preport_full_output_and_actor_context_already_persist",
+      "status": "passed",
+      "message": null,
+      "properties": {}
+    },
+    {
+      "name": "test_preport_message_retries_currently_make_two_rows",
+      "status": "passed",
+      "message": null,
+      "properties": {}
+    },
+    {
+      "name": "test_preport_evaluator_failure_has_no_valid_score",
+      "status": "failed",
+      "message": "AssertionError: persisted failure score=0.0\nassert 0.0 is None\n +  where 0.0 = SampleTaskEvaluation(sample_id=UUID('f858d940-bd91-4e1e-bdfc-169e26f4ba7c'), task_id=UUID('22036a8d-24bd-4d02-9f2f-5cd..._score': 0.0, 'stages_evaluated': 0, 'stages_passed': 0, 'failed_gate': None, 'metadata': {}, 'criterion_results': []}).score",
+      "properties": {}
+    }
+  ],
+  "baseline": {
+    "passed": 25,
+    "scope": "existing focused spawn, identity, communication, aggregation, worker stream and evaluator persistence tests"
+  }
+}

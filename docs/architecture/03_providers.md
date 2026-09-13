@@ -125,6 +125,18 @@ Movement of data across this diagram:
 
 ## 4. Invariants
 
+The builtins OpenAI-compatible resolver preserves an explicitly supplied
+gateway path such as `/v1/models/<deployment>` or `/v1`; host-only targets keep
+the normal `/v1` default. An explicit `#served-model` avoids unnecessary model
+discovery. Credentials come from explicit configuration or
+`ERGON_OPENAI_COMPATIBLE_API_KEY`, with the existing keyless-local fallback.
+They must not be serialized into benchmark records. MAG's integration profile
+requires an explicit internal training gateway target for all inference roles.
+
+`E2BSandboxRuntime.read_file` returns bytes using the SDK byte format. Detaching
+an attached SDK handle does not call nonexistent `AsyncSandbox.close`; native
+terminal cleanup still owns remote sandbox termination.
+
 1. **One entry point to LLM resolution.** Every model reference goes through `resolve_model_target`. Enforced by grep discipline and review; no runtime check.
 2. **Backends register at import time.** `register_model_backend` must be called before any caller hits `resolve_model_target`. Enforced by the builtins pack running its registration loop at import, before any worker module imports.
 3. **Singleton managers hold authoritative sandbox state.** A subclass's class-level state is the only source of truth for in-process reconnect. Enforced by `__new__` caching the instance and `get_sandbox` reading the class dict. Applies only within a single Python process; cross-process actors must use `terminate_by_sandbox_id` or provision their own sandbox.

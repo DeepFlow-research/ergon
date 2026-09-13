@@ -1,0 +1,27 @@
+{
+  "started_at": "2026-09-13T17:28:36.073497+00:00",
+  "sample_id": "fe5c76fe-5d4c-4355-a834-645635954098",
+  "scope": "real Inngest/Postgres/E2B native lifecycle; deterministic worker and criterion",
+  "sample_status": "executing",
+  "nodes": [
+    {
+      "task_id": "4604a9fd-9442-4d8a-b8a6-ae7fae5cb14f",
+      "status": "running"
+    },
+    {
+      "task_id": "d600e567-018d-4b13-b812-cd0fe981305f",
+      "status": "pending"
+    }
+  ],
+  "attempts": [
+    {
+      "id": "6451c5e7-424d-4e06-9629-d872c76312e2",
+      "status": "running",
+      "sandbox_id": null,
+      "worker_output": null,
+      "error": null
+    }
+  ],
+  "evaluations": [],
+  "resources": []
+}

@@ -11,7 +11,7 @@ export interface EvaluationRollup {
   failed: number;
   errored: number;
   skipped: number;
-  normalizedScore: number;
+  normalizedScore: number | null;
   maxScore: number;
   evaluatorNames: string[];
   attachedTaskIds: string[];

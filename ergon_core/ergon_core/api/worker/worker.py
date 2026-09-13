@@ -56,6 +56,16 @@ class Worker(BaseModel, ABC):
     requires_sandbox: ClassVar[type[Sandbox]] = Sandbox
 
     name: str
+    actor_key: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Optional stable person/policy identity within a sample; distinct from the executable Worker type.",
+    )
+
+    @property
+    def binding_key(self) -> str:
+        return self.actor_key or self.type_slug
+
     # `model` is required (no default) — defaults hide sizing decisions
     # per RFC 2026-04-22. Subclasses that want a fixed model should set
     # it on the subclass, not on the base.
@@ -63,7 +73,7 @@ class Worker(BaseModel, ABC):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @abstractmethod
-    async def execute(
+    def execute(
         self,
         task: Task,
         *,

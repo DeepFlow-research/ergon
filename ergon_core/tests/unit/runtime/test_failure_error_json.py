@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -43,6 +44,7 @@ async def test_finalize_failure_preserves_structured_error_json(monkeypatch) -> 
     }
 
     monkeypatch.setattr(module, "get_session", fake_get_session)
+    monkeypatch.setattr(TaskExecutionService, "_cancelled", AsyncMock(return_value=False))
 
     async def fake_mark_failed_by_node(*args, **kwargs):
         return None

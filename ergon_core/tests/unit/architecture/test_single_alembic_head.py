@@ -14,6 +14,8 @@ def test_v2_migration_stack_is_explicit() -> None:
         "00000001_add_experiment_persistence.py",
         "00000002_add_sample_experiment_provenance.py",
         "00000003_delete_definition_runtime_columns.py",
+        "00000004_message_idempotency.py",
+        "00000005_message_metadata.py",
     ]
 
 

@@ -1,0 +1,68 @@
+{
+  "ergon_base_commit": "6910ecfc74807209b86db5c6f063ac9932b462a0",
+  "branch": "agent/overnight-example-canaries",
+  "tracked_modified_paths": [
+    "ergon_builtins/ergon_builtins/benchmarks/gdpeval/loader.py",
+    "ergon_builtins/ergon_builtins/benchmarks/gdpeval/rubric/__init__.py",
+    "ergon_builtins/ergon_builtins/benchmarks/gdpeval/task_schemas.py",
+    "ergon_builtins/ergon_builtins/benchmarks/gdpeval/tools/tool_builder.py",
+    "ergon_builtins/ergon_builtins/benchmarks/researchrubrics/criteria/__init__.py",
+    "ergon_builtins/ergon_builtins/benchmarks/researchrubrics/rubric.py",
+    "ergon_builtins/ergon_builtins/benchmarks/swebench_verified/sandbox_template/Dockerfile",
+    "ergon_builtins/ergon_builtins/benchmarks/swebench_verified/tools/tool_builder.py",
+    "ergon_builtins/ergon_builtins/environments/catalog.py",
+    "ergon_builtins/pyproject.toml",
+    "ergon_builtins/tests/unit/benchmarks/test_catalog.py",
+    "ergon_builtins/tests/unit/benchmarks/test_gdpeval_loader_types.py",
+    "ergon_cli/tests/unit/state/test_onboard_profile.py",
+    "examples/experiment_api/02_mixed_environment_training/submit.py",
+    "examples/experiment_api/03_streaming_hf_dataset/submit.py",
+    "examples/experiment_api/05_row_dependent_runtime_configs/submit.py",
+    "examples/getting_started/01_minif2f_local_llamacpp/README.md",
+    "examples/getting_started/01_minif2f_local_llamacpp/submit.py",
+    "tests/examples/test_experiment_api_examples.py",
+    "tests/examples/test_getting_started_examples.py",
+    "tests/examples/test_minif2f_local_llamacpp_example.py"
+  ],
+  "python": "3.13.13 (main, Jun  2 2026, 22:33:40) [Clang 22.1.3 ]",
+  "local_packages": {
+    "inngest": "0.5.18",
+    "e2b": "2.20.0",
+    "e2b-code-interpreter": "2.6.0",
+    "pydantic-ai-slim": "1.87.0",
+    "sqlmodel": "0.0.38"
+  },
+  "sha256": {
+    "ergon_core/ergon_core/core/jobs/task/worker_execute/job.py": "8eb028145175b17d200ecac9f40ffe0fdc2e26281bf443e5cddf9ba8f2dc742b",
+    "ergon_core/ergon_core/core/application/runtime/task_management.py": "5ec58696be7a54a6e20909fb15bfa04fb48bca6776302c3947b260cafcd9030c",
+    "ergon_core/ergon_core/core/application/runtime/task_execution.py": "658e06b77ccd6a37b36006bc7ebd7e6fa3f89aa4d71561abe99d77456334930d",
+    "ergon_core/ergon_core/core/application/runtime/lifecycle.py": "794caa8a987815c12844fa70b3313f9101f31b521bf154a453dacfb37d936011",
+    "ergon_core/ergon_core/core/application/communication/service.py": "3aea3fd339ca078094d3987731698b7d6fc08e138af7411a046ebefc928b57d5",
+    "ergon_core/ergon_core/core/application/evaluation/service.py": "52e1bb605611c191a4162a79d219e987587a3ce2b0ed5ea3086a6ec85f5196a7",
+    "ergon_builtins/ergon_builtins/sandbox/e2b_runtime.py": "a6eeddf6ad8cbe46afee47eb190399c14b812019c371c2221a2abd95563dca14",
+    "ergon_builtins/ergon_builtins/llm/providers/openai_compatible.py": "64fa56dc25d7be2f11c5808557797bdc3c02cd5f39f06613c02412322e24f786",
+    "ergon_core/tests/unit/runtime/test_manager_gym_preport_proof.py": "1e041b6a2394994e5236f3970090bb7c4dd8d01a7edae6fb1e8e7b79d1ed0c9e",
+    "tests/fixtures/mag_preport.py": "29c49119b264460415ed6e723c86dbb278d95c73c33a3eb1ccaf1a89d49691ba",
+    "uv.lock": "61fe59c98ecf31917739c0fe78a7cbbc5d066f8df615332b686d3ac5ef884318",
+    "docs/rfcs/active/2026-09-07-manager-gym-port/evidence/native-proof/postgres_probe.py": "2b94ea3d6d255ed32f5ba3083ee18c2cf741b7492240e49de28d685d6ee89d29",
+    "docs/rfcs/active/2026-09-07-manager-gym-port/evidence/native-proof/e2b_probe.py": "5db1e83cb1c186f554d300b1e9f821395fd0b50aef5657dadb916b7f9f78398c",
+    "docs/rfcs/active/2026-09-07-manager-gym-port/evidence/native-proof/qwen_probe.py": "a4d843200eda5036c8839a020411dff0376c6818f1bc6fa06a1014e339ab2562",
+    "docs/rfcs/active/2026-09-07-manager-gym-port/evidence/native-proof/lifecycle_probe.py": "ee46e366809ff7bae9e4d9e76d9c33de67a45d7afef7be7209deaff5f84f840c",
+    "Dockerfile": "f0243b3318f7c48d50ce8fa8f66d1ace38f1e7806ae6138ad8fa00f525beda88"
+  },
+  "composition": "isolated local Compose project ergon-mag-proof; Linux aarch64; no training-account VM",
+  "source_status": "pre-existing dirty working tree; production code unmodified by this proof",
+  "linux_api_packages": {
+    "inngest": "0.5.19",
+    "e2b": "2.49.1",
+    "e2b-code-interpreter": "2.10.0",
+    "pydantic-ai-slim": "2.31.1",
+    "sqlmodel": "0.0.42"
+  },
+  "local_stack_cleanup": {
+    "compose_project": "ergon-mag-proof",
+    "containers_and_network_removed": true,
+    "database_volume_retained": "ergon-mag-proof_postgres_data",
+    "cloud_vm_or_gpu_created": false
+  }
+}

@@ -76,6 +76,7 @@ def build_evaluation_summary(
                 evaluated_resource_ids=cr.evaluated_resource_ids,
                 observation=cr.observation,
                 error=cr.error,
+                metadata=cr.metadata,
             )
         )
     stage_names = {s.stage_name for s in specs}

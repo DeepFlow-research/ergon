@@ -320,6 +320,10 @@ class Thread(SQLModel, table=True):
 
 class ThreadMessage(SQLModel, table=True):
     __tablename__ = "thread_messages"
+    __table_args__ = (
+        sa.UniqueConstraint("thread_id", "sequence_num", name="uq_thread_message_sequence"),
+        sa.UniqueConstraint("thread_id", "idempotency_key", name="uq_thread_message_action"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     thread_id: UUID = Field(foreign_key="threads.id", index=True)
@@ -333,6 +337,10 @@ class ThreadMessage(SQLModel, table=True):
     to_agent_id: str
     content: str
     sequence_num: int
+    idempotency_key: str | None = None
+    metadata_json: dict = Field(
+        default_factory=dict, sa_column=sa.Column(sa.JSON, nullable=False, server_default="{}")
+    )
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
 

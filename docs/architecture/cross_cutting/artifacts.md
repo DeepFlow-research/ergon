@@ -73,6 +73,15 @@ worker. That is the whole point.
 
 ## Current state
 
+Native MAG workers write resources to their E2B task sandbox under
+`/workspace/final_output/<logical-resource-uuid>.txt`; the root writes the frozen
+episode JSON there. Existing resource publication stores bytes and hashes in
+normal `SampleResource` records/blob storage. Task output also contains typed
+resource metadata and the frozen snapshot hash, so downstream native tasks
+and criteria use the full persisted output. The VM's `/tmp/ergon-blob` is
+retained artifact storage; it is not the task sandbox. Acceptance exports both
+database evidence and blob bytes before deleting a temporary VM.
+
 - `WorkerOutput.artifacts` no longer exists on the public surface; the
   serializable worker result carries `output`, `success`, and `metadata`
   only (see `ergon_core/api/results.py`). Workers that need to hand files
@@ -177,3 +186,23 @@ promotes into the runtime's public contract.
 - Retention policy. `ERGON_BLOB_ROOT` has no documented GC. Decide on a
   per-run TTL and whether blobs survive task deletion; wire into the
   RunResource lifecycle.
+
+## Native worker checkpoint artifacts
+
+`WorkerContext.run_step` in a runtime job uses `WorkerCheckpointStore` to retain
+typed JSON results through `SampleResourcePublishService` and the existing
+`SandboxResourcePublisher` blob adapter. These ordinary `SampleResource` artifacts
+are scoped to the sample and attempt, named `.checkpoints/<step>.json`, and
+exported alongside other resources. They are runtime evidence, not worker reports.
+The Inngest step records only a SHA-256 and byte count after publication commits,
+so repeated observations do not consume the engine's 32 MB aggregate state limit.
+Replay loads by that immutable reference and verifies both values; missing or
+corrupt bytes fail the run rather than repeat a completed provider operation.
+Stable worker-authored names still identify step calls; this internal replay
+reference does not change the public named resource API. Concurrent writes to
+the same blob use distinct temporary files before atomic replacement.
+
+Keep the existing blob volume with PostgreSQL and Inngest state during restarts.
+There is no new storage backend, task scheduler, sandbox execution path or GC.
+Deleting checkpoint artifacts while an attempt can replay breaks recovery. The
+provider-response-before-checkpoint failure gap remains unchanged.

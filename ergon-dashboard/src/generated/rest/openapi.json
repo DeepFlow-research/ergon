@@ -1,9 +1,3 @@
-2026-05-28 19:49:43,286 INFO alembic.runtime.plugins: setup plugin alembic.autogenerate.schemas
-2026-05-28 19:49:43,286 INFO alembic.runtime.plugins: setup plugin alembic.autogenerate.tables
-2026-05-28 19:49:43,286 INFO alembic.runtime.plugins: setup plugin alembic.autogenerate.types
-2026-05-28 19:49:43,286 INFO alembic.runtime.plugins: setup plugin alembic.autogenerate.constraints
-2026-05-28 19:49:43,286 INFO alembic.runtime.plugins: setup plugin alembic.autogenerate.defaults
-2026-05-28 19:49:43,286 INFO alembic.runtime.plugins: setup plugin alembic.autogenerate.comments
 {
   "openapi": "3.1.0",
   "info": {
@@ -3950,7 +3944,14 @@
             "title": "Aggregationrule"
           },
           "totalScore": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Totalscore"
           },
           "maxScore": {
@@ -3958,7 +3959,14 @@
             "title": "Maxscore"
           },
           "normalizedScore": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Normalizedscore"
           },
           "stagesEvaluated": {

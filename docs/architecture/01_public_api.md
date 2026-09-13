@@ -233,6 +233,34 @@ within the constraints the invariants below impose.
 
 ## extension points
 
+### Native worker composition and incomplete evaluation
+
+`Worker.actor_key` optionally supplies a configured actor identity across task
+invocations; `Worker.binding_key` falls back to `type_slug`. The worker type
+remains the serialization/execution discriminator. Do not replace a code type
+with a person's identifier.
+
+`WorkerContext.spawn_task` returns a bound `SpawnedTaskHandle`. Its `wait` (or
+`context.wait_for_task`) durably observes a descendant's persisted status and
+full `WorkerOutput`, attempt ID, error and timestamps. Timeouts return
+`timed_out=True`; they do not cancel work. The unbound handle still raises
+`AwaitCompletionNotSupportedError`. `run_step` checkpoints a BaseModel-valued
+operation using the existing workflow step; task mutations belong outside that
+operation. This supports one manager Worker making multiple decisions.
+
+`refine_task` accepts optional `replacement: Task` and `depends_on` for atomic
+unclaimed-task edits. Identity and containment remain fixed; a running or
+terminal executable replacement is rejected. Existing description-only callers
+retain their behavior. Spawn/refine/cancel/restart use the same native task
+service and the existing step-aware job wrapper.
+
+`Evaluator.failure_policy` defaults to `zero` for compatibility. Evaluators
+that require invalid runs to remain unscored can opt into `incomplete`:
+failure persists a null score and error metadata. `EvaluationSummary` and
+sample/dashboard contracts retain that null. Criterion metadata is retained in
+the normal summary for reproducible aggregation. See
+[native MAG](09_manager_gym.md) for a concrete composition.
+
 ### add a new benchmark
 
 **v2 object-bound path (preferred for new benchmarks):**

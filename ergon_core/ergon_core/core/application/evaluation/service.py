@@ -145,12 +145,14 @@ class EvaluationService:
         task_id: UUID,
         binding_key: str,
         exc: Exception,
+        incomplete: bool = False,
     ) -> None:
         error_type = type(exc).__name__
         summary = EvaluationSummary(
             evaluator_name=binding_key,
             max_score=0.0,
-            normalized_score=0.0,
+            normalized_score=None if incomplete else 0.0,
+            metadata={"incomplete": incomplete, "error_type": error_type},
             stages_evaluated=0,
             stages_passed=0,
             criterion_results=[],
@@ -163,7 +165,7 @@ class EvaluationService:
                 task_attempt_id=task_attempt_id,
                 task_id=task_id,
                 evaluator_slug=binding_key,
-                score=0.0,
+                score=None if incomplete else 0.0,
                 passed=False,
                 feedback=f"{error_type}: {exc}",
                 summary_json=summary.model_dump(mode="json"),

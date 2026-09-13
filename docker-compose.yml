@@ -69,7 +69,7 @@ services:
         - type=gha,scope=ergon-api
       cache_to:
         - type=gha,scope=ergon-api,mode=max
-    image: ergon-api:local
+    image: ${ERGON_API_IMAGE:-ergon-api:local}
     ports:
       - "9000:9000"
     env_file:

@@ -43,6 +43,14 @@ environment; see table below.
 
 ## Workers
 
+Native MAG: `benchmarks/manager_gym/` supplies `MAGManagerWorker`,
+`MAGWorkWorker`, `MAGHumanWorker` and `MAGStakeholderWorker` plus `MAGRubric`.
+Submit explicit `EpisodeConfig` records with `Environment.from_records` and
+`make_manager_gym_sample`; do not add an Environment subclass. The manager
+supports `cot`, `random` and `assign_all`. Work uses E2B and the explicit internal
+model binding. See `examples/manager_gym/README.md` and
+`docs/architecture/09_manager_gym.md` for current composition and acceptance.
+
 | slug | class | requires | notes |
 |---|---|---|---|
 | `training-stub` | `workers/baselines/training_stub_worker.py` | none | Emits synthetic multi-turn data with fake logprobs/token_ids — exercises the RL extraction path without a real model. |

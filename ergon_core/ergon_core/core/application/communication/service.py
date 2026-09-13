@@ -39,6 +39,45 @@ class CommunicationService:
                 thread_summary=request.thread_summary,
             )
 
+            # Lock before reading the next sequence or checking replay keys.
+            # The thread is the existing serialization boundary for messages.
+            session.exec(select(Thread).where(Thread.id == thread.id).with_for_update()).one()
+            if request.idempotency_key is not None:
+                existing = session.exec(
+                    select(ThreadMessage).where(
+                        ThreadMessage.thread_id == thread.id,
+                        ThreadMessage.idempotency_key == request.idempotency_key,
+                    )
+                ).first()
+                if existing is not None:
+                    if (
+                        existing.from_agent_id,
+                        existing.to_agent_id,
+                        existing.content,
+                        existing.metadata_json,
+                    ) != (
+                        request.from_agent_id,
+                        request.to_agent_id,
+                        request.content,
+                        request.metadata,
+                    ):
+                        raise ValueError(
+                            "Message idempotency key reused with different content or participants"
+                        )
+                    return MessageResponse(
+                        message_id=existing.id,
+                        thread_id=thread.id,
+                        sample_id=existing.sample_id,
+                        thread_topic=thread.topic,
+                        from_agent_id=existing.from_agent_id,
+                        to_agent_id=existing.to_agent_id,
+                        content=existing.content,
+                        sequence_num=existing.sequence_num,
+                        task_attempt_id=existing.task_attempt_id,
+                        created_at=existing.created_at,
+                        metadata=existing.metadata_json,
+                    )
+
             seq_num = (
                 session.exec(
                     select(func.coalesce(func.max(ThreadMessage.sequence_num), 0)).where(
@@ -56,6 +95,8 @@ class CommunicationService:
                 to_agent_id=request.to_agent_id,
                 content=request.content,
                 sequence_num=seq_num,
+                idempotency_key=request.idempotency_key,
+                metadata_json=request.metadata,
             )
             session.add(message)
 
@@ -76,6 +117,7 @@ class CommunicationService:
                 sequence_num=message.sequence_num,
                 task_attempt_id=message.task_attempt_id,
                 created_at=message.created_at,
+                metadata=message.metadata_json,
             )
 
         thread_dto = SampleCommunicationThreadDto(
@@ -140,6 +182,7 @@ class CommunicationService:
                     sequence_num=m.sequence_num,
                     task_attempt_id=m.task_attempt_id,
                     created_at=m.created_at,
+                    metadata=m.metadata_json,
                 )
                 for m in messages
             ]

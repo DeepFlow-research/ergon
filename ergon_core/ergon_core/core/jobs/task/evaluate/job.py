@@ -166,9 +166,10 @@ async def _run_evaluation(
             task_id=view.task_id,
             binding_key=binding_key,
             exc=exc,
+            incomplete=evaluator.failure_policy == "incomplete",
         )
         return EvaluateTaskRunResult(
-            score=0.0,
+            score=None if evaluator.failure_policy == "incomplete" else 0.0,
             passed=False,
             evaluator_name=binding_key,
         )

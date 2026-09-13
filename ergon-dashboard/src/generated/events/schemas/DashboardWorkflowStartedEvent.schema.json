@@ -1512,16 +1512,30 @@
           "type": "string"
         },
         "totalScore": {
-          "title": "Totalscore",
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Totalscore"
         },
         "maxScore": {
           "title": "Maxscore",
           "type": "number"
         },
         "normalizedScore": {
-          "title": "Normalizedscore",
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Normalizedscore"
         },
         "stagesEvaluated": {
           "title": "Stagesevaluated",

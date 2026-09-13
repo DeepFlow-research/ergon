@@ -80,6 +80,7 @@ rewrite.
 | [`05_dashboard.md`](05_dashboard.md) | Inngest→Next.js→Socket.io pipeline; HA constraints. |
 | [`06_builtins.md`](06_builtins.md) | Benchmark registration, template setup, stub worker pattern. |
 | [`07_testing.md`](07_testing.md) | Fast / state / e2e tiers; what each layer tests. |
+| [`09_manager_gym.md`](09_manager_gym.md) | Native MAG composition, scheduling differences, terminal scoring and acceptance. |
 | [`08_rl_loop.md`](08_rl_loop.md) | Rollout service, reward plumbing, TRL HTTP adapter. |
 
 Cross-cutting concerns that span layers live in [`cross_cutting/`](cross_cutting/):

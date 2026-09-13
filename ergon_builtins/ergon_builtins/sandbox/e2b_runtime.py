@@ -70,7 +70,7 @@ class E2BSandboxRuntime(SandboxRuntime):
         await self._sandbox.files.write(path, content)
 
     async def read_file(self, path: str) -> bytes:
-        return await self._sandbox.files.read(path)
+        return await self._sandbox.files.read(path, format="bytes")
 
     async def list_files(self, path: str) -> list[str]:
         result = await self._sandbox.commands.run(
@@ -85,7 +85,9 @@ class E2BSandboxRuntime(SandboxRuntime):
         await self._sandbox.kill()
 
     async def close_local(self) -> None:
-        await self._sandbox.close()
+        # E2B's async handle owns no client connection to close. Remote lifetime
+        # belongs to close()/the terminal cleanup job; detach must not kill it.
+        return None
 
 
 def _ensure_e2b_api_key() -> None:
