@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 import json
 import os
 from pathlib import Path
+from uuid import uuid4
 
 from ergon_builtins.benchmarks.manager_gym.actions import ManagerDecision
 from ergon_builtins.benchmarks.manager_gym.baselines import BulkDecision
@@ -87,6 +88,24 @@ async def main() -> None:
                 "elapsed_seconds": result.elapsed_seconds,
             }
         )
+    reference = f"POLICY-{uuid4().hex}"
+    calls = 0
+
+    async def lookup_policy() -> str:
+        """Read the policy reference required for the final resource."""
+        nonlocal calls
+        calls += 1
+        return f"Reference {reference}. Board approval and independent risk review are required."
+
+    tool_result = await infer(
+        model=args.model,
+        system="Call lookup_policy, then include its exact returned reference in a resource.",
+        prompt="Create a short policy note. Obtain its reference using the tool before answering.",
+        output_type=AITaskOutput,
+        tools=[lookup_policy],
+    )
+    if not calls or reference not in json.dumps(tool_result.output):
+        raise ValueError("Structured final output bypassed the required tool round trip")
     counts = []
     for scenario in SCENARIOS:
         state = new_episode(EpisodeConfig(scenario=scenario))
@@ -109,6 +128,12 @@ async def main() -> None:
                 "source_revision": SOURCE_REVISION,
                 "benchmark_version": BENCHMARK_VERSION,
                 "roles": receipts,
+                "tool_roundtrip": {
+                    "passed": True,
+                    "calls": calls,
+                    "input_tokens": tool_result.input_tokens,
+                    "output_tokens": tool_result.output_tokens,
+                },
                 "scenarios": counts,
             },
             indent=2,

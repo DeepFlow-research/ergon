@@ -52,6 +52,7 @@ docker compose exec -T api python examples/manager_gym/acceptance.py \
   --stage catalog --output /app/data/mag-acceptance
 ```
 
+Preflight checks all seven role schemas and a required tool round trip.
 Run stages in this order. A nonzero exit requires inspecting the saved sample
 before continuing. The scripted contract proves dependency order, repeated
 human fatigue, pending refinement/reassignment, cancellation, live messaging,
@@ -120,6 +121,10 @@ deadline or grading failure makes the MAG evaluation incomplete with a null
 score. Cancelled prerequisites are valid policy outcomes. Serial grading can
 exhaust the remaining lifetime on slow deployments; the acceptance result must
 expose that failure rather than silently reduce rubric coverage.
+
+Final responses use schema-validated prompted JSON in a single system message.
+Provider JSON constraints are disabled to preserve ordinary communication tools;
+the resolved inference profile records this choice.
 
 Inference uses at most 32,768 output tokens and a 2,048-token thinking budget, 300 seconds per request,
 12 requests per structured operation, two validation retries and a 600-second

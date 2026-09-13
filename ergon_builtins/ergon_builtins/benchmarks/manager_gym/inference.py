@@ -1,12 +1,15 @@
 """Bounded internal inference using Ergon's provider and transcript adapter."""
 
 import asyncio
+from dataclasses import replace
+import json
 from time import monotonic
 from typing import Any
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent
+from pydantic_ai import Agent, PromptedOutput
+from pydantic_ai.models import infer_model
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import UsageLimits
 
@@ -43,6 +46,9 @@ def inference_profile() -> dict[str, Any]:
         "validation_retries": 2,
         "request_limit": 12,
         "operation_timeout_seconds": 600,
+        "output_mode": "prompted_json_with_tools",
+        "provider_json_constraint": False,
+        "schema_prompt": "single_system_message",
     }
 
 
@@ -76,10 +82,19 @@ async def infer(
     temperature: float = 0.0,
 ) -> InferenceResult:
     resolved = resolve_model_target(require_internal_model(model))
+    backend = infer_model(resolved.model)
+    # The standing gateway's JSON constraint suppresses ordinary tool calls;
+    # final-output tools also produced empty arguments on long role responses.
+    # Keep normal tools and validate final JSON through PydanticAI instead.
+    backend.profile = replace(backend.profile, supports_json_object_output=False)
     agent = Agent[None, BaseModel](
-        resolved.model,
-        system_prompt=system,
-        output_type=output_type,
+        backend,
+        # Qwen accepts one leading system message. Put the schema there rather
+        # than letting PromptedOutput inject a second system message.
+        system_prompt=system
+        + "\nReturn your final answer as JSON matching this schema:\n"
+        + json.dumps(output_type.model_json_schema()),
+        output_type=PromptedOutput(output_type, template=False),
         tools=tools or [],
         retries=2,
         model_settings=model_settings(temperature),
