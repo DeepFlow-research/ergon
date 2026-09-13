@@ -147,3 +147,25 @@ validation feedback and a valid retry.
 Preflight requires the same tool round trip as well as all seven role schemas.
 This is an explicitly recorded inference profile change, not evidence of score
 parity with upstream models or a guarantee against future model failures.
+
+### Worker communication inputs
+
+The pinned SDK dispatches duplicated tool names through its last-definition map.
+That selects the source DI signatures for send/broadcast/recent messages;
+conversation/task reads retain the closure signatures. Native tools now retain
+source text previews: 100 characters for recent/task messages and 150 for a
+conversation, with recent messages newest first. AI/human task prompts do not
+receive an extra automatically injected inbox or execution-note block. Messages
+remain available through native actor-scoped tools and complete database records.
+
+Native task IDs populate the task-message default (the source closure captured
+None), and broadcasts fan out to ordinary recipient rows. Rejected sends expose
+only the already-permitted native actor IDs. These are explicit native mapping
+choices, not a duplicate MAG communication store. See the
+[communication contract audit](../rfcs/active/2026-09-07-manager-gym-port/evidence/implementation/communication-contract-audit.json).
+
+Provider/usage/timeout failures add compact response accounting to the exception
+notes retained by normal native error tracebacks: finish reasons, token counts,
+tool names and argument sizes. No prompts or tool argument content are copied
+into these diagnostics. A request that fails before a response is returned may
+still have unavailable usage; full failed transcripts are not reconstructed.

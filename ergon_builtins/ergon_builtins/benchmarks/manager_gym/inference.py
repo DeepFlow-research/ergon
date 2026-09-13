@@ -1,12 +1,15 @@
 """Bounded internal inference using Ergon's provider and transcript adapter."""
 
 import asyncio
+import json
 from time import monotonic
 from typing import Any
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, ToolOutput
+from pydantic_ai import Agent, ToolOutput, capture_run_messages
+from pydantic_ai.exceptions import AgentRunError
+from pydantic_ai.messages import ModelResponse, ToolCallPart
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import UsageLimits
 
@@ -87,8 +90,38 @@ async def infer(
         model_settings=model_settings(temperature),
     )
     started = monotonic()
-    async with asyncio.timeout(600):
-        result = await agent.run(prompt, usage_limits=UsageLimits(request_limit=12))
+    with capture_run_messages() as messages:
+        try:
+            async with asyncio.timeout(600):
+                result = await agent.run(prompt, usage_limits=UsageLimits(request_limit=12))
+        except (AgentRunError, TimeoutError) as error:
+            # Exception notes survive the existing native error/step traceback.
+            # Retain response accounting without copying prompts or tool arguments.
+            error.add_note(
+                json.dumps(
+                    {
+                        "model_responses": [
+                            {
+                                "finish_reason": message.finish_reason,
+                                "input_tokens": message.usage.input_tokens,
+                                "output_tokens": message.usage.output_tokens,
+                                "reasoning_tokens": message.usage.details.get("reasoning_tokens"),
+                                "tools": [
+                                    {
+                                        "name": part.tool_name,
+                                        "arguments_characters": len(part.args_as_json_str()),
+                                    }
+                                    for part in message.parts
+                                    if isinstance(part, ToolCallPart)
+                                ],
+                            }
+                            for message in messages
+                            if isinstance(message, ModelResponse)
+                        ]
+                    }
+                )
+            )
+            raise
     usage = result.usage()
     chunks = PydanticAITranscriptAdapter().build_chunks(result.all_messages())
     if chunks:

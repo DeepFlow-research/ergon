@@ -117,6 +117,10 @@
     "manager_agent_gym/core/manager_agent/random_manager.py": "c2a3d92424af53e620d4e9ec8b3ac00cb8ec43b7ed70cfbd78be8d7b02aaa7af",
     "manager_agent_gym/core/manager_agent/action_constraints.py": "dbc9f2a993a302b74833c2a632926ade022997c49aeb0bc3981a78459a26b713",
     "manager_agent_gym/core/manager_agent/llm_action_utils.py": "8dc561f8d8a0389895d43688b5397650df8ab2892ab20a17adb453259e36bae0",
-    "manager_agent_gym/core/workflow_agents/interface.py": "57b450ef07ff01f4564d11d611e9be3ef1aeacdcd7704823d8fb87f815686694"
+    "manager_agent_gym/core/workflow_agents/interface.py": "57b450ef07ff01f4564d11d611e9be3ef1aeacdcd7704823d8fb87f815686694",
+    "manager_agent_gym/core/workflow_agents/tools/communication.py": "ea381efd77b55f9cf9e3c805a4ef8f8af6181c6cc730f7c6aea300dbc268f493",
+    "manager_agent_gym/core/workflow_agents/tools/communication_di.py": "e707f7c540969a033637b4275655ef0cfd3ec1e4bee346b08d617c6c56183289",
+    "manager_agent_gym/core/workflow_agents/tool_factory.py": "5338585804e022ec2595a4a590460ed0ee14e05c39b96a3e810751d572fba3d8",
+    "manager_agent_gym/core/workflow_agents/registry.py": "a02a0a332782e48fd692bb9477544ddba62eb8b0a1d5566bf3b0ec6451205c4d"
   }
 }

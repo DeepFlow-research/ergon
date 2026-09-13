@@ -47,9 +47,9 @@ docker compose exec -T api python examples/manager_gym/cancellation.py \
 docker compose exec -T api python examples/manager_gym/acceptance.py \
   --stage contract --output /app/data/mag-acceptance
 docker compose exec -T api python examples/manager_gym/acceptance.py \
-  --stage pilot --output /app/data/mag-acceptance
+  --stage pilot --output /app/data/mag-acceptance --timeout-seconds 14400
 docker compose exec -T api python examples/manager_gym/acceptance.py \
-  --stage catalog --output /app/data/mag-acceptance
+  --stage catalog --output /app/data/mag-acceptance --timeout-seconds 14400
 ```
 
 Preflight checks all seven role schemas and a required tool round trip.
@@ -79,7 +79,8 @@ docker compose exec -T api python examples/manager_gym/submit.py \
   --scenario marketing_campaign --manager-mode assign_all
 ```
 
-Use `--all` for all 20 scenario records. `cot` is the default; `random` is
+Use `--all` to submit all 20 scenario records together. Use the acceptance runner
+above for the two-concurrent-sample VM profile. `cot` is the default; `random` is
 RandomV2 (random action class followed by a model call), and `assign_all` makes
 one model-generated mapping, fills gaps with the source fallback, admits
 leaves in dependency order, then no-ops. Each uses the same native execution
@@ -107,7 +108,7 @@ derives fatigue from the completed PostgreSQL attempts visible at invocation
 start, so concurrent invocations may capture the same history. Running work cannot be
 reassigned; unclaimed work can. No MAG scheduler is embedded.
 
-Model prompts retain source resource previews (300 characters for manager/judge, 200 for AI/human workers) and bounded manager message/action briefs. Native records, callable evaluation inputs and frozen artifacts retain full contents.
+Model prompts retain source resource previews (300 characters for manager/judge, 200 for AI/human workers) and bounded manager message/action briefs. Worker message tools use source text previews: 100 characters for recent/task messages and 150 for conversations. Workers read their inbox through tools; a full inbox is not appended to task prompts. Native records, callable evaluation inputs and frozen artifacts retain full contents.
 
 The default 50 decisions cover indices 0–49. Seven scenarios contain later
 events, so this is an integration profile, not a complete timeline experiment
@@ -135,12 +136,13 @@ transcripts are retained. Typed workflow checkpoints are ordinary native resourc
 artifacts under `.checkpoints/`; Inngest records small verified references. Keep
 those artifacts with the database and blob volume during restarts and export
 them before VM deletion. They are runtime evidence, not task output reports. A provider exception before its checkpoint can lose
-that failed call's transcript/usage; zero recorded usage is not proof of zero
-requests. Existing task retries are recorded separately.
+that failed call's full transcript. Native errors retain available response usage,
+finish reasons and tool names; usage before a response may be unavailable. Zero
+recorded usage is not proof of zero requests. Existing task retries are recorded separately.
 
 The thinking cap was verified against the standing deployment after an
 exploratory worker exhausted its full output budget. It is a per-request
-sampling setting, as documented by [vLLM](https://docs.vllm.ai/en/v0.22.0/features/reasoning_outputs/#thinking-budget-control),
+sampling setting, as documented by [vLLM](https://docs.vllm.ai/en/v0.28.0/features/reasoning_outputs/#thinking-budget-control),
 and does not modify the shared deployment. The complete profile is saved in
 sample source metadata and the preflight receipt.
 

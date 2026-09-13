@@ -8,13 +8,13 @@ from typing import Any, ClassVar
 from uuid import UUID, uuid5
 
 from pydantic import BaseModel, Field
-from sqlmodel import select, col
+from sqlmodel import select
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
 from ergon_core.api.worker import WorkerOutput
 from ergon_core.core.application.communication.models import CreateMessageRequest
 from ergon_core.core.application.communication.service import CommunicationService
-from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt, ThreadMessage
+from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
 from ergon_builtins.benchmarks.manager_gym.communication import MAGCommunication
 from ergon_builtins.benchmarks.manager_gym.inference import infer, InferenceResult
 from ergon_builtins.benchmarks.manager_gym.outputs import (
@@ -54,7 +54,6 @@ class WorkInputs(BaseModel):
     hours_worked: float = 0
     completed_tasks: int = 0
     prior_attempt_ids: list[UUID] = Field(default_factory=list)
-    inbox: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class WorkResult(BaseModel):
@@ -102,20 +101,10 @@ async def read_inputs(payload: WorkPayload, context: WorkerContext) -> WorkInput
                     prior_attempt_ids.append(row.id)
                     hours += float(metadata.get("accounted_hours", 0))
                     count += int(not metadata.get("misunderstanding", False))
-        messages = session.exec(
-            select(ThreadMessage)
-            .where(
-                ThreadMessage.sample_id == context.sample_id,
-                ThreadMessage.to_agent_id == payload.actor["agent_id"],
-            )
-            .order_by(col(ThreadMessage.created_at), col(ThreadMessage.id))
-        ).all()
-        inbox = [{"from": m.from_agent_id, "content": m.content, "id": str(m.id)} for m in messages]
     return WorkInputs(
         resources=list(resources.values()),
         hours_worked=hours,
         completed_tasks=count,
-        inbox=inbox,
         prior_attempt_ids=sorted(prior_attempt_ids),
     )
 
@@ -254,12 +243,6 @@ class MAGWorkWorker(Worker):
             output_type = HumanWorkOutput
         if actor.agent_type == "stakeholder":
             system += f"\nReview and approval persona: {payload.actor['persona_description']}; strictness {payload.actor['strictness']}. Private priorities: {payload.actor['initial_preferences']}"
-        prompt += (
-            "\nManager instructions:\n"
-            + "\n".join(planned.execution_notes)
-            + "\nInbox:\n"
-            + json.dumps(inputs.inbox)
-        )
         inference = await infer(
             model=self.model,
             system=system,

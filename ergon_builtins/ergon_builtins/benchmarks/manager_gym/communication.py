@@ -2,14 +2,18 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-import json
 from typing import Any
+from uuid import UUID
 
 from sqlmodel import select, col
 from ergon_core.api.worker import WorkerContext
 from ergon_core.core.application.communication.models import CreateMessageRequest
 from ergon_core.core.application.communication.service import CommunicationService
 from ergon_core.core.persistence.telemetry.models import ThreadMessage
+
+
+def preview(content: str, limit: int) -> str:
+    return content if len(content) <= limit else content[: limit - 3] + "..."
 
 
 @dataclass
@@ -37,7 +41,9 @@ class MAGCommunication:
 
     async def deliver(self, to_agent: str, content: str, message_type: str) -> str:
         if to_agent not in self.recipients:
-            return "Unknown or unavailable recipient"
+            return "Unknown or unavailable recipient. Available agent IDs: " + ", ".join(
+                self.recipients
+            )
         index = self.call_index
         self.call_index += 1
         response = await CommunicationService().save_message(
@@ -62,7 +68,7 @@ class MAGCommunication:
         """Send a direct message to another agent by its exact id."""
         return await self.deliver(to_agent, content, message_type)
 
-    async def broadcast_message(self, content: str, message_type: str = "broadcast") -> str:
+    async def broadcast_message(self, content: str, message_type: str = "general") -> str:
         """Send the same message to every other available actor."""
         results = []
         for recipient in self.recipients:
@@ -78,32 +84,48 @@ class MAGCommunication:
         rows = [
             m for m in self.read_messages() if m.to_agent_id == self.actor and m.created_at >= since
         ]
-        return json.dumps(
-            [
-                {"sender": m.from_agent_id, "content": m.content, "id": str(m.id)}
-                for m in rows[-limit:]
-            ]
+        if not rows:
+            return "📭 No recent messages"
+        return "\n".join(
+            f"[{m.created_at:%H:%M}] {m.from_agent_id}: {preview(m.content, 100)}"
+            for m in reversed(rows[-limit:])
         )
 
     async def get_conversation_with(self, other_agent_id: str, limit: int = 20) -> str:
         """Read this actor's conversation with one other actor."""
-        if not 1 <= limit <= 100:
-            return "Limit must be from 1 to 100"
+        limit = max(1, min(50, limit))
         rows = [
             m for m in self.read_messages() if other_agent_id in (m.from_agent_id, m.to_agent_id)
         ]
-        return json.dumps(
-            [{"sender": m.from_agent_id, "content": m.content} for m in rows[-limit:]]
+        if not rows:
+            return f"No conversation history found with {other_agent_id}"
+        rows = rows[-limit:]
+        return "\n".join(
+            [
+                f"Conversation with {other_agent_id} ({len(rows)} messages):",
+                *(
+                    f"[{m.created_at:%H:%M}] {'You' if m.from_agent_id == self.actor else other_agent_id}: {preview(m.content, 150)}"
+                    for m in rows
+                ),
+            ]
         )
 
     async def get_task_messages(self, task_id: str | None = None) -> str:
         """Read this actor's visible messages related to an authored task."""
-        target = task_id or self.logical_task
-        return json.dumps(
+        try:
+            target = str(UUID(task_id or self.logical_task))
+        except ValueError:
+            return f"Invalid task ID format for task messages: {task_id}"
+        rows = [m for m in self.read_messages() if m.metadata_json.get("logical_task_id") == target]
+        if not rows:
+            return f"No messages found for task {target}"
+        return "\n".join(
             [
-                {"sender": m.from_agent_id, "content": m.content}
-                for m in self.read_messages()
-                if m.metadata_json.get("logical_task_id") == target
+                f"Messages for task {target} ({len(rows)} found):",
+                *(
+                    f"[{m.created_at:%H:%M}] {m.from_agent_id} → {m.to_agent_id}: {preview(m.content, 100)}"
+                    for m in rows
+                ),
             ]
         )
 
