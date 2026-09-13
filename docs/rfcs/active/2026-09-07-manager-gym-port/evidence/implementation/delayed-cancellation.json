@@ -1,0 +1,12 @@
+{
+  "sample_id": "ec5dc9fe-12ee-4c7f-9f14-31c59913cf7e",
+  "code_digest": "0bd62a9743347179d5303a7236ccdb595bbcefcbbff788306f4066683d8c20af",
+  "checks": {
+    "sample_cancelled": true,
+    "no_late_spawn": true,
+    "tasks_cancelled": true,
+    "attempts_cancelled": true,
+    "sandboxes_closed": true
+  },
+  "accepted": true
+}

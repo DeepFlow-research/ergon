@@ -246,7 +246,11 @@ full `WorkerOutput`, attempt ID, error and timestamps. Timeouts return
 `timed_out=True`; they do not cancel work. The unbound handle still raises
 `AwaitCompletionNotSupportedError`. `run_step` checkpoints a BaseModel-valued
 operation using the existing workflow step; task mutations belong outside that
-operation. This supports one manager Worker making multiple decisions.
+operation. Runtime jobs retain result bytes through native resource publishing
+and checkpoint a hash/size reference; replay verifies retained bytes before typed
+decoding. Directly constructed test contexts can use inline checkpoints. This
+supports one manager Worker making multiple decisions without accumulating full
+observations in workflow-engine state. See [artifact retention](cross_cutting/artifacts.md#native-worker-checkpoint-artifacts).
 
 `refine_task` accepts optional `replacement: Task` and `depends_on` for atomic
 unclaimed-task edits. Identity and containment remain fixed; a running or

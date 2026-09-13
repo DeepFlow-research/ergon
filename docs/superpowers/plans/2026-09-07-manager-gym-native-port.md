@@ -306,6 +306,8 @@ ergon/
       mag_contract.py # add: verify native MAG contracts, compatibility and failure behavior
       mag_preport.py # add: verify native MAG contracts, compatibility and failure behavior
     integration/
+      restart/
+        test_reactivation.py # edit: verify native MAG contracts, compatibility and failure behavior
       test_mag_runtime_concurrency.py # add: verify native MAG contracts, compatibility and failure behavior
 ```
 
@@ -469,8 +471,8 @@ wages/token prices are not infrastructure billing.
 | 1. Characterize | Pinned source, 20 scenarios, 85 feature dispositions, exact 1,281-definition manifest and 1,230 terminal selection | Implemented; source inventory and offline callable checks pass |
 | 2. Repair native contracts | Existing E2B/provider/runtime/message/evaluation owners; no second scheduler | Implemented; unit, real PostgreSQL concurrency/migration and continuation proofs pass |
 | 3. Native benchmark | All actions, three manager modes, AI/human/stakeholder roles, messaging/timelines, native criteria and frozen re-evaluation | Implemented; full unit validation tracked in acceptance evidence |
-| 4. Linux/E2B contract | Locked Linux deployment, doctor, real role schemas, dependency/human/edit/cancel/message/decomposition/artifact/grading/cleanup contract | Earlier-build VM contract passed; repeat after final model/profile corrections |
-| 5. Autonomous pilots | Legal e-discovery, ICAAP, marketing, banking license; seed 0, normal native work and every terminal criterion | Fresh preview/cancellation-corrected build must pass before catalog expansion |
+| 4. Linux/E2B contract | Locked Linux deployment, doctor, real role schemas, dependency/human/edit/cancel/message/decomposition/artifact/grading/cleanup contract | Build-v5 role preflight, delayed cancellation and native composition contract pass |
+| 5. Autonomous pilots | Legal e-discovery, ICAAP, marketing, banking license; seed 0, normal native work and every terminal criterion | Build-v5 legal and ICAAP running; four pilots must pass before catalog expansion |
 | 6. Full catalog | All 20 seed-0 scenarios, reusing pilots only under identical code/model/config | Required; per-sample ledger is the authority, not this checklist |
 | 7. Review/export/cleanup | Curated receipt, raw native records/context/blobs, database backup, dashboard screenshot, owned resource closure, PR review | Required before completion |
 

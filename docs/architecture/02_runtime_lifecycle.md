@@ -129,6 +129,11 @@ are checkpointed as typed errors and raised outside the step boundary so a
 manager can respond. Context replay reuses matching persisted chunks and fails
 on a mismatch. Bounded waits inspect persisted attempts as well as terminal
 events, including failures/cancellations that have no completion event.
+`worker_execute/composition.py` supplies the existing resource/blob owner to
+`WorkerContext.run_step`: Inngest retains compact references and sample resources
+retain typed results, with byte-count/hash verification on replay. The normal
+resource export includes these `.checkpoints/` artifacts; keep the blob volume
+with database and workflow state during restarts.
 
 - **Static-sibling failure auto-cancels today.** When a static task (no `parent_node_id`) fails, `propagation.on_task_completed_or_failed` marks its siblings CANCELLED (`execution/propagation.py:515-526`). The intended fractal-OS semantic is that static siblings stay PENDING so a higher-level manager can adapt — matching managed-subtask behavior. Changing this also requires teaching `is_workflow_complete_v2` to terminate on blocked-by-failed chains, otherwise workflows hang. Tracked in `docs/rfcs/active/2026-04-17-static-sibling-failure-semantics.md`.
 - **Cancellation cleanup is still being consolidated.** `cleanup-cancelled-task` releases a sandbox when the cleanup service can identify one, but cancel payloads still do not carry first-class sandbox/benchmark identity. PR11 should finish this handoff so cancellation cleanup no longer depends on execution-row lookup.
