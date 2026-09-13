@@ -61,6 +61,7 @@ class BaseSmokeLeafWorker(Worker):
         *,
         name: str,
         model: str | None,
+        actor_key: str | None = None,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
         # PR 5 converted Worker to a Pydantic BaseModel — `metadata` is
@@ -68,7 +69,12 @@ class BaseSmokeLeafWorker(Worker):
         # `default_factory=dict`. Convert the nullable sentinel
         # into ``{}`` so callers that still pass ``metadata=None``
         # (e.g. smoke unit tests) keep working.
-        super().__init__(name=name, model=model, metadata=dict(metadata) if metadata else {})
+        super().__init__(
+            name=name,
+            model=model,
+            actor_key=actor_key,
+            metadata=dict(metadata) if metadata else {},
+        )
         self._last_result: SubworkerResult | None = None
 
     async def execute(
