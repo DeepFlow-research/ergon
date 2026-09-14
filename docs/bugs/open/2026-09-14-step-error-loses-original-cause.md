@@ -50,4 +50,11 @@ Regressions exercise direct and wrapped empty-message errors, retained response
 notes and caller context, and the actual worker job's returned error record.
 Inference tests verify auxiliary expiry, work continuing beyond that auxiliary
 limit, native cancellation reaching an in-flight model request, and unchanged
-request/provider failure rules. Live proof and full acceptance remain required.
+request/provider failure rules. The full unit suite passes 1,077 tests, with one
+skip and one expected failure; configured backend checks pass.
+
+The real Linux/Inngest/E2B proof on v15 passed all six checks for sample
+`dc68dc09-ced1-48a2-8ce5-7819025d1c1b`: original `TimeoutError`, original note,
+wrapper identity, one failed attempt, failed sample and closed sandbox. It made
+no model calls. See `evidence/implementation/step-error-v15.json` under the RFC.
+Fresh autonomous acceptance remains required.
