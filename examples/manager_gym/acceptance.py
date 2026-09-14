@@ -366,23 +366,19 @@ async def main() -> None:
     while pending or active:
         for scenario, sample_id in list(active.items()):
             evidence = inspect_sample(sample_id)
-            if (
-                args.stage == "pilot"
-                and not execution_checks(evidence)["native_failures_accounted"]
-            ):
-                ledger["pilot_admission_failure"] = sample_id
+            if not execution_checks(evidence)["native_failures_accounted"]:
+                ledger["admission_failure"] = sample_id
                 write_json(ledger_path, ledger)
             if evidence["sample"]["status"] in TERMINAL:
                 ledger["samples"][scenario] = await finish(sample_id, scenario, args.output)
                 write_json(ledger_path, ledger)
                 print(json.dumps(ledger["samples"][scenario]), flush=True)
                 del active[scenario]
-        if args.stage == "pilot" and (
-            ledger.get("pilot_admission_failure")
+        if (
+            ledger.get("admission_failure")
             or any(
-                row.get("accepted") is False
-                for name, row in ledger["samples"].items()
-                if name in PILOTS
+                ledger["samples"].get(scenario, {}).get("accepted") is False
+                for scenario in scenarios
             )
         ):
             pending.clear()

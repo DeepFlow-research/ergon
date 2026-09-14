@@ -67,6 +67,13 @@ decision, drain and evaluation time must fit the real sandbox lifetime.
 
 ## 5. Failure modes
 
+- **Lost file-upload response.** The builtin E2B runtime retries `httpx.ReadError`
+  from `write_file` at most twice, after one and two seconds. Every attempt
+  overwrites the same path with the same complete bytes, including when the
+  previous upload succeeded but its response was lost. Other exceptions and
+  exhausted retries propagate through the existing native task-failure path.
+  This does not retry commands, inference or whole workers, and does not
+  recreate a missing sandbox.
 - **Sandbox killed mid-task (OOM, network blip, E2B platform incident).** The next `sandbox.commands.run` call from inside the worker raises. System-owner steering: the task transitions to FAILED with the raised error captured as the failure reason. Managers of dynamic subtasks then figure out re-coordination per fractal-OS semantics — a failed subtask surfaces to its parent, which decides whether to retry, substitute, or fail upward. Static workflow nodes have no manager to catch the failure; downstream siblings in a static DAG inherit the failure per the rules laid out in `cross_cutting/error_propagation.md`.
 - **Sandbox times out after task but before criteria run.** The worker completed fine, `check_evaluators` fans out, the first criterion's reconnect hits a dead sandbox. Pending fix: bump timeout on creation to `task_timeout + max_criterion_timeout`. Until that RFC lands, managers set a generous literal timeout.
 - **Cancellation.** `ergon run cancel` emits a `TaskCancelledEvent`. The `cleanup_cancelled_task_fn` cleanup hook marks the execution row cancelled and releases the execution's sandbox through the shared sandbox lifecycle helper. Repeated cleanup is idempotent: the second release sees an already-closed or missing sandbox and exits cleanly.

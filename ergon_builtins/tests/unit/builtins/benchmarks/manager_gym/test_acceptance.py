@@ -1,4 +1,4 @@
-"""Keep a failed pilot gate from admitting further model work."""
+"""Keep a failed acceptance gate from admitting further model work."""
 
 import json
 import sys
@@ -79,10 +79,12 @@ def test_native_failed_sample_is_accepted_only_for_accounted_work_failures():
 
 
 @pytest.mark.asyncio
-async def test_failed_pilot_drains_admitted_samples_without_launching_more(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        sys, "argv", ["acceptance.py", "--stage", "pilot", "--output", str(tmp_path)]
-    )
+@pytest.mark.parametrize("stage", ["pilot", "catalog"])
+async def test_failed_gate_drains_admitted_samples_without_launching_more(
+    tmp_path, monkeypatch, stage
+):
+    monkeypatch.setattr(sys, "argv", ["acceptance.py", "--stage", stage, "--output", str(tmp_path)])
+    monkeypatch.setattr(acceptance, "SCENARIOS", acceptance.PILOTS)
     monkeypatch.setattr(acceptance, "code_digest", lambda: "test-build")
     submit = AsyncMock(side_effect=["first", "second"])
     finish = AsyncMock(
@@ -113,12 +115,12 @@ async def test_failed_pilot_drains_admitted_samples_without_launching_more(tmp_p
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("stage", ["pilot", "catalog"])
 async def test_unaccounted_failure_stops_admission_before_slow_sample_finishes(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, stage
 ):
-    monkeypatch.setattr(
-        sys, "argv", ["acceptance.py", "--stage", "pilot", "--output", str(tmp_path)]
-    )
+    monkeypatch.setattr(sys, "argv", ["acceptance.py", "--stage", stage, "--output", str(tmp_path)])
+    monkeypatch.setattr(acceptance, "SCENARIOS", acceptance.PILOTS)
     monkeypatch.setattr(acceptance, "code_digest", lambda: "test-build")
     submit = AsyncMock(side_effect=["slow", "quick"])
     finish = AsyncMock(
@@ -148,4 +150,4 @@ async def test_unaccounted_failure_stops_admission_before_slow_sample_finishes(
         await acceptance.main()
     assert submit.await_count == finish.await_count == 2
     ledger = json.loads((tmp_path / "acceptance.json").read_text())
-    assert ledger["pilot_admission_failure"] == "slow"
+    assert ledger["admission_failure"] == "slow"

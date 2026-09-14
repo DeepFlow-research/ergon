@@ -73,6 +73,11 @@ worker. That is the whole point.
 
 ## Current state
 
+The E2B adapter permits three identical full-file upload attempts when the
+response raises `httpx.ReadError`. E2B's overwrite semantics make this safe even
+if the preceding upload committed. Exhaustion remains a native failure; no
+worker, inference or command is replayed by this adapter.
+
 Native MAG workers write resources to their E2B task sandbox under
 `/workspace/final_output/<logical-resource-uuid>.txt`; the root writes the frozen
 episode JSON there. Existing resource publication stores bytes and hashes in

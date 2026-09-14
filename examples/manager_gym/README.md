@@ -65,7 +65,8 @@ before continuing. The scripted contract proves dependency order, repeated
 human fatigue, pending refinement/reassignment, cancellation, live messaging,
 decomposition, E2B artifacts and grading. It is not a MAG quality score.
 The cancellation probe stops two running E2B attempts and waits past a delayed spawn to prove the manager cannot reopen work.
-A failed pilot stops further admissions; already-admitted samples finish and
+A failed pilot or catalog sample stops further admissions, including an
+unaccounted native failure before its manager finishes; already-admitted samples finish and
 are exported. The four autonomous pilots precede the remaining catalog. Completed pilots
 are reused only under the same source digest, model, seed and limits.
 

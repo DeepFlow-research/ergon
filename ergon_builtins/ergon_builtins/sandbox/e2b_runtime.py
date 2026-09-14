@@ -1,11 +1,13 @@
 """E2B runtime adapter for public ``Sandbox`` implementations."""
 
 from collections.abc import Sequence
+import asyncio
 from shlex import quote
 from typing import Any
 
 from e2b import SandboxNotFoundException, TimeoutException
 from e2b_code_interpreter import AsyncSandbox
+import httpx
 
 from ergon_core.api.sandbox.runtime import CommandResult, SandboxRuntime
 from ergon_core.core.shared.settings import settings
@@ -67,7 +69,16 @@ class E2BSandboxRuntime(SandboxRuntime):
         )
 
     async def write_file(self, path: str, content: bytes) -> None:
-        await self._sandbox.files.write(path, content)
+        for attempt in range(3):
+            try:
+                await self._sandbox.files.write(path, content)
+                return
+            except httpx.ReadError:
+                # E2B overwrites this path with identical bytes. Retrying a lost
+                # upload response is safe; replaying the worker or commands is not.
+                if attempt == 2:
+                    raise
+                await asyncio.sleep(2**attempt)
 
     async def read_file(self, path: str) -> bytes:
         return await self._sandbox.files.read(path, format="bytes")
