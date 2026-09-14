@@ -204,6 +204,12 @@ the same blob use distinct, exclusively created temporary files before atomic
 replacement, preserving ordinary file/umask permissions for existing host-side
 readers of the shared artifact volume.
 
+Publication deduplicates content and paths within each resource kind. An artifact
+checkpoint and a named report with identical bytes retain distinct resource rows
+while sharing the content-addressed blob. Repeating either publication still
+deduplicates within that kind. This preserves final report discovery without
+copying the checkpoint bytes into another store.
+
 Keep the existing blob volume with PostgreSQL and Inngest state during restarts.
 There is no new storage backend, task scheduler, sandbox execution path or GC.
 Deleting checkpoint artifacts while an attempt can replay breaks recovery. The

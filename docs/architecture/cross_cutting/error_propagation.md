@@ -212,3 +212,11 @@ A late worker response must not overwrite a cancelled attempt with success or fa
 ## Failure detection after descendant blocking
 
 Task failure propagation and containment-descendant blocking handle the same event independently. If failure propagation checks first, pending descendants prevent workflow finalization. After blocking descendants, the existing descendant job now invokes the existing failure-propagation job in a durable step. That job rechecks the graph and emits the ordinary `workflow/failed` event. Running descendants still keep the workflow open. This closes the ordering race without changing scheduling or adding a benchmark-owned finalizer.
+
+## Evaluation diagnostics
+
+Alembic preserves existing application loggers when configuring migration logging,
+so startup and migration inspection do not disable native evaluator tracebacks.
+MAG judge exceptions include their criterion identity before the native evaluator
+records an incomplete result. A validation or transport exception does not become
+a numeric zero score.
