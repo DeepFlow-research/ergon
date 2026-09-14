@@ -9,6 +9,34 @@ import pytest
 from examples.manager_gym import acceptance
 
 
+def test_native_failed_sample_is_accepted_only_for_accounted_work_failures():
+    evidence = {
+        "sample": {"status": "failed"},
+        "nodes": [
+            {"task_id": "manager", "parent_task_id": None, "status": "completed"},
+            {"task_id": "work", "parent_task_id": "manager", "status": "failed"},
+        ],
+        "attempts": [
+            {
+                "id": "attempt",
+                "created_at": "2026-09-14",
+                "task_id": "work",
+                "worker_output_json": {
+                    "success": False,
+                    "metadata": {"model_failure": {"kind": "request_limit"}},
+                },
+            }
+        ],
+    }
+    assert all(acceptance.execution_checks(evidence).values())
+    evidence["attempts"][0]["worker_output_json"] = None
+    assert not acceptance.execution_checks(evidence)["native_failures_accounted"]
+    evidence["nodes"][0]["status"] = "failed"
+    assert not acceptance.execution_checks(evidence)["manager_completed"]
+    evidence["nodes"][1]["status"] = "blocked"
+    assert not acceptance.execution_checks(evidence)["all_tasks_terminal"]
+
+
 @pytest.mark.asyncio
 async def test_failed_pilot_drains_admitted_samples_without_launching_more(tmp_path, monkeypatch):
     monkeypatch.setattr(
@@ -24,7 +52,9 @@ async def test_failed_pilot_drains_admitted_samples_without_launching_more(tmp_p
     )
     monkeypatch.setattr(acceptance, "submit", submit)
     monkeypatch.setattr(
-        acceptance, "inspect_sample", lambda key: {"sample": {"status": "completed"}}
+        acceptance,
+        "inspect_sample",
+        lambda key: {"sample": {"status": "completed"}, "nodes": [], "attempts": []},
     )
     monkeypatch.setattr(acceptance, "finish", finish)
     with pytest.raises(SystemExit) as stopped:
@@ -39,3 +69,42 @@ async def test_failed_pilot_drains_admitted_samples_without_launching_more(tmp_p
         await acceptance.main()
     submit.assert_not_awaited()
     finish.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_unaccounted_failure_stops_admission_before_slow_sample_finishes(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        sys, "argv", ["acceptance.py", "--stage", "pilot", "--output", str(tmp_path)]
+    )
+    monkeypatch.setattr(acceptance, "code_digest", lambda: "test-build")
+    submit = AsyncMock(side_effect=["slow", "quick"])
+    finish = AsyncMock(
+        side_effect=[
+            {"sample_id": "quick", "accepted": True},
+            {"sample_id": "slow", "accepted": False},
+        ]
+    )
+    slow_reads = 0
+
+    def inspect(key):
+        nonlocal slow_reads
+        if key == "slow":
+            slow_reads += 1
+            return {
+                "sample": {"status": "executing" if slow_reads == 1 else "failed"},
+                "nodes": [{"task_id": "work", "parent_task_id": "manager", "status": "failed"}],
+                "attempts": [],
+            }
+        return {"sample": {"status": "completed"}, "nodes": [], "attempts": []}
+
+    monkeypatch.setattr(acceptance, "submit", submit)
+    monkeypatch.setattr(acceptance, "finish", finish)
+    monkeypatch.setattr(acceptance, "inspect_sample", inspect)
+    monkeypatch.setattr(acceptance.asyncio, "sleep", AsyncMock())
+    with pytest.raises(SystemExit):
+        await acceptance.main()
+    assert submit.await_count == finish.await_count == 2
+    ledger = json.loads((tmp_path / "acceptance.json").read_text())
+    assert ledger["pilot_admission_failure"] == "slow"

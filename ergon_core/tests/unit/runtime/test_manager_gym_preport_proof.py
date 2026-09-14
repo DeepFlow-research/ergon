@@ -24,6 +24,7 @@ from ergon_core.core.application.runtime.lifecycle import on_task_completed_or_f
 from ergon_core.core.application.runtime.orchestration import PrepareTaskExecutionCommand
 from ergon_core.core.application.runtime.task_execution import TaskExecutionService
 from ergon_core.core.application.runtime.task_execution_repository import WorkerOutputRepository
+from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
 from ergon_core.core.application.runtime.task_models import CancelTaskCommand, RefineTaskCommand
 from ergon_core.core.jobs.task.worker_execute.job import _StepAwareTaskManagementService
 from ergon_core.core.persistence.context.models import SampleContextEvent
@@ -53,6 +54,30 @@ def preport(monkeypatch):
     monkeypatch.setattr(management_module.inngest_client, "send", AsyncMock())
     yield session, sample_id, parent, svc
     session.close()
+
+
+@pytest.mark.parametrize("status", ["completed", "failed", "running", "cancelled"])
+def test_completion_exposes_retained_output_for_completed_or_failed_attempts(preport, status):
+    session, sample_id, parent, _ = preport
+    parent.status = status
+    output = {"output": "Recorded task outcome", "success": status != "failed", "metadata": {}}
+    attempt = SampleTaskAttempt(
+        sample_id=sample_id,
+        task_id=parent.task_id,
+        status=status,
+        worker_output_json=output,
+    )
+    session.add(attempt)
+    session.add(parent)
+    session.commit()
+    result = TaskInspectionService().completion(
+        session, sample_id=sample_id, task_id=parent.task_id
+    )
+    assert result.status == status
+    if status in {"completed", "failed"}:
+        assert result.output.model_dump() == output
+    else:
+        assert result.output is None
 
 
 async def child(state, slug, *, deps=(), actor=None):

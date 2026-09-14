@@ -121,6 +121,7 @@
     "manager_agent_gym/core/workflow_agents/tools/communication.py": "ea381efd77b55f9cf9e3c805a4ef8f8af6181c6cc730f7c6aea300dbc268f493",
     "manager_agent_gym/core/workflow_agents/tools/communication_di.py": "e707f7c540969a033637b4275655ef0cfd3ec1e4bee346b08d617c6c56183289",
     "manager_agent_gym/core/workflow_agents/tool_factory.py": "5338585804e022ec2595a4a590460ed0ee14e05c39b96a3e810751d572fba3d8",
-    "manager_agent_gym/core/workflow_agents/registry.py": "a02a0a332782e48fd692bb9477544ddba62eb8b0a1d5566bf3b0ec6451205c4d"
+    "manager_agent_gym/core/workflow_agents/registry.py": "a02a0a332782e48fd692bb9477544ddba62eb8b0a1d5566bf3b0ec6451205c4d",
+    "manager_agent_gym/core/execution/engine.py": "ba1162322258131af47dde6075decf995b29f82994bec361daa2178b58072877"
   }
 }

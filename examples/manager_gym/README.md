@@ -49,7 +49,7 @@ docker compose exec -T api python examples/manager_gym/acceptance.py \
 docker compose exec -T api python examples/manager_gym/acceptance.py \
   --stage pilot --output /app/data/mag-acceptance --timeout-seconds 14400
 docker compose exec -T api python examples/manager_gym/acceptance.py \
-  --stage catalog --output /app/data/mag-acceptance --timeout-seconds 14400
+  --stage catalog --output /app/data/mag-acceptance --timeout-seconds 36000
 ```
 
 Preflight checks all seven role schemas and a required tool round trip.
@@ -120,7 +120,7 @@ The configured E2B account permits a maximum sandbox lifetime of 3,600 seconds.
 The manager has a 2,400-second decision budget and a shared 600-second drain
 budget; final evaluation also needs time before sandbox expiry. A provider,
 deadline or grading failure makes the MAG evaluation incomplete with a null
-score. Cancelled prerequisites are valid policy outcomes. Serial grading can
+score. Bounded work-role request exhaustion or invalid model output is a native failed task and remains gradeable, matching MAG. Cancelled or model-failed prerequisites block their dependents; final drain cancels that blocked work through Ergon. Serial grading can
 exhaust the remaining lifetime on slow deployments; the acceptance result must
 expose that failure rather than silently reduce rubric coverage.
 
@@ -133,8 +133,7 @@ schemas. Invalid or truncated responses still consume the bounded retry budget.
 Inference uses at most 32,768 output tokens and a 2,048-token thinking budget, 300 seconds per request,
 12 requests per structured operation, two validation retries and a 600-second
 outer operation limit. Temperature is 0 for policy/AI/estimator/judge, 0.7 for
-human work and 1 for decomposition. Native attempts, successful model usage and
-transcripts are retained. Typed workflow checkpoints are ordinary native resource
+human work and 1 for decomposition. Native attempts, successful model usage and transcripts are retained. Bounded worker-model failures also retain observed usage, validation feedback and transcripts, with `success=false` and typed `model_failure` metadata. Typed workflow checkpoints are ordinary native resource
 artifacts under `.checkpoints/`; Inngest records small verified references. Keep
 those artifacts with the database and blob volume during restarts and export
 them before VM deletion. They are runtime evidence, not task output reports. A provider exception before its checkpoint can lose
@@ -176,3 +175,8 @@ PR. Publish a curated receipt with sample IDs, checks, counts and provenance.
 Confirm all owned sample sandboxes are closed, run `ergon stop`, then remove
 only this VM and its dedicated security group/key. Leave standing model
 deployments untouched.
+
+Pilot admission stops as soon as a native failed task has no accounted work-model
+outcome, even if its manager is still draining. Already-admitted samples finish
+and retain their evidence. This gate is persisted in the acceptance ledger and
+a resumed failed gate cannot admit extra scenarios.

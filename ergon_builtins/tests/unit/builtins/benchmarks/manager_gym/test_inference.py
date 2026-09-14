@@ -25,6 +25,7 @@ async def test_strict_output_preserves_tools_and_validates_retries(monkeypatch):
     messages = [
         {
             "role": "assistant",
+            "reasoning_content": "First inspect the policy, then produce its resource.",
             "tool_calls": [
                 {
                     "id": "lookup-1",
@@ -63,6 +64,12 @@ async def test_strict_output_preserves_tools_and_validates_retries(monkeypatch):
         assert [m["role"] for m in body["messages"]].count("system") == 1
         assert body["messages"][0]["role"] == "system"
         assert body["tool_choice"] == "required"
+        if len(requests) > 1:
+            assistant = next(m for m in body["messages"] if m["role"] == "assistant")
+            assert assistant["reasoning_content"] == messages[0]["reasoning_content"]
+            acknowledgement = next(m for m in body["messages"] if m["role"] == "tool")
+            assert acknowledgement["tool_call_id"] == "lookup-1"
+            assert acknowledgement["content"] == "LARCH-6281"
         functions = {t["function"]["name"]: t["function"] for t in body["tools"]}
         assert set(functions) == {"lookup_policy", "final_result"}
         assert functions["final_result"]["strict"] is True
@@ -153,3 +160,55 @@ async def test_request_limit_retains_usage_and_tool_diagnostics(monkeypatch):
         r["tools"] == [{"name": "lookup_policy", "arguments_characters": 2}] for r in responses
     )
     assert "PRIVATE" not in note
+    with override_allow_model_requests(True):
+        result = await inference.infer(
+            model=inference.INTERNAL_MODEL,
+            system="Private instructions",
+            prompt="PRIVATE-PROMPT",
+            output_type=AITaskOutput,
+            tools=[lookup_policy],
+            accept_model_failure=True,
+        )
+    assert result.failure.kind == "request_limit"
+    assert result.output == {}
+    assert result.input_tokens == 120 and result.output_tokens == 60
+    assert sum(c.part.part_kind == "tool_call" for c in result.chunks) == 12
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure_kind", ["validation", "http", "tool", "timeout"])
+async def test_only_observed_model_behavior_becomes_a_work_outcome(monkeypatch, failure_kind):
+    from pydantic_ai.exceptions import ModelHTTPError
+    from pydantic_ai.messages import ModelResponse, ToolCallPart
+    from pydantic_ai.models.function import FunctionModel
+
+    errors = {
+        "http": ModelHTTPError(503, "qwen", "unavailable"),
+        "tool": RuntimeError("database unavailable"),
+        "timeout": TimeoutError("request deadline"),
+    }
+
+    def response(messages, info):
+        if failure_kind in errors:
+            raise errors[failure_kind]
+        return ModelResponse(parts=[ToolCallPart("final_result", {})])
+
+    monkeypatch.setattr(
+        inference, "resolve_model_target", lambda _: ResolvedModel(model=FunctionModel(response))
+    )
+    with override_allow_model_requests(True):
+        operation = inference.infer(
+            model=inference.INTERNAL_MODEL,
+            system="Create one resource.",
+            prompt="Write a note.",
+            output_type=AITaskOutput,
+            accept_model_failure=True,
+        )
+        if failure_kind in errors:
+            with pytest.raises(type(errors[failure_kind])):
+                await operation
+        else:
+            result = await operation
+            assert result.failure.kind == "output_validation"
+            assert result.output == {}
+            assert any(c.part.part_kind == "tool_result" and c.part.is_error for c in result.chunks)

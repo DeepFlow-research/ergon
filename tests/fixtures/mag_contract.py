@@ -48,6 +48,25 @@ class ContractGate(Worker):
         yield WorkerOutput(output="gate released")
 
 
+class ContractModelFailure(Worker):
+    type_slug: ClassVar[str] = "mag-contract-model-failure"
+
+    async def execute(
+        self, task: Task, *, context: WorkerContext
+    ) -> AsyncGenerator[WorkerStreamItem, None]:
+        yield WorkerOutput(
+            output="Scripted worker request limit",
+            success=False,
+            metadata={
+                "model_failure": {
+                    "kind": "request_limit",
+                    "message": "Scripted worker request limit",
+                },
+                "resources": [],
+            },
+        )
+
+
 class CancellationContractWorker(Worker):
     type_slug: ClassVar[str] = "mag-cancellation-contract"
 
@@ -193,6 +212,39 @@ class MAGContractWorker(Worker):
             self.model,
         ):
             yield chunk
+        failed_plan = PlannedTask(
+            id=uuid5(state.workflow.id, "contract/model-failure"),
+            name="Expected model failure",
+            description="A bounded policy failure remains a native failed task.",
+        )
+        blocked_plan = PlannedTask(
+            id=uuid5(state.workflow.id, "contract/blocked-by-model-failure"),
+            name="Blocked by failed work",
+            description="Must not execute after its prerequisite fails.",
+            dependency_task_ids=[failed_plan.id],
+        )
+        failed = await context.spawn_task(
+            Task(
+                task_slug="mag-contract-model-failure",
+                description=failed_plan.description,
+                worker=ContractModelFailure(name="Expected failure", model="test:none"),
+                sandbox=E2BSandbox(timeout_seconds=600),
+            )
+        )
+        failed_result = await failed.wait(timeout_seconds=120)
+        blocked = await context.spawn_task(
+            Task(
+                task_slug="mag-contract-blocked",
+                description=blocked_plan.description,
+                worker=ContractGate(name="Must not run", model="test:none"),
+                sandbox=E2BSandbox(timeout_seconds=600),
+            ),
+            depends_on=[failed.task_id],
+        )
+        for planned, handle in ((failed_plan, failed), (blocked_plan, blocked)):
+            state.workflow.tasks[planned.id] = planned
+            state.bindings[str(planned.id)] = handle.task_id
+        state.native_dependencies[str(blocked_plan.id)] = [failed.task_id]
         await drain_admitted_work(state, context)
 
         async def observe() -> EpisodeState:
@@ -219,6 +271,13 @@ class MAGContractWorker(Worker):
             and str(completions[1].execution_id) in second["prior_attempt_ids"],
             "pending_refinement": "VERIFIED" in cast(WorkerOutput, completions[1].output).output,
             "cancellation": completions[4].status == "cancelled",
+            "bounded_model_failure": failed_result.status == "failed"
+            and failed_result.output is not None
+            and not failed_result.output.success
+            and state.workflow.tasks[failed_plan.id].status.value == "failed"
+            and not state.infrastructure_errors,
+            "failed_prerequisite_does_not_execute": (await blocked.wait(timeout_seconds=0)).status
+            == "cancelled",
             "decomposition": len(state.workflow.tasks[plans[5].id].subtasks) >= 3,
             "manager_message": any(
                 m.sender_id == "manager_agent" and m.receiver_id == human

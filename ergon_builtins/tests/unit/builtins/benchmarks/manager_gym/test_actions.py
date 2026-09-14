@@ -230,11 +230,11 @@ async def test_removed_prerequisite_is_policy_blocked_not_infrastructure_failure
             context,
             INTERNAL_MODEL,
         )
-    assert not await manager.has_cancelled_prerequisite(context, state.bindings[str(b.id)])
+    assert not await manager.has_policy_blocked_prerequisite(context, state.bindings[str(b.id)])
     await manager.remove_work(
         state, RemoveTaskAction(reasoning="Remove", task_id=a.id), context, INTERNAL_MODEL
     )
-    assert await manager.has_cancelled_prerequisite(context, state.bindings[str(b.id)])
+    assert await manager.has_policy_blocked_prerequisite(context, state.bindings[str(b.id)])
     state.config.drain_timeout_seconds = 0.001
     await manager.drain_admitted_work(state, context)
     assert not state.infrastructure_errors

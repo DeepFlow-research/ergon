@@ -16,7 +16,7 @@ from ergon_core.core.application.communication.models import CreateMessageReques
 from ergon_core.core.application.communication.service import CommunicationService
 from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
 from ergon_builtins.benchmarks.manager_gym.communication import MAGCommunication
-from ergon_builtins.benchmarks.manager_gym.inference import infer, InferenceResult
+from ergon_builtins.benchmarks.manager_gym.inference import infer, InferenceResult, ModelFailure
 from ergon_builtins.benchmarks.manager_gym.outputs import (
     AITaskOutput,
     HumanWorkOutput,
@@ -159,7 +159,15 @@ class MAGWorkWorker(Worker):
             output_tokens=result.inference.output_tokens
             + (result.estimator.output_tokens if result.estimator else 0),
         )
-        yield WorkerOutput(output=json.dumps(result.inference.output), metadata=metadata)
+        if result.inference.failure:
+            metadata["model_failure"] = result.inference.failure.model_dump(mode="json")
+        yield WorkerOutput(
+            output=json.dumps(result.inference.output)
+            if result.inference.failure is None
+            else result.inference.failure.message,
+            success=result.inference.failure is None,
+            metadata=metadata,
+        )
 
     async def _prepare_human(
         self, payload: WorkPayload, inputs: WorkInputs, actor: HumanAgentConfig, resources_text: str
@@ -256,15 +264,41 @@ class MAGWorkWorker(Worker):
                 timestep=payload.timestep,
             ).tools(),
             temperature=0.7 if isinstance(actor, HumanAgentConfig) else 0,
+            accept_model_failure=True,
         )
+        if (
+            inference.failure is None
+            and actor.agent_type != "ai"
+            and not output_type.model_validate(inference.output).resources
+        ):
+            inference = inference.model_copy(
+                update={
+                    "failure": ModelFailure(
+                        kind="output_validation", message="Human/stakeholder generated no resources"
+                    )
+                }
+            )
+        if inference.failure:
+            return WorkResult(
+                inference=inference,
+                estimator=estimator,
+                resources=[],
+                simulated_hours=0,
+                simulated_cost=0,
+                prior_hours=inputs.hours_worked,
+                prior_attempt_ids=inputs.prior_attempt_ids,
+                fatigue=fatigue,
+                quality_modifier=quality,
+                speed_modifier=speed,
+                misunderstanding=misunderstood,
+                execution_notes=[f"Task model failed: {inference.failure.message}"],
+            )
         output = output_type.model_validate(inference.output)
         resources = [
             Resource(id=uuid5(planned.id, f"output/{index}"), **draft.model_dump())
             for index, draft in enumerate(output.resources)
         ]
         if not resources:
-            if actor.agent_type != "ai":
-                raise ValueError("Human/stakeholder generated no resources")
             resources = [
                 Resource(
                     id=uuid5(planned.id, "output/0"),

@@ -3,13 +3,13 @@
 import asyncio
 import json
 from time import monotonic
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, ToolOutput, capture_run_messages
-from pydantic_ai.exceptions import AgentRunError
-from pydantic_ai.messages import ModelResponse, ToolCallPart
+from pydantic_ai.exceptions import AgentRunError, UnexpectedModelBehavior, UsageLimitExceeded
+from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import UsageLimits
 
@@ -48,7 +48,13 @@ def inference_profile() -> dict[str, Any]:
         "operation_timeout_seconds": 600,
         "output_mode": "strict_output_tool",
         "output_tool_strict": True,
+        "worker_model_failure_policy": "native_failed_task",
     }
+
+
+class ModelFailure(BaseModel):
+    kind: Literal["request_limit", "output_validation"]
+    message: str
 
 
 class InferenceResult(BaseModel):
@@ -57,6 +63,37 @@ class InferenceResult(BaseModel):
     elapsed_seconds: float
     input_tokens: int
     output_tokens: int
+    failure: ModelFailure | None = None
+
+
+def captured_result(
+    output: dict[str, Any],
+    messages: list[ModelMessage],
+    started: float,
+    failure: ModelFailure | None = None,
+) -> InferenceResult:
+    responses = [m for m in messages if isinstance(m, ModelResponse)]
+    input_tokens = sum(m.usage.input_tokens for m in responses)
+    output_tokens = sum(m.usage.output_tokens for m in responses)
+    chunks = PydanticAITranscriptAdapter().build_chunks(messages)
+    if chunks:
+        chunks[-1] = chunks[-1].model_copy(
+            update={
+                "provider_usage": ProviderTokenUsage(
+                    prompt_tokens=input_tokens,
+                    completion_tokens=output_tokens,
+                    total_tokens=input_tokens + output_tokens,
+                )
+            }
+        )
+    return InferenceResult(
+        output=output,
+        chunks=chunks,
+        elapsed_seconds=monotonic() - started,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        failure=failure,
+    )
 
 
 def require_internal_model(model: str) -> str:
@@ -79,6 +116,7 @@ async def infer(
     output_type: type[BaseModel],
     tools: list[Any] | None = None,
     temperature: float = 0.0,
+    accept_model_failure: bool = False,
 ) -> InferenceResult:
     resolved = resolve_model_target(require_internal_model(model))
     agent = Agent[None, BaseModel](
@@ -95,6 +133,25 @@ async def infer(
             async with asyncio.timeout(600):
                 result = await agent.run(prompt, usage_limits=UsageLimits(request_limit=12))
         except (AgentRunError, TimeoutError) as error:
+            # MAG work roles return unsuccessful task results for bounded model
+            # behavior. Transport, tool, storage and timeout failures still raise;
+            # managers, estimators and judges retain their strict default.
+            if (
+                accept_model_failure
+                and isinstance(error, (UsageLimitExceeded, UnexpectedModelBehavior))
+                and any(isinstance(m, ModelResponse) for m in messages)
+            ):
+                return captured_result(
+                    {},
+                    messages,
+                    started,
+                    ModelFailure(
+                        kind="request_limit"
+                        if isinstance(error, UsageLimitExceeded)
+                        else "output_validation",
+                        message=str(error),
+                    ),
+                )
             # Exception notes survive the existing native error/step traceback.
             # Retain response accounting without copying prompts or tool arguments.
             error.add_note(
@@ -122,22 +179,4 @@ async def infer(
                 )
             )
             raise
-    usage = result.usage()
-    chunks = PydanticAITranscriptAdapter().build_chunks(result.all_messages())
-    if chunks:
-        chunks[-1] = chunks[-1].model_copy(
-            update={
-                "provider_usage": ProviderTokenUsage(
-                    prompt_tokens=usage.input_tokens,
-                    completion_tokens=usage.output_tokens,
-                    total_tokens=usage.total_tokens,
-                )
-            }
-        )
-    return InferenceResult(
-        output=result.output.model_dump(mode="json"),
-        chunks=chunks,
-        elapsed_seconds=monotonic() - started,
-        input_tokens=usage.input_tokens,
-        output_tokens=usage.output_tokens,
-    )
+    return captured_result(result.output.model_dump(mode="json"), result.all_messages(), started)

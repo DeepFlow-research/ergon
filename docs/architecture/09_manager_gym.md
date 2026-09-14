@@ -177,3 +177,23 @@ the model to generate UUIDs only for the worker to replace them, causing avoidab
 validation retries. Original scenario resource identities remain unchanged.
 PydanticAI retry feedback is retained as an error tool result (or a user message
 for a retry without a tool), preserving the feedback the next model call saw.
+
+Bounded work-role model failures use the existing `WorkerOutput(success=False)`
+contract. After an observed model response, request-limit exhaustion and invalid
+model outputs become typed `model_failure` metadata, with no work resources or
+simulated cost/hours. The inference checkpoint retains the failed transcript and
+observed usage. Native tasks remain failed; Ergon does not release their
+dependents. Final drain cancels policy-blocked pending work through the native
+task API. Those outcomes remain gradeable in the frozen MAG snapshot, matching
+the source engine. Provider/HTTP, tool/storage and timeout exceptions still
+raise. Judges, managers and estimators do not opt into this work-role policy;
+failed grading remains incomplete/null. No historical snapshot is reclassified.
+
+`TaskInspectionService.completion` returns a persisted WorkerOutput for failed
+as well as completed nodes. Running/cancelled nodes still omit output. This
+read boundary lets callers distinguish an explicit unsuccessful worker result
+from an exception without bypassing native task inspection. It does not change
+failed-task scheduling. Native samples containing failed work retain their
+Failed status; acceptance separately requires a completed manager, all tasks
+terminal, every failed task accounted for by typed work-model failure, a complete
+numeric evaluation, retained artifacts and closed owned sandboxes.

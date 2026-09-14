@@ -44,9 +44,14 @@ downward along parent->subtask links" invariant.
 explicit. `zero` preserves historical behavior; `incomplete` persists a null
 normalized score plus failure metadata through jobs, storage, REST/events and
 dashboard selectors. MAG opts into incomplete: missing criteria, snapshot
-mismatch, exhausted judge/worker failures or execution deadlines cannot become
-a numeric utility. Invalid manager actions and policy-cancelled dependencies
-remain benchmark outcomes. Source random/bulk manager baselines retain their
+mismatch, exhausted judges, infrastructure errors or execution deadlines cannot
+become a numeric utility. Invalid manager actions, policy-cancelled dependencies
+and bounded worker-model failures remain benchmark outcomes. Work roles return
+existing `WorkerOutput(success=False)` values with typed model-failure metadata;
+their observed transcript and usage are retained. Native tasks and samples keep
+their Failed status. A completed manager can still produce a complete benchmark
+evaluation over those failed-work outcomes. Task inspection returns retained
+outputs for failed as well as completed tasks, without changing propagation. Source random/bulk manager baselines retain their
 documented model-error fallback with the error recorded in the action result.
 
 Expected native mutation rejections survive workflow checkpointing as typed

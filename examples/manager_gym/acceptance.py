@@ -203,6 +203,29 @@ def score_checks(evidence: dict, scenario: str) -> dict:
     }
 
 
+def execution_checks(evidence: dict) -> dict[str, bool]:
+    roots = [n for n in evidence["nodes"] if n["parent_task_id"] is None]
+    failed = {n["task_id"] for n in evidence["nodes"] if n["status"] == "failed"}
+    latest = {}
+    for attempt in sorted(evidence["attempts"], key=lambda a: (a["created_at"], a["id"])):
+        latest[attempt["task_id"]] = attempt
+    accounted = set()
+    for task_id in failed:
+        output = latest.get(task_id, {}).get("worker_output_json") or {}
+        failure = output.get("metadata", {}).get("model_failure", {})
+        if output.get("success") is False and failure.get("kind") in {
+            "request_limit",
+            "output_validation",
+        }:
+            accounted.add(task_id)
+    return {
+        "sample_terminal": evidence["sample"]["status"] in {"completed", "failed"},
+        "native_failures_accounted": failed == accounted,
+        "manager_completed": bool(roots) and all(n["status"] == "completed" for n in roots),
+        "all_tasks_terminal": all(n["status"] in TERMINAL for n in evidence["nodes"]),
+    }
+
+
 async def closed_sandboxes(evidence: dict) -> dict[str, bool]:
     ids = {e["sandbox_id"] for e in evidence["sandbox_events"] if e["kind"] == "sandbox_created"}
     ids.update(a["sandbox_id"] for a in evidence["attempts"] if a.get("sandbox_id"))
@@ -249,8 +272,8 @@ async def finish(sample_id: str, scenario: str, folder: Path) -> dict:
             break
         await asyncio.sleep(5)
     checks = score_checks(evidence, scenario)
+    checks.update(execution_checks(evidence))
     checks.update(
-        sample_completed=evidence["sample"]["status"] == "completed",
         artifacts_saved=any(
             not resource["name"].startswith(".checkpoints/") for resource in evidence["resources"]
         ),
@@ -320,10 +343,26 @@ async def main() -> None:
     }
     deadline = monotonic() + args.timeout_seconds
     while pending or active:
-        if args.stage == "pilot" and any(
-            row.get("accepted") is False
-            for name, row in ledger["samples"].items()
-            if name in PILOTS
+        for scenario, sample_id in list(active.items()):
+            evidence = inspect_sample(sample_id)
+            if (
+                args.stage == "pilot"
+                and not execution_checks(evidence)["native_failures_accounted"]
+            ):
+                ledger["pilot_admission_failure"] = sample_id
+                write_json(ledger_path, ledger)
+            if evidence["sample"]["status"] in TERMINAL:
+                ledger["samples"][scenario] = await finish(sample_id, scenario, args.output)
+                write_json(ledger_path, ledger)
+                print(json.dumps(ledger["samples"][scenario]), flush=True)
+                del active[scenario]
+        if args.stage == "pilot" and (
+            ledger.get("pilot_admission_failure")
+            or any(
+                row.get("accepted") is False
+                for name, row in ledger["samples"].items()
+                if name in PILOTS
+            )
         ):
             pending.clear()
         while pending and len(active) < args.concurrency:
@@ -333,13 +372,6 @@ async def main() -> None:
             ledger["samples"][scenario] = {"sample_id": sample_id}
             write_json(ledger_path, ledger)
             print(json.dumps({"submitted": scenario, "sample_id": sample_id}), flush=True)
-        for scenario, sample_id in list(active.items()):
-            evidence = inspect_sample(sample_id)
-            if evidence["sample"]["status"] in TERMINAL:
-                ledger["samples"][scenario] = await finish(sample_id, scenario, args.output)
-                write_json(ledger_path, ledger)
-                print(json.dumps(ledger["samples"][scenario]), flush=True)
-                del active[scenario]
         if monotonic() > deadline:
             raise TimeoutError(
                 "Acceptance deadline; existing sample ids retained for inspection/resume"

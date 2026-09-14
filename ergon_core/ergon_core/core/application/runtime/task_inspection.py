@@ -38,7 +38,7 @@ class TaskInspectionService:
         attempt = self._task_execution_repo.latest_for_node(session, task_id)
         output = None
         if (
-            node.status == COMPLETED
+            node.status in {COMPLETED, FAILED}
             and attempt is not None
             and attempt.worker_output_json is not None
         ):

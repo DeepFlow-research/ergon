@@ -268,7 +268,11 @@ async def project_native_state(state: EpisodeState, context: WorkerContext) -> E
                     state.workflow.resources[resource.id] = resource
                     if resource.id not in task.output_resource_ids:
                         task.output_resource_ids.append(resource.id)
-            if result.status == "failed" and str(native) not in state.infrastructure_errors:
+            if (
+                result.status == "failed"
+                and not (result.output and result.output.metadata.get("model_failure"))
+                and str(native) not in state.infrastructure_errors
+            ):
                 state.infrastructure_errors.append(str(native))
         rows = session.exec(
             select(ThreadMessage)

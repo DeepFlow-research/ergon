@@ -638,7 +638,7 @@ class DrainClassification(BaseModel):
     policy_blocked: bool
 
 
-async def has_cancelled_prerequisite(context: WorkerContext, native: UUID) -> bool:
+async def has_policy_blocked_prerequisite(context: WorkerContext, native: UUID) -> bool:
     """Classify unfinished work from the authoritative graph, without releasing it."""
     pending = [native]
     visited: set[UUID] = set()
@@ -650,6 +650,10 @@ async def has_cancelled_prerequisite(context: WorkerContext, native: UUID) -> bo
         task = await context.get_task(task_id)
         if task_id != native and task.status in {"cancelled", "blocked"}:
             return True
+        if task_id != native and task.status == "failed":
+            result = await context.wait_for_task(task_id, timeout_seconds=0)
+            if result.output and result.output.metadata.get("model_failure"):
+                return True
         pending.extend(task.depends_on)
     return False
 
@@ -658,16 +662,27 @@ async def drain_admitted_work(state: EpisodeState, context: WorkerContext) -> No
     remaining = state.config.drain_timeout_seconds
     checked_at = state.observed_at.timestamp()
     for _, native in sorted(state.bindings.items()):
+
+        async def classify() -> DrainClassification:
+            return DrainClassification(
+                policy_blocked=await has_policy_blocked_prerequisite(context, native)
+            )
+
+        before = await context.run_step(
+            f"drain-blocked-before-{native}", classify, output_type=DrainClassification
+        )
+        if before.policy_blocked and (await context.get_task(native)).status in {
+            "pending",
+            "blocked",
+        }:
+            await context.cancel_task(
+                native, reason="MAG prerequisite has a terminal policy outcome"
+            )
+            continue
         result = await context.wait_for_task(native, timeout_seconds=max(0, remaining))
         remaining -= max(0, result.checked_at - checked_at)
         checked_at = result.checked_at
         if result.timed_out:
-
-            async def classify() -> DrainClassification:
-                return DrainClassification(
-                    policy_blocked=await has_cancelled_prerequisite(context, native)
-                )
-
             classification = await context.run_step(
                 f"drain-blocked-{native}", classify, output_type=DrainClassification
             )
