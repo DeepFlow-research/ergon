@@ -83,6 +83,20 @@ deduplication keeps the report visible. Resume the same command after interrupti
 do not relabel a failed sample as a pass. Use a new output folder after code or
 configuration changes and retain the failed run's evidence.
 
+For long remote runs, detach the existing acceptance command from the SSH
+connection and retain its log on the VM. After all four pilots pass:
+
+```bash
+docker compose exec -d api sh -c 'exec python -u examples/manager_gym/acceptance.py --stage catalog --output /app/data/mag-acceptance --timeout-seconds 36000 >> /app/data/mag-acceptance/catalog.log 2>&1'
+```
+
+Run only one acceptance driver per output directory. Before resuming an
+interrupted launcher, check whether its driver still runs and inspect the saved
+ledger. Losing an operator connection does not stop already-admitted native
+tasks. Keep the API container alive; the detached driver uses the existing
+submission API, and Ergon still owns task execution. Read `acceptance.json`
+for durable outcomes; a local copy of a remote log may lag or disconnect.
+
 For ordinary submissions without the acceptance harness:
 
 ```bash
