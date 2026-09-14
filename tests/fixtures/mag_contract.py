@@ -226,6 +226,7 @@ class MAGContractWorker(Worker):
         failed = await context.spawn_task(
             Task(
                 task_slug="mag-contract-model-failure",
+                instance_key="default",
                 description=failed_plan.description,
                 worker=ContractModelFailure(name="Expected failure", model="test:none"),
                 sandbox=E2BSandbox(timeout_seconds=600),
@@ -235,6 +236,7 @@ class MAGContractWorker(Worker):
         blocked = await context.spawn_task(
             Task(
                 task_slug="mag-contract-blocked",
+                instance_key="default",
                 description=blocked_plan.description,
                 worker=ContractGate(name="Must not run", model="test:none"),
                 sandbox=E2BSandbox(timeout_seconds=600),
