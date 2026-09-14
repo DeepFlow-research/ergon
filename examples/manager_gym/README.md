@@ -37,6 +37,13 @@ The override disables API hot reload. Keep executable source fixed while
 samples are running. The Docker image installs from `uv.lock`; secrets, local
 virtual environments and data are excluded from its build context.
 
+For an existing deployment, update the dashboard before or together with the
+backend. Evaluation notifications carry sample/task IDs; the dashboard reloads
+the full saved result through its existing REST reader, avoiding Inngest's event
+size limit. The updated dashboard also accepts older embedded evaluation events.
+Install from the committed dashboard lockfile so its Inngest SDK is compatible
+with the engine. Keep API source fixed until all admitted samples finish.
+
 ## Run and inspect
 
 ```bash
