@@ -197,3 +197,10 @@ failed-task scheduling. Native samples containing failed work retain their
 Failed status; acceptance separately requires a completed manager, all tasks
 terminal, every failed task accounted for by typed work-model failure, a complete
 numeric evaluation, retained artifacts and closed owned sandboxes.
+
+Future RL sample selection must distinguish reward completeness from native
+execution status. Filtering only for Completed samples would discard valid
+manager episodes containing unsuccessful worker outputs. Incomplete/null
+evaluations remain ineligible as rewards; a numeric low or zero utility is
+still a real outcome. Token alignment, policy-role selection and reward
+attachment are deferred and require their own training-path validation.
