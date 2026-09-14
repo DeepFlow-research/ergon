@@ -64,8 +64,10 @@ are reused only under the same source digest, model, seed and limits.
 
 The runner writes `acceptance.json` and, for every terminal sample,
 `<sample-id>/records.json`, `context.jsonl.gz` and artifact blobs. It verifies
-the exact terminal criterion set, snapshot digest, independently recomputed
-utility and E2B sandbox closure. Resume the same command after interruption;
+the exact terminal criterion set, snapshot digest, named root report with matching
+bytes, independently recomputed utility and E2B sandbox closure. The scripted
+contract checkpoints the same bytes it publishes, proving that resource
+deduplication keeps the report visible. Resume the same command after interruption;
 do not relabel a failed sample as a pass. Use a new output folder after code or
 configuration changes and retain the failed run's evidence.
 

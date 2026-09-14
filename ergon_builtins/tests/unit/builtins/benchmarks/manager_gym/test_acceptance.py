@@ -2,11 +2,52 @@
 
 import json
 import sys
+from hashlib import sha256
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
 from examples.manager_gym import acceptance
+
+
+def test_frozen_checkpoint_does_not_substitute_for_named_report(monkeypatch):
+    content = '{"fixture":true}'
+    digest = sha256(content.encode()).hexdigest()
+    monkeypatch.setattr(acceptance, "definitions", lambda scenario: [SimpleNamespace(slug="a")])
+    evidence = {
+        "nodes": [{"task_id": "root", "parent_task_id": None}],
+        "attempts": [
+            {"id": "root-attempt", "task_id": "root", "worker_output_json": {"output": content}}
+        ],
+        "evaluations": [
+            {
+                "score": 0,
+                "summary_json": {
+                    "criterion_results": [
+                        {"criterion_slug": "a", "metadata": {"snapshot_hash": digest}}
+                    ]
+                },
+            }
+        ],
+        "resources": [
+            {
+                "task_attempt_id": "root-attempt",
+                "kind": "artifact",
+                "name": ".checkpoints/episode-final-snapshot.json",
+                "content_hash": digest,
+            }
+        ],
+    }
+    assert not acceptance.score_checks(evidence, "fixture")["snapshot_report_saved"]
+    report = dict(evidence["resources"][0], kind="report", name="manager-gym-snapshot.json")
+    evidence["resources"].append(report)
+    assert acceptance.score_checks(evidence, "fixture")["snapshot_report_saved"]
+    report["content_hash"] = "wrong bytes"
+    assert not acceptance.score_checks(evidence, "fixture")["snapshot_report_saved"]
+    report["content_hash"] = digest
+    report["task_attempt_id"] = "unrelated-worker"
+    assert not acceptance.score_checks(evidence, "fixture")["snapshot_report_saved"]
 
 
 def test_native_failed_sample_is_accepted_only_for_accounted_work_failures():

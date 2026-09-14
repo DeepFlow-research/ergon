@@ -8,6 +8,7 @@ import math
 from typing import Any, ClassVar, Literal, cast
 
 from pydantic import BaseModel, Field
+from pydantic_ai.exceptions import AgentRunError
 
 from ergon_core.api import Task
 from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome
@@ -170,9 +171,10 @@ def validation_context(state: EpisodeState, rubric: WorkflowRubric) -> Validatio
 
 
 class JudgeOutput(BaseModel):
-    score: float | bool | Literal["low", "medium", "high"]
-    reasoning: str
-    confidence: float = Field(ge=0, le=1)
+    reasoning: str = Field(description="Explanation of the assessment and rationale for the score")
+    score: float | Literal["low", "medium", "high"] | bool = Field(
+        description="Numeric score assigned by LLM"
+    )
 
 
 def normalize_score(value: Any, maximum: float, *, llm: bool) -> tuple[float, str]:
@@ -234,12 +236,16 @@ class MAGCriterion(Criterion):
             # a scope, which renders Workflow.pretty_print (300-char resources).
             # Callable rubrics still receive the complete requested context.
             evaluation_input = judge_prompt(rubric, validation.workflow.pretty_print())
-            response = await infer(
-                model=self.model,
-                system="You are a validation expert.",
-                prompt=evaluation_input,
-                output_type=JudgeOutput,
-            )
+            try:
+                response = await infer(
+                    model=self.model,
+                    system="You are a validation expert.",
+                    prompt=evaluation_input,
+                    output_type=JudgeOutput,
+                )
+            except (AgentRunError, TimeoutError) as error:
+                error.add_note(f"MAG judge criterion: {self.slug} ({rubric.name})")
+                raise
             judged = JudgeOutput.model_validate(response.output)
             score, _ = normalize_score(judged.score, rubric.max_score, llm=True)
             reasoning = judged.reasoning

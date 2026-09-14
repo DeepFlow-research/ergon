@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import json
 from typing import ClassVar, cast
 from uuid import uuid5
+from pydantic import RootModel
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
 from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome
@@ -296,7 +297,14 @@ class MAGContractWorker(Worker):
             "snapshot": state.model_dump(mode="json"),
             "completions": [c.model_dump(mode="json") for c in completions],
         }
-        encoded = json.dumps(receipt)
+
+        async def retain_receipt() -> RootModel[dict]:
+            return RootModel[dict](receipt)
+
+        frozen = await context.run_step(
+            "contract-receipt", retain_receipt, output_type=RootModel[dict]
+        )
+        encoded = frozen.model_dump_json()
         await task.sandbox.write_file(CONTRACT_FILE, encoded.encode())
         yield WorkerOutput(output=encoded, metadata={"scripted_contract": True})
 

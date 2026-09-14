@@ -1,10 +1,32 @@
 """PR 11 migration reset guard."""
 
 from pathlib import Path
+import subprocess
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[4]
 VERSIONS = ROOT / "ergon_core" / "migrations" / "versions"
+
+
+def test_migration_environment_preserves_existing_runtime_logger() -> None:
+    script = """
+import logging, sys
+from alembic import command
+from alembic.config import Config
+logger = logging.getLogger('ergon_core.core.jobs.task.evaluate.job')
+logger.disabled = False
+config = Config(sys.argv[1])
+config.set_main_option('script_location', sys.argv[2])
+command.upgrade(config, 'base', sql=True)
+assert not logger.disabled, 'Migration setup disabled an existing runtime logger'
+"""
+    subprocess.run(
+        [sys.executable, "-c", script, str(ROOT / "ergon_core/alembic.ini"), str(VERSIONS.parent)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
 
 def test_v2_migration_stack_is_explicit() -> None:

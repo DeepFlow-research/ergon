@@ -14,6 +14,41 @@ from ergon_builtins.llm.resolution import ResolvedModel
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("score", [True, "medium", 4.5])
+async def test_judge_accepts_upstream_response_without_extra_confidence(monkeypatch, score):
+    from pydantic_ai.messages import ModelResponse, ToolCallPart
+    from pydantic_ai.models.function import FunctionModel
+    from ergon_builtins.benchmarks.manager_gym.rubric import JudgeOutput
+
+    calls = []
+
+    def response(messages, info):
+        calls.append(messages)
+        return ModelResponse(
+            parts=[
+                ToolCallPart(
+                    info.output_tools[0].name,
+                    {"reasoning": "Assessment of the supplied evidence", "score": score},
+                )
+            ]
+        )
+
+    monkeypatch.setattr(
+        inference, "resolve_model_target", lambda _: ResolvedModel(model=FunctionModel(response))
+    )
+    with override_allow_model_requests(True):
+        result = await inference.infer(
+            model=inference.INTERNAL_MODEL,
+            system="You are a validation expert.",
+            prompt="Evaluate the supplied fixture.",
+            output_type=JudgeOutput,
+        )
+    assert len(calls) == 1
+    assert result.output["score"] == score
+    assert set(result.output) == {"reasoning", "score"}
+
+
+@pytest.mark.asyncio
 async def test_strict_output_preserves_tools_and_validates_retries(monkeypatch):
     requests, lookups = [], []
     final = {

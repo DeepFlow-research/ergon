@@ -60,6 +60,7 @@ class SampleResourcePublishService:
                         session,
                         task_attempt_id=task_attempt_id,
                         file_path=str(durable_path),
+                        kind=resource_kind.value,
                     )
                 if prior is not None:
                     continue
@@ -97,7 +98,7 @@ class SampleResourcePublishService:
         content: str,
         mime_type: str = "text/plain",
     ) -> SampleResourceView | None:
-        """Publish an explicit value as a run resource, deduping by content hash."""
+        """Deduplicate a value within its resource kind; share blob bytes across kinds."""
         content_bytes = content.encode("utf-8")
         content_hash = self._content_hash(content_bytes)
 
@@ -106,6 +107,7 @@ class SampleResourcePublishService:
                 session,
                 task_attempt_id=task_attempt_id,
                 content_hash=content_hash,
+                kind=kind.value,
             )
         if prior is not None:
             return None

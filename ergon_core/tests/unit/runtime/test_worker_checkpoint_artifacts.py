@@ -8,10 +8,18 @@ from uuid import uuid4
 
 import pytest
 from pydantic import BaseModel
+from sqlmodel import select
 
 from ergon_core.api.worker import WorkerContext
-from ergon_core.core.application.resources.publishing import WorkerCheckpointStore
+from ergon_core.core.application.resources.publishing import (
+    WorkerCheckpointStore,
+    SampleResourcePublishService,
+)
+from ergon_core.core.persistence.shared.enums import SampleResourceKind
+from ergon_core.core.persistence.telemetry.models import SampleResource, SampleTaskAttempt
 from ergon_core.core.infrastructure.sandbox.resource_publisher import SandboxResourcePublisher
+from ergon_core.tests.unit.runtime.test_manager_gym_preport_proof import preport
+from ergon_core.tests.unit.runtime.test_spawn_dynamic_task import _SessionContext
 
 
 class LargeResult(BaseModel):
@@ -36,6 +44,60 @@ class RetainingPublisher:
         data = values["content"].encode()
         values["blob_store"].write_blob(data, sha256(data).hexdigest())
         self.rows.append(values)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("checkpoint_first", [True, False])
+async def test_checkpoint_cannot_hide_identical_report(preport, tmp_path, checkpoint_first):
+    session, sample_id, parent, _ = preport
+    attempt = SampleTaskAttempt(sample_id=sample_id, task_id=parent.task_id, status="running")
+    session.add(attempt)
+    session.commit()
+    blobs = SandboxResourcePublisher(
+        sandbox=None, sample_id=sample_id, task_attempt_id=attempt.id, blob_root=tmp_path
+    )
+    publisher = SampleResourcePublishService(session_factory=lambda: _SessionContext(session))
+    store = WorkerCheckpointStore(blobs, sample_id, attempt.id, publisher)
+    result = LargeResult(transcript="Frozen episode shared by checkpoint and final report")
+    content = result.model_dump_json().encode()
+
+    class Reader:
+        async def list_sandbox_dir(self, path):
+            return ["manager-gym-snapshot.json"]
+
+        async def read_sandbox_file(self, path):
+            return content
+
+        def entry_name(self, entry):
+            return entry
+
+        def entry_path(self, path, entry):
+            return f"{path}/{entry}"
+
+    async def publish_report():
+        return await publisher.publish_sandbox_files(
+            reader=Reader(),
+            blob_store=blobs,
+            sample_id=sample_id,
+            task_attempt_id=attempt.id,
+            publish_dirs=(("/workspace/final_output", SampleResourceKind.REPORT),),
+        )
+
+    if checkpoint_first:
+        reference = store.save("episode-final-snapshot", result)
+        assert len(await publish_report()) == 1
+    else:
+        assert len(await publish_report()) == 1
+        reference = store.save("episode-final-snapshot", result)
+    assert store.load(reference) == content
+    assert await publish_report() == []
+    assert store.save("episode-final-snapshot", result) == reference
+    rows = session.exec(select(SampleResource)).all()
+    assert {(r.kind, r.name) for r in rows} == {
+        ("artifact", ".checkpoints/episode-final-snapshot.json"),
+        ("report", "manager-gym-snapshot.json"),
+    }
+    assert len({r.file_path for r in rows}) == 1
 
 
 @pytest.mark.asyncio

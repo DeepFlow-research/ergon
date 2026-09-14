@@ -67,7 +67,9 @@ def code_digest() -> str:
         p
         for directory in (
             "ergon_core/ergon_core",
+            "ergon_core/migrations",
             "ergon_builtins/ergon_builtins",
+            "examples/manager_gym",
             "tests/fixtures",
         )
         for p in (root / directory).rglob("*.py")
@@ -147,6 +149,23 @@ def inspect_sample(sample_id: str) -> dict:
     return result
 
 
+def named_report_matches_root(evidence: dict, name: str) -> bool:
+    roots = {n["task_id"] for n in evidence["nodes"] if n["parent_task_id"] is None}
+    attempts = [
+        a for a in evidence["attempts"] if a["task_id"] in roots and a.get("worker_output_json")
+    ]
+    if len(attempts) != 1:
+        return False
+    attempt = attempts[0]
+    reports = [
+        r
+        for r in evidence["resources"]
+        if r["task_attempt_id"] == attempt["id"] and r["kind"] == "report" and r["name"] == name
+    ]
+    digest = sha256(attempt["worker_output_json"]["output"].encode()).hexdigest()
+    return len(reports) == 1 and reports[0]["content_hash"] == digest
+
+
 def score_checks(evidence: dict, scenario: str) -> dict:
     evaluations = evidence["evaluations"]
     if len(evaluations) != 1:
@@ -157,6 +176,7 @@ def score_checks(evidence: dict, scenario: str) -> dict:
         return {
             "native_contract": evaluation["score"] == 1,
             "criteria_saved": len(summary.get("criterion_results", [])) == 1,
+            "contract_report_saved": named_report_matches_root(evidence, "mag-contract.json"),
         }
     rows = summary.get("criterion_results", [])
     expected = {d.slug for d in definitions(scenario)}
@@ -196,6 +216,7 @@ def score_checks(evidence: dict, scenario: str) -> dict:
         and abs(recomputed - evaluation["score"]) < 1e-9,
         "one_frozen_snapshot": bool(rows)
         and {r.get("metadata", {}).get("snapshot_hash") for r in rows} == {digest},
+        "snapshot_report_saved": named_report_matches_root(evidence, "manager-gym-snapshot.json"),
         "native_team_work": any(
             a["task_id"] not in roots and a.get("worker_output_json") and a["status"] == "completed"
             for a in evidence["attempts"]
