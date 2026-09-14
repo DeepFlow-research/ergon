@@ -42,7 +42,6 @@ from ergon_core.core.infrastructure.tracing import (
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
 from ergon_core.core.views.dashboard_events.contracts import DashboardTaskEvaluationUpdatedEvent
-from ergon_core.core.views.samples.evaluation_mapping import build_dashboard_evaluation_dto
 
 if TYPE_CHECKING:
     from ergon_core.api.rubric import Evaluator
@@ -186,14 +185,6 @@ async def _run_evaluation(
         DashboardTaskEvaluationUpdatedEvent(
             sample_id=sample_id,
             task_id=view.task_id,
-            evaluation=build_dashboard_evaluation_dto(
-                evaluation_id=persisted.evaluation_id,
-                sample_id=persisted.sample_id,
-                task_id=persisted.task_id,
-                total_score=persisted.total_score,
-                created_at=persisted.created_at,
-                summary=persisted.summary,
-            ),
         )
     )
 

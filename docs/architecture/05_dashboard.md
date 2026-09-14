@@ -93,8 +93,19 @@ ContextEventRepository listener           --> dashboard/context_event
                                               Socket.io room run:<id>
 ```
 
-The broader set of `DashboardEmitter` methods exists for the target
-pipeline shape but has no live call sites yet; see Follow-ups.
+Other `DashboardEmitter` surfaces have differing rollout coverage; see Follow-ups.
+Task evaluation updates are wired from the native evaluation job after persistence.
+They carry only `sample_id` and `task_id`: complete judge inputs can exceed the
+Inngest event size limit. The dashboard handler reloads the latest task evaluation
+through the existing sample snapshot reader, updates its store, and broadcasts the
+complete evaluation over Socket.io. Failed or missing reads throw for normal
+Inngest retry. Judge inputs, scores and feedback are never truncated to fit an event.
+
+Deploy the updated dashboard before or alongside a backend using these notifications.
+The handler also accepts legacy events containing an embedded `evaluation`. The
+browser Socket contract and REST snapshot contract remain unchanged. Inngest SDK
+3.54.1 is pinned because the current development engine rejects the older SDK's
+registration; no server compatibility gate is bypassed.
 
 ## 4. Invariants
 

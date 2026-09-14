@@ -1,4 +1,5 @@
 import type { ContextEventState } from "./contracts/contextEvents";
+import type { DashboardTaskEvaluationUpdatedEvent } from "@/generated/events";
 export type { ContextEventState };
 
 import type {
@@ -134,7 +135,9 @@ export type DashboardEvents = {
   "dashboard/sandbox.command": { data: DashboardSandboxCommandData };
   "dashboard/sandbox.closed": { data: DashboardSandboxClosedData };
   "dashboard/thread.message_created": { data: DashboardThreadMessageCreatedData };
-  "dashboard/task.evaluation_updated": { data: DashboardTaskEvaluationUpdatedData };
+  "dashboard/task.evaluation_updated": {
+    data: DashboardTaskEvaluationUpdatedEvent | DashboardTaskEvaluationUpdatedData;
+  };
   "dashboard/sample.runtime_event": { data: DashboardSampleRuntimeEventData };
   "dashboard/context.event": { data: DashboardContextEventEventData };
 };

@@ -16,6 +16,7 @@ import {
 import { parseSampleSnapshot } from "../../src/lib/contracts/rest";
 import { deserializeSampleState } from "../../src/lib/sampleState";
 import { store } from "../../src/lib/state/store";
+import { loadSampleTaskEvaluation } from "../../src/lib/server-data/samples";
 import {
   getHarnessSample,
   resetDashboardHarness,
@@ -222,6 +223,54 @@ test("dashboard nested DTO event parser accepts backend snake-case payloads", ()
 
   assert.equal(parsedThread.message.sequenceNum, message.sequenceNum);
   assert.equal(parsedEvaluation.evaluation.totalScore, evaluation.totalScore);
+});
+
+test("evaluation notifications reload full large evidence from the existing snapshot reader", async (t) => {
+  resetDashboardHarness();
+  const run = createDashboardSeed().runs?.[0];
+  const evaluation = run?.evaluationsByTask?.[FIXTURE_IDS.solveTaskId];
+  assert.ok(run && evaluation?.criterionResults?.[0]);
+  const evidence = "retained judge evidence ".repeat(200_000);
+  evaluation.criterionResults[0].evaluationInput = evidence;
+  const notification = dashboardEventSchemas["dashboard/task.evaluation_updated"].parse({
+    sample_id: FIXTURE_IDS.sampleId,
+    task_id: FIXTURE_IDS.solveTaskNodeUuid,
+  });
+  run.evaluationsByTask = { [notification.task_id]: evaluation };
+  let calls = 0;
+  t.mock.method(globalThis, "fetch", async (input: URL, init: RequestInit) => {
+    calls++;
+    assert.equal(input.pathname, `/samples/${notification.sample_id}/workspace`);
+    assert.equal(init.cache, "no-store");
+    return new Response(JSON.stringify(run), { status: 200 });
+  });
+
+  const first = await loadSampleTaskEvaluation(notification.sample_id, notification.task_id);
+  assert.ok(first.ok);
+  assert.equal(first.data.criterionResults[0].evaluationInput, evidence);
+  assert.ok(JSON.stringify(first.data).length > 3 * 1024 * 1024);
+  assert.ok(JSON.stringify(notification).length < 256);
+
+  evaluation.totalScore = 0.25;
+  const refreshed = await loadSampleTaskEvaluation(notification.sample_id, notification.task_id);
+  assert.ok(refreshed.ok);
+  assert.equal(refreshed.data.totalScore, 0.25);
+  assert.equal(calls, 2);
+});
+
+test("evaluation refresh preserves read failures and missing results", async (t) => {
+  resetDashboardHarness();
+  const run = createDashboardSeed().runs?.[0];
+  assert.ok(run);
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify(run), { status: 200 }));
+  const missing = await loadSampleTaskEvaluation(FIXTURE_IDS.sampleId, "absent-task");
+  assert.equal(missing.ok, false);
+  assert.equal(missing.status, 404);
+  t.mock.restoreAll();
+  t.mock.method(globalThis, "fetch", async () => new Response("{}", { status: 503 }));
+  const unavailable = await loadSampleTaskEvaluation(FIXTURE_IDS.sampleId, FIXTURE_IDS.solveTaskId);
+  assert.equal(unavailable.ok, false);
+  assert.equal(unavailable.status, 503);
 });
 
 test("dashboard sample runtime event parser accepts backend wrapped event", () => {
