@@ -651,7 +651,10 @@ async def has_policy_blocked_prerequisite(context: WorkerContext, native: UUID) 
         if task_id != native and task.status in {"cancelled", "blocked"}:
             return True
         if task_id != native and task.status == "failed":
-            result = await context.wait_for_task(task_id, timeout_seconds=0)
+            with context.session_factory() as session:
+                result = context.task_inspect.completion(
+                    session, sample_id=context.sample_id, task_id=task_id
+                )
             if result.output and result.output.metadata.get("model_failure"):
                 return True
         pending.extend(task.depends_on)

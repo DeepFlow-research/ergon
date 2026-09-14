@@ -12,6 +12,7 @@ from sqlmodel import select
 from ergon_core.api.worker.results import WorkerOutput
 from ergon_core.core.application.context.service import ContextEventService, ContextReplayMismatch
 from ergon_core.core.application.runtime import task_execution as execution_module
+from ergon_core.core.application.runtime import sample_lifecycle as lifecycle_module
 from ergon_core.core.application.runtime.orchestration import (
     PrepareTaskExecutionCommand,
     FinalizeTaskExecutionCommand,
@@ -33,10 +34,56 @@ from ergon_core.core.persistence.telemetry.models import (
 )
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.jobs.sample.cleanup import job as cleanup_module
+from ergon_core.core.jobs.task.cancel_orphans import job as orphan_module
+from ergon_core.core.jobs.task.propagate import job as propagation_module
+from ergon_core.core.jobs.task.propagate.contract import TaskFailedEvent
 from ergon_core.core.persistence.context.models import SampleContextEvent
 from ergon_core.core.shared.context_parts import AssistantTextPart, ContextPartChunk
 from ergon_core.tests.unit.runtime.test_manager_gym_preport_proof import preport, child, node
 from ergon_core.tests.unit.runtime.test_spawn_dynamic_task import _SessionContext, _make_task
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("running_child", [False, True])
+async def test_failure_before_descendant_blocking_rechecks_workflow(
+    preport, monkeypatch, running_child
+):
+    session, sample_id, parent, _ = preport
+    pending = await child(preport, "pending")
+    if running_child:
+        running = await child(preport, "running")
+        node(preport, running.task_id).status = "running"
+    parent.status = "failed"
+    session.commit()
+    for module in (lifecycle_module, orphan_module):
+        monkeypatch.setattr(module, "get_session", lambda: _SessionContext(session))
+    send = AsyncMock()
+    monkeypatch.setattr(propagation_module, "send_job_events", send)
+    payload = TaskFailedEvent(
+        sample_id=sample_id, task_id=parent.task_id, execution_id=uuid4(), error="parent failed"
+    )
+
+    # Reproduce the event ordering from the live proof: failure sees pending
+    # containment work; the independent descendant handler settles it later.
+    initial = await propagation_module.run_propagate_task_failure_job(payload)
+    assert not initial.workflow_failed
+    send.assert_awaited_once_with([])
+    send.reset_mock()
+
+    async def run_step(name, action):
+        return await action()
+
+    ctx = SimpleNamespace(step=SimpleNamespace(run=run_step))
+    assert await orphan_module.run_block_descendants_on_failed_job(ctx, payload) == 1
+    assert node(preport, pending.task_id).status == "blocked"
+    if running_child:
+        assert node(preport, running.task_id).status == "running"
+        send.assert_awaited_once_with([])
+    else:
+        events = send.await_args.args[0]
+        assert len(events) == 1
+        assert events[0][0] == "workflow/failed"
+        assert events[0][1]["sample_id"] == str(sample_id)
 
 
 @pytest.mark.asyncio

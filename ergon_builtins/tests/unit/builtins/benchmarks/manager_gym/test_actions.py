@@ -8,6 +8,8 @@ import pytest
 from sqlmodel import Session
 
 from ergon_core.api.worker import WorkerContext
+from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
 from ergon_core.core.application.communication import service as communication_module
 from ergon_core.core.application.runtime import task_inspection as inspection_module
 from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
@@ -22,7 +24,11 @@ from ergon_builtins.benchmarks.manager_gym.actions import (
     RemoveTaskAction,
 )
 from ergon_builtins.benchmarks.manager_gym.inference import InferenceResult, INTERNAL_MODEL
-from ergon_builtins.benchmarks.manager_gym.state import all_tasks, public_observation
+from ergon_builtins.benchmarks.manager_gym.state import (
+    all_tasks,
+    public_observation,
+    project_native_state,
+)
 from ergon_builtins.benchmarks.manager_gym.source_types import Resource
 from tests.fixtures.mag_contract import contract_state
 
@@ -239,6 +245,51 @@ async def test_removed_prerequisite_is_policy_blocked_not_infrastructure_failure
     await manager.drain_admitted_work(state, context)
     assert not state.infrastructure_errors
     assert (await context.get_task(state.bindings[str(b.id)])).status == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_failed_prerequisite_classification_reads_without_nested_durable_wait(
+    runtime, monkeypatch
+):
+    state, context = runtime
+    a, b = list(state.workflow.tasks.values())[:2]
+    ai = next(k for k in state.active_actors if state.actors[k]["agent_type"] == "ai")
+    for planned in (a, b):
+        await manager.assign(
+            state,
+            AssignTaskAction(reasoning="Assign", task_id=str(planned.id), agent_id=ai),
+            context,
+            INTERNAL_MODEL,
+        )
+    native = state.bindings[str(a.id)]
+    with context.session_factory() as session:
+        node = session.get(SampleGraphNode, (context.sample_id, native))
+        node.status = "failed"
+        session.add(node)
+        session.add(
+            SampleTaskAttempt(
+                sample_id=context.sample_id,
+                task_id=native,
+                status="failed",
+                worker_output_json={
+                    "output": "Request limit",
+                    "success": False,
+                    "metadata": {
+                        "model_failure": {"kind": "request_limit", "message": "Request limit"}
+                    },
+                },
+            )
+        )
+        session.commit()
+    forbidden = AsyncMock(
+        side_effect=AssertionError("No nested durable wait inside classification")
+    )
+    monkeypatch.setattr(WorkerContext, "wait_for_task", forbidden)
+    assert await manager.has_policy_blocked_prerequisite(context, state.bindings[str(b.id)])
+    projected = await project_native_state(state, context)
+    assert projected.workflow.tasks[a.id].status.value == "failed"
+    assert not projected.infrastructure_errors
+    forbidden.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -16,6 +16,7 @@ from typing import Any
 from uuid import UUID
 from ergon_core.core.application.runtime.task_management import TaskManagementService
 from ergon_core.core.jobs._events import send_job_events
+from ergon_core.core.jobs.task.propagate.job import run_propagate_task_failure_job
 from ergon_core.core.persistence.shared.db import get_session
 from .contract import PropagationCancelCause, TaskCancelledEvent, TaskFailedEvent
 
@@ -79,6 +80,15 @@ async def run_block_descendants_on_failed_job(ctx: Any, payload: TaskFailedEvent
         return [str(nid) for nid in blocked_ids]
 
     blocked = await ctx.step.run("block-pending-descendants", _block_descendants)
+    if blocked:
+
+        async def _propagate_after_blocking() -> dict:
+            # The sibling failure handler may have checked before these nodes
+            # became BLOCKED. Reuse its terminal detection and normal event path.
+            result = await run_propagate_task_failure_job(payload)
+            return result.model_dump(mode="json")
+
+        await ctx.step.run("propagate-blocked-descendants", _propagate_after_blocking)
     return len(blocked)
 
 

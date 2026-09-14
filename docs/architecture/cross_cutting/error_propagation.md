@@ -208,3 +208,7 @@ Three movements to keep straight:
 ## Cancellation is terminal
 
 A late worker response must not overwrite a cancelled attempt with success or failure. Invoked workers stop on task/sample cancellation, and terminal samples cannot admit or claim new work. The sample cleanup job covers attempts whose per-task cleanup handler was interrupted by sample cancellation.
+
+## Failure detection after descendant blocking
+
+Task failure propagation and containment-descendant blocking handle the same event independently. If failure propagation checks first, pending descendants prevent workflow finalization. After blocking descendants, the existing descendant job now invokes the existing failure-propagation job in a durable step. That job rechecks the graph and emits the ordinary `workflow/failed` event. Running descendants still keep the workflow open. This closes the ordering race without changing scheduling or adding a benchmark-owned finalizer.
