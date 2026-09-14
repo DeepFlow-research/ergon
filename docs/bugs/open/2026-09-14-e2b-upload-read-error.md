@@ -7,7 +7,7 @@ invariant_violated: docs/architecture/cross_cutting/artifacts.md
 related_rfc: docs/rfcs/active/2026-09-07-manager-gym-port/
 ---
 
-# Lost E2B upload response fails completed MAG work
+# E2B upload read error prevents native work completion
 
 ## Symptom and evidence
 
