@@ -7,7 +7,6 @@ repository listener pattern.
 """
 
 import logging
-import traceback
 from collections.abc import AsyncIterable, Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -34,7 +33,10 @@ from ergon_core.core.application.runtime.task_models import (
 from ergon_core.core.shared.context_parts import ContextPartChunk
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.application.context.service import ContextEventService, ContextReplayMismatch
-from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
+from ergon_core.core.infrastructure.inngest.errors import (
+    ContractViolationError,
+    execution_error_details,
+)
 from ergon_core.core.persistence.context.models import SampleContextEvent
 from .composition import worker_checkpoint_store
 from .contract import WorkerExecuteRequest
@@ -146,7 +148,8 @@ async def run_worker_execute_job(
         )
 
     except Exception as exc:  # slopcop: ignore[no-broad-except]
-        error_msg = str(exc)
+        error_details = execution_error_details(exc, phase="worker_execute")
+        error_msg = str(error_details["message"])
         logger.exception(
             "worker-execute failed task_id=%s after %d chunks: %s",
             payload.task_id,
@@ -156,13 +159,7 @@ async def run_worker_execute_job(
         return WorkerExecuteResult(
             success=False,
             error=error_msg,
-            error_json={
-                "message": error_msg,
-                "exception_type": type(exc).__name__,
-                "phase": "worker_execute",
-                "stack": "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
-                "context": {},
-            },
+            error_json=error_details,
         )
 
     # Persist worker output BEFORE returning to the

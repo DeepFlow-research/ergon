@@ -46,6 +46,8 @@ def inference_profile() -> dict[str, Any]:
         "validation_retries": 2,
         "request_limit": 12,
         "operation_timeout_seconds": 600,
+        "work_operation_timeout_seconds": None,
+        "work_lifetime_owner": "native_task_cancellation",
         "output_mode": "strict_output_tool",
         "output_tool_strict": True,
         "worker_model_failure_policy": "native_failed_task",
@@ -130,7 +132,9 @@ async def infer(
     started = monotonic()
     with capture_run_messages() as messages:
         try:
-            async with asyncio.timeout(600):
+            # Work lifetime belongs to the native task. Its request budget and
+            # provider deadlines still apply; manager/auxiliary calls stay bounded.
+            async with asyncio.timeout(None if accept_model_failure else 600):
                 result = await agent.run(prompt, usage_limits=UsageLimits(request_limit=12))
         except (AgentRunError, TimeoutError) as error:
             # MAG work roles return unsuccessful task results for bounded model

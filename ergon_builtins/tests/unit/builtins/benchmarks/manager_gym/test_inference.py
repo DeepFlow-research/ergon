@@ -1,5 +1,6 @@
 """Exercise MAG's provider wire contract through a real PydanticAI tool round trip."""
 
+import asyncio
 import json
 
 import httpx
@@ -247,3 +248,66 @@ async def test_only_observed_model_behavior_becomes_a_work_outcome(monkeypatch, 
             assert result.failure.kind == "output_validation"
             assert result.output == {}
             assert any(c.part.part_kind == "tool_result" and c.part.is_error for c in result.chunks)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("work_role", [False, True])
+async def test_native_work_lifetime_does_not_use_auxiliary_deadline(monkeypatch, work_role):
+    from pydantic_ai.messages import ModelResponse, ToolCallPart
+    from pydantic_ai.models.function import FunctionModel
+
+    timeout = asyncio.timeout
+
+    # Scale the auxiliary deadline down; work must survive it, but must still
+    # propagate an ordinary native cancellation while the model request is live.
+    monkeypatch.setattr(
+        inference.asyncio, "timeout", lambda seconds: timeout(0.001 if seconds else None)
+    )
+    started = asyncio.Event()
+    cancelled = asyncio.Event()
+
+    async def response(messages, info):
+        started.set()
+        try:
+            await asyncio.sleep(0.05)
+            return ModelResponse(
+                parts=[
+                    ToolCallPart(
+                        "final_result",
+                        {
+                            "reasoning": "done",
+                            "resources": [],
+                            "confidence": 1,
+                            "execution_notes": [],
+                        },
+                    )
+                ]
+            )
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+
+    monkeypatch.setattr(
+        inference, "resolve_model_target", lambda _: ResolvedModel(model=FunctionModel(response))
+    )
+    kwargs = dict(
+        model=inference.INTERNAL_MODEL,
+        system="Work.",
+        prompt="Work.",
+        output_type=AITaskOutput,
+        accept_model_failure=work_role,
+    )
+    with override_allow_model_requests(True):
+        if work_role:
+            result = await inference.infer(**kwargs)
+            assert result.failure is None
+            started.clear()
+            task = asyncio.create_task(inference.infer(**kwargs))
+            await started.wait()
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert cancelled.is_set()
+        else:
+            with pytest.raises(TimeoutError):
+                await inference.infer(**kwargs)

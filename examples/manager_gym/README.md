@@ -145,8 +145,12 @@ resource IDs. Preflight checks a required tool round trip and all role
 schemas. Invalid or truncated responses still consume the bounded retry budget.
 
 Inference uses at most 32,768 output tokens and a 2,048-token thinking budget, 300 seconds per request,
-12 requests per structured operation, two validation retries and a 600-second
-outer operation limit. Temperature is 0 for policy/AI/estimator/judge, 0.7 for
+12 requests per structured operation and two validation retries. Manager,
+estimator, decomposer and judge operations have a 600-second outer limit.
+Work roles use native task cancellation and the manager's shared drain deadline
+instead of a second whole-work timer. Provider request timeouts still fail the
+execution; no transport failure is reclassified as a model outcome.
+Temperature is 0 for policy/AI/estimator/judge, 0.7 for
 human work and 1 for decomposition. Native attempts, successful model usage and transcripts are retained. Bounded worker-model failures also retain observed usage, validation feedback and transcripts, with `success=false` and typed `model_failure` metadata. Typed workflow checkpoints are ordinary native resource
 artifacts under `.checkpoints/`; Inngest records small verified references. Keep
 those artifacts with the database and blob volume during restarts and export
@@ -154,6 +158,17 @@ them before VM deletion. They are runtime evidence, not task output reports. A p
 that failed call's full transcript. Native errors retain available response usage,
 finish reasons and tool names; usage before a response may be unavailable. Zero
 recorded usage is not proof of zero requests. Existing task retries are recorded separately.
+
+The original-step-error proof uses a scripted failure and no model requests:
+
+```bash
+python examples/manager_gym/step_error.py --output /app/data/mag-acceptance
+```
+
+It requires the deployed native stack and E2B. Acceptance means one failed
+attempt retains its original exception type, message and traceback note through
+Inngest replay, and its sandbox is closed. This is a diagnostic contract proof,
+not a MAG score.
 
 The thinking cap was verified against the standing deployment after an
 exploratory worker exhausted its full output budget. It is a per-request

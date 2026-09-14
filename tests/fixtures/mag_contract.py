@@ -38,6 +38,19 @@ from ergon_builtins.benchmarks.manager_gym.state import (
 CONTRACT_FILE = "/workspace/final_output/mag-contract.json"
 
 
+class ContractStepFailure(Worker):
+    type_slug: ClassVar[str] = "mag-contract-step-failure"
+
+    async def execute(self, task: Task, *, context: WorkerContext):
+        async def fail() -> RootModel[str]:
+            error = TimeoutError()
+            error.add_note("native-step-failure-proof")
+            raise error
+
+        await context.run_step("expected-step-failure", fail, output_type=RootModel[str])
+        yield WorkerOutput(output="unreachable")
+
+
 class ContractGate(Worker):
     type_slug: ClassVar[str] = "mag-contract-gate"
 

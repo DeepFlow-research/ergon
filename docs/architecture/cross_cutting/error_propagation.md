@@ -220,3 +220,10 @@ so startup and migration inspection do not disable native evaluator tracebacks.
 MAG judge exceptions include their criterion identity before the native evaluator
 records an incomplete result. A validation or transport exception does not become
 a numeric zero score.
+
+Worker and task execution use the existing Inngest error adapter to preserve an
+exhausted step's original exception name and stack. Inngest's `StepError` wraps
+these values; formatting only the wrapper loses them. Native `error_json` retains
+the original type, original and replay tracebacks, and existing task context.
+An empty message falls back to the exception name. This changes diagnostics only:
+failure status, retry policy, scheduling and scoring remain unchanged.

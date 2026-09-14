@@ -119,6 +119,12 @@ The integration model profile includes a verified per-request thinking cap of
 2,048 tokens after an exploratory worker exhausted 32,768 output tokens.
 Source metadata and criterion evidence record the profile; the shared model
 deployment is unchanged.
+Work roles have a 12-request budget and 300-second provider request deadline;
+their lifetime is governed by native task cancellation and the manager's shared
+drain deadline. There is no separate whole-work inference timer. Manager,
+estimator, decomposer and judge calls retain the 600-second operation cap.
+Provider timeouts and native execution failures still make evaluations incomplete;
+this is a lifetime change, not a broader model-failure fallback.
 Model and VM/E2B billing are separate from simulated labor cost. Serving weight
 location and image digest are provenance, not proof of immutable weight bytes.
 

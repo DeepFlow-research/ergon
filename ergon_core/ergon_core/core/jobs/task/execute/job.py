@@ -47,7 +47,6 @@ would kill the sandbox before `persist_outputs` could upload artifacts.
 """
 
 import logging
-import traceback
 from datetime import UTC, datetime
 from functools import partial
 from typing import Any
@@ -72,7 +71,11 @@ from ergon_core.core.application.runtime.orchestration import (
     PreparedTaskExecution,
     PrepareTaskExecutionCommand,
 )
-from ergon_core.core.infrastructure.inngest.errors import ContractViolationError, NonRetriableError
+from ergon_core.core.infrastructure.inngest.errors import (
+    ContractViolationError,
+    NonRetriableError,
+    execution_error_details,
+)
 from ergon_core.core.jobs._events import send_job_event
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import SampleRecord
@@ -418,7 +421,8 @@ async def run_execute_task_job(
         )
 
     except Exception as exc:  # slopcop: ignore[no-broad-except]
-        error_msg = str(exc)
+        error_details = execution_error_details(exc, phase="task_execute")
+        error_msg = str(error_details["message"])
         logger.exception("task-execute failed task_id=%s: %s", payload.task_id, error_msg)
 
         if prepared is not None:
@@ -432,14 +436,10 @@ async def run_execute_task_job(
                     sample_id=payload.sample_id,
                     task_id=payload.task_id,
                     error_message=error_msg,
-                    error_json={
-                        "message": error_msg,
-                        "exception_type": type(exc).__name__,
-                        "phase": "task_execute",
-                        "stack": "".join(
-                            traceback.format_exception(type(exc), exc, exc.__traceback__)
-                        ),
-                        "context": {
+                    error_json=execution_error_details(
+                        exc,
+                        phase="task_execute",
+                        context={
                             "task_slug": str(prepared.task_slug),
                             "assigned_worker_slug": str(prepared.assigned_worker_slug),
                             "worker_type": str(prepared.worker_type),
@@ -447,7 +447,7 @@ async def run_execute_task_job(
                             "task_id": str(prepared.task_id),
                             "execution_id": str(prepared.execution_id),
                         },
-                    },
+                    ),
                 )
             )
 

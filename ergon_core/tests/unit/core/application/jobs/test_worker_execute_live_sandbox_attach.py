@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+import inngest
 
 from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.api.worker.results import WorkerOutput
@@ -45,7 +46,7 @@ class _FakeSession:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("fail", [False, True])
+@pytest.mark.parametrize("fail", [False, True, "step"])
 async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch, fail) -> None:
     from ergon_core.core.jobs.task.worker_execute import job as module
 
@@ -62,6 +63,8 @@ async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch, fai
     async def execute(self, task, *, context):
         assert task_execution.attached_sandboxes == [(context.execution_id, "sbx-live")]
         assert task.sandbox.is_live
+        if fail == "step":
+            raise inngest.StepError("", "TimeoutError", "original worker traceback")
         if fail:
             raise RuntimeError("Worker fails before producing output")
         yield WorkerOutput(output="ok")
@@ -95,10 +98,14 @@ async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch, fai
         )
     )
 
-    assert result.success is not fail
+    assert result.success is (not fail)
     assert seen_sandbox_ids == ["sbx-live"]
     assert len(task_execution.attached_sandboxes) == 1
     assert len(task_execution.persisted_outputs) == (0 if fail else 1)
+    if fail == "step":
+        assert result.error == "TimeoutError"
+        assert result.error_json["exception_type"] == "TimeoutError"
+        assert "original worker traceback" in result.error_json["stack"]
 
 
 @pytest.mark.asyncio

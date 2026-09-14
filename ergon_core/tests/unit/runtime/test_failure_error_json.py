@@ -4,7 +4,30 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+import inngest
 from ergon_core.core.application.runtime.orchestration import FailTaskExecutionCommand
+from ergon_core.core.infrastructure.inngest.errors import execution_error_details
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_execution_error_preserves_original_type_stack_and_context(wrapped) -> None:
+    error = TimeoutError()
+    error.add_note("retained response accounting")
+    if wrapped:
+        error = inngest.StepError(
+            message="", name="TimeoutError", stack="original stack\nretained response accounting"
+        )
+    context = {"task_id": "task-123"}
+    details = execution_error_details(error, phase="task_execute", context=context)
+    assert details["message"] == "TimeoutError"
+    assert details["exception_type"] == "TimeoutError"
+    assert "retained response accounting" in details["stack"]
+    assert details["context"]["task_id"] == "task-123"
+    assert context == {"task_id": "task-123"}
+    if wrapped:
+        assert details["context"]["workflow_error_type"] == "StepError"
+        assert "original stack" in details["stack"]
+        assert "Workflow replay:" in details["stack"]
 
 
 @pytest.mark.asyncio
