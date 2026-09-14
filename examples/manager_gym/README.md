@@ -21,6 +21,7 @@ Populate an ignored, mode-600 `.env` using configured secret storage:
 E2B_API_KEY=<configured E2B credential>
 ERGON_OPENAI_COMPATIBLE_API_KEY=<configured training gateway credential>
 COMPOSE_PROJECT_NAME=ergon-mag-acceptance
+COMPOSE_FILE=docker-compose.yml:examples/manager_gym/compose.acceptance.yml
 ERGON_API_IMAGE=ergon-mag-native:acceptance
 ```
 
@@ -28,14 +29,17 @@ Then run from the repository root:
 
 ```bash
 uv sync --python 3.13 --frozen --no-dev --package ergon-cli
-export COMPOSE_FILE=docker-compose.yml:examples/manager_gym/compose.acceptance.yml
 uv run --no-sync ergon start
 uv run --no-sync ergon doctor
 ```
 
-The override disables API hot reload. Keep executable source fixed while
+The override disables API hot reload and runs the dashboard's built production
+server. Its unprivileged container therefore does not need to rewrite host-owned
+TypeScript declarations during development startup. Keep executable source fixed while
 samples are running. The Docker image installs from `uv.lock`; secrets, local
 virtual environments and data are excluded from its build context.
+Keep `COMPOSE_FILE` in `.env` so later SSH sessions and container recreation use
+the same acceptance settings.
 
 For an existing deployment, update the dashboard before or together with the
 backend. Evaluation notifications carry sample/task IDs; the dashboard reloads
