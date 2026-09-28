@@ -12,6 +12,8 @@ from pydantic import AfterValidator, BaseModel, Field, PrivateAttr
 from ergon_core.api.task import Task
 from ergon_core.api.errors import ContainmentViolation
 from ergon_core.api.worker.results import SpawnedTaskHandle, TaskCompletion
+from ergon_core.core.application.events.runtime import TaskCompletedEvent
+from ergon_core.core.application.runtime.status import NON_AUTONOMOUS_STATUSES
 from ergon_core.core.application.runtime.task_models import (
     CancelTaskCommand,
     RefineTaskCommand,
@@ -190,7 +192,12 @@ class WorkerContext(BaseModel):
         return output_type.model_validate_json(data)
 
     async def wait_for_task(self, task_id: UUID, *, timeout_seconds: float = 300) -> TaskCompletion:
-        """Wait durably; recheck persisted state to tolerate missed terminal events."""
+        """Wait until a descendant task settles (finishes or is blocked), or the timeout passes.
+
+        Each check reads persisted state in a durable step and waits for a completion
+        event between checks, so a missed event only delays the next check. A timeout
+        returns the latest state with ``timed_out=True``; it never cancels the task.
+        """
         if not math.isfinite(timeout_seconds) or timeout_seconds < 0:
             raise ValueError("Task wait timeout must be finite and nonnegative")
         await self._assert_descendant(task_id)
@@ -209,7 +216,7 @@ class WorkerContext(BaseModel):
         state = await self.run_step(f"{prefix}-state-0", inspect, output_type=TaskCompletion)
         deadline = state.checked_at + max(0, timeout_seconds)
         iteration = 0
-        while state.status not in {"completed", "failed", "cancelled", "blocked"}:
+        while state.status not in NON_AUTONOMOUS_STATUSES:
             remaining = deadline - state.checked_at
             if remaining <= 0:
                 return state.model_copy(update={"timed_out": True})
@@ -219,7 +226,7 @@ class WorkerContext(BaseModel):
             else:
                 await self.steps.wait_for_event(
                     f"{prefix}-event-{iteration}",
-                    event="task/completed",
+                    event=TaskCompletedEvent.name,
                     if_exp=f"async.data.task_id == '{task_id}' && async.data.sample_id == '{self.sample_id}'",
                     timeout=timedelta(seconds=seconds),
                 )
@@ -253,7 +260,17 @@ class WorkerContext(BaseModel):
         replacement: Task | None = None,
         depends_on: tuple[UUID, ...] | None = None,
     ) -> None:
-        """Refine a descendant task's description. Raises ``ContainmentViolation`` otherwise."""
+        """Edit a descendant task that no worker has claimed yet.
+
+        Args:
+            task_id: The descendant task.
+            description: Its new description.
+            replacement: A new task definition (worker, payload, sandbox) to run instead.
+            depends_on: Its new complete set of prerequisites.
+
+        Raises:
+            ContainmentViolation: ``task_id`` is not a descendant of this task.
+        """
 
         await self._assert_descendant(task_id)
         with self.session_factory() as session:

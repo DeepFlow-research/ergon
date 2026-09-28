@@ -27,9 +27,9 @@ _ALEMBIC_INI = _ERGON_CORE_ROOT / "alembic.ini"
 def get_engine() -> Engine:
     url = Settings().database_url
     if make_url(url).get_backend_name() == "postgresql":
-        # ponytail: these synchronous Sessions span async notifications. A full
-        # QueuePool blocks the event loop needed by current connection owners.
-        # Let PostgreSQL bound connections; use async Sessions for higher scale.
+        # Synchronous Sessions stay open across async notifications, so a
+        # QueuePool at capacity would block the event loop their owners need.
+        # PostgreSQL bounds connections instead; async Sessions would scale further.
         return create_engine(url, poolclass=NullPool)
     return create_engine(url)
 
