@@ -9,6 +9,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from ergon_core.core.persistence.context.models import SampleContextEvent
 from ergon_core.core.shared.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
@@ -19,7 +20,6 @@ from ergon_core.core.shared.context_parts import (
     ToolResultPart,
     UserMessagePart,
 )
-from ergon_core.core.persistence.context.models import SampleContextEvent
 from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
@@ -150,7 +150,8 @@ class ContextEventService:
 
         for listener in self._listeners:
             try:
-                # TODO: the return of this function should probably be a DTO detailing which of the listeners were actuallly called and which ones failed
+                # TODO: return a DTO detailing which listeners were called and which
+                # ones failed.
                 await listener(event)
             except Exception:  # slopcop: ignore[no-broad-except]
                 logger.warning("Context event listener failed", exc_info=True)

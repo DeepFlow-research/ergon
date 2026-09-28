@@ -4,29 +4,29 @@ import logging
 from uuid import UUID
 
 from ergon_core.api.task import Task
+from ergon_core.api.worker.results import WorkerOutput
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.application.runtime import status as graph_status
-from ergon_core.core.persistence.graph.models import SampleGraphNode
-from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.enums import TaskExecutionStatus, TERMINAL_SAMPLE_STATUSES
-from ergon_core.core.persistence.telemetry.models import SampleRecord, SampleTaskAttempt
-from ergon_core.core.infrastructure.inngest.errors import ConfigurationError
-from ergon_core.api.worker.results import WorkerOutput
-from ergon_core.core.application.runtime.models import MutationMeta, SampleGraphNodeView
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime.lifecycle import (
+    mark_task_failed_by_node,
+)
+from ergon_core.core.application.runtime.models import MutationMeta, SampleGraphNodeView
 from ergon_core.core.application.runtime.orchestration import (
     FailTaskExecutionCommand,
     FinalizeTaskExecutionCommand,
     PreparedTaskExecution,
     PrepareTaskExecutionCommand,
 )
-from ergon_core.core.application.runtime.lifecycle import (
-    mark_task_failed_by_node,
-)
 from ergon_core.core.application.runtime.task_execution_repository import (
     TaskExecutionRepository,
     WorkerOutputRepository,
 )
+from ergon_core.core.infrastructure.inngest.errors import ConfigurationError
+from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.enums import TERMINAL_SAMPLE_STATUSES, TaskExecutionStatus
+from ergon_core.core.persistence.telemetry.models import SampleRecord, SampleTaskAttempt
 from ergon_core.core.shared.utils import require_not_none, utcnow
 from ergon_core.core.views.dashboard_events.contracts import DashboardTaskStatusChangedEvent
 from sqlmodel import Session
@@ -183,7 +183,9 @@ class TaskExecutionService:
                     benchmark_type=benchmark_type,
                     execution_id=None,
                     skipped=True,
-                    skip_reason="Sample/task is terminal, task is claimed, or dependencies are incomplete",
+                    skip_reason=(
+                        "Sample/task is terminal, task is claimed, or dependencies are incomplete"
+                    ),
                 )
 
             execution = SampleTaskAttempt(

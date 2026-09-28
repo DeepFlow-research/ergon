@@ -6,8 +6,7 @@ from ergon_core.api.errors import ContainmentViolation
 from ergon_core.core.application.resources.errors import SampleResourceNotFoundError
 from ergon_core.core.application.resources.models import SampleResourceView
 from ergon_core.core.persistence.graph.models import SampleGraphNode
-from ergon_core.core.persistence.telemetry.models import SampleResource
-from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
+from ergon_core.core.persistence.telemetry.models import SampleResource, SampleTaskAttempt
 from ergon_core.core.shared.json_types import JsonObject
 from sqlmodel import Session, select
 

@@ -3,18 +3,8 @@
 These are the contracts between Inngest functions and services.
 """
 
-import sys
 from datetime import datetime
-
-if sys.version_info >= (3, 11):
-    from enum import StrEnum
-else:
-    from enum import Enum
-
-    class StrEnum(str, Enum):
-        pass
-
-
+from enum import StrEnum
 from uuid import UUID
 
 from ergon_core.core.shared.json_types import JsonObject

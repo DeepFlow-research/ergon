@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[3]
 REGISTRY = ROOT / "ergon_core/core/infrastructure/inngest/registry.py"
 JOBS_ROOT = ROOT / "ergon_core/core/jobs"

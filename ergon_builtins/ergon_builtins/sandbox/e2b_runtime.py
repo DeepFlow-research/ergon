@@ -1,14 +1,13 @@
 """E2B runtime adapter for public ``Sandbox`` implementations."""
 
-from collections.abc import Sequence
 import asyncio
+from collections.abc import Sequence
 from shlex import quote
 from typing import Any
 
+import httpx
 from e2b import SandboxNotFoundException, TimeoutException
 from e2b_code_interpreter import AsyncSandbox
-import httpx
-
 from ergon_core.api.sandbox.runtime import CommandResult, SandboxRuntime
 from ergon_core.core.shared.settings import settings
 

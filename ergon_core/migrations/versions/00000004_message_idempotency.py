@@ -1,7 +1,7 @@
 """Serialize native message order and optionally deduplicate committed actions."""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "00000004"
 down_revision = "00000003"

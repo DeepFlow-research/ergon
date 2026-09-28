@@ -3,15 +3,15 @@
 import logging
 from uuid import UUID
 
-from ergon_core.core.application.events.service import get_dashboard_event_publisher
-from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import Thread, ThreadMessage
 from ergon_core.core.application.communication.models import (
     CreateMessageRequest,
     MessageResponse,
     ThreadSummary,
     ThreadWithMessages,
 )
+from ergon_core.core.application.events.service import get_dashboard_event_publisher
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.telemetry.models import Thread, ThreadMessage
 from ergon_core.core.shared.utils import utcnow
 from ergon_core.core.views.dashboard_events.contracts import DashboardThreadMessageCreatedEvent
 from ergon_core.core.views.samples.models import (
@@ -279,5 +279,6 @@ class CommunicationService:
         return thread
 
 
-# TODO: consider if we should have these object level singletons or lean more on proper dependency injection pattern for core
+# TODO: consider if we should have these object level singletons or lean more on
+# proper dependency injection pattern for core
 communication_service = CommunicationService()

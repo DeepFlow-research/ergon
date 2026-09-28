@@ -3,8 +3,8 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
 from ergon_core.core.shared.json_types import JsonObject
+from pydantic import BaseModel, Field
 
 
 class CreateMessageRequest(BaseModel):

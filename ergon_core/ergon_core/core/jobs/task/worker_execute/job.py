@@ -420,7 +420,8 @@ async def _consume_worker_stream(
 
         if not isinstance(item, ContextPartChunk):
             raise ContractViolationError(
-                f"Worker stream expected ContextPartChunk or WorkerOutput, got {type(item).__name__}"
+                "Worker stream expected ContextPartChunk or WorkerOutput, "
+                f"got {type(item).__name__}"
             )
 
         await persist_chunk(item, chunk_count)

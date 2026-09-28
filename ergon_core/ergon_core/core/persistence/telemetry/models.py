@@ -4,11 +4,11 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
-from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.shared.enums import (
     SampleStatus,
     TaskExecutionStatus,
 )
+from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.shared.rollout_status import RolloutStatus
 from ergon_core.core.shared.utils import utcnow as _utcnow
 from pydantic import model_validator
@@ -125,11 +125,11 @@ class SampleRecord(SQLModel, table=True):
         self.__class__._parse_json_object(self.summary_json, "summary_json")
         try:
             SampleStatus(self.status)
-        except ValueError:
+        except ValueError as error:
             raise ValueError(
                 f"{self.status!r} is not a valid SampleStatus; "
                 f"valid values: {[e.value for e in SampleStatus]}"
-            )
+            ) from error
         return self
 
 
@@ -197,11 +197,11 @@ class SampleTaskAttempt(SQLModel, table=True):
         self.validate_identity()
         try:
             TaskExecutionStatus(self.status)
-        except ValueError:
+        except ValueError as error:
             raise ValueError(
                 f"{self.status!r} is not a valid TaskExecutionStatus; "
                 f"valid values: {[e.value for e in TaskExecutionStatus]}"
-            )
+            ) from error
         return self
 
 
@@ -257,11 +257,11 @@ class SampleResource(SQLModel, table=True):
         self.__class__._parse_metadata(self.metadata_json)
         try:
             SampleResourceKind(self.kind)
-        except ValueError:
+        except ValueError as error:
             raise ValueError(
                 f"{self.kind!r} is not a valid SampleResourceKind; "
                 f"valid values: {[e.value for e in SampleResourceKind]}"
-            )
+            ) from error
         return self
 
 
@@ -368,11 +368,11 @@ class RolloutBatch(SQLModel, table=True):
     def _validate_fields(self) -> "RolloutBatch":
         try:
             RolloutStatus(self.status)
-        except ValueError:
+        except ValueError as error:
             raise ValueError(
                 f"{self.status!r} is not a valid RolloutBatch status; "
                 f"valid values: {[e.value for e in RolloutStatus]}"
-            )
+            ) from error
         return self
 
 

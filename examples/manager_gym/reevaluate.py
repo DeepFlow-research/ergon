@@ -36,7 +36,8 @@ async def main() -> None:
     digest = sha256(json.dumps(raw, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     if snapshot_hash(state) != digest:
         raise ValueError(
-            "Snapshot schema differs from this code version; do not silently rewrite historical evidence"
+            "Snapshot schema differs from this code version; re-grade it with the "
+            "benchmark revision that produced it"
         )
     name = f"mag-reevaluation-{uuid4().hex[:8]}"
     sample = make_snapshot_reevaluation_sample(

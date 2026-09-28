@@ -1,4 +1,4 @@
-"""Rubric version 2 corrects three upstream rubrics; version 1 leaves them as upstream wrote them."""
+"""Rubric version 2 corrects three upstream rubrics; version 1 keeps them as upstream wrote them."""
 
 from ergon_builtins.benchmarks.manager_gym.rubric import definitions
 from ergon_builtins.benchmarks.manager_gym.upstream import AdditionalContextItem

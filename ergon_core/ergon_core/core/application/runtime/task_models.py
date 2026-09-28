@@ -8,7 +8,6 @@ from ergon_core.core.application.runtime.status import NodeStatus
 from ergon_core.core.persistence.shared.types import NodeId, SampleId
 from pydantic import BaseModel, Field
 
-
 # ── cancel_task ───────────────────────────────────────────────────────────
 
 

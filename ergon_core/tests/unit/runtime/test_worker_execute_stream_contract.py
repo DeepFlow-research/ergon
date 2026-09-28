@@ -7,28 +7,26 @@ from ergon_core.core.jobs.task.worker_execute.job import _consume_worker_stream
 from ergon_core.core.shared.context_parts import AssistantTextPart, ContextPartChunk
 
 
-async def _stream_with_terminal_output() -> AsyncGenerator[ContextPartChunk | WorkerOutput, None]:
+async def _stream_with_terminal_output() -> AsyncGenerator[ContextPartChunk | WorkerOutput]:
     yield ContextPartChunk(part=AssistantTextPart(content="transcript"))
     yield WorkerOutput(output="final result", success=True)
 
 
-async def _stream_without_terminal_output() -> AsyncGenerator[
-    ContextPartChunk | WorkerOutput, None
-]:
+async def _stream_without_terminal_output() -> AsyncGenerator[ContextPartChunk | WorkerOutput]:
     yield ContextPartChunk(part=AssistantTextPart(content="transcript"))
 
 
-async def _stream_after_terminal_output() -> AsyncGenerator[ContextPartChunk | WorkerOutput, None]:
+async def _stream_after_terminal_output() -> AsyncGenerator[ContextPartChunk | WorkerOutput]:
     yield WorkerOutput(output="final result", success=True)
     yield ContextPartChunk(part=AssistantTextPart(content="late transcript"))
 
 
-async def _stream_with_multiple_outputs() -> AsyncGenerator[ContextPartChunk | WorkerOutput, None]:
+async def _stream_with_multiple_outputs() -> AsyncGenerator[ContextPartChunk | WorkerOutput]:
     yield WorkerOutput(output="first", success=True)
     yield WorkerOutput(output="second", success=True)
 
 
-async def _stream_with_invalid_item() -> AsyncGenerator[object, None]:
+async def _stream_with_invalid_item() -> AsyncGenerator[object]:
     yield object()
     yield WorkerOutput(output="final result", success=True)
 

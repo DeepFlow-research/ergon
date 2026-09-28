@@ -1,9 +1,8 @@
 """PR 11 migration reset guard."""
 
-from pathlib import Path
 import subprocess
 import sys
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 VERSIONS = ROOT / "ergon_core" / "migrations" / "versions"

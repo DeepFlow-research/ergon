@@ -1,8 +1,8 @@
 """Public worker result models."""
 
 from collections.abc import Awaitable, Callable
-from time import time
 from datetime import datetime
+from time import time
 from typing import Any
 from uuid import UUID
 

@@ -2,11 +2,10 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 from uuid import uuid4
 
-import pytest
 import inngest
-
-from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
+import pytest
 from ergon_core.api.worker.results import WorkerOutput
+from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.core.jobs.task.worker_execute.contract import WorkerExecuteRequest
 from ergon_core.core.jobs.task.worker_execute.job import run_worker_execute_job
 
@@ -149,8 +148,8 @@ async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
 
 @pytest.mark.asyncio
 async def test_step_aware_task_management_sends_collected_ready_events(monkeypatch) -> None:
-    from ergon_core.core.jobs.task.worker_execute import job as module
     from ergon_core.core.application.runtime import management
+    from ergon_core.core.jobs.task.worker_execute import job as module
 
     sent: list[tuple[str, object]] = []
 

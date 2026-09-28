@@ -4,7 +4,8 @@ Reused across PR 5+ unit tests that need a concrete Worker/Sandbox pair
 without pulling in any real builtins or external SDK dependencies.
 """
 
-from typing import AsyncGenerator, ClassVar
+from collections.abc import AsyncGenerator
+from typing import ClassVar
 
 from ergon_core.api.sandbox.sandbox import Sandbox
 from ergon_core.api.task import Task
@@ -34,5 +35,5 @@ class EchoWorker(Worker):
         task: Task,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[WorkerStreamItem, None]:
+    ) -> AsyncGenerator[WorkerStreamItem]:
         yield WorkerOutput(final_text="ok")

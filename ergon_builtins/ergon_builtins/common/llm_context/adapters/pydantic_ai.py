@@ -14,12 +14,11 @@ from ergon_core.core.shared.context_parts import (
     ToolResultPart,
     UserMessagePart,
 )
-from ergon_core.core.persistence.context.models import SampleContextEvent
 from pydantic import BaseModel
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse
-from pydantic_ai.messages import RetryPromptPart as PydanticRetryPromptPart
 from pydantic_ai.messages import ModelRequestPart as PydanticModelRequestPart
 from pydantic_ai.messages import ModelResponsePart as PydanticModelResponsePart
+from pydantic_ai.messages import RetryPromptPart as PydanticRetryPromptPart
 from pydantic_ai.messages import SystemPromptPart as PydanticSystemPromptPart
 from pydantic_ai.messages import TextPart as PydanticTextPart
 from pydantic_ai.messages import ThinkingPart as PydanticThinkingPart

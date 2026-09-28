@@ -7,12 +7,12 @@ state.
 
 from uuid import UUID
 
-from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.application.runtime import status as graph_status
-from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
-from ergon_core.core.application.runtime.models import MutationMeta
 from ergon_core.core.application.runtime.graph_lookup import GraphNodeLookup
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime.models import MutationMeta
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
+from ergon_core.core.shared.json_types import JsonObject
 from sqlmodel import Session, select
 
 _PROPAGATION_META = MutationMeta(actor="system:propagation")
@@ -165,7 +165,8 @@ async def mark_task_failed_by_node(
     )
 
 
-# TODO: as per the experiments design comment, feels like alot of this would benefit from being a service or repository method?
+# TODO: as per the experiments design comment, much of this may belong in a service or
+# repository method.
 async def _block_successors_bfs(
     session: Session,
     sample_id: UUID,

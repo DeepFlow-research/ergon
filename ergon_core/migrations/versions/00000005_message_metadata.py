@@ -1,7 +1,7 @@
 """Keep author-supplied message metadata in the native message record."""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "00000005"
 down_revision = "00000004"

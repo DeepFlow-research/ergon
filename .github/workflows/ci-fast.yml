@@ -20,10 +20,10 @@ jobs:
         run: uv sync --frozen --all-packages --group dev
 
       - name: Ruff check
-        run: uv run ruff check ergon_core ergon_builtins ergon_cli ergon_infra ergon_ingestion tests
+        run: uv run ruff check ergon_core ergon_builtins ergon_cli ergon_infra ergon_ingestion tests examples scripts
 
       - name: Ruff format check
-        run: uv run ruff format --check ergon_core ergon_builtins ergon_cli ergon_infra ergon_ingestion tests
+        run: uv run ruff format --check ergon_core ergon_builtins ergon_cli ergon_infra ergon_ingestion tests examples scripts
 
       - name: Type check (ty)
         run: uv run ty check ergon_core/ergon_core ergon_builtins/ergon_builtins ergon_cli/ergon_cli ergon_infra ergon_ingestion/ergon_ingestion

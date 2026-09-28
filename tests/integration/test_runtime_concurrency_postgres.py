@@ -164,7 +164,8 @@ def test_historical_duplicate_messages_migrate_without_loss():
                     upgrade()  # Fresh/current metadata and repeat application both remain safe.
             rows = connection.execute(
                 text(
-                    "SELECT id, sequence_num, metadata_json FROM thread_messages ORDER BY sequence_num"
+                    "SELECT id, sequence_num, metadata_json FROM thread_messages "
+                    "ORDER BY sequence_num"
                 )
             ).all()
             assert [(r.id, r.sequence_num) for r in rows] == [

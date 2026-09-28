@@ -61,12 +61,18 @@ async def main() -> None:
         (
             AITaskOutput,
             "ai",
-            "Create one two-sentence legal hold note resource with name, description and inline content; omit resource id.",
+            (
+                "Create one two-sentence legal hold note resource with name, description and "
+                "inline content; omit resource id."
+            ),
         ),
         (
             HumanWorkOutput,
             "human",
-            "As records manager create one short legal hold note resource. Omit resource id. Include work process and quality notes.",
+            (
+                "As records manager create one short legal hold note resource. Omit resource id. "
+                "Include work process and quality notes."
+            ),
         ),
         (
             HumanTimeEstimation,
@@ -76,17 +82,26 @@ async def main() -> None:
         (
             Decomposition,
             "decomposer",
-            "Decompose writing a legal hold procedure into three subtasks with executive summary, implementation plan and acceptance criteria.",
+            (
+                "Decompose writing a legal hold procedure into three subtasks with executive "
+                "summary, implementation plan and acceptance criteria."
+            ),
         ),
         (
             JudgeOutput,
             "judge",
-            "Score out of 10: All records must be retained until counsel releases the hold. Criterion: requires retention pending counsel release.",
+            (
+                "Score out of 10: All records must be retained until counsel releases the hold. "
+                "Criterion: requires retention pending counsel release."
+            ),
         ),
         (
             BulkDecision,
             "manager",
-            "Assign task 00000000-0000-0000-0000-000000000001 to ai_writer, giving reasoning and one assignments entry.",
+            (
+                "Assign task 00000000-0000-0000-0000-000000000001 to ai_writer, giving reasoning "
+                "and one assignments entry."
+            ),
         ),
     ]
     receipts = []
@@ -163,7 +178,8 @@ async def main() -> None:
         + "\n"
     )
     print(
-        f"Validated {len(cases)} model schemas and {len(counts)} scenario compositions: {args.output}"
+        f"Validated {len(cases)} model schemas and {len(counts)} scenario compositions: "
+        f"{args.output}"
     )
 
 

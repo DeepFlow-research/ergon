@@ -5,27 +5,28 @@ Terminates sandbox after sample completion/failure and ensures sample status is 
 
 import logging
 from functools import partial
+from typing import Any
 from uuid import UUID
-from sqlmodel import Session, select
 
-from ergon_core.core.application.runtime.task_management import TaskManagementService
-from ergon_core.core.application.runtime.task_cleanup import TaskCleanupService
-from ergon_core.core.application.runtime.task_models import CancelTaskCommand
-from ergon_core.core.application.runtime.task_errors import TaskAlreadyTerminalError
 from ergon_core.core.application.runtime.status import TERMINAL_STATUSES
+from ergon_core.core.application.runtime.task_cleanup import TaskCleanupService
+from ergon_core.core.application.runtime.task_errors import TaskAlreadyTerminalError
+from ergon_core.core.application.runtime.task_management import TaskManagementService
+from ergon_core.core.application.runtime.task_models import CancelTaskCommand
+from ergon_core.core.infrastructure.inngest.errors import ConfigurationError, DataIntegrityError
+from ergon_core.core.jobs.sandbox._lifecycle import terminate_external_sandbox
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.types import SampleId, NodeId
 from ergon_core.core.persistence.shared.enums import SampleStatus
+from ergon_core.core.persistence.shared.types import NodeId, SampleId
 from ergon_core.core.persistence.telemetry.models import (
     SampleRecord,
     SampleTaskAttempt,
     SandboxEvent,
 )
-from ergon_core.core.infrastructure.inngest.errors import ConfigurationError, DataIntegrityError
-from ergon_core.core.jobs.sandbox._lifecycle import terminate_external_sandbox
+from sqlmodel import Session, select
+
 from .contract import SampleCleanupEvent, SampleCleanupResult
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +78,8 @@ async def _cleanup_sample(
 
         if sandbox_id is not None and not isinstance(sandbox_id, str):
             logger.warning(
-                "sample-cleanup sample_id=%s: sandbox_id has unexpected type %s, skipping termination",
+                "sample-cleanup sample_id=%s: sandbox_id has unexpected type %s, "
+                "skipping termination",
                 sample_id,
                 type(sandbox_id).__name__,
             )

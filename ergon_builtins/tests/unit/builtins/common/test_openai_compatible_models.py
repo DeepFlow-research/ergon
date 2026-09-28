@@ -4,13 +4,12 @@ import json
 import urllib.request
 from types import TracebackType
 
-from ergon_core.core.shared.settings import settings
-from pydantic_ai.models.openai import OpenAIChatModel
-
 from ergon_builtins.llm.resolution import (
     registered_model_backend_prefixes,
     resolve_model_target,
 )
+from ergon_core.core.shared.settings import settings
+from pydantic_ai.models.openai import OpenAIChatModel
 
 
 class _FakeModelsResponse:

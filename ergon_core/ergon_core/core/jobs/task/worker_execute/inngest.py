@@ -1,10 +1,10 @@
 """Inngest adapter for worker execution."""
 
 import inngest
-
-from .job import run_worker_execute_job
 from ergon_core.core.infrastructure.inngest.client import RUN_CANCEL, TASK_CANCEL, inngest_client
+
 from .contract import WorkerExecuteRequest, WorkerExecuteResult
+from .job import run_worker_execute_job
 
 
 @inngest_client.create_function(

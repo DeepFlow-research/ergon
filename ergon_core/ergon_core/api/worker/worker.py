@@ -2,22 +2,21 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Callable
-from typing import TYPE_CHECKING, Any, ClassVar, cast
-
-from pydantic import BaseModel, ConfigDict, Field, model_serializer
+from typing import Any, ClassVar, cast
 
 from ergon_core.api._serialization import (
     TaskDefinitionJson,
     import_component_subclass,
     inject_type_discriminator,
 )
-from ergon_core.api.task import Task
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.sandbox.sandbox import Sandbox
+from ergon_core.api.task import Task
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import WorkerOutput
-from ergon_core.core.shared.context_parts import ContextPartChunk
 from ergon_core.core.infrastructure.dependencies import check_packages
+from ergon_core.core.shared.context_parts import ContextPartChunk
+from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
 WorkerStreamItem = ContextPartChunk | WorkerOutput
 
@@ -59,7 +58,10 @@ class Worker(BaseModel, ABC):
     actor_key: str | None = Field(
         default=None,
         min_length=1,
-        description="Optional stable person/policy identity within a sample; distinct from the executable Worker type.",
+        description=(
+            "Optional stable person/policy identity within a sample; distinct from the "
+            "executable Worker type."
+        ),
     )
 
     @property
@@ -78,7 +80,7 @@ class Worker(BaseModel, ABC):
         task: Task,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[WorkerStreamItem, None]:
+    ) -> AsyncGenerator[WorkerStreamItem]:
         """Run the worker, yielding context chunks and a terminal ``WorkerOutput``."""
         raise NotImplementedError
 

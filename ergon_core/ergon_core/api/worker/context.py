@@ -2,47 +2,46 @@
 
 import asyncio
 import math
-from datetime import timedelta
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Annotated, Any, ContextManager, TypeAlias, TypeVar
+from contextlib import AbstractContextManager
+from datetime import timedelta
+from typing import TYPE_CHECKING, Annotated, Any, TypeAlias, TypeVar
 from uuid import UUID
 
-from pydantic import AfterValidator, BaseModel, Field, PrivateAttr
-
-from ergon_core.api.task import Task
 from ergon_core.api.errors import ContainmentViolation
+from ergon_core.api.task import Task
 from ergon_core.api.worker.results import SpawnedTaskHandle, TaskCompletion
 from ergon_core.core.application.events.runtime import TaskCompletedEvent
-from ergon_core.core.application.runtime.status import NON_AUTONOMOUS_STATUSES
-from ergon_core.core.application.runtime.task_models import (
-    CancelTaskCommand,
-    RefineTaskCommand,
-    RestartTaskCommand,
-)
 from ergon_core.core.application.resources.models import SampleResourceView
 from ergon_core.core.application.resources.publishing import (
     CheckpointReference,
     WorkerCheckpointStore,
 )
-from ergon_core.core.application.runtime.task_models import SubtaskInfo
+from ergon_core.core.application.runtime.status import NON_AUTONOMOUS_STATUSES
+from ergon_core.core.application.runtime.task_models import (
+    CancelTaskCommand,
+    RefineTaskCommand,
+    RestartTaskCommand,
+    SubtaskInfo,
+)
 from ergon_core.core.persistence.shared.types import NodeId, SampleId
+from pydantic import AfterValidator, BaseModel, Field, PrivateAttr
 
 if TYPE_CHECKING:
-    from sqlmodel import Session
-
     from ergon_core.core.application.resources.service import SampleResourceReadService
     from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
     from ergon_core.core.application.runtime.task_management import TaskManagementService
+    from sqlmodel import Session
 
     TaskManagementServiceAlias: TypeAlias = TaskManagementService
     TaskInspectionServiceAlias: TypeAlias = TaskInspectionService
     SampleResourceReadServiceAlias: TypeAlias = SampleResourceReadService
-    SessionFactory: TypeAlias = Callable[[], ContextManager[Session]]
+    SessionFactory: TypeAlias = Callable[[], AbstractContextManager[Session]]
 else:
     TaskManagementServiceAlias: TypeAlias = Any
     TaskInspectionServiceAlias: TypeAlias = Any
     SampleResourceReadServiceAlias: TypeAlias = Any
-    SessionFactory: TypeAlias = Callable[[], ContextManager[Any]]
+    SessionFactory: TypeAlias = Callable[[], AbstractContextManager[Any]]
 
 
 def _require_injected_dependency(value: object | None) -> object:
@@ -227,7 +226,10 @@ class WorkerContext(BaseModel):
                 await self.steps.wait_for_event(
                     f"{prefix}-event-{iteration}",
                     event=TaskCompletedEvent.name,
-                    if_exp=f"async.data.task_id == '{task_id}' && async.data.sample_id == '{self.sample_id}'",
+                    if_exp=(
+                        f"async.data.task_id == '{task_id}' "
+                        f"&& async.data.sample_id == '{self.sample_id}'"
+                    ),
                     timeout=timedelta(seconds=seconds),
                 )
             iteration += 1

@@ -30,7 +30,6 @@ from uuid import UUID
 
 from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.core.application.evaluation.service import EvaluationService
-from .contract import EvaluateTaskRunResult, TaskEvaluateRequest
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.application.runtime.task_execution import TaskExecutionService
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
@@ -42,6 +41,8 @@ from ergon_core.core.infrastructure.tracing import (
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
 from ergon_core.core.views.dashboard_events.contracts import DashboardTaskEvaluationUpdatedEvent
+
+from .contract import EvaluateTaskRunResult, TaskEvaluateRequest
 
 if TYPE_CHECKING:
     from ergon_core.api.rubric import Evaluator

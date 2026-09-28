@@ -7,9 +7,8 @@ use this model — no untyped dict access.
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
-
 from ergon_core.api.criterion import CriterionEvidence
+from pydantic import BaseModel, Field, model_validator
 
 EvalCriterionStatus = Literal["passed", "failed", "errored", "skipped"]
 

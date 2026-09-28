@@ -11,18 +11,17 @@ Covered here:
   BOTH deps complete, not when just one does
 """
 
-import pytest
 from uuid import UUID
+
+import pytest
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from ergon_core.core.application.runtime.models import MutationMeta
-from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
-from ergon_core.core.application.runtime.status import CANCELLED, EDGE_PENDING
-from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
-from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.core.application.runtime.orchestration import PropagateTaskCompletionCommand
 from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
-from sqlmodel import Session, select
+from ergon_core.core.application.runtime.status import CANCELLED
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
+from sqlmodel import Session
 
 from tests.integration.propagation._helpers import (
     get_node_status,

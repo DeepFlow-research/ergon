@@ -1,8 +1,8 @@
 """Every existing smoke worker must survive the public worker JSON boundary."""
 
 import pytest
-
 from ergon_core.api.worker import Worker
+
 from tests.fixtures.smoke_components.benchmarks import _SMOKE_WORKERS
 
 

@@ -14,7 +14,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 
 def _source(module: object) -> str:
-    loader = getattr(module, "__loader__")
+    loader = module.__loader__
     source = loader.get_source(module.__name__)
     assert source is not None
     return source

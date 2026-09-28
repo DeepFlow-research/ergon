@@ -5,7 +5,6 @@ import traceback
 from uuid import UUID
 
 import inngest
-
 from ergon_core.core.shared.json_types import JsonObject
 
 logger = logging.getLogger("ergon.infrastructure.inngest")

@@ -13,9 +13,6 @@ from typing import TYPE_CHECKING, NamedTuple
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
-from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine
-
 from ergon_core.api.task import Task
 from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.application.runtime import management as management_module
@@ -26,6 +23,8 @@ from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord
 from ergon_core.test_support.task_factory import TestSandbox, TestWorker
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine
 
 if TYPE_CHECKING:
     import pytest

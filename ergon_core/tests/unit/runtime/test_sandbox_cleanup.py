@@ -25,7 +25,7 @@ class _FakeStepCtx:
 
     class _Step:
         async def run(self, _step_id: str, fn):
-            return await fn() if hasattr(fn, "__call__") else fn
+            return await fn() if callable(fn) else fn
 
     def __init__(self) -> None:
         self.step = self._Step()
