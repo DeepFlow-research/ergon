@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session, col, select
 
 from ergon_builtins.benchmarks.manager_gym.actions import ActionResult
+from ergon_builtins.benchmarks.manager_gym.inference import InferenceProfile
 from ergon_builtins.benchmarks.manager_gym.upstream import (
     SCENARIOS,
     AgentConfig,
@@ -48,6 +49,7 @@ class EpisodeConfig(BaseModel):
     wall_time_seconds: float = Field(default=2400, gt=0, le=2700)
     input_token_price_per_million: float = Field(default=0, ge=0)
     output_token_price_per_million: float = Field(default=0, ge=0)
+    inference: InferenceProfile = Field(default_factory=InferenceProfile)
 
 
 class ScheduledMessage(BaseModel):

@@ -1,13 +1,12 @@
-"""Bounded internal inference using Ergon's provider and transcript adapter."""
+"""Bounded model calls for Manager Gym roles, through Ergon's model resolution."""
 
 import asyncio
 import json
 from time import monotonic
 from typing import Any, Literal
-from urllib.parse import urlsplit
 
 from ergon_core.core.shared.context_parts import ContextPartChunk, ProviderTokenUsage
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai import Agent, ToolOutput, capture_run_messages
 from pydantic_ai.exceptions import AgentRunError, UnexpectedModelBehavior, UsageLimitExceeded
 from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
@@ -17,41 +16,67 @@ from pydantic_ai.usage import UsageLimits
 from ergon_builtins.common.llm_context.adapters.pydantic_ai import PydanticAITranscriptAdapter
 from ergon_builtins.llm.resolution import resolve_model_target
 
-INTERNAL_MODEL = (
-    "openai-compatible:https://gateway.example.invalid/v1/models/qwen3-8-27b-28#qwen3-8-27b-28"
-)
+Role = Literal["manager", "decomposer", "ai", "human", "stakeholder", "estimator", "judge"]
+
+# Upstream parity: MAG samples human workers at 0.7 and task decomposition at
+# 1.0; every other role is deterministic.
+DEFAULT_TEMPERATURES: dict[Role, float] = {
+    "manager": 0,
+    "decomposer": 1,
+    "ai": 0,
+    "human": 0.7,
+    "stakeholder": 0,
+    "estimator": 0,
+    "judge": 0,
+}
 
 
-def model_settings(temperature: float = 0.0) -> ModelSettings:
-    return ModelSettings(
-        temperature=temperature,
-        max_tokens=32768,
-        timeout=300,
-        extra_body={"thinking_token_budget": 2048},
+class InferenceProfile(BaseModel):
+    """Sampling settings and limits applied to every model call in an episode.
+
+    The profile is part of ``EpisodeConfig``, so it is recorded with each sample
+    and every role of an episode uses the same limits.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    temperatures: dict[Role, float] = Field(
+        default_factory=lambda: dict(DEFAULT_TEMPERATURES),
+        description="Sampling temperature per role.",
+    )
+    max_tokens: int = Field(default=32_768, gt=0, description="Output token cap per request.")
+    request_timeout_seconds: float = Field(default=300, gt=0, description="Per-request timeout.")
+    thinking_token_budget: int | None = Field(
+        default=None,
+        gt=0,
+        description=(
+            "Reasoning token cap sent as vLLM's `thinking_token_budget`. Leave unset for "
+            "providers that reject unknown request fields."
+        ),
+    )
+    output_retries: int = Field(
+        default=2, ge=0, description="Retries when a response fails output validation."
+    )
+    request_limit: int = Field(
+        default=12, gt=0, description="Model requests allowed per call, including tool rounds."
+    )
+    operation_timeout_seconds: float = Field(
+        default=600,
+        gt=0,
+        description="Wall-clock bound on manager, estimator and judge calls. Work calls are "
+        "bounded by their native task instead.",
     )
 
-
-def inference_profile() -> dict[str, Any]:
-    return {
-        "request_settings": model_settings(),
-        "role_temperatures": {
-            "manager": 0,
-            "ai": 0,
-            "human": 0.7,
-            "stakeholder": 0,
-            "estimator": 0,
-            "decomposer": 1,
-            "judge": 0,
-        },
-        "validation_retries": 2,
-        "request_limit": 12,
-        "operation_timeout_seconds": 600,
-        "work_operation_timeout_seconds": None,
-        "work_lifetime_owner": "native_task_cancellation",
-        "output_mode": "strict_output_tool",
-        "output_tool_strict": True,
-        "worker_model_failure_policy": "native_failed_task",
-    }
+    def model_settings(self, role: Role) -> ModelSettings:
+        """Request settings for one model call made by ``role``."""
+        settings = ModelSettings(
+            temperature=self.temperatures[role],
+            max_tokens=self.max_tokens,
+            timeout=self.request_timeout_seconds,
+        )
+        if self.thinking_token_budget is not None:
+            settings["extra_body"] = {"thinking_token_budget": self.thinking_token_budget}
+        return settings
 
 
 class ModelFailure(BaseModel):
@@ -98,44 +123,55 @@ def captured_result(
     )
 
 
-def require_internal_model(model: str) -> str:
-    prefix, _, target = model.partition(":")
-    if (
-        prefix != "openai-compatible"
-        or urlsplit(target.split("#")[0]).hostname != "gateway.example.invalid"
-    ):
-        raise ValueError("MAG integration runs require an explicit internal training gateway model")
-    if not target.partition("#")[2]:
-        raise ValueError("MAG requires the explicit served model id after #")
-    return model
-
-
 async def infer(
     *,
     model: str,
+    role: Role,
+    profile: InferenceProfile,
     system: str,
     prompt: str,
     output_type: type[BaseModel],
     tools: list[Any] | None = None,
-    temperature: float = 0.0,
     accept_model_failure: bool = False,
 ) -> InferenceResult:
-    resolved = resolve_model_target(require_internal_model(model))
+    """Run one structured model call for a MAG role.
+
+    Args:
+        model: Ergon model target, e.g. ``"openai:gpt-4o"`` or
+            ``"openai-compatible:http://localhost:8000#Qwen/Qwen3-8B"``.
+        role: The role making the call; selects its temperature.
+        profile: The episode's inference limits.
+        system: System prompt.
+        prompt: User prompt.
+        output_type: Model the response must validate against, returned through
+            a strict output tool.
+        tools: Extra tools the model may call before answering.
+        accept_model_failure: Return request-limit and output-validation failures
+            as ``InferenceResult.failure`` instead of raising. Work roles use this
+            so the native task fails rather than the episode.
+
+    Returns:
+        The validated output with its transcript chunks and token usage.
+    """
+    resolved = resolve_model_target(model)
     agent = Agent[None, BaseModel](
         resolved.model,
         system_prompt=system,
         output_type=ToolOutput(output_type, strict=True),
         tools=tools or [],
-        retries=2,
-        model_settings=model_settings(temperature),
+        retries=profile.output_retries,
+        model_settings=profile.model_settings(role),
     )
     started = monotonic()
+    timeout = None if accept_model_failure else profile.operation_timeout_seconds
     with capture_run_messages() as messages:
         try:
             # Work lifetime belongs to the native task. Its request budget and
             # provider deadlines still apply; manager/auxiliary calls stay bounded.
-            async with asyncio.timeout(None if accept_model_failure else 600):
-                result = await agent.run(prompt, usage_limits=UsageLimits(request_limit=12))
+            async with asyncio.timeout(timeout):
+                result = await agent.run(
+                    prompt, usage_limits=UsageLimits(request_limit=profile.request_limit)
+                )
         except (AgentRunError, TimeoutError) as error:
             # MAG work roles return unsuccessful task results for bounded model
             # behavior. Transport, tool, storage and timeout failures still raise;

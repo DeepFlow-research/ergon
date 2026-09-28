@@ -2,11 +2,11 @@
 
 import json
 import logging
-import os
 import urllib.error
-from urllib.parse import urlsplit
 import urllib.request
+from urllib.parse import urlsplit
 
+from ergon_core.core.shared.settings import settings
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
@@ -47,7 +47,7 @@ def resolve_openai_compatible_target(
     resolved_name = model_name or target_model_name or discover_model_name(endpoint, backend_label)
     provider = OpenAIProvider(
         base_url=_api_base_url(endpoint),
-        api_key=api_key or os.environ.get("ERGON_OPENAI_COMPATIBLE_API_KEY") or "not-needed",
+        api_key=api_key or settings.openai_compatible_api_key or "not-needed",
     )
     model = OpenAIChatModel(model_name=resolved_name, provider=provider)
     logger.info(

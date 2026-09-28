@@ -9,6 +9,7 @@ import argparse
 import asyncio
 import gzip
 import json
+import os
 import platform
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -18,7 +19,7 @@ from uuid import UUID, uuid4
 
 from e2b import AsyncSandbox
 from e2b.exceptions import SandboxNotFoundException
-from ergon_builtins.benchmarks.manager_gym.inference import INTERNAL_MODEL, require_internal_model
+from ergon_builtins.benchmarks.manager_gym.inference import InferenceProfile
 from ergon_builtins.benchmarks.manager_gym.rubric import definitions
 from ergon_builtins.benchmarks.manager_gym.sample import make_manager_gym_sample
 from ergon_builtins.benchmarks.manager_gym.state import (
@@ -112,7 +113,12 @@ async def submit(scenario: str, args: argparse.Namespace) -> str:
         make_contract(name, args.model)
         if scenario == "contract"
         else make_manager_gym_sample(
-            EpisodeConfig(scenario=scenario, seed=0, max_decisions=args.max_decisions),
+            EpisodeConfig(
+                scenario=scenario,
+                seed=0,
+                max_decisions=args.max_decisions,
+                inference=InferenceProfile(thinking_token_budget=args.thinking_token_budget),
+            ),
             environment_name=name,
             model=args.model,
         )
@@ -320,17 +326,27 @@ async def main() -> None:
     parser.add_argument("--stage", choices=["contract", "pilot", "catalog"], required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--max-decisions", type=int, default=50)
-    parser.add_argument("--model", default=INTERNAL_MODEL)
+    parser.add_argument(
+        "--model",
+        default=os.environ.get("ERGON_MAG_MODEL"),
+        required=not os.environ.get("ERGON_MAG_MODEL"),
+        help="Ergon model target for every role and the judge (default: $ERGON_MAG_MODEL).",
+    )
+    parser.add_argument(
+        "--thinking-token-budget",
+        type=int,
+        help="Reasoning token cap for thinking models served by vLLM.",
+    )
     parser.add_argument("--concurrency", type=int, choices=[1, 2], default=2)
     parser.add_argument("--timeout-seconds", type=int, default=5400)
     args = parser.parse_args()
-    require_internal_model(args.model)
     args.output.mkdir(parents=True, exist_ok=True)
     ledger_path = args.output / "acceptance.json"
     configuration = {
         "code_digest": code_digest(),
         "model": args.model,
         "max_decisions": args.max_decisions,
+        "thinking_token_budget": args.thinking_token_budget,
         "seed": 0,
         "benchmark_version": BENCHMARK_VERSION,
         "source_revision": SOURCE_REVISION,
@@ -374,12 +390,8 @@ async def main() -> None:
                 write_json(ledger_path, ledger)
                 print(json.dumps(ledger["samples"][scenario]), flush=True)
                 del active[scenario]
-        if (
-            ledger.get("admission_failure")
-            or any(
-                ledger["samples"].get(scenario, {}).get("accepted") is False
-                for scenario in scenarios
-            )
+        if ledger.get("admission_failure") or any(
+            ledger["samples"].get(scenario, {}).get("accepted") is False for scenario in scenarios
         ):
             pending.clear()
         while pending and len(active) < args.concurrency:

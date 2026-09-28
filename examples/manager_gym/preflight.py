@@ -1,8 +1,8 @@
-"""Verify catalog composition and real role schemas through the configured gateway.
+"""Check that a model target can play every Manager Gym role before a full run.
 
-Run inside the normal API container after `ergon doctor`. This makes bounded
-internal model requests, then writes only configuration and usage receipts.
-The separate contract stage verifies E2B, scheduling, messaging and grading.
+Makes one bounded request per role output schema plus a tool round trip, composes
+every scenario offline, and writes a JSON receipt with token usage. Run it inside
+the API container after `ergon doctor`.
 """
 
 import argparse
@@ -15,12 +15,7 @@ from uuid import uuid4
 
 from ergon_builtins.benchmarks.manager_gym.actions import ManagerDecision
 from ergon_builtins.benchmarks.manager_gym.baselines import BulkDecision
-from ergon_builtins.benchmarks.manager_gym.inference import (
-    INTERNAL_MODEL,
-    infer,
-    inference_profile,
-    require_internal_model,
-)
+from ergon_builtins.benchmarks.manager_gym.inference import InferenceProfile, Role, infer
 from ergon_builtins.benchmarks.manager_gym.manager import Decomposition
 from ergon_builtins.benchmarks.manager_gym.outputs import (
     AITaskOutput,
@@ -36,45 +31,70 @@ from ergon_builtins.benchmarks.manager_gym.state import (
     new_episode,
 )
 from ergon_builtins.benchmarks.manager_gym.upstream import SCENARIOS
+from pydantic import BaseModel
 
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", default=INTERNAL_MODEL)
+    parser.add_argument(
+        "--model",
+        default=os.environ.get("ERGON_MAG_MODEL"),
+        required=not os.environ.get("ERGON_MAG_MODEL"),
+        help="Ergon model target for every role and the judge (default: $ERGON_MAG_MODEL).",
+    )
+    parser.add_argument(
+        "--thinking-token-budget",
+        type=int,
+        help="Reasoning token cap for thinking models served by vLLM.",
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    require_internal_model(args.model)
-    for key in ("E2B_API_KEY", "ERGON_OPENAI_COMPATIBLE_API_KEY"):
-        if not os.environ.get(key):
-            raise ValueError(f"Missing configured secret: {key}")
-    cases = [
-        (ManagerDecision, "Choose get_workflow_status with reasoning as the one manager action."),
+    if not os.environ.get("E2B_API_KEY"):
+        raise ValueError("Missing E2B_API_KEY; Manager Gym work runs in E2B sandboxes")
+    profile = InferenceProfile(thinking_token_budget=args.thinking_token_budget)
+    cases: list[tuple[type[BaseModel], Role, str]] = [
+        (
+            ManagerDecision,
+            "manager",
+            "Choose get_workflow_status with reasoning as the one manager action.",
+        ),
         (
             AITaskOutput,
+            "ai",
             "Create one two-sentence legal hold note resource with name, description and inline content; omit resource id.",
         ),
         (
             HumanWorkOutput,
+            "human",
             "As records manager create one short legal hold note resource. Omit resource id. Include work process and quality notes.",
         ),
-        (HumanTimeEstimation, "Estimate hours to write a two-sentence legal hold note."),
+        (
+            HumanTimeEstimation,
+            "estimator",
+            "Estimate hours to write a two-sentence legal hold note.",
+        ),
         (
             Decomposition,
+            "decomposer",
             "Decompose writing a legal hold procedure into three subtasks with executive summary, implementation plan and acceptance criteria.",
         ),
         (
             JudgeOutput,
+            "judge",
             "Score out of 10: All records must be retained until counsel releases the hold. Criterion: requires retention pending counsel release.",
         ),
         (
             BulkDecision,
+            "manager",
             "Assign task 00000000-0000-0000-0000-000000000001 to ai_writer, giving reasoning and one assignments entry.",
         ),
     ]
     receipts = []
-    for schema, prompt in cases:
+    for schema, role, prompt in cases:
         result = await infer(
             model=args.model,
+            role=role,
+            profile=profile,
             system="Follow the requested structured output contract.",
             prompt=prompt,
             output_type=schema,
@@ -99,6 +119,8 @@ async def main() -> None:
 
     tool_result = await infer(
         model=args.model,
+        role="ai",
+        profile=profile,
         system="Call lookup_policy, then include its exact returned reference in a resource.",
         prompt="Create a short policy note. Obtain its reference using the tool before answering.",
         output_type=AITaskOutput,
@@ -123,7 +145,7 @@ async def main() -> None:
         json.dumps(
             {
                 "observed_at": datetime.now(UTC).isoformat(),
-                "inference_profile": inference_profile(),
+                "inference_profile": profile.model_dump(mode="json"),
                 "model": args.model,
                 "source_revision": SOURCE_REVISION,
                 "benchmark_version": BENCHMARK_VERSION,

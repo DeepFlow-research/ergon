@@ -129,9 +129,9 @@ The builtins OpenAI-compatible resolver preserves an explicitly supplied
 gateway path such as `/v1/models/<deployment>` or `/v1`; host-only targets keep
 the normal `/v1` default. An explicit `#served-model` avoids unnecessary model
 discovery. Credentials come from explicit configuration or
-`ERGON_OPENAI_COMPATIBLE_API_KEY`, with the existing keyless-local fallback.
-They must not be serialized into benchmark records. MAG's integration profile
-requires an explicit internal training gateway target for all inference roles.
+`ERGON_OPENAI_COMPATIBLE_API_KEY` (`Settings.openai_compatible_api_key`), with
+the existing keyless-local fallback. They must not be serialized into benchmark
+records.
 
 `E2BSandboxRuntime.read_file` returns bytes using the SDK byte format. Detaching
 an attached SDK handle does not call nonexistent `AsyncSandbox.close`; native

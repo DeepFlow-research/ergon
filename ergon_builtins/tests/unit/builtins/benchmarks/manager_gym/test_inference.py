@@ -10,8 +10,11 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from ergon_builtins.benchmarks.manager_gym import inference
+from ergon_builtins.benchmarks.manager_gym.inference import InferenceProfile
 from ergon_builtins.benchmarks.manager_gym.outputs import AITaskOutput
 from ergon_builtins.llm.resolution import ResolvedModel
+
+MODEL = "openai-compatible:http://localhost:8000/v1#test-model"
 
 
 @pytest.mark.asyncio
@@ -39,7 +42,9 @@ async def test_judge_accepts_upstream_response_without_extra_confidence(monkeypa
     )
     with override_allow_model_requests(True):
         result = await inference.infer(
-            model=inference.INTERNAL_MODEL,
+            model=MODEL,
+            role="ai",
+            profile=InferenceProfile(),
             system="You are a validation expert.",
             prompt="Evaluate the supplied fixture.",
             output_type=JudgeOutput,
@@ -145,7 +150,9 @@ async def test_strict_output_preserves_tools_and_validates_retries(monkeypatch):
         )
         with override_allow_model_requests(True):
             result = await inference.infer(
-                model=inference.INTERNAL_MODEL,
+                model=MODEL,
+                role="ai",
+                profile=InferenceProfile(thinking_token_budget=2048),
                 system="Read the policy.",
                 prompt="Create its resource.",
                 output_type=AITaskOutput,
@@ -181,7 +188,9 @@ async def test_request_limit_retains_usage_and_tool_diagnostics(monkeypatch):
     )
     with override_allow_model_requests(True), pytest.raises(UsageLimitExceeded) as failed:
         await inference.infer(
-            model=inference.INTERNAL_MODEL,
+            model=MODEL,
+            role="ai",
+            profile=InferenceProfile(),
             system="Private instructions",
             prompt="PRIVATE-PROMPT",
             output_type=AITaskOutput,
@@ -198,7 +207,9 @@ async def test_request_limit_retains_usage_and_tool_diagnostics(monkeypatch):
     assert "PRIVATE" not in note
     with override_allow_model_requests(True):
         result = await inference.infer(
-            model=inference.INTERNAL_MODEL,
+            model=MODEL,
+            role="ai",
+            profile=InferenceProfile(),
             system="Private instructions",
             prompt="PRIVATE-PROMPT",
             output_type=AITaskOutput,
@@ -234,7 +245,9 @@ async def test_only_observed_model_behavior_becomes_a_work_outcome(monkeypatch, 
     )
     with override_allow_model_requests(True):
         operation = inference.infer(
-            model=inference.INTERNAL_MODEL,
+            model=MODEL,
+            role="ai",
+            profile=InferenceProfile(),
             system="Create one resource.",
             prompt="Write a note.",
             output_type=AITaskOutput,
@@ -291,7 +304,9 @@ async def test_native_work_lifetime_does_not_use_auxiliary_deadline(monkeypatch,
         inference, "resolve_model_target", lambda _: ResolvedModel(model=FunctionModel(response))
     )
     kwargs = dict(
-        model=inference.INTERNAL_MODEL,
+        model=MODEL,
+        role="ai",
+        profile=InferenceProfile(),
         system="Work.",
         prompt="Work.",
         output_type=AITaskOutput,
@@ -311,3 +326,11 @@ async def test_native_work_lifetime_does_not_use_auxiliary_deadline(monkeypatch,
         else:
             with pytest.raises(TimeoutError):
                 await inference.infer(**kwargs)
+
+
+def test_profile_sends_thinking_budget_only_when_set():
+    assert "extra_body" not in InferenceProfile().model_settings("ai")
+    settings = InferenceProfile(thinking_token_budget=512).model_settings("human")
+    assert settings["extra_body"] == {"thinking_token_budget": 512}
+    assert settings["temperature"] == 0.7
+    assert InferenceProfile().model_settings("decomposer")["temperature"] == 1

@@ -15,7 +15,7 @@ from ergon_core.api.rubric.results import TaskEvaluationResult
 from pydantic import BaseModel, Field
 from pydantic_ai.exceptions import AgentRunError
 
-from ergon_builtins.benchmarks.manager_gym.inference import infer, model_settings
+from ergon_builtins.benchmarks.manager_gym.inference import infer
 from ergon_builtins.benchmarks.manager_gym.prompts import judge_prompt
 from ergon_builtins.benchmarks.manager_gym.state import (
     EpisodeState,
@@ -235,6 +235,8 @@ class MAGCriterion(Criterion):
             try:
                 response = await infer(
                     model=self.model,
+                    role="judge",
+                    profile=state.config.inference,
                     system="You are a validation expert.",
                     prompt=evaluation_input,
                     output_type=JudgeOutput,
@@ -265,7 +267,9 @@ class MAGCriterion(Criterion):
                 "snapshot_hash": digest,
                 "preference_weight": state.weights.get(definition.owner, 0),
                 "model": self.model if rubric.llm_prompt else None,
-                "model_settings": model_settings() if rubric.llm_prompt else None,
+                "model_settings": (
+                    state.config.inference.model_settings("judge") if rubric.llm_prompt else None
+                ),
                 "usage": usage,
             },
         )

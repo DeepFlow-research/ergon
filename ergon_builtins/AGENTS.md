@@ -47,9 +47,11 @@ Native MAG: `benchmarks/manager_gym/` supplies `MAGManagerWorker`,
 `MAGWorkWorker`, `MAGHumanWorker` and `MAGStakeholderWorker` plus `MAGRubric`.
 Submit explicit `EpisodeConfig` records with `Environment.from_records` and
 `make_manager_gym_sample`; do not add an Environment subclass. The manager
-supports `cot`, `random` and `assign_all`. Work uses E2B and the explicit internal
-model binding. See `examples/manager_gym/README.md` and
-`docs/architecture/09_manager_gym.md` for current composition and acceptance.
+supports `cot`, `random` and `assign_all`. Work runs in E2B; every role and the
+judge use the model target passed to `make_manager_gym_sample`. Upstream MAG code
+is vendored under `manager_gym/_vendor/mag` and reached only through
+`manager_gym/upstream.py`. See `examples/manager_gym/README.md` and
+`docs/architecture/09_manager_gym.md`.
 
 | slug | class | requires | notes |
 |---|---|---|---|

@@ -14,9 +14,11 @@ from ergon_core.api.worker import WorkerOutput
 from pydantic_ai.models import override_allow_model_requests
 from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.messages import ModelResponse, ToolCallPart
-from ergon_builtins.benchmarks.manager_gym.inference import INTERNAL_MODEL, InferenceResult
+from ergon_builtins.benchmarks.manager_gym.inference import InferenceResult
 from ergon_builtins.benchmarks.manager_gym.outputs import AITaskOutput
 from ergon_builtins.benchmarks.manager_gym.state import EpisodeConfig, new_episode, all_tasks
+
+MODEL = "openai-compatible:http://localhost:8000/v1#test-model"
 
 
 @pytest.mark.asyncio
@@ -48,7 +50,7 @@ async def test_native_resource_ids_are_assigned_without_model_uuid_validation(mo
         ),
     )
     payload = workers.WorkPayload(episode=state.config, planned_task=planned, actor=actor)
-    result = await workers.MAGWorkWorker(name=actor["agent_id"], model=INTERNAL_MODEL)._work(
+    result = await workers.MAGWorkWorker(name=actor["agent_id"], model=MODEL)._work(
         payload, workers.WorkInputs(resources=[]), None
     )
     assert result.resources[0].id == uuid5(planned.id, "output/0")
@@ -77,7 +79,7 @@ async def test_invalid_model_output_is_a_durable_native_failed_work_result(
             "confidence_level": "low",
         }
     )
-    task = work_task(state, planned, actor, INTERNAL_MODEL, [])
+    task = work_task(state, planned, actor, MODEL, [])
     monkeypatch.setattr(
         inference,
         "resolve_model_target",

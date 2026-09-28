@@ -11,7 +11,6 @@ from uuid import uuid4
 
 import pytest
 from ergon_builtins.benchmarks.manager_gym.actions import ManagerDecision
-from ergon_builtins.benchmarks.manager_gym.inference import INTERNAL_MODEL, require_internal_model
 from ergon_builtins.benchmarks.manager_gym.rubric import (
     MAGCriterion,
     MAGRubric,
@@ -39,6 +38,8 @@ from ergon_core.test_support.task_factory import task_with_id
 
 INVENTORY = Path(__file__).resolve().parent / "fixtures" / "rubric_inventory.json"
 
+MODEL = "openai-compatible:http://localhost:8000/v1#test-model"
+
 
 def test_large_native_artifacts_do_not_expand_manager_or_source_judge_previews():
     state = new_episode(EpisodeConfig(scenario="icaap"))
@@ -59,13 +60,13 @@ async def test_snapshot_reevaluation_preserves_hash_and_links_original_sample():
     state = new_episode(EpisodeConfig(scenario="legal_litigation_ediscovery"))
     source_id = uuid4()
     sample = make_snapshot_reevaluation_sample(
-        state, source_sample_id=source_id, environment_name="re-eval"
+        state, source_sample_id=source_id, environment_name="re-eval", model=MODEL
     )
     assert sample.source_metadata["evaluation_of_sample"] == str(source_id)
     assert sample.source_metadata["snapshot_hash"] == snapshot_hash(state)
-    assert sample.source_metadata["inference_profile"]["request_settings"]["extra_body"] == {
-        "thinking_token_budget": 2048
-    }
+    assert sample.source_metadata["inference_profile"] == state.config.inference.model_dump(
+        mode="json"
+    )
     task = sample.tasks[0]
     write_file = AsyncMock()
     # Bind an existing sandbox-runtime test double, keeping normal Task authoring.
@@ -97,7 +98,7 @@ def test_scenario_roundtrip_preserves_ids_hierarchy_and_private_preferences(scen
     obs = public_observation(restored)
     assert "weights" not in obs and "actors" not in obs
     assert all("initial_preferences" not in actor for actor in obs["agents"])
-    sample = make_manager_gym_sample(config)
+    sample = make_manager_gym_sample(config, model=MODEL)
     assert "evaluator_function" not in sample.model_dump_json()
 
 
@@ -137,7 +138,7 @@ async def test_every_terminal_callable_runs_against_frozen_native_projection():
         for definition in definitions(scenario):
             if definition.rubric.evaluator_function:
                 result = await MAGCriterion(
-                    slug=definition.slug, scenario=scenario, model=INTERNAL_MODEL
+                    slug=definition.slug, scenario=scenario, model=MODEL
                 ).evaluate(context)
                 assert math.isfinite(result.score)
                 assert 0 <= result.score <= definition.rubric.max_score
@@ -163,11 +164,14 @@ def test_gateway_json_string_action_is_decoded_then_validated():
 
 
 @pytest.mark.parametrize(
-    "target", ["openai:gpt-4o", "openrouter:qwen", "openai-compatible:https://example.com#qwen"]
+    "target",
+    ["openai:gpt-4o", "openrouter:qwen/qwen3-32b", "openai-compatible:http://localhost:8000#qwen"],
 )
-def test_external_inference_cannot_be_enabled_by_a_fallback(target):
-    with pytest.raises(ValueError):
-        require_internal_model(target)
+def test_any_model_target_drives_every_role_and_the_judge(target):
+    sample = make_manager_gym_sample(EpisodeConfig(scenario="icaap"), model=target)
+    task = sample.tasks[0]
+    assert task.worker.model == target
+    assert all(evaluator.model == target for evaluator in task.evaluators)
 
 
 def test_source_score_encodings_have_distinct_scales():
@@ -180,7 +184,7 @@ def test_source_score_encodings_have_distinct_scales():
 def test_utility_uses_raw_preference_scores_and_rejects_partial_results():
 
     state = new_episode(EpisodeConfig(scenario="legal_litigation_ediscovery"))
-    rubric = MAGRubric(name="MAG", scenario=state.config.scenario, model=INTERNAL_MODEL)
+    rubric = MAGRubric(name="MAG", scenario=state.config.scenario, model=MODEL)
     task = task_with_id(uuid4(), task_slug="test", instance_key="test", description="test")
     rows = [
         CriterionOutcome(

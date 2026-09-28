@@ -375,7 +375,8 @@ async def decompose_work(
             )
             + f"\n\nWorkflow goal: {state.workflow.workflow_goal}",
             output_type=Decomposition,
-            temperature=1,
+            role="decomposer",
+            profile=state.config.inference,
         )
 
     result = await context.run_step(
@@ -555,11 +556,21 @@ async def policy_turn(
     async def decide() -> BaselineInference:
         if state.config.manager_mode == "random":
             return await baseline_infer(
-                model=model, system=system, prompt=json.dumps(observation), output_type=schema
+                model=model,
+                role="manager",
+                profile=state.config.inference,
+                system=system,
+                prompt=json.dumps(observation),
+                output_type=schema,
             )
         return BaselineInference(
             result=await infer(
-                model=model, system=system, prompt=json.dumps(observation), output_type=schema
+                model=model,
+                role="manager",
+                profile=state.config.inference,
+                system=system,
+                prompt=json.dumps(observation),
+                output_type=schema,
             )
         )
 

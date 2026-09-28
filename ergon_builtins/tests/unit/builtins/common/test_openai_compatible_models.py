@@ -4,6 +4,7 @@ import json
 import urllib.request
 from types import TracebackType
 
+from ergon_core.core.shared.settings import settings
 from pydantic_ai.models.openai import OpenAIChatModel
 
 from ergon_builtins.llm.resolution import (
@@ -103,7 +104,7 @@ def test_openai_compatible_backend_prefixes_are_registered() -> None:
 
 
 def test_gateway_base_url_and_runtime_secret_reach_normal_resolver(monkeypatch) -> None:
-    monkeypatch.setenv("ERGON_OPENAI_COMPATIBLE_API_KEY", "runtime-secret")
+    monkeypatch.setattr(settings, "openai_compatible_api_key", "runtime-secret")
     target = "openai-compatible:https://gateway.example/v1/models/qwen#qwen"
     resolved = resolve_model_target(target)
     assert str(resolved.model.provider.client.base_url) == "https://gateway.example/v1/models/qwen/"

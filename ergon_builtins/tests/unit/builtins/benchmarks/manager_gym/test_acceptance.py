@@ -83,7 +83,11 @@ def test_native_failed_sample_is_accepted_only_for_accounted_work_failures():
 async def test_failed_gate_drains_admitted_samples_without_launching_more(
     tmp_path, monkeypatch, stage
 ):
-    monkeypatch.setattr(sys, "argv", ["acceptance.py", "--stage", stage, "--output", str(tmp_path)])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["acceptance.py", "--stage", stage, "--output", str(tmp_path), "--model", "test:model"],
+    )
     monkeypatch.setattr(acceptance, "SCENARIOS", acceptance.PILOTS)
     monkeypatch.setattr(acceptance, "code_digest", lambda: "test-build")
     submit = AsyncMock(side_effect=["first", "second"])
@@ -119,7 +123,11 @@ async def test_failed_gate_drains_admitted_samples_without_launching_more(
 async def test_unaccounted_failure_stops_admission_before_slow_sample_finishes(
     tmp_path, monkeypatch, stage
 ):
-    monkeypatch.setattr(sys, "argv", ["acceptance.py", "--stage", stage, "--output", str(tmp_path)])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["acceptance.py", "--stage", stage, "--output", str(tmp_path), "--model", "test:model"],
+    )
     monkeypatch.setattr(acceptance, "SCENARIOS", acceptance.PILOTS)
     monkeypatch.setattr(acceptance, "code_digest", lambda: "test-build")
     submit = AsyncMock(side_effect=["slow", "quick"])

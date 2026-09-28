@@ -6,14 +6,15 @@ from pathlib import Path
 from time import monotonic
 from uuid import uuid4
 
-from ergon_core.api import Environment, Experiment, Sample, Task
 from ergon_builtins.sandbox.e2b_sandbox import E2BSandbox
+from ergon_core.api import Environment, Experiment, Sample, Task
+
 from examples.manager_gym.acceptance import (
-    inspect_sample,
     closed_sandboxes,
-    export_evidence,
-    write_json,
     code_digest,
+    export_evidence,
+    inspect_sample,
+    write_json,
 )
 from tests.fixtures.mag_contract import ContractStepFailure
 

@@ -2,22 +2,27 @@
 
 import argparse
 import asyncio
-from hashlib import sha256
 import json
+import os
+from hashlib import sha256
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from ergon_core.api import Environment, Experiment
-from ergon_builtins.benchmarks.manager_gym.inference import INTERNAL_MODEL
 from ergon_builtins.benchmarks.manager_gym.sample import make_snapshot_reevaluation_sample
 from ergon_builtins.benchmarks.manager_gym.state import EpisodeState, snapshot_hash
+from ergon_core.api import Environment, Experiment
 
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--snapshot", type=Path, required=True)
     parser.add_argument("--source-sample-id", type=UUID, required=True)
-    parser.add_argument("--model", default=INTERNAL_MODEL)
+    parser.add_argument(
+        "--model",
+        default=os.environ.get("ERGON_MAG_MODEL"),
+        required=not os.environ.get("ERGON_MAG_MODEL"),
+        help="Ergon model target for the LLM judge (default: $ERGON_MAG_MODEL).",
+    )
     args = parser.parse_args()
     raw = json.loads(args.snapshot.read_text())
     state = EpisodeState.model_validate(raw)

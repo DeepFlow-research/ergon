@@ -11,7 +11,7 @@ from ergon_builtins.benchmarks.manager_gym.actions import (
     ManagerDecision,
     RemoveTaskAction,
 )
-from ergon_builtins.benchmarks.manager_gym.inference import INTERNAL_MODEL, InferenceResult
+from ergon_builtins.benchmarks.manager_gym.inference import InferenceResult
 from ergon_builtins.benchmarks.manager_gym.state import (
     all_tasks,
     project_native_state,
@@ -47,6 +47,8 @@ ACTIONS = [
     "get_pending_tasks",
 ]
 
+MODEL = "openai-compatible:http://localhost:8000/v1#test-model"
+
 
 def test_assignment_does_not_expose_unrelated_workflow_resources():
     state = contract_state()
@@ -56,7 +58,7 @@ def test_assignment_does_not_expose_unrelated_workflow_resources():
     state.workflow.resources = {r.id: r for r in (allowed, unrelated)}
     planned.input_resource_ids = [allowed.id]
     actor = next(k for k, a in state.actors.items() if a["agent_type"] == "ai")
-    task = manager.work_task(state, planned, actor, INTERNAL_MODEL, [])
+    task = manager.work_task(state, planned, actor, MODEL, [])
     assert [r.id for r in task.task_payload.resources] == [allowed.id]
 
 
@@ -148,7 +150,7 @@ async def test_all_source_actions_reach_native_result(runtime, monkeypatch, name
         return InferenceResult(output=output, elapsed_seconds=0, input_tokens=1, output_tokens=1)
 
     monkeypatch.setattr(manager, "infer", infer)
-    chunks = [chunk async for chunk in manager.policy_turn(state, context, INTERNAL_MODEL)]
+    chunks = [chunk async for chunk in manager.policy_turn(state, context, MODEL)]
     assert state.actions[-1].success and not chunks[-1].part.is_error
     if name.startswith("get_"):
         assert "last_action" not in state.actions[-1].data
@@ -174,7 +176,7 @@ async def test_plan_cycles_are_rejected_without_mutation(runtime):
     ).action
     before = state.model_dump(mode="json")
     with pytest.raises(ValueError, match="cycle"):
-        await manager.apply_action(state, action, context, INTERNAL_MODEL)
+        await manager.apply_action(state, action, context, MODEL)
     assert state.model_dump(mode="json") == before
 
 
@@ -203,19 +205,19 @@ async def test_reassignment_preserves_work_dependencies_without_serializing_an_a
             state,
             AssignTaskAction(reasoning="Assign", task_id=str(planned.id), agent_id=actor),
             context,
-            INTERNAL_MODEL,
+            MODEL,
         )
     b_native = state.bindings[str(b.id)]
     b_info = await context.get_task(b_native)
     assert b_info.depends_on == [state.bindings[str(a.id)]]
     await manager.remove_work(
-        state, RemoveTaskAction(reasoning="Remove", task_id=b.id), context, INTERNAL_MODEL
+        state, RemoveTaskAction(reasoning="Remove", task_id=b.id), context, MODEL
     )
     await manager.assign(
         state,
         AssignTaskAction(reasoning="Continue", task_id=str(c.id), agent_id=ai),
         context,
-        INTERNAL_MODEL,
+        MODEL,
     )
     c_info = await context.get_task(state.bindings[str(c.id)])
     assert b_native not in c_info.depends_on
@@ -233,11 +235,11 @@ async def test_removed_prerequisite_is_policy_blocked_not_infrastructure_failure
             state,
             AssignTaskAction(reasoning="Assign", task_id=str(planned.id), agent_id=ai),
             context,
-            INTERNAL_MODEL,
+            MODEL,
         )
     assert not await manager.has_policy_blocked_prerequisite(context, state.bindings[str(b.id)])
     await manager.remove_work(
-        state, RemoveTaskAction(reasoning="Remove", task_id=a.id), context, INTERNAL_MODEL
+        state, RemoveTaskAction(reasoning="Remove", task_id=a.id), context, MODEL
     )
     assert await manager.has_policy_blocked_prerequisite(context, state.bindings[str(b.id)])
     state.config.drain_timeout_seconds = 0.001
@@ -258,7 +260,7 @@ async def test_failed_prerequisite_classification_reads_without_nested_durable_w
             state,
             AssignTaskAction(reasoning="Assign", task_id=str(planned.id), agent_id=ai),
             context,
-            INTERNAL_MODEL,
+            MODEL,
         )
     native = state.bindings[str(a.id)]
     with context.session_factory() as session:
@@ -298,13 +300,13 @@ async def test_assign_all_model_fallback_uses_native_dependencies_once(runtime, 
     state.config.noop_wait_seconds = 0
     failed_model = AsyncMock(side_effect=RuntimeError("Contract model failure"))
     monkeypatch.setattr(baselines, "infer", failed_model)
-    first = [c async for c in manager.policy_turn(state, context, INTERNAL_MODEL)]
+    first = [c async for c in manager.policy_turn(state, context, MODEL)]
     assert len(state.bindings) == 6
     assert state.actions[-1].success
     assert "Contract model failure" in state.actions[-1].data["model_error"]
     assert first[-1].part.tool_name == "assign_tasks_to_agents"
     state.timestep += 1
-    second = [c async for c in manager.policy_turn(state, context, INTERNAL_MODEL)]
+    second = [c async for c in manager.policy_turn(state, context, MODEL)]
     assert len(state.bindings) == 6 and failed_model.await_count == 1
     assert second[-1].part.tool_name == "noop"
 
@@ -323,7 +325,7 @@ async def test_random_baseline_is_one_selected_model_action_with_recorded_fallba
     assert "anyOf" not in selected.model_json_schema()["properties"]["action"]
     failed_model = AsyncMock(side_effect=RuntimeError("Contract random failure"))
     monkeypatch.setattr(baselines, "infer", failed_model)
-    chunks = [c async for c in manager.policy_turn(state, context, INTERNAL_MODEL)]
+    chunks = [c async for c in manager.policy_turn(state, context, MODEL)]
     assert not state.actions[-1].success and chunks[-1].part.is_error
     assert "Contract random failure" in state.actions[-1].data["error"]
-    assert failed_model.call_args.kwargs["model"] == INTERNAL_MODEL
+    assert failed_model.call_args.kwargs["model"] == MODEL

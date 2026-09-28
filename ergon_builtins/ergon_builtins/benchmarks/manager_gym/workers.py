@@ -16,7 +16,12 @@ from pydantic import BaseModel, Field
 from sqlmodel import select
 
 from ergon_builtins.benchmarks.manager_gym.communication import MAGCommunication
-from ergon_builtins.benchmarks.manager_gym.inference import InferenceResult, ModelFailure, infer
+from ergon_builtins.benchmarks.manager_gym.inference import (
+    InferenceResult,
+    ModelFailure,
+    Role,
+    infer,
+)
 from ergon_builtins.benchmarks.manager_gym.outputs import (
     AITaskOutput,
     HumanTimeEstimation,
@@ -27,8 +32,10 @@ from ergon_builtins.benchmarks.manager_gym.upstream import (
     AI_AGENT_TASK_TEMPLATE,
     HUMAN_SIMULATION_INSTRUCTIONS_TEMPLATE,
     HUMAN_TASK_ASSIGNMENT_TEMPLATE,
+    AgentConfig,
     HumanAgentConfig,
     Resource,
+    StakeholderConfig,
 )
 from ergon_builtins.benchmarks.manager_gym.upstream import (
     Task as PlannedTask,
@@ -70,6 +77,15 @@ class WorkResult(BaseModel):
     speed_modifier: float | None = None
     misunderstanding: bool = False
     execution_notes: list[str] = Field(default_factory=list)
+
+
+def work_role(actor: AgentConfig) -> Role:
+    """The inference role an actor's work runs under."""
+    if isinstance(actor, HumanAgentConfig):
+        return "human"
+    if isinstance(actor, StakeholderConfig):
+        return "stakeholder"
+    return "ai"
 
 
 async def read_inputs(payload: WorkPayload, context: WorkerContext) -> WorkInputs:
@@ -189,6 +205,8 @@ class MAGWorkWorker(Worker):
         if not hours:
             estimator = await infer(
                 model=self.model,
+                role="estimator",
+                profile=payload.episode.inference,
                 system=f"You are {actor.role}, with {actor.experience_years} years of experience. Estimate realistic hours including research, review, breaks and obstacles. Background: {actor.background}; expertise: {actor.expertise_areas}; style: {actor.work_style}.",
                 prompt=planned.description,
                 output_type=HumanTimeEstimation,
@@ -253,6 +271,8 @@ class MAGWorkWorker(Worker):
             system += f"\nReview and approval persona: {payload.actor['persona_description']}; strictness {payload.actor['strictness']}. Private priorities: {payload.actor['initial_preferences']}"
         inference = await infer(
             model=self.model,
+            role=work_role(actor),
+            profile=payload.episode.inference,
             system=system,
             prompt=prompt,
             output_type=output_type,
@@ -263,7 +283,6 @@ class MAGWorkWorker(Worker):
                 logical_task=str(planned.id),
                 timestep=payload.timestep,
             ).tools(),
-            temperature=0.7 if isinstance(actor, HumanAgentConfig) else 0,
             accept_model_failure=True,
         )
         if (

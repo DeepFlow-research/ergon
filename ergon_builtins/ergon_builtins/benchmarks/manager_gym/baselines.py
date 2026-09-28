@@ -100,6 +100,8 @@ async def baseline_infer(**kwargs) -> BaselineInference:
 async def bulk_infer(state: EpisodeState, model: str) -> BaselineInference:
     return await baseline_infer(
         model=model,
+        role="manager",
+        profile=state.config.inference,
         system=(
             "You are a workflow orchestration manager operating on a task DAG.\n"
             "Goal: assign each task to the best-fit agent so work can proceed without further input.\n"

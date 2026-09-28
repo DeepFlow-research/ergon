@@ -7,11 +7,6 @@ from uuid import UUID
 from ergon_core.api import Sample, Task, Worker, WorkerContext, WorkerStreamItem
 from ergon_core.api.worker import WorkerOutput
 
-from ergon_builtins.benchmarks.manager_gym.inference import (
-    INTERNAL_MODEL,
-    inference_profile,
-    require_internal_model,
-)
 from ergon_builtins.benchmarks.manager_gym.manager import EpisodeTask, MAGManagerWorker
 from ergon_builtins.benchmarks.manager_gym.rubric import MAGRubric
 from ergon_builtins.benchmarks.manager_gym.state import (
@@ -26,9 +21,18 @@ from ergon_builtins.sandbox.e2b_sandbox import E2BSandbox
 
 
 def make_manager_gym_sample(
-    config: EpisodeConfig, *, environment_name: str = "manager-gym", model: str = INTERNAL_MODEL
+    config: EpisodeConfig, *, model: str, environment_name: str = "manager-gym"
 ) -> Sample:
-    require_internal_model(model)
+    """Build the Ergon sample for one MAG episode.
+
+    Args:
+        config: Scenario, manager policy, seed and limits for the episode.
+        model: Ergon model target used by every role and by the LLM judge.
+        environment_name: Environment the sample is recorded under.
+
+    Returns:
+        A sample with a single manager task, graded by ``MAGRubric``.
+    """
     spec = SCENARIOS[config.scenario]
     task = EpisodeTask(
         task_slug=f"mag-{config.scenario}",
@@ -48,7 +52,7 @@ def make_manager_gym_sample(
             "provider": "ergon-builtin:manager-gym",
             "benchmark_version": BENCHMARK_VERSION,
             "source_revision": SOURCE_REVISION,
-            "inference_profile": inference_profile(),
+            "inference_profile": config.inference.model_dump(mode="json"),
         },
         tasks=[cast(Task, task)],
     )
@@ -85,9 +89,19 @@ def make_snapshot_reevaluation_sample(
     *,
     source_sample_id: UUID,
     environment_name: str,
-    model: str = INTERNAL_MODEL,
+    model: str,
 ) -> Sample:
-    require_internal_model(model)
+    """Build a sample that re-grades a frozen episode snapshot without re-running it.
+
+    Args:
+        state: The frozen episode state produced by the manager.
+        source_sample_id: The sample the snapshot came from.
+        environment_name: Environment the new sample is recorded under.
+        model: Ergon model target for the LLM judge.
+
+    Returns:
+        A sample whose single task replays the snapshot into ``MAGRubric``.
+    """
     return Sample.from_tasks(
         name=f"Re-evaluate {state.config.scenario}:{source_sample_id}",
         sample_key=f"reevaluate:{source_sample_id}",
@@ -98,7 +112,7 @@ def make_snapshot_reevaluation_sample(
             "source_revision": SOURCE_REVISION,
             "evaluation_of_sample": str(source_sample_id),
             "snapshot_hash": snapshot_hash(state),
-            "inference_profile": inference_profile(),
+            "inference_profile": state.config.inference.model_dump(mode="json"),
         },
         tasks=[
             cast(
