@@ -2,9 +2,9 @@ from collections.abc import AsyncGenerator
 
 import pytest
 from ergon_core.api.worker import WorkerOutput
-from ergon_core.core.shared.context_parts import AssistantTextPart, ContextPartChunk
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.jobs.task.worker_execute.job import _consume_worker_stream
+from ergon_core.core.shared.context_parts import AssistantTextPart, ContextPartChunk
 
 
 async def _stream_with_terminal_output() -> AsyncGenerator[ContextPartChunk | WorkerOutput, None]:

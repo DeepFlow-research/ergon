@@ -2,14 +2,13 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
-
-from ergon_core.core.jobs.task.propagate.contract import TaskFailedEvent
-from ergon_core.core.jobs.task.propagate.job import run_propagate_task_failure_job
 from ergon_core.core.application.runtime.orchestration import (
     PropagateTaskCompletionCommand,
     PropagationResult,
     WorkflowTerminalState,
 )
+from ergon_core.core.jobs.task.propagate.contract import TaskFailedEvent
+from ergon_core.core.jobs.task.propagate.job import run_propagate_task_failure_job
 
 
 @pytest.mark.asyncio

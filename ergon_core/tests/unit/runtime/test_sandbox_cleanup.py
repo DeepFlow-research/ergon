@@ -8,13 +8,12 @@ task events and call ``terminate_external_sandbox`` once.
 from uuid import uuid4
 
 import pytest
-
-from ergon_core.core.jobs.task.propagate.contract import TaskCompletedEvent, TaskFailedEvent
-from ergon_core.core.jobs.sandbox.cleanup import job as sandbox_cleanup_module
 from ergon_core.core.infrastructure.sandbox.lifecycle import (
     SandboxTerminationReason,
     SandboxTerminationResult,
 )
+from ergon_core.core.jobs.sandbox.cleanup import job as sandbox_cleanup_module
+from ergon_core.core.jobs.task.propagate.contract import TaskCompletedEvent, TaskFailedEvent
 
 
 class _FakeStepCtx:

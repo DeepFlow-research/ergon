@@ -1,34 +1,41 @@
-from uuid import uuid4
+import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import ClassVar
 from unittest.mock import AsyncMock
-import json
+from uuid import uuid4
 
 import pytest
-from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine, select
-
-from ergon_core.api.rubric.results import TaskEvaluationResult
 from ergon_core.api import Rubric
-from ergon_core.api.criterion import CriterionContext, CriterionOutcome
+from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome
+from ergon_core.api.rubric.results import TaskEvaluationResult
 from ergon_core.api.worker import WorkerOutput
+from ergon_core.core.application.evaluation import service as service_module
 from ergon_core.core.application.evaluation.models import CriterionSpec
-from ergon_core.core.jobs.task.evaluate import job as evaluation_job
-from ergon_core.core.infrastructure.dashboard.emitter import DashboardEmitter
-from ergon_core.core.infrastructure.inngest.client import inngest_client
-from ergon_core.test_support.task_factory import task_with_id
-from tests.fixtures.mag_preport import PreportCriterion
 from ergon_core.core.application.evaluation.service import (
     EvaluationService,
     EvaluationServiceResult,
 )
+from ergon_core.core.infrastructure.dashboard.emitter import DashboardEmitter
+from ergon_core.core.infrastructure.inngest.client import inngest_client
+from ergon_core.core.jobs.task.evaluate import job as evaluation_job
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
     SampleRecord,
-    SampleTaskEvaluation,
     SampleTaskAttempt,
+    SampleTaskEvaluation,
 )
+from ergon_core.test_support.task_factory import task_with_id
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine, select
+
+
+class _FixedCriterion(Criterion):
+    type_slug: ClassVar[str] = "fixed-test-criterion"
+
+    async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
+        return CriterionOutcome(slug=self.slug, score=1.0, passed=True)
 
 
 def _session() -> Session:
@@ -76,8 +83,6 @@ def _seed_run(session: Session) -> tuple:
 
 @pytest.mark.asyncio
 async def test_persist_success_writes_evaluation_row_with_service_summary(monkeypatch) -> None:
-    from ergon_core.core.application.evaluation import service as service_module
-
     session = _session()
     monkeypatch.setattr(service_module, "get_session", lambda: session)
     monkeypatch.setattr(session, "close", lambda: None)
@@ -111,13 +116,11 @@ async def test_persist_success_writes_evaluation_row_with_service_summary(monkey
 
 @pytest.mark.asyncio
 async def test_large_evaluation_is_persisted_before_a_bounded_dashboard_notification(monkeypatch):
-    from ergon_core.core.application.evaluation import service as service_module
-
     session = _session()
     monkeypatch.setattr(service_module, "get_session", lambda: session)
     monkeypatch.setattr(session, "close", lambda: None)
     sample_id, task_id, execution_id = _seed_run(session)
-    criterion = PreportCriterion(slug="large-input")
+    criterion = _FixedCriterion(slug="large-input")
     large_input = "retained judge evidence " * 200_000
     result = EvaluationServiceResult(
         result=TaskEvaluationResult(

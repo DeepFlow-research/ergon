@@ -7,19 +7,17 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from pydantic import BaseModel
-from sqlmodel import select
-
 from ergon_core.api.worker import WorkerContext
 from ergon_core.core.application.resources.publishing import (
-    WorkerCheckpointStore,
     SampleResourcePublishService,
+    WorkerCheckpointStore,
 )
+from ergon_core.core.infrastructure.sandbox.resource_publisher import SandboxResourcePublisher
 from ergon_core.core.persistence.shared.enums import SampleResourceKind
 from ergon_core.core.persistence.telemetry.models import SampleResource, SampleTaskAttempt
-from ergon_core.core.infrastructure.sandbox.resource_publisher import SandboxResourcePublisher
-from ergon_core.tests.unit.runtime.test_manager_gym_preport_proof import preport
-from ergon_core.tests.unit.runtime.test_spawn_dynamic_task import _SessionContext
+from ergon_core.test_support.runtime_harness import SessionContext
+from pydantic import BaseModel
+from sqlmodel import select
 
 
 class LargeResult(BaseModel):
@@ -48,15 +46,15 @@ class RetainingPublisher:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("checkpoint_first", [True, False])
-async def test_checkpoint_cannot_hide_identical_report(preport, tmp_path, checkpoint_first):
-    session, sample_id, parent, _ = preport
+async def test_checkpoint_cannot_hide_identical_report(graph_runtime, tmp_path, checkpoint_first):
+    session, sample_id, parent, _ = graph_runtime
     attempt = SampleTaskAttempt(sample_id=sample_id, task_id=parent.task_id, status="running")
     session.add(attempt)
     session.commit()
     blobs = SandboxResourcePublisher(
         sandbox=None, sample_id=sample_id, task_attempt_id=attempt.id, blob_root=tmp_path
     )
-    publisher = SampleResourcePublishService(session_factory=lambda: _SessionContext(session))
+    publisher = SampleResourcePublishService(session_factory=lambda: SessionContext(session))
     store = WorkerCheckpointStore(blobs, sample_id, attempt.id, publisher)
     result = LargeResult(transcript="Frozen episode shared by checkpoint and final report")
     content = result.model_dump_json().encode()

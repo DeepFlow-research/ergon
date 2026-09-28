@@ -3,7 +3,6 @@
 import uuid
 
 import pytest
-
 from ergon_core.api import SpawnedTaskHandle as SpawnedTaskHandleFromApi
 from ergon_core.api.worker import SpawnedTaskHandle as SpawnedTaskHandleFromWorker
 from ergon_core.api.worker.results import AwaitCompletionNotSupportedError

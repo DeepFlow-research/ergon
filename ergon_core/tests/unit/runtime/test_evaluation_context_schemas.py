@@ -2,11 +2,10 @@
 
 from uuid import uuid4
 
-from pydantic import ValidationError
 import pytest
-
 from ergon_core.core.application.evaluation import models as evaluation_models
 from ergon_core.core.jobs.task.evaluate.contract import TaskEvaluateRequest
+from pydantic import ValidationError
 
 
 def test_task_evaluate_request_is_id_only_with_evaluator_index() -> None:

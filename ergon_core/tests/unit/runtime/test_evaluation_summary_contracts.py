@@ -5,18 +5,18 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from ergon_core.api.criterion import Criterion
 from ergon_core.api.criterion import (
+    Criterion,
     CriterionContext,
     CriterionEvidence,
     CriterionOutcome,
     EvidenceMessage,
 )
 from ergon_core.api.rubric import TaskEvaluationResult
-from ergon_core.core.application.evaluation.summary import CriterionOutcomeEntry
-from ergon_core.core.application.evaluation.models import CriterionSpec
 from ergon_core.core.application.evaluation.mappers import build_evaluation_summary
+from ergon_core.core.application.evaluation.models import CriterionSpec
 from ergon_core.core.application.evaluation.service import EvaluationServiceResult
+from ergon_core.core.application.evaluation.summary import CriterionOutcomeEntry
 from ergon_core.core.views.samples.evaluation_mapping import build_dashboard_evaluation_dto
 from pydantic import ValidationError
 

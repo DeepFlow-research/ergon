@@ -7,10 +7,10 @@ without pulling in any real builtins or external SDK dependencies.
 from typing import AsyncGenerator, ClassVar
 
 from ergon_core.api.sandbox.sandbox import Sandbox
-from ergon_core.api.worker.worker import Worker, WorkerStreamItem
+from ergon_core.api.task import Task
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import WorkerOutput
-from ergon_core.api.task import Task
+from ergon_core.api.worker.worker import Worker, WorkerStreamItem
 
 
 class EchoSandbox(Sandbox):

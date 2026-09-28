@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
-from ergon_core.core.views.samples.service import _display_run_score
 from ergon_core.core.persistence.shared.enums import SampleStatus
+from ergon_core.core.views.samples.service import _display_run_score
 
 
 def test_display_run_score_uses_normalized_score_for_multi_evaluator_runs() -> None:

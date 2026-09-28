@@ -2,6 +2,13 @@ from uuid import UUID, uuid4
 
 import pytest
 from ergon_core.api import Sample
+from ergon_core.core.application.runtime import execution as task_execution_module
+from ergon_core.core.application.runtime.orchestration import (
+    InitializeWorkflowCommand,
+    PrepareTaskExecutionCommand,
+)
+from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
+from ergon_core.core.application.runtime.task_execution import TaskExecutionService
 from ergon_core.core.application.samples.materialization import materialize_sample
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
@@ -9,13 +16,6 @@ from ergon_core.core.persistence.telemetry.models import (
     SampleRecord,
     SampleTaskAttempt,
 )
-from ergon_core.core.application.runtime import execution as task_execution_module
-from ergon_core.core.application.runtime.orchestration import (
-    InitializeWorkflowCommand,
-    PrepareTaskExecutionCommand,
-)
-from ergon_core.core.application.runtime.task_execution import TaskExecutionService
-from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
 from ergon_core.test_support.task_factory import task_with_id
 from pydantic import BaseModel
 from sqlalchemy.pool import StaticPool

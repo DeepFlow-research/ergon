@@ -3,8 +3,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
-import pytest
 import inngest
+import pytest
 from ergon_core.core.application.runtime.orchestration import FailTaskExecutionCommand
 from ergon_core.core.infrastructure.inngest.errors import execution_error_details
 

@@ -60,8 +60,10 @@ async def main() -> None:
     checks = {
         "one_failed_attempt": len(errors) == 1 and evidence["attempts"][0]["status"] == "failed",
         "sample_failed": evidence["sample"]["status"] == "failed",
-        "original_type_and_message": len(errors) == 1
-        and errors[0].get("exception_type") == errors[0].get("message") == "TimeoutError",
+        "original_type": len(errors) == 1 and errors[0].get("exception_type") == "TimeoutError",
+        # The scripted error has no message, so the record falls back to its type name.
+        "empty_message_falls_back_to_type": len(errors) == 1
+        and errors[0].get("message") == "TimeoutError",
         "original_note_retained": len(errors) == 1
         and "native-step-failure-proof" in errors[0].get("stack", ""),
         "step_wrapper_recorded": len(errors) == 1

@@ -3,7 +3,6 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-
 from ergon_core.core.jobs.resources.persist_outputs.contract import PersistOutputsRequest
 from ergon_core.core.jobs.resources.persist_outputs.job import run_persist_outputs_job
 

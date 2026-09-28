@@ -1,7 +1,8 @@
-"""Bounded pre-port probes: real Ergon services, SQLite, and installed SDK replay.
+"""Dynamic task behaviour a long-running manager worker relies on.
 
-Strict xfails assert desired port behavior that current Ergon does not provide.
-These are evidence of gaps, not live PostgreSQL/E2B or full-manager acceptance.
+Real Ergon services on in-memory SQLite, plus the installed Inngest SDK's replay:
+dependency release, cancellation, refinement, actor bindings, checkpointed
+decisions, persisted outputs, idempotent messages and incomplete evaluations.
 """
 
 from types import SimpleNamespace
@@ -10,17 +11,12 @@ from uuid import uuid4
 
 import inngest
 import pytest
-from inngest.experimental import mocked
-from sqlmodel import Session, select
-
 from ergon_core.api.worker.results import WorkerOutput
 from ergon_core.core.application.communication import service as comm_module
 from ergon_core.core.application.communication.models import CreateMessageRequest
 from ergon_core.core.application.context.service import ContextEventService
 from ergon_core.core.application.evaluation import service as eval_module
 from ergon_core.core.application.runtime import task_execution as execution_module
-from ergon_core.core.application.runtime import task_management as management_module
-from ergon_core.core.application.runtime.lifecycle import on_task_completed_or_failed
 from ergon_core.core.application.runtime.orchestration import PrepareTaskExecutionCommand
 from ergon_core.core.application.runtime.task_execution import TaskExecutionService
 from ergon_core.core.application.runtime.task_execution_repository import WorkerOutputRepository
@@ -31,34 +27,14 @@ from ergon_core.core.persistence.context.models import SampleContextEvent
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt, SampleTaskEvaluation
 from ergon_core.core.shared.context_parts import AssistantTextPart, ContextPartChunk
-from ergon_core.tests.unit.runtime.test_spawn_dynamic_task import (
-    _make_session,
-    _make_task,
-    _seed_parent,
-    _service,
-    _SessionContext,
-)
-
-
-@pytest.fixture
-def preport(monkeypatch):
-    session = _make_session()
-    sample_id = uuid4()
-    parent = _seed_parent(session, sample_id=sample_id)
-    svc = _service(session, monkeypatch)
-    monkeypatch.setattr(
-        management_module,
-        "get_dashboard_event_publisher",
-        lambda: SimpleNamespace(publish=AsyncMock()),
-    )
-    monkeypatch.setattr(management_module.inngest_client, "send", AsyncMock())
-    yield session, sample_id, parent, svc
-    session.close()
+from ergon_core.test_support.runtime_harness import SessionContext, make_task
+from inngest.experimental import mocked
+from sqlmodel import Session, select
 
 
 @pytest.mark.parametrize("status", ["completed", "failed", "running", "cancelled"])
-def test_completion_exposes_retained_output_for_completed_or_failed_attempts(preport, status):
-    session, sample_id, parent, _ = preport
+def test_completion_exposes_retained_output_for_completed_or_failed_attempts(graph_runtime, status):
+    session, sample_id, parent, _ = graph_runtime
     parent.status = status
     output = {"output": "Recorded task outcome", "success": status != "failed", "metadata": {}}
     attempt = SampleTaskAttempt(
@@ -80,72 +56,42 @@ def test_completion_exposes_retained_output_for_completed_or_failed_attempts(pre
         assert result.output is None
 
 
-async def child(state, slug, *, deps=(), actor=None):
-    _, sample_id, parent, svc = state
-    task = _make_task().model_copy(update={"task_slug": slug})
-    if actor:
-        task.worker.name = actor
-        task.worker.actor_key = actor
-        task.worker.metadata = {"actor_key": actor, "actor_role": "environment"}
-    return await svc.spawn_dynamic_task(
-        sample_id=sample_id, parent_task_id=parent.task_id, task=task, depends_on=deps
-    )
-
-
-def node(state, task_id):
-    session, sample_id, _, _ = state
-    return session.get(SampleGraphNode, (sample_id, task_id))
-
-
-async def complete(state, task_id):
-    session, sample_id, _, svc = state
-    node(state, task_id).status = "completed"
-    session.commit()
-    return await on_task_completed_or_failed(
-        session,
-        sample_id=sample_id,
-        task_id=task_id,
-        terminal_status="completed",
-        graph_repo=svc._graph_repo,
-    )
-
-
 @pytest.mark.asyncio
-async def test_preport_dependency_created_before_completion_releases(preport):
-    a = await child(preport, "a")
-    b = await child(preport, "b", deps=(a.task_id,))
-    ready = await complete(preport, a.task_id)
+async def test_dependency_created_before_completion_releases(graph_runtime):
+    a = await graph_runtime.spawn("a")
+    b = await graph_runtime.spawn("b", deps=(a.task_id,))
+    ready = await graph_runtime.complete(a.task_id)
     assert b.task_id in ready
 
 
 @pytest.mark.asyncio
-async def test_preport_dependency_created_after_completion_releases(preport):
-    a = await child(preport, "a")
-    await complete(preport, a.task_id)
+async def test_dependency_created_after_completion_releases(graph_runtime):
+    a = await graph_runtime.spawn("a")
+    await graph_runtime.complete(a.task_id)
     dispatched = []
 
     async def record(sample_id, task_id):
         dispatched.append(task_id)
 
-    preport[3]._runtime_events.dispatch_task_ready = record
-    b = await child(preport, "b", deps=(a.task_id,))
+    graph_runtime.service._runtime_events.dispatch_task_ready = record
+    b = await graph_runtime.spawn("b", deps=(a.task_id,))
     assert b.task_id in dispatched
 
 
 @pytest.mark.asyncio
-async def test_preport_explicit_cancellation_stays_cancelled(preport):
-    session, sample_id, _, svc = preport
-    a = await child(preport, "a")
-    b = await child(preport, "b", deps=(a.task_id,))
+async def test_explicit_cancellation_survives_prerequisite_completion(graph_runtime):
+    session, sample_id, _, svc = graph_runtime
+    a = await graph_runtime.spawn("a")
+    b = await graph_runtime.spawn("b", deps=(a.task_id,))
     await svc.cancel_task(session, CancelTaskCommand(sample_id=sample_id, task_id=b.task_id))
-    ready = await complete(preport, a.task_id)
-    assert b.task_id not in ready and node(preport, b.task_id).status == "cancelled"
+    ready = await graph_runtime.complete(a.task_id)
+    assert b.task_id not in ready and graph_runtime.node(b.task_id).status == "cancelled"
 
 
 @pytest.mark.asyncio
-async def test_preport_refinement_reaches_executable_task(preport):
-    session, sample_id, _, svc = preport
-    b = await child(preport, "b")
+async def test_refinement_reaches_executable_task(graph_runtime):
+    session, sample_id, _, svc = graph_runtime
+    b = await graph_runtime.spawn("b")
     await svc.refine_task(
         session,
         RefineTaskCommand(
@@ -157,11 +103,11 @@ async def test_preport_refinement_reaches_executable_task(preport):
 
 
 @pytest.mark.asyncio
-async def test_preport_prepare_rechecks_dependencies(preport, monkeypatch):
-    session, sample_id, _, _ = preport
-    a = await child(preport, "a")
-    b = await child(preport, "b", deps=(a.task_id,))
-    monkeypatch.setattr(execution_module, "get_session", lambda: _SessionContext(session))
+async def test_prepare_rechecks_dependencies(graph_runtime, monkeypatch):
+    session, sample_id, _, _ = graph_runtime
+    a = await graph_runtime.spawn("a")
+    b = await graph_runtime.spawn("b", deps=(a.task_id,))
+    monkeypatch.setattr(execution_module, "get_session", lambda: SessionContext(session))
     monkeypatch.setattr(execution_module, "_emit_task_status", AsyncMock())
     await TaskExecutionService().prepare(
         PrepareTaskExecutionCommand(sample_id=sample_id, task_id=b.task_id)
@@ -172,19 +118,19 @@ async def test_preport_prepare_rechecks_dependencies(preport, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_preport_same_class_people_have_distinct_bindings(preport):
-    a = await child(preport, "a", actor="alice")
-    b = await child(preport, "b", actor="bob")
+async def test_workers_of_one_class_keep_distinct_actor_bindings(graph_runtime):
+    a = await graph_runtime.spawn("a", actor="alice")
+    b = await graph_runtime.spawn("b", actor="bob")
     assert (
-        node(preport, a.task_id).assigned_worker_slug
-        != node(preport, b.task_id).assigned_worker_slug
+        graph_runtime.node(a.task_id).assigned_worker_slug
+        != graph_runtime.node(b.task_id).assigned_worker_slug
     )
 
 
-def run_sdk_manager(state, monkeypatch, *, memoize_decision):
+def run_sdk_manager(state, monkeypatch):
     session, sample_id, parent, _ = state
     calls = []
-    sdk = inngest.Inngest(app_id="mag-preport-proof")
+    sdk = inngest.Inngest(app_id="mag-graph_runtime-proof")
 
     async def decision():
         calls.append("model-response")
@@ -192,19 +138,16 @@ def run_sdk_manager(state, monkeypatch, *, memoize_decision):
 
     @sdk.create_function(fn_id="manager", trigger=inngest.TriggerEvent(event="proof"))
     async def manager(ctx: inngest.Context):
-        if memoize_decision:
-            await ctx.step.run("decision-0", decision)
-        else:
-            await decision()
+        await ctx.step.run("decision-0", decision)
         handle = await _StepAwareTaskManagementService(ctx).spawn_dynamic_task(
             sample_id=sample_id,
             parent_task_id=parent.task_id,
-            task=_make_task(),
+            task=make_task(),
         )
         return str(handle.task_id)
 
     result = mocked.trigger(
-        manager, inngest.Event(name="proof"), mocked.Inngest(app_id="mag-preport-proof")
+        manager, inngest.Event(name="proof"), mocked.Inngest(app_id="mag-graph_runtime-proof")
     )
     if result.status is not mocked.Status.COMPLETED:
         raise RuntimeError(f"SDK proof did not complete: {result}")
@@ -216,25 +159,14 @@ def run_sdk_manager(state, monkeypatch, *, memoize_decision):
     return len(calls)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="SDK replay repeats uncheckpointed policy work even though spawning itself is memoized",
-)
-def test_preport_inline_manager_does_not_repeat_policy(preport, monkeypatch, record_property):
-    count = run_sdk_manager(preport, monkeypatch, memoize_decision=False)
-    record_property("policy_calls", count)
-    assert count == 1, f"policy calls={count} for one decision and one spawned node"
-
-
-def test_preport_existing_sdk_step_can_checkpoint_policy(preport, monkeypatch):
-    assert run_sdk_manager(preport, monkeypatch, memoize_decision=True) == 1
+def test_checkpointed_decision_runs_once_across_sdk_replay(graph_runtime, monkeypatch):
+    assert run_sdk_manager(graph_runtime, monkeypatch) == 1
 
 
 @pytest.mark.asyncio
-async def test_preport_full_output_and_actor_context_already_persist(preport):
-    session, sample_id, _, _ = preport
-    handle = await child(preport, "work")
+async def test_full_worker_output_and_actor_binding_persist(graph_runtime):
+    session, sample_id, _, _ = graph_runtime
+    handle = await graph_runtime.spawn("work")
     attempt = SampleTaskAttempt(sample_id=sample_id, task_id=handle.task_id, status="running")
     session.add(attempt)
     session.commit()
@@ -254,8 +186,8 @@ async def test_preport_full_output_and_actor_context_already_persist(preport):
 
 
 @pytest.mark.asyncio
-async def test_preport_message_retries_currently_make_two_rows(preport, monkeypatch):
-    session, sample_id, _, _ = preport
+async def test_retried_message_with_idempotency_key_is_stored_once(graph_runtime, monkeypatch):
+    session, sample_id, _, _ = graph_runtime
     engine = session.get_bind()
     monkeypatch.setattr(comm_module, "get_session", lambda: Session(engine))
     monkeypatch.setattr(
@@ -267,16 +199,17 @@ async def test_preport_message_retries_currently_make_two_rows(preport, monkeypa
         to_agent_id="bob",
         thread_topic="work",
         content="decision-0",
+        idempotency_key="decision-0",
     )
     svc = comm_module.CommunicationService()
     first, second = await svc.save_message(request), await svc.save_message(request)
-    assert first.message_id != second.message_id
-    assert len(svc.get_thread_messages(first.thread_id)) == 2
+    assert first.message_id == second.message_id
+    assert len(svc.get_thread_messages(first.thread_id)) == 1
 
 
 @pytest.mark.asyncio
-async def test_preport_evaluator_failure_has_no_valid_score(preport, monkeypatch):
-    session, sample_id, _, _ = preport
+async def test_incomplete_evaluator_failure_persists_no_score(graph_runtime, monkeypatch):
+    session, sample_id, _, _ = graph_runtime
     engine = session.get_bind()
     monkeypatch.setattr(eval_module, "get_session", lambda: Session(engine))
     await eval_module.EvaluationService().persist_failure(

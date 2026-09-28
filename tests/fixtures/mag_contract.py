@@ -1,4 +1,9 @@
-"""Scripted live composition contract; deliberately not an autonomous MAG score."""
+"""A scripted Manager Gym episode that exercises the native runtime contract end to end.
+
+It drives the real manager actions against a live stack (E2B, Inngest, the real
+model for work roles) and records a pass/fail check per runtime guarantee. It is
+a runtime contract, not a MAG score.
+"""
 
 import json
 from collections.abc import AsyncGenerator
@@ -12,6 +17,7 @@ from ergon_builtins.benchmarks.manager_gym.actions import (
     RefineTaskAction,
     RemoveTaskAction,
 )
+from ergon_builtins.benchmarks.manager_gym.constants import MANAGER_ACTOR_ID
 from ergon_builtins.benchmarks.manager_gym.manager import (
     assign,
     decompose_work,
@@ -28,6 +34,12 @@ from ergon_builtins.benchmarks.manager_gym.state import (
     project_native_state,
     snapshot_hash,
 )
+from ergon_builtins.benchmarks.manager_gym.upstream import (
+    AIAgentConfig,
+    HumanAgentConfig,
+    StakeholderConfig,
+    TaskStatus,
+)
 from ergon_builtins.benchmarks.manager_gym.upstream import Task as PlannedTask
 from ergon_builtins.sandbox.e2b_sandbox import E2BSandbox
 from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
@@ -37,12 +49,29 @@ from pydantic import RootModel
 
 CONTRACT_FILE = "/workspace/final_output/mag-contract.json"
 
+# The scripted plan. The first four form a chain, each depending on the previous.
+AI_NOTE = "AI note"
+HUMAN_REVIEW = "Human review"
+HUMAN_FOLLOW_UP = "Human follow-up"
+APPROVAL = "Stakeholder approval"
+REMOVED = "Remove me"
+DECOMPOSED = "Decompose me"
+CHAIN = (AI_NOTE, HUMAN_REVIEW, HUMAN_FOLLOW_UP, APPROVAL)
+CONTRACT_TASKS = (*CHAIN, REMOVED, DECOMPOSED)
+WORK_DESCRIPTION = (
+    "Write a brief one-sentence work product for a simulated project status update. "
+    "Use the communication send_message tool to tell manager_agent what you produced."
+)
+
 
 class ContractStepFailure(Worker):
+    """Fails inside a durable step with a message-less error and a traceback note."""
+
     type_slug: ClassVar[str] = "mag-contract-step-failure"
 
     async def execute(self, task: Task, *, context: WorkerContext):
         async def fail() -> RootModel[str]:
+            # No message on purpose: the record must fall back to the exception's name.
             error = TimeoutError()
             error.add_note("native-step-failure-proof")
             raise error
@@ -52,22 +81,26 @@ class ContractStepFailure(Worker):
 
 
 class ContractGate(Worker):
+    """Holds its dependents pending for 30 seconds so edits and cancellation can be tested."""
+
     type_slug: ClassVar[str] = "mag-contract-gate"
 
     async def execute(
         self, task: Task, *, context: WorkerContext
-    ) -> AsyncGenerator[WorkerStreamItem, None]:
+    ) -> AsyncGenerator[WorkerStreamItem]:
         # Hold admission while the root proves pending mutations. Ergon owns the wait.
         await context.steps.sleep("pending-mutation-window", timedelta(seconds=30))
         yield WorkerOutput(output="gate released")
 
 
 class ContractModelFailure(Worker):
+    """Returns a bounded model failure, as a work role does when its request budget runs out."""
+
     type_slug: ClassVar[str] = "mag-contract-model-failure"
 
     async def execute(
         self, task: Task, *, context: WorkerContext
-    ) -> AsyncGenerator[WorkerStreamItem, None]:
+    ) -> AsyncGenerator[WorkerStreamItem]:
         yield WorkerOutput(
             output="Scripted worker request limit",
             success=False,
@@ -82,11 +115,13 @@ class ContractModelFailure(Worker):
 
 
 class CancellationContractWorker(Worker):
+    """Spawns a waiting child, then tries a late spawn that sample cancellation must stop."""
+
     type_slug: ClassVar[str] = "mag-cancellation-contract"
 
     async def execute(
         self, task: Task, *, context: WorkerContext
-    ) -> AsyncGenerator[WorkerStreamItem, None]:
+    ) -> AsyncGenerator[WorkerStreamItem]:
         child = Task(
             task_slug="cancellation-child",
             instance_key="first",
@@ -97,67 +132,54 @@ class CancellationContractWorker(Worker):
         await context.spawn_task(child)
         await context.steps.sleep("cancel-before-late-spawn", timedelta(seconds=45))
         await context.spawn_task(child.model_copy(update={"instance_key": "late"}))
-        yield WorkerOutput(output="Cancellation did not stop the manager")
+        raise RuntimeError("Sample cancellation did not stop the manager")
+        yield WorkerOutput(output="unreachable")
 
 
 def contract_state() -> EpisodeState:
+    """An ediscovery episode whose plan is replaced by the scripted contract tasks."""
     state = new_episode(EpisodeConfig(scenario="legal_litigation_ediscovery", seed=7))
     apply_timeline(state)
-    tasks = []
-    for index, name in enumerate(
-        [
-            "AI note",
-            "Human review",
-            "Human follow-up",
-            "Stakeholder approval",
-            "Remove me",
-            "Decompose me",
-        ]
-    ):
-        tasks.append(
-            PlannedTask(
-                id=uuid5(state.workflow.id, f"contract/{index}"),
-                name=name,
-                description="Write a brief one-sentence work product for a simulated project status update. Use the communication send_message tool to tell manager_agent what you produced.",
-                estimated_duration_hours=1 if index == 1 else None,
-            )
+    tasks = {
+        name: PlannedTask(
+            id=uuid5(state.workflow.id, f"contract/{index}"),
+            name=name,
+            description=WORK_DESCRIPTION,
+            estimated_duration_hours=1 if name == HUMAN_REVIEW else None,
         )
-    tasks[1].dependency_task_ids = [tasks[0].id]
-    tasks[2].dependency_task_ids = [tasks[1].id]
-    tasks[3].dependency_task_ids = [tasks[2].id]
-    state.workflow.tasks = {t.id: t for t in tasks}
+        for index, name in enumerate(CONTRACT_TASKS)
+    }
+    for prerequisite, dependent in zip(CHAIN, CHAIN[1:], strict=False):
+        tasks[dependent].dependency_task_ids = [tasks[prerequisite].id]
+    state.workflow.tasks = {t.id: t for t in tasks.values()}
     state.workflow.resources = {}
     for actor in state.actors.values():
-        if actor.agent_type == "human_mock":
-            # Disable this branch only in the contract so two fatigue ledger entries are guaranteed.
+        if isinstance(actor, HumanAgentConfig):
+            # Guarantee two fatigue-ledger entries for the same human.
             actor.misunderstanding_rate = 0
     return state
 
 
+def _first(state: EpisodeState, kind: type) -> str:
+    return next(k for k in state.active_actors if isinstance(state.actors[k], kind))
+
+
 class MAGContractWorker(Worker):
+    """Runs the scripted contract as the manager and emits a receipt of named checks."""
+
     type_slug: ClassVar[str] = "mag-native-contract"
 
     async def execute(
         self, task: Task, *, context: WorkerContext
-    ) -> AsyncGenerator[WorkerStreamItem, None]:
+    ) -> AsyncGenerator[WorkerStreamItem]:
         async def initialize() -> EpisodeState:
             return contract_state()
 
         state = await context.run_step("contract-initialize", initialize, output_type=EpisodeState)
-        names = [
-            "AI note",
-            "Human review",
-            "Human follow-up",
-            "Stakeholder approval",
-            "Remove me",
-            "Decompose me",
-        ]
-        plans = [next(t for t in state.workflow.tasks.values() if t.name == name) for name in names]
-        ai = next(k for k in state.active_actors if state.actors[k].agent_type == "ai")
-        human = next(k for k in state.active_actors if state.actors[k].agent_type == "human_mock")
-        stakeholder = next(
-            k for k in state.active_actors if state.actors[k].agent_type == "stakeholder"
-        )
+        plans = {t.name: t for t in state.workflow.tasks.values()}
+        ai = _first(state, AIAgentConfig)
+        human = _first(state, HumanAgentConfig)
+        stakeholder = _first(state, StakeholderConfig)
         gate = await context.spawn_task(
             Task(
                 task_slug="mag-contract-gate",
@@ -167,13 +189,17 @@ class MAGContractWorker(Worker):
                 sandbox=E2BSandbox(timeout_seconds=600),
             )
         )
-        state.native_dependencies[plans[0].id] = [gate.task_id]
-        state.native_dependencies[plans[4].id] = [gate.task_id]
-        for planned, actor in zip(plans[:5], [ai, human, human, stakeholder, ai], strict=True):
+        state.native_dependencies[plans[AI_NOTE].id] = [gate.task_id]
+        state.native_dependencies[plans[REMOVED].id] = [gate.task_id]
+        assignees = {AI_NOTE: ai, HUMAN_REVIEW: human, HUMAN_FOLLOW_UP: human}
+        assignees |= {APPROVAL: stakeholder, REMOVED: ai}
+        for name, actor in assignees.items():
             await assign(
                 state,
                 AssignTaskAction(
-                    reasoning="Scripted native contract", task_id=str(planned.id), agent_id=actor
+                    reasoning="Scripted native contract",
+                    task_id=str(plans[name].id),
+                    agent_id=actor,
                 ),
                 context,
                 self.model,
@@ -182,8 +208,8 @@ class MAGContractWorker(Worker):
             state,
             RefineTaskAction(
                 reasoning="Prove pending Task payload replacement",
-                task_id=plans[1].id,
-                new_description=plans[1].description
+                task_id=plans[HUMAN_REVIEW].id,
+                new_description=plans[HUMAN_REVIEW].description
                 + " Include the exact word VERIFIED in the work product.",
                 new_name=None,
                 new_estimated_duration=None,
@@ -197,7 +223,7 @@ class MAGContractWorker(Worker):
             state,
             AssignTaskAction(
                 reasoning="Prove pending reassignment uses native Task replacement",
-                task_id=str(plans[4].id),
+                task_id=str(plans[REMOVED].id),
                 agent_id=human,
             ),
             context,
@@ -205,21 +231,22 @@ class MAGContractWorker(Worker):
         )
         await remove_work(
             state,
-            RemoveTaskAction(reasoning="Prove cancellation persists", task_id=plans[4].id),
+            RemoveTaskAction(reasoning="Prove cancellation persists", task_id=plans[REMOVED].id),
             context,
-            self.model,
         )
         await save_message(
             state,
             context,
-            "manager_agent",
+            MANAGER_ACTOR_ID,
             human,
             "Keep the two work products distinct and concise.",
             "contract-manager-message",
         )
         for chunk in await decompose_work(
             state,
-            DecomposeTaskAction(reasoning="Prove model decomposition", task_id=plans[5].id),
+            DecomposeTaskAction(
+                reasoning="Prove model decomposition", task_id=plans[DECOMPOSED].id
+            ),
             context,
             self.model,
         ):
@@ -265,39 +292,41 @@ class MAGContractWorker(Worker):
             return await project_native_state(state, context)
 
         state = await context.run_step("contract-final", observe, output_type=EpisodeState)
-        completions = [
-            await context.wait_for_task(state.bindings[p.id], timeout_seconds=0) for p in plans[:5]
-        ]
-        if any(c.status != "completed" or c.output is None for c in completions[:4]):
+        completions = {
+            name: await context.wait_for_task(state.bindings[plans[name].id], timeout_seconds=0)
+            for name in assignees
+        }
+        chain = [completions[name] for name in CHAIN]
+        if any(c.status != "completed" or c.output is None for c in chain):
             raise RuntimeError("A required contract role failed")
-        first = cast(WorkerOutput, completions[1].output).metadata
-        second = cast(WorkerOutput, completions[2].output).metadata
+        review = completions[HUMAN_REVIEW]
+        first = cast(WorkerOutput, review.output).metadata
+        second = cast(WorkerOutput, completions[HUMAN_FOLLOW_UP].output).metadata
         checks = {
-            "native_roles_completed": all(c.status == "completed" for c in completions[:4]),
+            "native_roles_completed": all(c.status == "completed" for c in chain),
             "dependency_order": all(
-                cast(datetime, completions[i].completed_at)
-                <= cast(datetime, completions[i + 1].started_at)
-                for i in range(3)
+                cast(datetime, before.completed_at) <= cast(datetime, after.started_at)
+                for before, after in zip(chain, chain[1:], strict=False)
             ),
             "fatigue_ledger": second["prior_hours"] == first["accounted_hours"]
             and second["fatigue"] > 0
-            and str(completions[1].execution_id) in second["prior_attempt_ids"],
-            "pending_refinement": "VERIFIED" in cast(WorkerOutput, completions[1].output).output,
-            "cancellation": completions[4].status == "cancelled",
+            and str(review.execution_id) in second["prior_attempt_ids"],
+            "pending_refinement": "VERIFIED" in cast(WorkerOutput, review.output).output,
+            "cancellation": completions[REMOVED].status == "cancelled",
             "bounded_model_failure": failed_result.status == "failed"
             and failed_result.output is not None
             and not failed_result.output.success
-            and state.workflow.tasks[failed_plan.id].status.value == "failed"
+            and state.workflow.tasks[failed_plan.id].status == TaskStatus.FAILED
             and not state.infrastructure_errors,
             "failed_prerequisite_does_not_execute": (await blocked.wait(timeout_seconds=0)).status
             == "cancelled",
-            "decomposition": len(state.workflow.tasks[plans[5].id].subtasks) >= 3,
+            "decomposition": len(state.workflow.tasks[plans[DECOMPOSED].id].subtasks) >= 3,
             "manager_message": any(
-                m.sender_id == "manager_agent" and m.receiver_id == human
+                m.sender_id == MANAGER_ACTOR_ID and m.receiver_id == human
                 for m in state.workflow.messages
             ),
             "role_message": any(
-                m.sender_id in {ai, human, stakeholder} and m.receiver_id == "manager_agent"
+                m.sender_id in {ai, human, stakeholder} and m.receiver_id == MANAGER_ACTOR_ID
                 for m in state.workflow.messages
             ),
         }
@@ -305,7 +334,7 @@ class MAGContractWorker(Worker):
             "checks": checks,
             "snapshot_hash": snapshot_hash(state),
             "snapshot": state.model_dump(mode="json"),
-            "completions": [c.model_dump(mode="json") for c in completions],
+            "completions": [c.model_dump(mode="json") for c in completions.values()],
         }
 
         async def retain_receipt() -> RootModel[dict]:
@@ -320,6 +349,8 @@ class MAGContractWorker(Worker):
 
 
 class MAGContractCriterion(Criterion):
+    """Passes when every contract check held and the stored receipt matches the output."""
+
     type_slug: ClassVar[str] = "mag-native-contract"
 
     async def evaluate(self, context: CriterionContext) -> CriterionOutcome:

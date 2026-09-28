@@ -26,10 +26,11 @@ from ergon_core.core.application.samples.materialization import materialize_samp
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord
-from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
+
+from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
 
 
 class _EmptyPayload(BaseModel):

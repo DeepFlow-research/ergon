@@ -1,15 +1,16 @@
-from ergon_core.core.application.runtime import status as graph_status
-from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
-from ergon_core.core.application.runtime import execution as task_execution_service
-from ergon_core.core.application.runtime.lifecycle import on_task_completed_or_failed
-from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
-from ergon_core.core.application.runtime import service as workflow_service
-from ergon_core.core.application.runtime.orchestration import PropagationResult
-from ergon_core.core.application.runtime import propagation as workflow_propagation_service
-from sqlalchemy.pool import StaticPool
-from sqlmodel import SQLModel, Session, create_engine
 from uuid import uuid4
+
 import pytest
+from ergon_core.core.application.runtime import execution as task_execution_service
+from ergon_core.core.application.runtime import propagation as workflow_propagation_service
+from ergon_core.core.application.runtime import service as workflow_service
+from ergon_core.core.application.runtime import status as graph_status
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime.lifecycle import on_task_completed_or_failed
+from ergon_core.core.application.runtime.orchestration import PropagationResult
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine
 
 
 def _source(module: object) -> str:

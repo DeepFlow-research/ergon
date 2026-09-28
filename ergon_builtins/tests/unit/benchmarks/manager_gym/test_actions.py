@@ -25,11 +25,10 @@ from ergon_core.core.application.runtime import task_inspection as inspection_mo
 from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
+from ergon_core.test_support.runtime_harness import SessionContext
 from pydantic_ai.exceptions import UnexpectedModelBehavior
 from sqlmodel import Session
 
-from ergon_core.tests.unit.runtime.test_manager_gym_preport_proof import preport
-from ergon_core.tests.unit.runtime.test_spawn_dynamic_task import _SessionContext
 from tests.fixtures.mag_contract import contract_state
 
 ACTIONS = [
@@ -64,9 +63,9 @@ def test_assignment_does_not_expose_unrelated_workflow_resources():
 
 
 @pytest.fixture
-def runtime(preport, monkeypatch):
-    session, sample_id, root, service = preport
-    monkeypatch.setattr(inspection_module, "get_session", lambda: _SessionContext(session))
+def runtime(graph_runtime, monkeypatch):
+    session, sample_id, root, service = graph_runtime
+    monkeypatch.setattr(inspection_module, "get_session", lambda: SessionContext(session))
     monkeypatch.setattr(communication_module, "get_session", lambda: Session(session.get_bind()))
     monkeypatch.setattr(
         communication_module,
@@ -81,7 +80,7 @@ def runtime(preport, monkeypatch):
         task_mgmt=service,
         task_inspect=TaskInspectionService(),
         resource_service=SampleResourceReadService(),
-        session_factory=lambda: _SessionContext(session),
+        session_factory=lambda: SessionContext(session),
     )
     return contract_state(), context
 

@@ -5,58 +5,56 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import inngest
-from inngest.experimental import mocked
 import pytest
-from sqlmodel import select
-
 from ergon_core.api.worker.results import WorkerOutput
 from ergon_core.core.application.context.service import ContextEventService, ContextReplayMismatch
-from ergon_core.core.application.runtime import task_execution as execution_module
 from ergon_core.core.application.runtime import sample_lifecycle as lifecycle_module
+from ergon_core.core.application.runtime import task_execution as execution_module
 from ergon_core.core.application.runtime.orchestration import (
-    PrepareTaskExecutionCommand,
-    FinalizeTaskExecutionCommand,
     FailTaskExecutionCommand,
+    FinalizeTaskExecutionCommand,
+    PrepareTaskExecutionCommand,
+)
+from ergon_core.core.application.runtime.task_errors import (
+    TaskAlreadyTerminalError,
+    TaskRunningError,
 )
 from ergon_core.core.application.runtime.task_execution import TaskExecutionService
-from ergon_core.core.application.runtime.task_errors import (
-    TaskRunningError,
-    TaskAlreadyTerminalError,
-)
 from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
 from ergon_core.core.application.runtime.task_management import TaskManagementService
 from ergon_core.core.application.runtime.task_models import RefineTaskCommand
-from ergon_core.core.jobs.task.worker_execute.job import _StepAwareTaskManagementService
-from ergon_core.core.persistence.telemetry.models import (
-    SampleTaskAttempt,
-    SampleRecord,
-    SandboxEvent,
-)
-from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.jobs.sample.cleanup import job as cleanup_module
 from ergon_core.core.jobs.task.cancel_orphans import job as orphan_module
 from ergon_core.core.jobs.task.propagate import job as propagation_module
 from ergon_core.core.jobs.task.propagate.contract import TaskFailedEvent
+from ergon_core.core.jobs.task.worker_execute.job import _StepAwareTaskManagementService
 from ergon_core.core.persistence.context.models import SampleContextEvent
+from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.telemetry.models import (
+    SampleRecord,
+    SampleTaskAttempt,
+    SandboxEvent,
+)
 from ergon_core.core.shared.context_parts import AssistantTextPart, ContextPartChunk
-from ergon_core.tests.unit.runtime.test_manager_gym_preport_proof import preport, child, node
-from ergon_core.tests.unit.runtime.test_spawn_dynamic_task import _SessionContext, _make_task
+from ergon_core.test_support.runtime_harness import SessionContext, make_task
+from inngest.experimental import mocked
+from sqlmodel import select
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("running_child", [False, True])
 async def test_failure_before_descendant_blocking_rechecks_workflow(
-    preport, monkeypatch, running_child
+    graph_runtime, monkeypatch, running_child
 ):
-    session, sample_id, parent, _ = preport
-    pending = await child(preport, "pending")
+    session, sample_id, parent, _ = graph_runtime
+    pending = await graph_runtime.spawn("pending")
     if running_child:
-        running = await child(preport, "running")
-        node(preport, running.task_id).status = "running"
+        running = await graph_runtime.spawn("running")
+        graph_runtime.node(running.task_id).status = "running"
     parent.status = "failed"
     session.commit()
     for module in (lifecycle_module, orphan_module):
-        monkeypatch.setattr(module, "get_session", lambda: _SessionContext(session))
+        monkeypatch.setattr(module, "get_session", lambda: SessionContext(session))
     send = AsyncMock()
     monkeypatch.setattr(propagation_module, "send_job_events", send)
     payload = TaskFailedEvent(
@@ -75,9 +73,9 @@ async def test_failure_before_descendant_blocking_rechecks_workflow(
 
     ctx = SimpleNamespace(step=SimpleNamespace(run=run_step))
     assert await orphan_module.run_block_descendants_on_failed_job(ctx, payload) == 1
-    assert node(preport, pending.task_id).status == "blocked"
+    assert graph_runtime.node(pending.task_id).status == "blocked"
     if running_child:
-        assert node(preport, running.task_id).status == "running"
+        assert graph_runtime.node(running.task_id).status == "running"
         send.assert_awaited_once_with([])
     else:
         events = send.await_args.args[0]
@@ -87,10 +85,10 @@ async def test_failure_before_descendant_blocking_rechecks_workflow(
 
 
 @pytest.mark.asyncio
-async def test_duplicate_ready_claim_creates_one_attempt(preport, monkeypatch):
-    session, sample_id, _, _ = preport
-    handle = await child(preport, "claimed-once")
-    monkeypatch.setattr(execution_module, "get_session", lambda: _SessionContext(session))
+async def test_duplicate_ready_claim_creates_one_attempt(graph_runtime, monkeypatch):
+    session, sample_id, _, _ = graph_runtime
+    handle = await graph_runtime.spawn("claimed-once")
+    monkeypatch.setattr(execution_module, "get_session", lambda: SessionContext(session))
     monkeypatch.setattr(execution_module, "_emit_task_status", AsyncMock())
     command = PrepareTaskExecutionCommand(sample_id=sample_id, task_id=handle.task_id)
     first, second = (
@@ -103,25 +101,25 @@ async def test_duplicate_ready_claim_creates_one_attempt(preport, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_cancelled_parent_cannot_spawn_after_its_cascade(preport):
-    session, _, parent, _ = preport
+async def test_cancelled_parent_cannot_spawn_after_its_cascade(graph_runtime):
+    session, _, parent, _ = graph_runtime
     parent.status = "cancelled"
     session.commit()
     with pytest.raises(TaskAlreadyTerminalError):
-        await child(preport, "late-spawn")
+        await graph_runtime.spawn("late-spawn")
     assert len(session.exec(select(SampleGraphNode)).all()) == 1
 
 
 @pytest.mark.asyncio
-async def test_cancelled_sample_rejects_late_spawns_and_ready_events(preport, monkeypatch):
-    session, sample_id, _, _ = preport
-    pending = await child(preport, "queued-before-cancel")
+async def test_cancelled_sample_rejects_late_spawns_and_ready_events(graph_runtime, monkeypatch):
+    session, sample_id, _, _ = graph_runtime
+    pending = await graph_runtime.spawn("queued-before-cancel")
     sample = session.get(SampleRecord, sample_id)
     sample.status = "cancelled"
     session.commit()
     with pytest.raises(ValueError, match="terminal sample"):
-        await child(preport, "late-spawn")
-    monkeypatch.setattr(execution_module, "get_session", lambda: _SessionContext(session))
+        await graph_runtime.spawn("late-spawn")
+    monkeypatch.setattr(execution_module, "get_session", lambda: SessionContext(session))
     claim = await TaskExecutionService().prepare(
         PrepareTaskExecutionCommand(sample_id=sample_id, task_id=pending.task_id)
     )
@@ -130,14 +128,16 @@ async def test_cancelled_sample_rejects_late_spawns_and_ready_events(preport, mo
 
 
 @pytest.mark.asyncio
-async def test_late_success_or_failure_cannot_overwrite_cancelled_attempt(preport, monkeypatch):
-    session, sample_id, _, _ = preport
-    pending = await child(preport, "cancel-wins")
+async def test_late_success_or_failure_cannot_overwrite_cancelled_attempt(
+    graph_runtime, monkeypatch
+):
+    session, sample_id, _, _ = graph_runtime
+    pending = await graph_runtime.spawn("cancel-wins")
     attempt = SampleTaskAttempt(sample_id=sample_id, task_id=pending.task_id, status="cancelled")
     session.add(attempt)
-    node(preport, pending.task_id).status = "cancelled"
+    graph_runtime.node(pending.task_id).status = "cancelled"
     session.commit()
-    monkeypatch.setattr(execution_module, "get_session", lambda: _SessionContext(session))
+    monkeypatch.setattr(execution_module, "get_session", lambda: SessionContext(session))
     emit = AsyncMock()
     monkeypatch.setattr(execution_module, "_emit_task_status", emit)
     service = TaskExecutionService()
@@ -150,15 +150,19 @@ async def test_late_success_or_failure_cannot_overwrite_cancelled_attempt(prepor
             error_message="Late provider result after cancellation",
         )
     )
-    assert attempt.status == "cancelled" and node(preport, pending.task_id).status == "cancelled"
+    assert (
+        attempt.status == "cancelled" and graph_runtime.node(pending.task_id).status == "cancelled"
+    )
     emit.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_sample_cancel_closes_every_attempt_and_unattached_sandbox(preport, monkeypatch):
-    session, sample_id, parent, _ = preport
-    running = await child(preport, "running")
-    node(preport, running.task_id).status = "running"
+async def test_sample_cancel_closes_every_attempt_and_unattached_sandbox(
+    graph_runtime, monkeypatch
+):
+    session, sample_id, parent, _ = graph_runtime
+    running = await graph_runtime.spawn("running")
+    graph_runtime.node(running.task_id).status = "running"
     for task_id, sandbox_id in ((parent.task_id, "root-box"), (running.task_id, "child-box")):
         session.add(
             SampleTaskAttempt(
@@ -184,12 +188,12 @@ async def test_sample_cancel_closes_every_attempt_and_unattached_sandbox(preport
 
 
 @pytest.mark.asyncio
-async def test_pending_replacement_is_atomic_on_invalid_dependency(preport):
-    session, sample_id, _, service = preport
-    a = await child(preport, "a")
-    b = await child(preport, "b", deps=(a.task_id,))
-    replacement = _make_task().model_copy(update={"task_slug": "b", "description": "new"})
-    before = node(preport, b.task_id).task_json
+async def test_pending_replacement_is_atomic_on_invalid_dependency(graph_runtime):
+    session, sample_id, _, service = graph_runtime
+    a = await graph_runtime.spawn("a")
+    b = await graph_runtime.spawn("b", deps=(a.task_id,))
+    replacement = make_task().model_copy(update={"task_slug": "b", "description": "new"})
+    before = graph_runtime.node(b.task_id).task_json
     with pytest.raises(Exception, match="missing node"):
         await service.refine_task(
             session,
@@ -203,7 +207,7 @@ async def test_pending_replacement_is_atomic_on_invalid_dependency(preport):
         )
     # Even a caller retaining/committing its session cannot publish a partial replacement.
     session.commit()
-    assert node(preport, b.task_id).task_json == before
+    assert graph_runtime.node(b.task_id).task_json == before
     assert [
         e.source_task_id
         for e in service._graph_repo.get_incoming_edges(
@@ -212,8 +216,8 @@ async def test_pending_replacement_is_atomic_on_invalid_dependency(preport):
     ] == [a.task_id]
 
 
-def test_sdk_replays_a_rejected_mutation_without_changing_the_error(preport, monkeypatch):
-    session, sample_id, parent, _ = preport
+def test_sdk_replays_a_rejected_mutation_without_changing_the_error(graph_runtime, monkeypatch):
+    session, sample_id, parent, _ = graph_runtime
     calls = []
 
     async def reject(self, session, command):
@@ -245,9 +249,9 @@ def test_sdk_replays_a_rejected_mutation_without_changing_the_error(preport, mon
 
 
 @pytest.mark.asyncio
-async def test_full_completion_and_context_replay(preport):
-    session, sample_id, _, _ = preport
-    handle = await child(preport, "full-result")
+async def test_full_completion_and_context_replay(graph_runtime):
+    session, sample_id, _, _ = graph_runtime
+    handle = await graph_runtime.spawn("full-result")
     output = WorkerOutput(output="durable " * 1000, metadata={"actor_key": "alice", "hours": 2})
     attempt = SampleTaskAttempt(
         sample_id=sample_id,
@@ -256,7 +260,7 @@ async def test_full_completion_and_context_replay(preport):
         worker_output_json=output.model_dump(mode="json"),
     )
     session.add(attempt)
-    node(preport, handle.task_id).status = "completed"
+    graph_runtime.node(handle.task_id).status = "completed"
     session.commit()
     assert (
         TaskInspectionService()

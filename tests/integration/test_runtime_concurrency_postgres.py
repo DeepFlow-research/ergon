@@ -1,34 +1,35 @@
-"""Real PostgreSQL serialization contracts required by concurrent native agents."""
+"""PostgreSQL serialisation guarantees that concurrent agents in one sample rely on.
 
-from pathlib import Path
-import runpy
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
-from sqlalchemy import text, inspect
+Message sequencing and idempotency, the per-sample graph lock, and the message
+migrations, checked against a real PostgreSQL database.
+"""
 
 import asyncio
+import runpy
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from threading import Barrier
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import event
-from sqlmodel import select
-
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from ergon_core.core.application.communication import service as communication_module
 from ergon_core.core.application.communication.models import CreateMessageRequest
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from ergon_core.core.persistence.shared.db import get_engine, get_session
 from ergon_core.core.persistence.telemetry.models import SampleRecord, ThreadMessage
+from sqlalchemy import event, inspect, text
+from sqlmodel import select
 
 
 @pytest.fixture
 def sample(monkeypatch):
     assert get_engine().dialect.name == "postgresql", "This contract requires real PostgreSQL"
     row = SampleRecord(
-        benchmark_type="mag-postgres-contract",
+        benchmark_type="runtime-postgres-contract",
         instance_key=str(uuid4()),
         worker_team_json={},
         status="completed",
@@ -130,26 +131,27 @@ async def test_graph_lock_allows_evaluation_summary_writes(sample):
                 evaluation_session.add(row)
                 evaluation_session.commit()
 
-        # The old sample-row graph lock blocks this ordinary evaluator write,
-        # freezing the API when both run on the same async event loop.
+        # The graph lock must not lock the sample row: an evaluator writing the
+        # sample summary on the same event loop would otherwise block the API.
         await asyncio.to_thread(persist_summary)
 
 
 def test_historical_duplicate_messages_migrate_without_loss():
-
-    schema = "mag_migration_" + uuid4().hex
+    schema = "message_migration_" + uuid4().hex
     root = Path(__file__).resolve().parents[2]
     with get_engine().connect() as connection:
         connection.execute(text(f"CREATE SCHEMA {schema}"))
         connection.execute(text(f"SET search_path TO {schema}"))
         connection.execute(
             text(
-                "CREATE TABLE thread_messages (id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, sequence_num INTEGER NOT NULL, created_at TIMESTAMP NOT NULL)"
+                "CREATE TABLE thread_messages (id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, "
+                "sequence_num INTEGER NOT NULL, created_at TIMESTAMP NOT NULL)"
             )
         )
         connection.execute(
             text(
-                "INSERT INTO thread_messages VALUES ('first','thread',1,'2026-01-01'),('second','thread',1,'2026-01-02'),('third','thread',2,'2026-01-03')"
+                "INSERT INTO thread_messages VALUES ('first','thread',1,'2026-01-01'),"
+                "('second','thread',1,'2026-01-02'),('third','thread',2,'2026-01-03')"
             )
         )
         try:

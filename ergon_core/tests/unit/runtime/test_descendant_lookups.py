@@ -3,13 +3,12 @@
 from uuid import UUID, uuid4
 
 import pytest
-from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.application.runtime import inspection as inspection_module
 from ergon_core.core.application.runtime.graph_traversal import descendants
 from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
+from ergon_core.core.persistence.graph.models import SampleGraphNode
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
-
 
 # ---------------------------------------------------------------------------
 # Helpers
