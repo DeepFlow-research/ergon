@@ -1,225 +1,92 @@
-# Native Manager Agent Gym
+# Manager Agent Gym
 
-One sample is one manager episode. The manager uses native task spawning,
-dependencies, pending edits, messaging and evaluator jobs. AI, simulated human
-and stakeholder work each run as normal Ergon tasks with their own E2B sandbox.
-The Linux VM hosts Ergon's ordinary API, PostgreSQL, Inngest and dashboard.
-Inference uses the existing training gateway; it does not run in E2B.
+Run the 20 scenarios of [Manager Agent Gym](https://github.com/DeepFlow-research/manager_agent_gym)
+(MAG) on Ergon. In each episode an LLM manager decomposes a project, assigns work to simulated
+AI and human workers, answers a stakeholder whose priorities shift, and is scored by MAG's
+rubrics on the finished workflow. Scheduling, messaging, sandboxes and grading are native
+Ergon; the design is described in
+[`docs/architecture/09_manager_gym.md`](../../docs/architecture/09_manager_gym.md).
 
-## Start on a Linux VM
+## Prerequisites
 
-The acceptance deployment uses Ubuntu 24.04, Python 3.13, Docker/Compose,
-4 vCPU, 16 GiB RAM and an encrypted 100 GiB disk in the training account.
-Use an SSH security group restricted to your address. Keep service ports
-private; tunnel dashboard port 3001 if needed. No GPU or AWS instance role is
-required. Provision through your existing VM workflow and record its resource
-IDs so that cleanup only removes this deployment.
+- The Ergon stack running (`ergon start`, then `ergon doctor`).
+- `E2B_API_KEY` set: every task, including the manager, runs in an E2B sandbox.
+- Credentials for your model provider, for example `OPENAI_API_KEY`, or
+  `ERGON_OPENAI_COMPATIBLE_API_KEY` for a hosted OpenAI-compatible endpoint.
 
-Populate an ignored, mode-600 `.env` using configured secret storage:
+One model target drives the manager, every worker and the LLM judge. Pass it with `--model` or
+set `ERGON_MAG_MODEL`. Targets use Ergon's usual syntax, for example `openai:gpt-4o` or
+`openai-compatible:http://localhost:8000#Qwen/Qwen3-32B` for a local vLLM server.
 
-```dotenv
-E2B_API_KEY=<configured E2B credential>
-ERGON_OPENAI_COMPATIBLE_API_KEY=<configured training gateway credential>
-COMPOSE_PROJECT_NAME=ergon-mag-acceptance
-COMPOSE_FILE=docker-compose.yml:examples/manager_gym/compose.acceptance.yml
-ERGON_API_IMAGE=ergon-mag-native:acceptance
-```
+## Check the model
 
-Then run from the repository root:
-
-```bash
-uv sync --python 3.13 --frozen --no-dev --package ergon-cli
-uv run --no-sync ergon start
-uv run --no-sync ergon doctor
-```
-
-The override disables API hot reload and runs the dashboard's built production
-server. Its unprivileged container therefore does not need to rewrite host-owned
-TypeScript declarations during development startup. Keep executable source fixed while
-samples are running. The Docker image installs from `uv.lock`; secrets, local
-virtual environments and data are excluded from its build context.
-Keep `COMPOSE_FILE` in `.env` so later SSH sessions and container recreation use
-the same acceptance settings.
-
-For an existing deployment, update the dashboard before or together with the
-backend. Evaluation notifications carry sample/task IDs; the dashboard reloads
-the full saved result through its existing REST reader, avoiding Inngest's event
-size limit. The updated dashboard also accepts older embedded evaluation events.
-Install from the committed dashboard lockfile so its Inngest SDK is compatible
-with the engine. Keep API source fixed until all admitted samples finish.
-
-## Run and inspect
+`preflight.py` makes one small request per role output schema, checks a tool round trip, and
+composes every scenario offline. Run it before spending on a full episode:
 
 ```bash
 docker compose exec -T api python examples/manager_gym/preflight.py \
-  --output /app/data/mag-acceptance/preflight.json
-docker compose exec -T api python examples/manager_gym/cancellation.py \
-  --output /app/data/mag-acceptance
-docker compose exec -T api python examples/manager_gym/acceptance.py \
-  --stage contract --output /app/data/mag-acceptance
-docker compose exec -T api python examples/manager_gym/acceptance.py \
-  --stage pilot --output /app/data/mag-acceptance --timeout-seconds 14400
-docker compose exec -T api python examples/manager_gym/acceptance.py \
-  --stage catalog --output /app/data/mag-acceptance --timeout-seconds 36000
+  --model openai:gpt-4o --output /app/data/mag-preflight.json
 ```
 
-Preflight checks all seven role schemas and a required tool round trip.
-Run stages in this order. A nonzero exit requires inspecting the saved sample
-before continuing. The scripted contract proves dependency order, repeated
-human fatigue, pending refinement/reassignment, cancellation, live messaging,
-decomposition, E2B artifacts and grading. It is not a MAG quality score.
-The cancellation probe stops two running E2B attempts and waits past a delayed spawn to prove the manager cannot reopen work.
-A failed pilot or catalog sample stops further admissions, including an
-unaccounted native failure before its manager finishes; already-admitted samples finish and
-are exported. The four autonomous pilots precede the remaining catalog. Completed pilots
-are reused only under the same source digest, model, seed and limits.
-
-The runner writes `acceptance.json` and, for every terminal sample,
-`<sample-id>/records.json`, `context.jsonl.gz` and artifact blobs. It verifies
-the exact terminal criterion set, snapshot digest, named root report with matching
-bytes, independently recomputed utility and E2B sandbox closure. The scripted
-contract checkpoints the same bytes it publishes, proving that resource
-deduplication keeps the report visible. Resume the same command after interruption;
-do not relabel a failed sample as a pass. Use a new output folder after code or
-configuration changes and retain the failed run's evidence.
-
-For long remote runs, detach the existing acceptance command from the SSH
-connection and retain its log on the VM. After all four pilots pass:
-
-```bash
-docker compose exec -d api sh -c 'exec python -u examples/manager_gym/acceptance.py --stage catalog --output /app/data/mag-acceptance --timeout-seconds 36000 >> /app/data/mag-acceptance/catalog.log 2>&1'
-```
-
-Run only one acceptance driver per output directory. Before resuming an
-interrupted launcher, check whether its driver still runs and inspect the saved
-ledger. Losing an operator connection does not stop already-admitted native
-tasks. Keep the API container alive; the detached driver uses the existing
-submission API, and Ergon still owns task execution. Read `acceptance.json`
-for durable outcomes; a local copy of a remote log may lag or disconnect.
-
-For ordinary submissions without the acceptance harness:
+## Run
 
 ```bash
 docker compose exec -T api python examples/manager_gym/submit.py \
-  --scenario legal_litigation_ediscovery --seed 0 --max-decisions 50
-docker compose exec -T api python examples/manager_gym/submit.py \
-  --scenario icaap --manager-mode random
-docker compose exec -T api python examples/manager_gym/submit.py \
-  --scenario marketing_campaign --manager-mode assign_all
+  --model openai:gpt-4o --scenario icaap
 ```
 
-Use `--all` to submit all 20 scenario records together. Use the acceptance runner
-above for the two-concurrent-sample VM profile. `cot` is the default; `random` is
-RandomV2 (random action class followed by a model call), and `assign_all` makes
-one model-generated mapping, fills gaps with the source fallback, admits
-leaves in dependency order, then no-ops. Each uses the same native execution
-path. The default action union remains the 13 source actions; bulk assignment
-is specific to that baseline.
+The script prints the experiment name and sample IDs; follow progress in the dashboard. Useful
+options:
 
-Default model for **every role and judge**:
+| Option | Meaning |
+|---|---|
+| `--scenario NAME` | Scenario to run; repeat it to run several. Default `legal_litigation_ediscovery`. |
+| `--all` | Run all 20 scenarios. |
+| `--manager-mode` | `cot` (default), or upstream's `random` and `assign_all` baselines. |
+| `--max-decisions` | Manager decisions per episode (default 50). |
+| `--seed` | Seed for the simulated humans and baselines. |
+| `--thinking-token-budget` | Reasoning cap for thinking models served by vLLM. |
 
-```text
-openai-compatible:https://gateway.example.invalid/v1/models/qwen3-8-27b-28#qwen3-8-27b-28
-```
+`random` chooses a random action type and lets the model fill it in; `assign_all` makes one
+model-generated assignment of every task, then waits. All three policies share the same
+execution path.
 
-Only explicit internal training gateway targets are accepted by this profile.
-There is no OpenAI/OpenRouter/search fallback. Capture the serving image,
-weight location/revision if available and deployment configuration separately:
-a mutable endpoint name does not identify immutable model weights.
+## Scores
 
-## Interpretation and limits
+Each sample's evaluation reports MAG's utility: rubric scores grouped by stakeholder
+preference, normalised, and weighted by the final preference weights. Diagnostic rubrics are
+reported but excluded from utility. If grading or infrastructure fails, the evaluation is
+incomplete (a null score) rather than zero.
 
-`mag-native-v1` uses Ergon scheduling and normal completion visibility. Manager
-decision indices drive roster/preference changes and stakeholder replies;
-simulated labor hours do not delay native execution. Only authored task
-dependencies constrain work; actor capacity remains informational. A human
-derives fatigue from the completed PostgreSQL attempts visible at invocation
-start, so concurrent invocations may capture the same history. Running work cannot be
-reassigned; unclaimed work can. No MAG scheduler is embedded.
+Rubric version 2 (the default) fixes three upstream rubric bugs listed in
+[the vendored README](../../ergon_builtins/ergon_builtins/benchmarks/manager_gym/_vendor/mag/README.md);
+pass `rubric_version=1` to `MAGRubric` to reproduce upstream scoring.
 
-Model prompts retain source resource previews (300 characters for manager/judge, 200 for AI/human workers) and bounded manager message/action briefs. Worker message tools use source text previews: 100 characters for recent/task messages and 150 for conversations. Workers read their inbox through tools; a full inbox is not appended to task prompts. Native records, callable evaluation inputs and frozen artifacts retain full contents.
-
-The default 50 decisions cover indices 0–49. Seven scenarios contain later
-events, so this is an integration profile, not a complete timeline experiment
-or evidence of statistical equivalence to upstream. Increase `max_decisions`
-in a separately named experiment when studying those events.
-
-The configured E2B account permits a maximum sandbox lifetime of 3,600 seconds.
-The manager has a 2,400-second decision budget and a shared 600-second drain
-budget; final evaluation also needs time before sandbox expiry. A provider,
-deadline or grading failure makes the MAG evaluation incomplete with a null
-score. Bounded work-role request exhaustion or invalid model output is a native failed task and remains gradeable, matching MAG. Cancelled or model-failed prerequisites block their dependents; final drain cancels that blocked work through Ergon. Serial grading can
-exhaust the remaining lifetime on slow deployments; the acceptance result must
-expose that failure rather than silently reduce rubric coverage.
-
-Final responses use PydanticAI output tools with strict argument schemas.
-Ordinary communication tools stay enabled; the resolved inference profile
-records this choice. Resource drafts contain content fields; native code assigns
-resource IDs. Preflight checks a required tool round trip and all role
-schemas. Invalid or truncated responses still consume the bounded retry budget.
-
-Inference uses at most 32,768 output tokens and a 2,048-token thinking budget, 300 seconds per request,
-12 requests per structured operation and two validation retries. Manager,
-estimator, decomposer and judge operations have a 600-second outer limit.
-Work roles use native task cancellation and the manager's shared drain deadline
-instead of a second whole-work timer. Provider request timeouts still fail the
-execution; no transport failure is reclassified as a model outcome.
-Temperature is 0 for policy/AI/estimator/judge, 0.7 for
-human work and 1 for decomposition. Native attempts, successful model usage and transcripts are retained. Bounded worker-model failures also retain observed usage, validation feedback and transcripts, with `success=false` and typed `model_failure` metadata. Typed workflow checkpoints are ordinary native resource
-artifacts under `.checkpoints/`; Inngest records small verified references. Keep
-those artifacts with the database and blob volume during restarts and export
-them before VM deletion. They are runtime evidence, not task output reports. A provider exception before its checkpoint can lose
-that failed call's full transcript. Native errors retain available response usage,
-finish reasons and tool names; usage before a response may be unavailable. Zero
-recorded usage is not proof of zero requests. Existing task retries are recorded separately.
-
-The original-step-error proof uses a scripted failure and no model requests:
+To grade an exported snapshot again, for example with a different judge, submit it as a new
+sample linked to the original:
 
 ```bash
-python examples/manager_gym/step_error.py --output /app/data/mag-acceptance
+docker compose exec -T api python examples/manager_gym/reevaluate.py \
+  --model openai:gpt-4o --snapshot manager-gym-snapshot.json --source-sample-id <uuid>
 ```
 
-It requires the deployed native stack and E2B. Acceptance means one failed
-attempt retains its original exception type, message and traceback note through
-Inngest replay, and its sandbox is closed. This is a diagnostic contract proof,
-not a MAG score.
+## Limits
 
-The thinking cap was verified against the standing deployment after an
-exploratory worker exhausted its full output budget. It is a per-request
-sampling setting, as documented by [vLLM](https://docs.vllm.ai/en/v0.28.0/features/reasoning_outputs/#thinking-budget-control),
-and does not modify the shared deployment. The complete profile is saved in
-sample source metadata and the preflight receipt.
+- Fifty decisions cover timesteps 0–49; seven scenarios schedule later events that then do
+  not occur. Raise `--max-decisions` in a separately named experiment to study them.
+- An episode must finish within the manager's one-hour sandbox lifetime, including grading.
+- Model and sandbox costs are separate from the simulated labour cost the benchmark reports.
 
-To grade an exported snapshot again, run `reevaluate.py --snapshot <path>
---source-sample-id <uuid>` inside the API container. It submits a separate native
-sample linked to the original ID and snapshot hash. It rejects JSON that the
-current schema would rewrite; use the matching benchmark revision for older
-snapshots. Re-evaluation makes fresh judge calls and retains the new model/profile.
+## Citation
 
-Standing internal model capacity avoids a new external inference bill. The VM,
-storage and E2B still consume resources; actual monetary charges are unknown
-unless checked against account billing. Simulated wage/token costs are
-benchmark metrics, not cloud billing.
-
-## Export and cleanup
-
-Before deleting the VM, export the acceptance folder, native database and blob
-store. The latter contains the files referenced by persisted resource rows:
-
-```bash
-docker compose exec -T postgres pg_dump -U ergon -Fc ergon > data/mag-postgres.dump
-tar czf data/mag-blobs.tgz -C /tmp ergon-blob
+```bibtex
+@inproceedings{manager_agent_gym_2025,
+  title     = {Orchestrating Human-AI Teams: The Manager Agent as a Unifying Research Challenge},
+  author    = {Masters, Charlie and Vellanki, Advaith and Shangguan, Jiangbo and Kultys, Bart
+               and Moore, Alastair and Albrecht, Stefano V.},
+  booktitle = {Proceedings of the International Conference on Distributed Artificial
+               Intelligence (DAI 2025)},
+  year      = {2025},
+  url       = {https://arxiv.org/abs/2510.02557}
+}
 ```
-
-Copy `data/mag-acceptance`, the dump and blob archive to durable storage you
-control; verify their hashes and record the destination. Private model traces
-can contain scenario work products and belong with run evidence, not a public
-PR. Publish a curated receipt with sample IDs, checks, counts and provenance.
-Confirm all owned sample sandboxes are closed, run `ergon stop`, then remove
-only this VM and its dedicated security group/key. Leave standing model
-deployments untouched.
-
-Pilot admission stops as soon as a native failed task has no accounted work-model
-outcome, even if its manager is still draining. Already-admitted samples finish
-and retain their evidence. This gate is persisted in the acceptance ledger and
-a resumed failed gate cannot admit extra scenarios.

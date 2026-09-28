@@ -40,8 +40,7 @@ downward along parent->subtask links" invariant.
 
 ## Current behavior (as of 2026-04-17)
 
-**September 2026 native composition update:** evaluator failure policy is now
-explicit. `zero` preserves historical behavior; `incomplete` persists a null
+**Evaluator failure policy.** `zero` preserves historical behavior; `incomplete` persists a null
 normalized score plus failure metadata through jobs, storage, REST/events and
 dashboard selectors. MAG opts into incomplete: missing criteria, snapshot
 mismatch, exhausted judges, infrastructure errors or execution deadlines cannot

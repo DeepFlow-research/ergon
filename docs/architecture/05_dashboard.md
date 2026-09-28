@@ -193,11 +193,11 @@ references.
 
 ## 8. Follow-ups
 
-The MAG Linux acceptance overlay runs `pnpm start` with `NODE_ENV=production`
-after building the dashboard image. The normal development command writes
-TypeScript declarations and can fail against a Linux source bind mount owned by
-a different UID. Acceptance uses the compiled bundle with the image's existing
-unprivileged user; it does not make source files writable or run the server as root.
+The Manager Gym acceptance overlay (`tests/real_llm/manager_gym/compose.acceptance.yml`)
+runs `pnpm start` with `NODE_ENV=production` after building the dashboard image. The
+normal development command writes TypeScript declarations and can fail against a Linux
+source bind mount owned by a different UID; the compiled bundle runs as the image's
+unprivileged user without making source files writable or running the server as root.
 
 Known limitations tracked as bugs or RFCs:
 

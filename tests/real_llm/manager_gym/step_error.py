@@ -9,14 +9,14 @@ from uuid import uuid4
 from ergon_builtins.sandbox.e2b_sandbox import E2BSandbox
 from ergon_core.api import Environment, Experiment, Sample, Task
 
-from examples.manager_gym.acceptance import (
+from tests.fixtures.mag_contract import ContractStepFailure
+from tests.real_llm.manager_gym.acceptance import (
     closed_sandboxes,
     code_digest,
     export_evidence,
     inspect_sample,
     write_json,
 )
-from tests.fixtures.mag_contract import ContractStepFailure
 
 
 async def main() -> None:

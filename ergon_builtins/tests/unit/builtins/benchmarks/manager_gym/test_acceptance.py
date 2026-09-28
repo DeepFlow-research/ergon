@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from examples.manager_gym import acceptance
+from tests.real_llm.manager_gym import acceptance
 
 
 def test_frozen_checkpoint_does_not_substitute_for_named_report(monkeypatch):

@@ -123,8 +123,8 @@ commit while a graph operation awaits a notification. Commit/rollback releases
 the lock; SQLite keeps its existing transaction behavior.
 PostgreSQL Sessions use SQLAlchemy `NullPool`: the synchronous queue-pool checkout
 otherwise blocks the async event loop when lock waiters occupy its connections.
-PostgreSQL supplies the connection ceiling; the current acceptance runs two
-episodes concurrently. Higher concurrency requires async database Sessions or
+PostgreSQL supplies the connection ceiling, which has been exercised with two
+concurrent Manager Gym episodes. Higher concurrency requires async database Sessions or
 a measured database connection budget, not an unbounded runtime claim. A duplicate or stale ready event is skipped before
 creating an attempt when the task is no longer pending/ready or prerequisites
 are incomplete. Late-created dependents of already-completed work are
@@ -199,6 +199,6 @@ A brief index of where runtime functions live. The architectural claims above st
 | State-machine core | `runtime/execution/propagation.py` |
 | Services | `core/application/**` |
 
-## MAG cancellation evidence
+## Cancellation of invoked workers
 
 Invoked workers carry the same native sample/task cancellation matchers as task execution. Dynamic spawning rejects terminal parents or samples under the sample lock; task preparation rejects terminal samples. Late success/failure finalization cannot overwrite a cancelled attempt. Existing children may continue after successful parent completion.

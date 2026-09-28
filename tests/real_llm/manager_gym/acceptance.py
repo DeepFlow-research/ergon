@@ -62,7 +62,7 @@ def write_json(path: Path, value: object) -> None:
 
 
 def code_digest() -> str:
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[3]
     digest = sha256()
     paths = sorted(
         p
@@ -72,6 +72,7 @@ def code_digest() -> str:
             "ergon_builtins/ergon_builtins",
             "examples/manager_gym",
             "tests/fixtures",
+            "tests/real_llm/manager_gym",
         )
         for p in (root / directory).rglob("*.py")
     )
@@ -321,9 +322,18 @@ async def finish(sample_id: str, scenario: str, folder: Path) -> dict:
     }
 
 
-async def main() -> None:
+STAGES = ("contract", "pilot", "catalog")
+POLL_SECONDS = 5
+
+
+def stage_scenarios(stage: str) -> list[str]:
+    """Scenarios a stage runs: the scripted contract, four pilots, or the catalog."""
+    return {"contract": ["contract"], "pilot": list(PILOTS), "catalog": list(SCENARIOS)}[stage]
+
+
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", choices=["contract", "pilot", "catalog"], required=True)
+    parser.add_argument("--stage", choices=STAGES, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--max-decisions", type=int, default=50)
     parser.add_argument(
@@ -339,9 +349,11 @@ async def main() -> None:
     )
     parser.add_argument("--concurrency", type=int, choices=[1, 2], default=2)
     parser.add_argument("--timeout-seconds", type=int, default=5400)
-    args = parser.parse_args()
-    args.output.mkdir(parents=True, exist_ok=True)
-    ledger_path = args.output / "acceptance.json"
+    return parser.parse_args()
+
+
+def load_ledger(path: Path, args: argparse.Namespace) -> dict:
+    """Resume the ledger in ``path``, refusing one recorded under other settings."""
     configuration = {
         "code_digest": code_digest(),
         "model": args.model,
@@ -351,27 +363,43 @@ async def main() -> None:
         "benchmark_version": BENCHMARK_VERSION,
         "source_revision": SOURCE_REVISION,
     }
-    ledger: dict = (
-        json.loads(ledger_path.read_text())
-        if ledger_path.exists()
-        else {
+    if not path.exists():
+        return {
             "configuration": configuration,
             "machine": platform.platform(),
             "started_at": datetime.now(UTC).isoformat(),
             "samples": {},
         }
-    )
+    ledger = json.loads(path.read_text())
     if ledger["configuration"] != configuration:
         raise ValueError(
             "Output folder belongs to a different code/model/configuration; use a new folder"
         )
-    scenarios = (
-        ["contract"]
-        if args.stage == "contract"
-        else list(PILOTS)
-        if args.stage == "pilot"
-        else list(SCENARIOS)
-    )
+    return ledger
+
+
+async def collect_finished(
+    active: dict[str, str], ledger: dict, ledger_path: Path, folder: Path
+) -> None:
+    """Record every active sample that reached a terminal status."""
+    for scenario, sample_id in list(active.items()):
+        evidence = inspect_sample(sample_id)
+        if not execution_checks(evidence)["native_failures_accounted"]:
+            ledger["admission_failure"] = sample_id
+            write_json(ledger_path, ledger)
+        if evidence["sample"]["status"] in TERMINAL:
+            ledger["samples"][scenario] = await finish(sample_id, scenario, folder)
+            write_json(ledger_path, ledger)
+            print(json.dumps(ledger["samples"][scenario]), flush=True)
+            del active[scenario]
+
+
+async def main() -> None:
+    args = parse_args()
+    args.output.mkdir(parents=True, exist_ok=True)
+    ledger_path = args.output / "acceptance.json"
+    ledger = load_ledger(ledger_path, args)
+    scenarios = stage_scenarios(args.stage)
     pending = [s for s in scenarios if s not in ledger["samples"]]
     active = {
         s: r["sample_id"]
@@ -380,16 +408,8 @@ async def main() -> None:
     }
     deadline = monotonic() + args.timeout_seconds
     while pending or active:
-        for scenario, sample_id in list(active.items()):
-            evidence = inspect_sample(sample_id)
-            if not execution_checks(evidence)["native_failures_accounted"]:
-                ledger["admission_failure"] = sample_id
-                write_json(ledger_path, ledger)
-            if evidence["sample"]["status"] in TERMINAL:
-                ledger["samples"][scenario] = await finish(sample_id, scenario, args.output)
-                write_json(ledger_path, ledger)
-                print(json.dumps(ledger["samples"][scenario]), flush=True)
-                del active[scenario]
+        await collect_finished(active, ledger, ledger_path, args.output)
+        # Stop admitting new samples after any failure; admitted ones still drain.
         if ledger.get("admission_failure") or any(
             ledger["samples"].get(scenario, {}).get("accepted") is False for scenario in scenarios
         ):
@@ -406,7 +426,7 @@ async def main() -> None:
                 "Acceptance deadline; existing sample ids retained for inspection/resume"
             )
         if active:
-            await asyncio.sleep(5)
+            await asyncio.sleep(POLL_SECONDS)
     if not all(ledger["samples"].get(s, {}).get("accepted") for s in scenarios):
         raise SystemExit(1)
 

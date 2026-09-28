@@ -83,9 +83,9 @@ Native MAG workers write resources to their E2B task sandbox under
 episode JSON there. Existing resource publication stores bytes and hashes in
 normal `SampleResource` records/blob storage. Task output also contains typed
 resource metadata and the frozen snapshot hash, so downstream native tasks
-and criteria use the full persisted output. The VM's `/tmp/ergon-blob` is
-retained artifact storage; it is not the task sandbox. Acceptance exports both
-database evidence and blob bytes before deleting a temporary VM.
+and criteria use the full persisted output. The host blob store (`/tmp/ergon-blob`
+by default) is retained artifact storage, not the task sandbox; an export of a run
+needs both the database records and the blob bytes.
 
 - `WorkerOutput.artifacts` no longer exists on the public surface; the
   serializable worker result carries `output`, `success`, and `metadata`

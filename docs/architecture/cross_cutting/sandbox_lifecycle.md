@@ -55,8 +55,8 @@ owned by native terminal/cancellation cleanup. The MAG contract checks sandbox
 absence through E2B after the sample becomes terminal; it does not substitute
 a manual kill for autonomous cleanup evidence. All MAG executable tasks bind
 E2B, including the manager. Its many checkpointed decisions share that task's
-sandbox. The observed acceptance account permits at most 3,600 seconds, so
-decision, drain and evaluation time must fit the real sandbox lifetime.
+sandbox. That sandbox is created with a 3,600-second lifetime, so decision,
+drain and evaluation time must fit within it.
 
 1. **Sandbox lives until all criteria for the task have completed.** Teardown runs after `check_evaluators` finishes, NOT at task completion, NOT during `finalize_success`. Confirm by reading the teardown call at `check_evaluators.py:82`. This was a point of confusion in earlier drafts of this doc — the correction is that teardown follows criteria, not the other way around.
 2. **Sandbox timeout on creation MUST be at least `task_timeout + max_criterion_timeout`.** Criteria running against a timed-out sandbox is a data-loss bug: the criterion reconnects, the sandbox is dead, the score is lost. Pending enforcement in RFC 2026-04-17-sandbox-lifetime-covers-criteria. Today this is a convention — managers set a generous timeout by inspection, not by formula.

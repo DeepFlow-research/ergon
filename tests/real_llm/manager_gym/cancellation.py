@@ -10,14 +10,14 @@ from ergon_builtins.sandbox.e2b_sandbox import E2BSandbox
 from ergon_core.api import Environment, Experiment, Sample, Task
 from ergon_core.core.application.runtime.sample_records import cancel_sample
 
-from examples.manager_gym.acceptance import (
+from tests.fixtures.mag_contract import CancellationContractWorker
+from tests.real_llm.manager_gym.acceptance import (
     closed_sandboxes,
     code_digest,
     export_evidence,
     inspect_sample,
     write_json,
 )
-from tests.fixtures.mag_contract import CancellationContractWorker
 
 
 async def main() -> None:

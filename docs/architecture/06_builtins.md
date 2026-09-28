@@ -95,7 +95,7 @@ Environment class or alternate loader registry is required. The package owns
 manager/AI/human/stakeholder Workers, native communication tools and terminal
 rubric factories. Every task binds the existing `E2BSandbox`. See
 [the architecture](09_manager_gym.md) and
-[the runbook](../../examples/manager_gym/README.md).
+[how to run it](../../examples/manager_gym/README.md).
 
 At concept level, adding a benchmark means:
 

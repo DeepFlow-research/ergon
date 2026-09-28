@@ -8,3 +8,6 @@ Start with [`getting_started/`](getting_started/). Those examples are intentiona
 small, but they exercise the same object-bound APIs used by larger benchmarks:
 configure a benchmark object, bind workers and sandboxes, persist the definition,
 launch a sample, and inspect the resulting artifacts.
+
+[`manager_gym/`](manager_gym/) runs the Manager Agent Gym benchmark: an LLM manager
+coordinating simulated AI and human workers across 20 scenarios.
