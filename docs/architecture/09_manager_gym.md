@@ -114,8 +114,10 @@ benchmark version.
 
 Kept from upstream, including known quirks:
 
-- Scenario factories, team and preference timelines, actor formulas, prompts and rubric
-  definitions (hash-checked against an inventory taken at the pinned revision).
+- Scenario factories, team and preference timelines, actor formulas and rubric definitions
+  (hash-checked against an inventory taken at the pinned revision).
+- Manager, worker, estimator and judge prompts, input-resource listings, human execution notes
+  and communication tool replies, word for word (`prompts.py` marks each upstream template).
 - Terminal rubric selection: preference rubrics declared `ON_COMPLETION` plus every
   diagnostic. `BOTH` cadence is not expanded (no registered rubric uses it).
 - The misunderstanding branch reports simulated duration and cost but does not add to the
@@ -135,6 +137,9 @@ Deliberate differences in native execution (`mag-native-v1`):
 | Model errors in rubrics can become a score of 0 | Grading errors make the evaluation incomplete | An outage is not a policy failure. |
 | Free-text or JSON-mode final answers | Strict output tools with two validation retries | JSON mode can skip required tool calls; prompted JSON exhausted budgets on long outputs. |
 | Capacity fields are informational | Also informational | Enforcing capacity would change parallelism and fatigue interleaving. |
+| A failed human time estimate falls back to one hour | The work task fails | Estimator calls follow the strict model-failure rules in section 8. |
+| An AI worker's fallback resource holds the SDK's run result | It holds the model's raw answer | The SDK object does not exist natively. |
+| Stakeholder work runs upstream's stakeholder agent | A work role with the stakeholder's persona and current weights appended | Stakeholder replies between decisions stay scripted, as upstream. |
 
 Rubric versions (`MAGRubric(rubric_version=...)`, recorded in criterion metadata):
 

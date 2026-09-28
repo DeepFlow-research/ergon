@@ -34,13 +34,18 @@ from ergon_builtins.benchmarks.manager_gym.outputs import (
     ResourceDraft,
 )
 from ergon_builtins.benchmarks.manager_gym.prompts import (
+    FALLBACK_RESOURCE_DESCRIPTION,
     FALLBACK_RESOURCE_NAME,
+    HUMAN_ESTIMATOR_PROMPT,
     HUMAN_ESTIMATOR_SYSTEM_PROMPT,
+    HUMAN_EXECUTION_NOTES,
     HUMAN_MISUNDERSTANDING_EXECUTION_NOTES,
-    HUMAN_MISUNDERSTANDING_NOTE,
+    HUMAN_MISUNDERSTOOD_TASK_PROMPT,
+    HUMAN_NO_RESOURCES,
+    HUMAN_SHARP_NOTE,
+    HUMAN_TASK_PROMPT,
     HUMAN_TIRED_NOTE,
-    HUMAN_WORK_STYLE_NOTE,
-    NO_INPUT_RESOURCES,
+    INPUT_RESOURCE_LINE,
     STAKEHOLDER_WORK_PERSONA,
 )
 from ergon_builtins.benchmarks.manager_gym.state import Actor, EpisodeConfig
@@ -48,6 +53,7 @@ from ergon_builtins.benchmarks.manager_gym.upstream import (
     AI_AGENT_TASK_TEMPLATE,
     HUMAN_SIMULATION_INSTRUCTIONS_TEMPLATE,
     HUMAN_TASK_ASSIGNMENT_TEMPLATE,
+    NO_RESOURCES_MESSAGE,
     AgentConfig,
     AIAgentConfig,
     HumanAgentConfig,
@@ -63,6 +69,7 @@ SPEED_STDDEV = 0.2
 MIN_SPEED = 0.1
 MIN_ESTIMATED_HOURS = 0.1
 TIRED_BELOW_QUALITY = 0.7
+SHARP_ABOVE_QUALITY = 0.9
 
 # Upstream parity: characters of each input resource shown to a worker.
 INPUT_RESOURCE_PREVIEW_CHARS = 200
@@ -179,16 +186,24 @@ async def read_inputs(payload: WorkPayload, context: WorkerContext) -> WorkInput
     )
 
 
-def format_input_resources(resources: Sequence[Resource]) -> str:
-    """Render input resources for a worker prompt, previewing long contents."""
-    return (
-        "\n\n".join(
-            f"{r.name}: {r.description}\n{(r.content or '')[:INPUT_RESOURCE_PREVIEW_CHARS]}"
-            + ("..." if len(r.content or "") > INPUT_RESOURCE_PREVIEW_CHARS else "")
-            for r in resources
+def format_input_resources(resources: Sequence[Resource], *, empty: str) -> str:
+    """Render input resources for a worker prompt as upstream does, or ``empty`` if none."""
+    if not resources:
+        return empty
+    lines = []
+    for resource in resources:
+        content = resource.content or ""
+        preview = (
+            content[:INPUT_RESOURCE_PREVIEW_CHARS] + "..."
+            if len(content) > INPUT_RESOURCE_PREVIEW_CHARS
+            else content
         )
-        or NO_INPUT_RESOURCES
-    )
+        lines.append(
+            INPUT_RESOURCE_LINE.format(
+                name=resource.name, description=resource.description, preview=preview
+            )
+        )
+    return "\n".join(lines)
 
 
 def draw_human_noise(
@@ -214,25 +229,51 @@ def human_system_prompt(actor: HumanAgentConfig) -> str:
 
 
 def human_task_prompt(
-    planned: PlannedTask, actor: HumanAgentConfig, draws: HumanDraws, resources_text: str
+    planned: PlannedTask, actor: HumanAgentConfig, draws: HumanDraws, resources: Sequence[Resource]
 ) -> str:
-    """The task assignment a human sees, with notes for fatigue and misunderstanding."""
-    prompt = HUMAN_TASK_ASSIGNMENT_TEMPLATE.format(
+    """The task a human sees: upstream's normal prompt, or its misunderstanding prompt."""
+    base_prompt = HUMAN_TASK_ASSIGNMENT_TEMPLATE.format(
         persona_name=actor.name,
         task_name=planned.name,
         task_description=planned.description,
-        resources_list=resources_text,
+        resources_list=format_input_resources(resources, empty=HUMAN_NO_RESOURCES),
         time_constraints="",
         dependencies="",
     )
-    if draws.quality < TIRED_BELOW_QUALITY:
-        prompt += HUMAN_TIRED_NOTE
-    prompt += HUMAN_WORK_STYLE_NOTE.format(
-        work_style=actor.work_style, experience_years=actor.experience_years
-    )
     if draws.misunderstood:
-        prompt += HUMAN_MISUNDERSTANDING_NOTE
-    return prompt
+        return HUMAN_MISUNDERSTOOD_TASK_PROMPT.format(base_prompt=base_prompt)
+    if draws.quality < TIRED_BELOW_QUALITY:
+        quality_context = HUMAN_TIRED_NOTE
+    elif draws.quality > SHARP_ABOVE_QUALITY:
+        quality_context = HUMAN_SHARP_NOTE
+    else:
+        quality_context = ""
+    return HUMAN_TASK_PROMPT.format(
+        base_prompt=base_prompt,
+        quality_context=quality_context,
+        expertise_areas=", ".join(actor.expertise_areas),
+        work_style=actor.work_style,
+        experience_years=actor.experience_years,
+    )
+
+
+def human_execution_notes(
+    actor: HumanAgentConfig, draws: HumanDraws, output: HumanWorkOutput
+) -> list[str]:
+    """Upstream's execution notes for a human's completed work."""
+    if draws.misunderstood:
+        return list(HUMAN_MISUNDERSTANDING_EXECUTION_NOTES)
+    header = [
+        line.format(
+            name=actor.name,
+            work_style=actor.work_style,
+            experience_years=actor.experience_years,
+            fatigue=draws.fatigue,
+            quality=draws.quality,
+        )
+        for line in HUMAN_EXECUTION_NOTES
+    ]
+    return [*header, *output.challenges_encountered]
 
 
 def stakeholder_persona(actor: StakeholderConfig, weights: dict[str, float]) -> str:
@@ -255,11 +296,12 @@ def _output_resources(
     ]
     if resources:
         return resources
+    # Upstream stores the SDK's run result as the content; Ergon stores the raw answer.
     return [
         Resource(
             id=uuid5(planned.id, "output/0"),
             name=FALLBACK_RESOURCE_NAME.format(task_name=planned.name),
-            description=planned.description,
+            description=FALLBACK_RESOURCE_DESCRIPTION.format(task_description=planned.description),
             content=json.dumps(inference.output),
         )
     ]
@@ -338,10 +380,11 @@ class MAGWorkWorker(Worker):
                     role=actor.role,
                     experience_years=actor.experience_years,
                     background=actor.background,
-                    expertise_areas=actor.expertise_areas,
+                    expertise_areas=", ".join(actor.expertise_areas),
                     work_style=actor.work_style,
+                    personality_traits=", ".join(actor.personality_traits),
                 ),
-                prompt=planned.description,
+                prompt=HUMAN_ESTIMATOR_PROMPT.format(task_description=planned.description),
                 output_type=HumanTimeEstimation,
             )
             estimated = HumanTimeEstimation.model_validate(estimator.output).estimated_hours
@@ -355,14 +398,13 @@ class MAGWorkWorker(Worker):
     ) -> WorkResult:
         actor = payload.actor
         planned = payload.planned_task
-        resources_text = format_input_resources(inputs.resources)
         draws, estimator, hours = None, None, 0.0
         output_type: type[AITaskOutput | HumanWorkOutput]
         if isinstance(actor, HumanAgentConfig):
             draws = draw_human_noise(payload, inputs, actor)
             hours, estimator = await self._human_hours(payload, actor, draws)
             system = human_system_prompt(actor)
-            prompt = human_task_prompt(planned, actor, draws, resources_text)
+            prompt = human_task_prompt(planned, actor, draws, inputs.resources)
             output_type = HumanWorkOutput
         else:
             system = actor.system_prompt
@@ -371,7 +413,9 @@ class MAGWorkWorker(Worker):
             prompt = AI_AGENT_TASK_TEMPLATE.format(
                 task_name=planned.name,
                 task_description=planned.description,
-                input_resources=resources_text,
+                input_resources=format_input_resources(
+                    inputs.resources, empty=NO_RESOURCES_MESSAGE
+                ),
             )
             output_type = AITaskOutput
         inference = await infer(
@@ -427,9 +471,7 @@ class MAGWorkWorker(Worker):
                     "simulated_hours": hours,
                     "simulated_cost": hours * actor.hourly_rate,
                     "accounted_hours": 0 if draws.misunderstood else hours,
-                    "execution_notes": list(HUMAN_MISUNDERSTANDING_EXECUTION_NOTES)
-                    if draws.misunderstood
-                    else [human_output.work_process, human_output.quality_notes],
+                    "execution_notes": human_execution_notes(actor, draws, human_output),
                 }
             )
         episode = payload.episode

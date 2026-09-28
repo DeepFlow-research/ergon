@@ -41,23 +41,76 @@ STAKEHOLDER_SUGGESTION = "Suggestion from {name} ({role}): Please prioritize cri
 
 # ── Work roles ───────────────────────────────────────────────────────────────
 
-HUMAN_ESTIMATOR_SYSTEM_PROMPT = "You are {role}, with {experience_years} years of experience. Estimate realistic hours including research, review, breaks and obstacles. Background: {background}; expertise: {expertise_areas}; style: {work_style}."
-HUMAN_TIRED_NOTE = "\n(Note: You're feeling a bit tired/stressed today.)"
-HUMAN_WORK_STYLE_NOTE = (
-    "\nApply your {work_style} work style and {experience_years} years of experience."
+# Upstream parity: HumanAgent's prompts (core/workflow_agents/human_agent.py),
+# kept byte for byte, including their indentation.
+HUMAN_ESTIMATOR_SYSTEM_PROMPT = (
+    "\n"
+    "                You are {role} with {experience_years} years of experience.\n"
+    "                                \n"
+    "                Your task is to estimate how long it would take YOU SPECIFICALLY to complete the given task.\n"
+    "                Consider:\n"
+    "                - Your background: {background}\n"
+    "                - Your expertise areas: {expertise_areas}\n"
+    "                - Your work style: {work_style}\n"
+    "                - Your personality traits: {personality_traits}\n"
+    "                - Realistic time for research, planning, execution, and review\n"
+    "                - Potential challenges you might face given your background\n"
+    "\n"
+    "                Be realistic - include time for breaks, getting up to speed, and potential obstacles.\n"
+    '                Don\'t just estimate the "ideal" time, but the real time it would take you personally.'
 )
-HUMAN_MISUNDERSTANDING_NOTE = "\nYou slightly misunderstand one important requirement in a realistic, plausible way. Proceed confidently without flagging confusion; produce a complete work product consistent with that misunderstanding."
-# Upstream parity: HumanAgent's execution notes for misunderstood work
-# (core/workflow_agents/human_agent.py).
+HUMAN_ESTIMATOR_PROMPT = (
+    "Task: {task_description}\n"
+    "\n"
+    "                Please estimate how many hours this task would take you to complete, considering your specific background and experience level.\n"
+    "\n"
+    "                Provide your reasoning and estimated hours.\n"
+    "            "
+)
+HUMAN_TASK_PROMPT = (
+    "{base_prompt}\n"
+    "\n"
+    "{quality_context}\n"
+    "\n"
+    "Please complete this task using your expertise in {expertise_areas}. \n"
+    "Apply your {work_style} work style and {experience_years} years of experience.\n"
+    "\n"
+    "Work through this step-by-step as you naturally would, using your available tools and taking breaks as needed.\n"
+)
+HUMAN_MISUNDERSTOOD_TASK_PROMPT = (
+    "{base_prompt}\n"
+    "\n"
+    "Important twist: You slightly misunderstand the task in a realistic, plausible way a human might.\n"
+    "- Pick one reasonable misinterpretation (e.g., focusing on format over substance, optimizing the wrong KPI, solving a related-but-different problem, or assuming a different audience).\n"
+    "- Proceed confidently without flagging confusion. Do not state that you misunderstood.\n"
+    "- Produce a complete work product consistent with that misunderstanding.\n"
+    "- Demonstrate craftsmanship appropriate to your background and work style.\n"
+    "\n"
+    "Deliver the output as you normally would for this task, fully believing it satisfies the request.\n"
+)
+HUMAN_TIRED_NOTE = "\n(Note: You're feeling a bit tired/stressed today)"
+HUMAN_SHARP_NOTE = "\n(Note: You're feeling sharp and focused today)"
+HUMAN_NO_RESOURCES = "No specific resources provided"
+HUMAN_EXECUTION_NOTES = (
+    "Human worker: {name}",
+    "Work style: {work_style}",
+    "Experience: {experience_years} years",
+    "Current fatigue level: {fatigue:.2f}",
+    "Quality modifier applied: {quality:.2f}",
+)
 HUMAN_MISUNDERSTANDING_EXECUTION_NOTES = (
     "Task execution under a subtle misunderstanding of requirements",
     "Output may be misaligned with the original intent",
 )
-STAKEHOLDER_WORK_PERSONA = "\nReview and approval persona: {persona_description}; strictness {strictness}. Private priorities: {priorities}"
-NO_INPUT_RESOURCES = "No specific input resources provided"
-# Upstream parity: AIAgent names its fallback resource this way when the model
-# returns none (core/workflow_agents/ai_agent.py).
+
+# Upstream parity: how AIAgent and HumanAgent list input resources.
+INPUT_RESOURCE_LINE = "- {name}: {description}\n  Content: {preview}"
+# Upstream parity: AIAgent's fallback when the model returns no resource
+# (core/workflow_agents/ai_agent.py).
 FALLBACK_RESOURCE_NAME = "Completed: {task_name}"
+FALLBACK_RESOURCE_DESCRIPTION = "AI agent completed task: {task_description}"
+
+STAKEHOLDER_WORK_PERSONA = "\nReview and approval persona: {persona_description}; strictness {strictness}. Private priorities: {priorities}"
 
 # ── Judge ────────────────────────────────────────────────────────────────────
 

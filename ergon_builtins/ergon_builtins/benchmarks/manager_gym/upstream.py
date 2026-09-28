@@ -30,6 +30,7 @@ from ._vendor.mag.manager_agent_gym.core.manager_agent.prompts.structured_manage
 )
 from ._vendor.mag.manager_agent_gym.core.workflow_agents.prompts.ai_agent_prompts import (
     AI_AGENT_TASK_TEMPLATE,
+    NO_RESOURCES_MESSAGE,
 )
 from ._vendor.mag.manager_agent_gym.core.workflow_agents.prompts.human_agent_prompts import (
     HUMAN_SIMULATION_INSTRUCTIONS_TEMPLATE,
@@ -90,6 +91,7 @@ __all__ = [
     "AI_AGENT_TASK_TEMPLATE",
     "HUMAN_SIMULATION_INSTRUCTIONS_TEMPLATE",
     "HUMAN_TASK_ASSIGNMENT_TEMPLATE",
+    "NO_RESOURCES_MESSAGE",
     "SCENARIOS",
     "STRUCTURED_MANAGER_SYSTEM_PROMPT_TEMPLATE",
     "TASK_DECOMPOSITION_PROMPT",
