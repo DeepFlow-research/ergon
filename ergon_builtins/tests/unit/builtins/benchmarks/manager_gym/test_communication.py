@@ -5,7 +5,6 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-
 from ergon_builtins.benchmarks.manager_gym.communication import MAGCommunication
 
 

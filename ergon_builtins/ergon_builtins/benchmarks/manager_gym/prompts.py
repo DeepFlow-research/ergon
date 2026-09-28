@@ -1,7 +1,68 @@
 # ruff: noqa: E501
-"""Prompt templates used by the native Manager Gym adapter."""
+"""Prompt text used by the native Manager Gym adapter.
+
+Templates marked "Upstream parity" are MAG's own wording, copied from the named
+upstream module; the rest are Ergon's. MAG's scenario, manager and worker prompt
+templates that are vendored verbatim are imported from ``upstream.py`` instead.
+"""
 
 from ergon_builtins.benchmarks.manager_gym.upstream import WorkflowRubric
+
+# ── Manager ──────────────────────────────────────────────────────────────────
+
+# Appended to upstream's structured manager system prompt: how native scheduling
+# differs from upstream's engine ticks.
+MANAGER_SCHEDULING_RULES = "\nNative scheduling rules: assign prerequisite leaves first, then dependents. Assign only leaf tasks. Actor capacity is informational; only task dependencies constrain execution. Mutate/remove only unstarted work. Queries and invalid actions consume decisions. Noop yields briefly for running work. The episode drains admitted tasks before scoring."
+
+DECOMPOSITION_SYSTEM_PROMPT = "Decompose the supplied task into the requested structured plan."
+DECOMPOSITION_GOAL_SUFFIX = "\n\nWorkflow goal: {goal}"
+DECOMPOSED_SUBTASK_DESCRIPTION = "Executive summary: {executive_summary}\nImplementation plan: {implementation_plan}\nAcceptance criteria: {acceptance_criteria}"
+
+# Upstream parity: RandomManagerV2's one-shot assignment prompt
+# (core/manager_agent/random_manager.py).
+BULK_ASSIGNMENT_SYSTEM_PROMPT = (
+    "You are a workflow orchestration manager operating on a task DAG.\n"
+    "Goal: assign each task to the best-fit agent so work can proceed without further input.\n"
+    "Respect constraints and practical roles: prefer AI agents for analysis/automation;\n"
+    "route approvals, governance, and sign-offs to human/stakeholder roles when required.\n"
+    "Maximize overall workflow throughput and quality; avoid leaving tasks unassigned.\n"
+    "Output exactly one AssignTasksToAgentsAction with a complete 'assignments' list.\n"
+)
+
+# ── Stakeholder (scripted between decisions) ─────────────────────────────────
+
+# Upstream parity: StakeholderAgent's scripted messages
+# (core/workflow_agents/stakeholder_agent.py).
+STAKEHOLDER_REPLY = (
+    "Thanks for the update. My priorities remain as discussed; please proceed accordingly."
+)
+STAKEHOLDER_REPLY_QUOTE = "\nRegarding your message: {content}"
+STAKEHOLDER_SUGGESTION = "Suggestion from {name} ({role}): Please prioritize critical-path tasks and ensure stakeholder review before final delivery."
+
+# ── Work roles ───────────────────────────────────────────────────────────────
+
+HUMAN_ESTIMATOR_SYSTEM_PROMPT = "You are {role}, with {experience_years} years of experience. Estimate realistic hours including research, review, breaks and obstacles. Background: {background}; expertise: {expertise_areas}; style: {work_style}."
+HUMAN_TIRED_NOTE = "\n(Note: You're feeling a bit tired/stressed today.)"
+HUMAN_WORK_STYLE_NOTE = (
+    "\nApply your {work_style} work style and {experience_years} years of experience."
+)
+HUMAN_MISUNDERSTANDING_NOTE = "\nYou slightly misunderstand one important requirement in a realistic, plausible way. Proceed confidently without flagging confusion; produce a complete work product consistent with that misunderstanding."
+# Upstream parity: HumanAgent's execution notes for misunderstood work
+# (core/workflow_agents/human_agent.py).
+HUMAN_MISUNDERSTANDING_EXECUTION_NOTES = (
+    "Task execution under a subtle misunderstanding of requirements",
+    "Output may be misaligned with the original intent",
+)
+STAKEHOLDER_WORK_PERSONA = "\nReview and approval persona: {persona_description}; strictness {strictness}. Private priorities: {priorities}"
+NO_INPUT_RESOURCES = "No specific input resources provided"
+# Upstream parity: AIAgent names its fallback resource this way when the model
+# returns none (core/workflow_agents/ai_agent.py).
+FALLBACK_RESOURCE_NAME = "Completed: {task_name}"
+
+# ── Judge ────────────────────────────────────────────────────────────────────
+
+# Upstream parity: core/evaluation/validation_rules.py.
+JUDGE_SYSTEM_PROMPT = "You are a validation expert."
 
 # Upstream parity: the LLM judge instructions from MAG's
 # ``WorkflowValidationRule._llm_validate`` (core/evaluation/validation_rules.py),

@@ -1,11 +1,12 @@
 """Native criteria over one frozen terminal snapshot, retaining MAG utility arithmetic."""
 
 import inspect
-import json
 import math
 from collections import defaultdict
 from collections.abc import Iterable
+from datetime import datetime
 from typing import Any, ClassVar, Literal, cast
+from uuid import UUID
 
 from ergon_core.api import Task
 from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome
@@ -19,17 +20,18 @@ from ergon_builtins.benchmarks.manager_gym.inference import infer
 from ergon_builtins.benchmarks.manager_gym.prompts import judge_prompt
 from ergon_builtins.benchmarks.manager_gym.state import (
     EpisodeState,
-    actor_config,
     all_tasks,
     snapshot_hash,
 )
 from ergon_builtins.benchmarks.manager_gym.upstream import (
     SCENARIOS,
+    AdditionalContextItem,
     AgentPublicState,
     Preference,
     PreferenceWeights,
     RunCondition,
     SenderMessagesView,
+    TaskStatus,
     ThreadMessagesView,
     ValidationContext,
     Workflow,
@@ -37,6 +39,7 @@ from ergon_builtins.benchmarks.manager_gym.upstream import (
     build_constraints_for_scenario,
     build_default_evaluators,
 )
+from ergon_builtins.benchmarks.manager_gym.upstream import Task as PlannedTask
 
 
 class RubricDefinition(BaseModel):
@@ -88,7 +91,7 @@ def _group_senders(workflow: Workflow) -> list[SenderMessagesView]:
         SenderMessagesView(
             sender_id=k,
             total_messages=len(messages),
-            most_recent_at=max((m.timestamp for m in messages)),
+            most_recent_at=max(m.timestamp for m in messages),
             messages=messages,
         )
         for k, messages in groups.items()
@@ -103,65 +106,66 @@ def _group_threads(workflow: Workflow) -> list[ThreadMessagesView]:
         ThreadMessagesView(
             thread_id=k,
             total_messages=len(messages),
-            last_activity=max((m.timestamp for m in messages)),
+            last_activity=max(m.timestamp for m in messages),
             messages=messages,
         )
         for k, messages in threads.items()
     ]
 
 
+def _agent_public_state(
+    key: str, state: EpisodeState, tasks: dict[UUID, PlannedTask], joined_at: datetime
+) -> AgentPublicState:
+    mine = [t for t in tasks.values() if t.assigned_agent_id == key]
+    running = [t for t in mine if t.status == TaskStatus.RUNNING]
+    return AgentPublicState(
+        agent_id=key,
+        agent_type=state.actors[key].agent_type,
+        is_available=not running,
+        tasks_completed=sum(t.status == TaskStatus.COMPLETED and not t.subtasks for t in mine),
+        joined_at=joined_at,
+        current_task_ids=[t.id for t in running],
+    )
+
+
 def validation_context(state: EpisodeState, rubric: WorkflowRubric) -> ValidationContext:
+    """The context upstream's validation engine would pass ``rubric``, from a frozen snapshot.
+
+    Supplemental fields are filled only when the rubric requests them, as upstream does.
+    """
     workflow = state.workflow.model_copy(deep=True)
     if workflow.started_at is None:
         raise ValueError("Frozen workflow has no start time")
-    workflow.agents = {key: actor_config(state.actors[key]) for key in state.active_actors}
+    workflow.agents = {key: state.actors[key] for key in state.active_actors}
     current = PreferenceWeights(
         preferences=[Preference(name=k, weight=v) for k, v in state.weights.items()]
     )
     context = ValidationContext(
         workflow=workflow, current_preferences=current, timestep=state.timestep
     )
-    required = {item.value for item in rubric.required_context}
-    if "manager_actions" in required:
+    required = rubric.required_context
+    tasks = all_tasks(workflow)
+    if AdditionalContextItem.MANAGER_ACTIONS in required:
         context.manager_actions = state.actions
-    if "preference_history" in required:
+    if AdditionalContextItem.PREFERENCE_HISTORY in required:
         context.preference_history = state.preference_history
-    if "communications_by_sender" in required:
+    if AdditionalContextItem.COMMS_BY_SENDER in required:
         context.communications_by_sender = _group_senders(workflow)
-    if "communications_by_thread" in required:
+    if AdditionalContextItem.COMMS_BY_THREAD in required:
         context.communications_by_thread = _group_threads(workflow)
-    if "resources_by_task" in required:
+    if AdditionalContextItem.RESOURCES_BY_TASK in required:
         context.resources_by_task = {
-            k: workflow.get_task_output_resources(t) for k, t in all_tasks(workflow).items()
+            k: workflow.get_task_output_resources(t) for k, t in tasks.items()
         }
         context.all_resources = workflow.get_all_resources()
-    if "stakeholder_profile" in required:
-        context.stakeholder_profile = next(
-            (v for v in state.actors.values() if v["agent_type"] == "stakeholder")
-        )
-    if "agent_public_states" in required:
+    if AdditionalContextItem.STAKEHOLDER_PROFILE in required:
+        context.stakeholder_profile = state.stakeholder().model_dump(mode="json")
+    if AdditionalContextItem.AGENT_PUBLIC_STATES in required:
         context.agent_public_states = {
-            k: AgentPublicState(
-                agent_id=k,
-                agent_type=state.actors[k]["agent_type"],
-                is_available=not any(
-                    t.assigned_agent_id == k and t.status.value == "running"
-                    for t in all_tasks(workflow).values()
-                ),
-                tasks_completed=sum(
-                    t.assigned_agent_id == k and t.status.value == "completed" and not t.subtasks
-                    for t in all_tasks(workflow).values()
-                ),
-                joined_at=workflow.started_at,
-                current_task_ids=[
-                    t.id
-                    for t in all_tasks(workflow).values()
-                    if t.assigned_agent_id == k and t.status.value == "running"
-                ],
-            )
+            k: _agent_public_state(k, state, tasks, workflow.started_at)
             for k in state.active_actors
         }
-    if "agent_tool_usage_by_task" in required:
+    if AdditionalContextItem.AGENT_TOOL_USAGE_BY_TASK in required:
         context.agent_tool_usage_by_task = state.tool_usage
     return context
 

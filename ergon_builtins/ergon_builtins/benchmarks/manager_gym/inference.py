@@ -80,11 +80,15 @@ class InferenceProfile(BaseModel):
 
 
 class ModelFailure(BaseModel):
+    """A bounded model failure a work role reports instead of raising."""
+
     kind: Literal["request_limit", "output_validation"]
     message: str
 
 
 class InferenceResult(BaseModel):
+    """One structured model call: its output, transcript chunks and token usage."""
+
     output: dict[str, Any]
     chunks: list[ContextPartChunk] = Field(default_factory=list)
     elapsed_seconds: float
@@ -99,6 +103,7 @@ def captured_result(
     started: float,
     failure: ModelFailure | None = None,
 ) -> InferenceResult:
+    """Package a finished call's messages as transcript chunks with summed usage."""
     responses = [m for m in messages if isinstance(m, ModelResponse)]
     input_tokens = sum(m.usage.input_tokens for m in responses)
     output_tokens = sum(m.usage.output_tokens for m in responses)

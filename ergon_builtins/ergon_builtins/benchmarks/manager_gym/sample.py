@@ -1,12 +1,19 @@
-"""Ordinary Ergon sample construction for the pinned MAG scenario catalog."""
+"""Build Ergon samples for Manager Gym episodes, and for re-grading frozen snapshots."""
 
 from collections.abc import AsyncGenerator
 from typing import ClassVar, cast
 from uuid import UUID
 
 from ergon_core.api import Sample, Task, Worker, WorkerContext, WorkerStreamItem
-from ergon_core.api.worker import WorkerOutput
+from pydantic import JsonValue
 
+from ergon_builtins.benchmarks.manager_gym.constants import (
+    MANAGER_ACTOR_ID,
+    PROVIDER,
+    RUBRIC_NAME,
+    SANDBOX_TIMEOUT_SECONDS,
+)
+from ergon_builtins.benchmarks.manager_gym.inference import InferenceProfile
 from ergon_builtins.benchmarks.manager_gym.manager import EpisodeTask, MAGManagerWorker
 from ergon_builtins.benchmarks.manager_gym.rubric import MAGRubric
 from ergon_builtins.benchmarks.manager_gym.state import (
@@ -14,10 +21,21 @@ from ergon_builtins.benchmarks.manager_gym.state import (
     SOURCE_REVISION,
     EpisodeConfig,
     EpisodeState,
+    scenario_goal,
     snapshot_hash,
+    snapshot_output,
 )
-from ergon_builtins.benchmarks.manager_gym.upstream import SCENARIOS
 from ergon_builtins.sandbox.e2b_sandbox import E2BSandbox
+
+
+def _source_metadata(inference: InferenceProfile, **extra: str) -> dict[str, JsonValue]:
+    return {
+        "provider": PROVIDER,
+        "benchmark_version": BENCHMARK_VERSION,
+        "source_revision": SOURCE_REVISION,
+        **extra,
+        "inference_profile": inference.model_dump(mode="json"),
+    }
 
 
 def make_manager_gym_sample(
@@ -33,55 +51,39 @@ def make_manager_gym_sample(
     Returns:
         A sample with a single manager task, graded by ``MAGRubric``.
     """
-    spec = SCENARIOS[config.scenario]
     task = EpisodeTask(
         task_slug=f"mag-{config.scenario}",
         instance_key=str(config.seed),
-        description=spec.create_workflow().workflow_goal,
+        description=scenario_goal(config.scenario),
         task_payload=config,
-        worker=MAGManagerWorker(name="MAG manager", actor_key="manager_agent", model=model),
-        sandbox=E2BSandbox(timeout_seconds=3600),
-        evaluators=(MAGRubric(name="MAG terminal utility", scenario=config.scenario, model=model),),
+        worker=MAGManagerWorker(name="MAG manager", actor_key=MANAGER_ACTOR_ID, model=model),
+        sandbox=E2BSandbox(timeout_seconds=SANDBOX_TIMEOUT_SECONDS),
+        evaluators=(MAGRubric(name=RUBRIC_NAME, scenario=config.scenario, model=model),),
     )
     return Sample.from_tasks(
         name=f"{config.scenario}:{config.seed}",
         sample_key=f"{config.scenario}:{config.seed}",
         environment_name=environment_name,
         sample_ref=config.model_dump(mode="json"),
-        source_metadata={
-            "provider": "ergon-builtin:manager-gym",
-            "benchmark_version": BENCHMARK_VERSION,
-            "source_revision": SOURCE_REVISION,
-            "inference_profile": config.inference.model_dump(mode="json"),
-        },
+        source_metadata=_source_metadata(config.inference),
         tasks=[cast(Task, task)],
     )
 
 
 class SnapshotTask(Task[EpisodeState]):
-    pass
+    """A task whose payload is a frozen episode snapshot."""
 
 
 class MAGSnapshotWorker(Worker):
+    """Re-publishes a frozen snapshot unchanged, so ``MAGRubric`` can grade it again."""
+
     type_slug: ClassVar[str] = "manager-gym-snapshot"
 
     async def execute(
         self, task: Task, *, context: WorkerContext
-    ) -> AsyncGenerator[WorkerStreamItem, None]:
+    ) -> AsyncGenerator[WorkerStreamItem]:
         state = EpisodeState.model_validate(task.task_payload.model_dump())
-        encoded = state.model_dump_json()
-        await task.sandbox.write_file(
-            "/workspace/final_output/manager-gym-snapshot.json", encoded.encode()
-        )
-        yield WorkerOutput(
-            output=encoded,
-            metadata={
-                "snapshot_hash": snapshot_hash(state),
-                "incomplete": bool(state.infrastructure_errors),
-                "benchmark_version": BENCHMARK_VERSION,
-                "source_revision": SOURCE_REVISION,
-            },
-        )
+        yield await snapshot_output(state, task.sandbox)
 
 
 def make_snapshot_reevaluation_sample(
@@ -102,34 +104,24 @@ def make_snapshot_reevaluation_sample(
     Returns:
         A sample whose single task replays the snapshot into ``MAGRubric``.
     """
+    scenario = state.config.scenario
+    task = SnapshotTask(
+        task_slug=f"mag-reevaluate-{scenario}",
+        instance_key=str(source_sample_id),
+        description=state.workflow.workflow_goal,
+        task_payload=state,
+        worker=MAGSnapshotWorker(name="Frozen MAG snapshot", model=model),
+        sandbox=E2BSandbox(timeout_seconds=SANDBOX_TIMEOUT_SECONDS),
+        evaluators=(MAGRubric(name=RUBRIC_NAME, scenario=scenario, model=model),),
+    )
     return Sample.from_tasks(
-        name=f"Re-evaluate {state.config.scenario}:{source_sample_id}",
+        name=f"Re-evaluate {scenario}:{source_sample_id}",
         sample_key=f"reevaluate:{source_sample_id}",
         environment_name=environment_name,
-        source_metadata={
-            "provider": "ergon-builtin:manager-gym",
-            "benchmark_version": BENCHMARK_VERSION,
-            "source_revision": SOURCE_REVISION,
-            "evaluation_of_sample": str(source_sample_id),
-            "snapshot_hash": snapshot_hash(state),
-            "inference_profile": state.config.inference.model_dump(mode="json"),
-        },
-        tasks=[
-            cast(
-                Task,
-                SnapshotTask(
-                    task_slug=f"mag-reevaluate-{state.config.scenario}",
-                    instance_key=str(source_sample_id),
-                    description=state.workflow.workflow_goal,
-                    task_payload=state,
-                    worker=MAGSnapshotWorker(name="Frozen MAG snapshot", model=model),
-                    sandbox=E2BSandbox(timeout_seconds=3600),
-                    evaluators=(
-                        MAGRubric(
-                            name="MAG terminal utility", scenario=state.config.scenario, model=model
-                        ),
-                    ),
-                ),
-            )
-        ],
+        source_metadata=_source_metadata(
+            state.config.inference,
+            evaluation_of_sample=str(source_sample_id),
+            snapshot_hash=snapshot_hash(state),
+        ),
+        tasks=[cast(Task, task)],
     )

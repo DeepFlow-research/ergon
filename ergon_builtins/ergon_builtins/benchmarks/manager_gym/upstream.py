@@ -6,6 +6,9 @@ factories, evaluators and prompts from this module only, so the boundary
 between vendored and native code stays in one place.
 """
 
+import json
+from pathlib import Path
+
 from ._vendor.mag.examples.common_stakeholders import (
     create_stakeholder_agent,
 )
@@ -78,7 +81,12 @@ from ._vendor.mag.manager_agent_gym.schemas.workflow_agents.telemetry import (
     AgentToolUseEvent,
 )
 
+_MANIFEST = Path(__file__).parent / "_vendor" / "mag" / "MANIFEST.json"
+UPSTREAM_REVISION: str = json.loads(_MANIFEST.read_text())["revision"]
+"""The upstream MAG commit the vendored sources were copied from."""
+
 __all__ = [
+    "UPSTREAM_REVISION",
     "AI_AGENT_TASK_TEMPLATE",
     "HUMAN_SIMULATION_INSTRUCTIONS_TEMPLATE",
     "HUMAN_TASK_ASSIGNMENT_TEMPLATE",

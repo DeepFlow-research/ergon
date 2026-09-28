@@ -32,3 +32,6 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["ergon_builtins*"]
+
+[tool.setuptools.package-data]
+"ergon_builtins.benchmarks.manager_gym._vendor.mag" = ["MANIFEST.json", "NOTICE", "README.md"]

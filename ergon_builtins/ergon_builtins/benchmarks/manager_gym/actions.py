@@ -1,10 +1,36 @@
-"""Pinned MAG action fields; execution is implemented with native Ergon APIs."""
+# ruff: noqa: E501 -- upstream's action docstrings are model-facing schema text, kept word for word.
+"""Manager action schemas and the record of each executed action.
 
-import json
-from typing import Any, Literal
+The action classes' names, fields, descriptions and docstrings are upstream MAG's
+(``schemas/execution/manager_actions.py``): they form the JSON schema the manager
+model chooses from, so they are kept word for word. Ergon executes the actions in
+``manager.py``.
+"""
+
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
+
+from ergon_builtins.benchmarks.manager_gym.parsing import JsonDecoded
+
+ActionType = Literal[
+    "assign_task",
+    "create_task",
+    "remove_task",
+    "send_message",
+    "noop",
+    "get_workflow_status",
+    "get_available_agents",
+    "get_pending_tasks",
+    "refine_task",
+    "add_task_dependency",
+    "remove_task_dependency",
+    "failed_action",
+    "inspect_task",
+    "decompose_task",
+    "assign_tasks_to_agents",
+]
 
 
 class ActionResult(BaseModel):
@@ -23,25 +49,7 @@ class ActionResult(BaseModel):
         ```
     """
 
-    action_type: Literal[
-        "assign_task",
-        "assign_all_pending_tasks",
-        "create_task",
-        "remove_task",
-        "send_message",
-        "noop",
-        "get_workflow_status",
-        "get_available_agents",
-        "get_pending_tasks",
-        "refine_task",
-        "add_task_dependency",
-        "remove_task_dependency",
-        "failed_action",
-        "inspect_task",
-        "request_end_workflow",
-        "decompose_task",
-        "assign_tasks_to_agents",
-    ] = Field(description="Type of action result")
+    action_type: ActionType = Field(description="Type of action result")
     summary: str = Field(description="Short summary of what happened / info returned")
     kind: Literal[
         "mutation", "info", "noop", "message", "inspection", "failed_action", "unknown"
@@ -49,19 +57,12 @@ class ActionResult(BaseModel):
     data: dict[str, Any] = Field(
         description="Optional structured payload for follow-up use (empty if not applicable)"
     )
-    timestep: int | None = Field(
-        default=None, description="Timestep of the action, set by the engine"
-    )
-    success: bool = Field(default=True, description="Whether the action succeeded (set by execute)")
+    timestep: int | None = Field(default=None, description="Decision index the action ran at")
+    success: bool = Field(default=True, description="Whether the action succeeded")
 
 
 class BaseManagerAction(BaseModel):
-    """
-    Base class for all manager actions.
-
-    All action classes must inherit from this and implement the execute method.
-    This ensures type safety and consistent execution interface.
-    """
+    """Fields shared by every manager action."""
 
     reasoning: str = Field(
         description="Concise 2–3 sentence rationale for the chosen action",
@@ -84,6 +85,7 @@ class AssignTaskAction(BaseManagerAction):
     """
 
     action_type: Literal["assign_task"] = "assign_task"
+    # Upstream parity: unlike the other actions, MAG types this id as a string.
     task_id: str = Field(description="ID of the task to assign")
     agent_id: str = Field(description="ID of the agent to assign the task to")
 
@@ -246,23 +248,6 @@ class DecomposeTaskAction(BaseManagerAction):
     task_id: UUID = Field(..., description="UUID of the task id to decompose")
 
 
-class RequestEndWorkflowAction(BaseManagerAction):
-    """Request that the workflow end as soon as possible.
-
-    Use when:
-    - All required atomic tasks are completed and further work offers negligible utility
-    - The stakeholder explicitly accepts the deliverables
-    - Time/budget constraints imply continued work would reduce overall utility
-
-    This action signals the engine via the communication service; the engine will terminate on the next check cycle.
-    """
-
-    action_type: Literal["request_end_workflow"] = "request_end_workflow"
-    reason: str | None = Field(
-        description="Optional short reason for requesting the workflow to end"
-    )
-
-
 ManagerAction = (
     AssignTaskAction
     | CreateTaskAction
@@ -280,14 +265,8 @@ ManagerAction = (
 )
 
 
+# The manager's structured output. It has no docstring on purpose: the model
+# sees this class as its output schema, which matches upstream's.
 class ManagerDecision(BaseModel):
     reasoning: str
-    action: ManagerAction = Field(discriminator="action_type")
-
-    @field_validator("action", mode="before")
-    @classmethod
-    def decode_action(cls, value: object) -> object:
-        # The standing Qwen tool parser returns nested JSON as a JSON string.
-        # Decode that transport representation, then run the unchanged union
-        # validation; malformed JSON and unknown actions still fail explicitly.
-        return json.loads(value) if isinstance(value, str) else value
+    action: Annotated[ManagerAction, JsonDecoded] = Field(discriminator="action_type")

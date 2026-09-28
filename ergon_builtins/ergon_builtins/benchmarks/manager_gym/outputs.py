@@ -1,10 +1,19 @@
-"""
-Agent output data models for different agent types.
+# ruff: noqa: E501 -- upstream's output docstrings are model-facing schema text, kept word for word.
+"""Structured outputs of the work roles.
+
+These are upstream MAG's ``schemas/workflow_agents/outputs.py`` models, and the
+model sees them as its output schema, so their docstrings and descriptions are
+kept word for word. One change: resources are drafts without an id, because the
+worker assigns each resource a deterministic id. "At least one resource" is
+stated to the model but not enforced here; the worker handles an empty list the
+way upstream does for each role.
 """
 
-import json
+from typing import Annotated
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
+
+from ergon_builtins.benchmarks.manager_gym.parsing import JsonDecoded
 
 
 class ResourceDraft(BaseModel):
@@ -16,14 +25,7 @@ class ResourceDraft(BaseModel):
     content_type: str = Field(default="text/plain", description="The resource's MIME type")
 
 
-class ResourceOutput(BaseModel):
-    @field_validator("resources", mode="before", check_fields=False)
-    @classmethod
-    def decode_resources(cls, value: object) -> object:
-        return json.loads(value) if isinstance(value, str) else value
-
-
-class AITaskOutput(ResourceOutput):
+class AITaskOutput(BaseModel):
     """
     Structured output representing the result of an AI task execution.
 
@@ -31,18 +33,18 @@ class AITaskOutput(ResourceOutput):
     """
 
     reasoning: str
-    resources: list[ResourceDraft] = Field(
+    resources: Annotated[list[ResourceDraft], JsonDecoded] = Field(
         description="Resources created by the AI agent. There MUST BE AT LEAST ONE RESOURCE."
     )
     confidence: float
     execution_notes: list[str]
 
 
-class HumanWorkOutput(ResourceOutput):
+class HumanWorkOutput(BaseModel):
     """Structured output format for human work simulation."""
 
     reasoning: str
-    resources: list[ResourceDraft] = Field(
+    resources: Annotated[list[ResourceDraft], JsonDecoded] = Field(
         description="Resources created by the human agent. There MUST BE AT LEAST ONE RESOURCE."
     )
     work_process: str

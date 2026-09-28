@@ -105,8 +105,6 @@ max-complexity = 10
     "no-print",
     "no-typing-any",
 ]
-# Random/bulk policies explicitly preserve upstream's recorded model fallback.
-"ergon_builtins/ergon_builtins/benchmarks/manager_gym/baselines.py" = ["no-broad-except"]
 # Print is acceptable in tests and narrowly-scoped command entrypoints.
 "tests/**" = ["no-print"]
 "ergon_core/ergon_core/core/application/testing/suppression_budget.py" = ["no-print"]

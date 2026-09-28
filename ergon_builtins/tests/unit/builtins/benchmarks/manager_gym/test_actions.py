@@ -11,7 +11,7 @@ from ergon_builtins.benchmarks.manager_gym.actions import (
     ManagerDecision,
     RemoveTaskAction,
 )
-from ergon_builtins.benchmarks.manager_gym.inference import InferenceResult
+from ergon_builtins.benchmarks.manager_gym.inference import InferenceProfile, InferenceResult
 from ergon_builtins.benchmarks.manager_gym.state import (
     all_tasks,
     project_native_state,
@@ -25,6 +25,7 @@ from ergon_core.core.application.runtime import task_inspection as inspection_mo
 from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 from sqlmodel import Session
 
 from ergon_core.tests.unit.runtime.test_manager_gym_preport_proof import preport
@@ -57,7 +58,7 @@ def test_assignment_does_not_expose_unrelated_workflow_resources():
     unrelated = Resource(name="Other task input", description="Not assigned", content="unrelated")
     state.workflow.resources = {r.id: r for r in (allowed, unrelated)}
     planned.input_resource_ids = [allowed.id]
-    actor = next(k for k, a in state.actors.items() if a["agent_type"] == "ai")
+    actor = next(k for k, a in state.actors.items() if a.agent_type == "ai")
     task = manager.work_task(state, planned, actor, MODEL, [])
     assert [r.id for r in task.task_payload.resources] == [allowed.id]
 
@@ -90,9 +91,7 @@ def action_data(name, state):
     fields = {
         "assign_task": {
             "task_id": str(plans[0].id),
-            "agent_id": next(
-                k for k in state.active_actors if state.actors[k]["agent_type"] == "ai"
-            ),
+            "agent_id": next(k for k in state.active_actors if state.actors[k].agent_type == "ai"),
         },
         "create_task": {
             "name": "New plan",
@@ -198,8 +197,8 @@ async def test_reassignment_preserves_work_dependencies_without_serializing_an_a
     for planned in (a, b, c):
         planned.dependency_task_ids = []
     b.dependency_task_ids = [a.id]
-    ai = next(k for k in state.active_actors if state.actors[k]["agent_type"] == "ai")
-    human = next(k for k in state.active_actors if state.actors[k]["agent_type"] == "human_mock")
+    ai = next(k for k in state.active_actors if state.actors[k].agent_type == "ai")
+    human = next(k for k in state.active_actors if state.actors[k].agent_type == "human_mock")
     for planned, actor in ((a, ai), (b, ai), (b, human)):
         await manager.assign(
             state,
@@ -207,19 +206,17 @@ async def test_reassignment_preserves_work_dependencies_without_serializing_an_a
             context,
             MODEL,
         )
-    b_native = state.bindings[str(b.id)]
+    b_native = state.bindings[b.id]
     b_info = await context.get_task(b_native)
-    assert b_info.depends_on == [state.bindings[str(a.id)]]
-    await manager.remove_work(
-        state, RemoveTaskAction(reasoning="Remove", task_id=b.id), context, MODEL
-    )
+    assert b_info.depends_on == [state.bindings[a.id]]
+    await manager.remove_work(state, RemoveTaskAction(reasoning="Remove", task_id=b.id), context)
     await manager.assign(
         state,
         AssignTaskAction(reasoning="Continue", task_id=str(c.id), agent_id=ai),
         context,
         MODEL,
     )
-    c_info = await context.get_task(state.bindings[str(c.id)])
+    c_info = await context.get_task(state.bindings[c.id])
     assert b_native not in c_info.depends_on
     assert c_info.depends_on == []
     assert (await context.get_task(b_native)).status == "cancelled"
@@ -229,7 +226,7 @@ async def test_reassignment_preserves_work_dependencies_without_serializing_an_a
 async def test_removed_prerequisite_is_policy_blocked_not_infrastructure_failure(runtime):
     state, context = runtime
     a, b = list(state.workflow.tasks.values())[:2]
-    ai = next(k for k in state.active_actors if state.actors[k]["agent_type"] == "ai")
+    ai = next(k for k in state.active_actors if state.actors[k].agent_type == "ai")
     for planned in (a, b):
         await manager.assign(
             state,
@@ -237,15 +234,13 @@ async def test_removed_prerequisite_is_policy_blocked_not_infrastructure_failure
             context,
             MODEL,
         )
-    assert not await manager.has_policy_blocked_prerequisite(context, state.bindings[str(b.id)])
-    await manager.remove_work(
-        state, RemoveTaskAction(reasoning="Remove", task_id=a.id), context, MODEL
-    )
-    assert await manager.has_policy_blocked_prerequisite(context, state.bindings[str(b.id)])
+    assert not await manager.has_policy_blocked_prerequisite(context, state.bindings[b.id])
+    await manager.remove_work(state, RemoveTaskAction(reasoning="Remove", task_id=a.id), context)
+    assert await manager.has_policy_blocked_prerequisite(context, state.bindings[b.id])
     state.config.drain_timeout_seconds = 0.001
     await manager.drain_admitted_work(state, context)
     assert not state.infrastructure_errors
-    assert (await context.get_task(state.bindings[str(b.id)])).status == "cancelled"
+    assert (await context.get_task(state.bindings[b.id])).status == "cancelled"
 
 
 @pytest.mark.asyncio
@@ -254,7 +249,7 @@ async def test_failed_prerequisite_classification_reads_without_nested_durable_w
 ):
     state, context = runtime
     a, b = list(state.workflow.tasks.values())[:2]
-    ai = next(k for k in state.active_actors if state.actors[k]["agent_type"] == "ai")
+    ai = next(k for k in state.active_actors if state.actors[k].agent_type == "ai")
     for planned in (a, b):
         await manager.assign(
             state,
@@ -262,7 +257,7 @@ async def test_failed_prerequisite_classification_reads_without_nested_durable_w
             context,
             MODEL,
         )
-    native = state.bindings[str(a.id)]
+    native = state.bindings[a.id]
     with context.session_factory() as session:
         node = session.get(SampleGraphNode, (context.sample_id, native))
         node.status = "failed"
@@ -286,7 +281,7 @@ async def test_failed_prerequisite_classification_reads_without_nested_durable_w
         side_effect=AssertionError("No nested durable wait inside classification")
     )
     monkeypatch.setattr(WorkerContext, "wait_for_task", forbidden)
-    assert await manager.has_policy_blocked_prerequisite(context, state.bindings[str(b.id)])
+    assert await manager.has_policy_blocked_prerequisite(context, state.bindings[b.id])
     projected = await project_native_state(state, context)
     assert projected.workflow.tasks[a.id].status.value == "failed"
     assert not projected.infrastructure_errors
@@ -298,7 +293,7 @@ async def test_assign_all_model_fallback_uses_native_dependencies_once(runtime, 
     state, context = runtime
     state.config.manager_mode = "assign_all"
     state.config.noop_wait_seconds = 0
-    failed_model = AsyncMock(side_effect=RuntimeError("Contract model failure"))
+    failed_model = AsyncMock(side_effect=UnexpectedModelBehavior("Contract model failure"))
     monkeypatch.setattr(baselines, "infer", failed_model)
     first = [c async for c in manager.policy_turn(state, context, MODEL)]
     assert len(state.bindings) == 6
@@ -323,9 +318,27 @@ async def test_random_baseline_is_one_selected_model_action_with_recorded_fallba
         is baselines.random_schema(state).model_fields["action"].annotation
     )
     assert "anyOf" not in selected.model_json_schema()["properties"]["action"]
-    failed_model = AsyncMock(side_effect=RuntimeError("Contract random failure"))
+    failed_model = AsyncMock(side_effect=UnexpectedModelBehavior("Contract random failure"))
     monkeypatch.setattr(baselines, "infer", failed_model)
     chunks = [c async for c in manager.policy_turn(state, context, MODEL)]
     assert not state.actions[-1].success and chunks[-1].part.is_error
     assert "Contract random failure" in state.actions[-1].data["error"]
     assert failed_model.call_args.kwargs["model"] == MODEL
+
+
+@pytest.mark.asyncio
+async def test_baselines_record_model_errors_but_raise_other_failures(monkeypatch):
+    request = {
+        "model": MODEL,
+        "role": "manager",
+        "profile": InferenceProfile(),
+        "system": "Assign every task.",
+        "prompt": "{}",
+        "output_type": baselines.BulkDecision,
+    }
+    monkeypatch.setattr(baselines, "infer", AsyncMock(side_effect=UnexpectedModelBehavior("bad")))
+    recorded = await baselines.baseline_infer(**request)
+    assert recorded.result is None and recorded.error == "UnexpectedModelBehavior: bad"
+    monkeypatch.setattr(baselines, "infer", AsyncMock(side_effect=ValueError("bad target")))
+    with pytest.raises(ValueError, match="bad target"):
+        await baselines.baseline_infer(**request)

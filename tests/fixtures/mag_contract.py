@@ -128,9 +128,9 @@ def contract_state() -> EpisodeState:
     state.workflow.tasks = {t.id: t for t in tasks}
     state.workflow.resources = {}
     for actor in state.actors.values():
-        if actor["agent_type"] == "human_mock":
+        if actor.agent_type == "human_mock":
             # Disable this branch only in the contract so two fatigue ledger entries are guaranteed.
-            actor["misunderstanding_rate"] = 0
+            actor.misunderstanding_rate = 0
     return state
 
 
@@ -153,12 +153,10 @@ class MAGContractWorker(Worker):
             "Decompose me",
         ]
         plans = [next(t for t in state.workflow.tasks.values() if t.name == name) for name in names]
-        ai = next(k for k in state.active_actors if state.actors[k]["agent_type"] == "ai")
-        human = next(
-            k for k in state.active_actors if state.actors[k]["agent_type"] == "human_mock"
-        )
+        ai = next(k for k in state.active_actors if state.actors[k].agent_type == "ai")
+        human = next(k for k in state.active_actors if state.actors[k].agent_type == "human_mock")
         stakeholder = next(
-            k for k in state.active_actors if state.actors[k]["agent_type"] == "stakeholder"
+            k for k in state.active_actors if state.actors[k].agent_type == "stakeholder"
         )
         gate = await context.spawn_task(
             Task(
@@ -169,8 +167,8 @@ class MAGContractWorker(Worker):
                 sandbox=E2BSandbox(timeout_seconds=600),
             )
         )
-        state.native_dependencies[str(plans[0].id)] = [gate.task_id]
-        state.native_dependencies[str(plans[4].id)] = [gate.task_id]
+        state.native_dependencies[plans[0].id] = [gate.task_id]
+        state.native_dependencies[plans[4].id] = [gate.task_id]
         for planned, actor in zip(plans[:5], [ai, human, human, stakeholder, ai], strict=True):
             await assign(
                 state,
@@ -259,8 +257,8 @@ class MAGContractWorker(Worker):
         )
         for planned, handle in ((failed_plan, failed), (blocked_plan, blocked)):
             state.workflow.tasks[planned.id] = planned
-            state.bindings[str(planned.id)] = handle.task_id
-        state.native_dependencies[str(blocked_plan.id)] = [failed.task_id]
+            state.bindings[planned.id] = handle.task_id
+        state.native_dependencies[blocked_plan.id] = [failed.task_id]
         await drain_admitted_work(state, context)
 
         async def observe() -> EpisodeState:
@@ -268,8 +266,7 @@ class MAGContractWorker(Worker):
 
         state = await context.run_step("contract-final", observe, output_type=EpisodeState)
         completions = [
-            await context.wait_for_task(state.bindings[str(p.id)], timeout_seconds=0)
-            for p in plans[:5]
+            await context.wait_for_task(state.bindings[p.id], timeout_seconds=0) for p in plans[:5]
         ]
         if any(c.status != "completed" or c.output is None for c in completions[:4]):
             raise RuntimeError("A required contract role failed")

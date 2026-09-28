@@ -1,22 +1,20 @@
 """Creation identifiers belong to native code, not the model's deliverable schema."""
 
-from unittest.mock import AsyncMock
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid5
 
 import pytest
-
-from ergon_builtins.benchmarks.manager_gym import workers
-from ergon_builtins.benchmarks.manager_gym import inference
+from ergon_builtins.benchmarks.manager_gym import inference, workers
+from ergon_builtins.benchmarks.manager_gym.inference import InferenceResult
 from ergon_builtins.benchmarks.manager_gym.manager import work_task
+from ergon_builtins.benchmarks.manager_gym.outputs import AITaskOutput
+from ergon_builtins.benchmarks.manager_gym.state import EpisodeConfig, all_tasks, new_episode
 from ergon_builtins.llm.resolution import ResolvedModel
 from ergon_core.api.worker import WorkerOutput
+from pydantic_ai.messages import ModelResponse, ToolCallPart
 from pydantic_ai.models import override_allow_model_requests
 from pydantic_ai.models.function import FunctionModel
-from pydantic_ai.messages import ModelResponse, ToolCallPart
-from ergon_builtins.benchmarks.manager_gym.inference import InferenceResult
-from ergon_builtins.benchmarks.manager_gym.outputs import AITaskOutput
-from ergon_builtins.benchmarks.manager_gym.state import EpisodeConfig, new_episode, all_tasks
 
 MODEL = "openai-compatible:http://localhost:8000/v1#test-model"
 
@@ -26,7 +24,7 @@ async def test_native_resource_ids_are_assigned_without_model_uuid_validation(mo
     assert "id" not in AITaskOutput.model_json_schema()["$defs"]["ResourceDraft"]["properties"]
     state = new_episode(EpisodeConfig(scenario="legal_litigation_ediscovery"))
     planned = next(t for t in all_tasks(state.workflow).values() if not t.subtasks)
-    actor = next(a for a in state.actors.values() if a["agent_type"] == "ai")
+    actor = next(a for a in state.actors.values() if a.agent_type == "ai")
     output = {
         "reasoning": "Created the deliverable",
         "resources": [
@@ -50,7 +48,7 @@ async def test_native_resource_ids_are_assigned_without_model_uuid_validation(mo
         ),
     )
     payload = workers.WorkPayload(episode=state.config, planned_task=planned, actor=actor)
-    result = await workers.MAGWorkWorker(name=actor["agent_id"], model=MODEL)._work(
+    result = await workers.MAGWorkWorker(name=actor.agent_id, model=MODEL)._work(
         payload, workers.WorkInputs(resources=[]), None
     )
     assert result.resources[0].id == uuid5(planned.id, "output/0")
@@ -65,7 +63,7 @@ async def test_invalid_model_output_is_a_durable_native_failed_work_result(
     state = new_episode(EpisodeConfig(scenario="legal_litigation_ediscovery"))
     planned = next(t for t in all_tasks(state.workflow).values() if not t.subtasks)
     actor_type = "human_mock" if output_kind == "empty_human" else "ai"
-    actor = next(k for k, a in state.actors.items() if a["agent_type"] == actor_type)
+    actor = next(k for k, a in state.actors.items() if a.agent_type == actor_type)
     planned.estimated_duration_hours = 1
     final = (
         {}

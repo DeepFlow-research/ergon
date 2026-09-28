@@ -5,14 +5,13 @@ import json
 
 import httpx
 import pytest
-from pydantic_ai.models import override_allow_model_requests
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
-
 from ergon_builtins.benchmarks.manager_gym import inference
 from ergon_builtins.benchmarks.manager_gym.inference import InferenceProfile
 from ergon_builtins.benchmarks.manager_gym.outputs import AITaskOutput
 from ergon_builtins.llm.resolution import ResolvedModel
+from pydantic_ai.models import override_allow_model_requests
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openai import OpenAIProvider
 
 MODEL = "openai-compatible:http://localhost:8000/v1#test-model"
 
@@ -20,9 +19,9 @@ MODEL = "openai-compatible:http://localhost:8000/v1#test-model"
 @pytest.mark.asyncio
 @pytest.mark.parametrize("score", [True, "medium", 4.5])
 async def test_judge_accepts_upstream_response_without_extra_confidence(monkeypatch, score):
+    from ergon_builtins.benchmarks.manager_gym.rubric import JudgeOutput
     from pydantic_ai.messages import ModelResponse, ToolCallPart
     from pydantic_ai.models.function import FunctionModel
-    from ergon_builtins.benchmarks.manager_gym.rubric import JudgeOutput
 
     calls = []
 
