@@ -38,6 +38,14 @@ from ergon_core.test_support.task_factory import task_with_id
 
 INVENTORY = Path(__file__).resolve().parent / "fixtures" / "rubric_inventory.json"
 
+# Rubric counts at the pinned upstream revision: every definition, those upstream
+# runs at the end of an episode, and how many of those are LLM-judged.
+UPSTREAM_DEFINITIONS = 1281
+UPSTREAM_TERMINAL = 1230
+UPSTREAM_TERMINAL_LLM = 876
+# Rubric version 2 drops ICAAP's callable seeking_sourcing rubric.
+TERMINAL_CALLABLE = {1: UPSTREAM_TERMINAL - UPSTREAM_TERMINAL_LLM, 2: 353}
+
 MODEL = "openai-compatible:http://localhost:8000/v1#test-model"
 
 
@@ -104,8 +112,12 @@ def test_scenario_roundtrip_preserves_ids_hierarchy_and_private_preferences(scen
 
 def test_rubric_manifest_matches_pinned_source_inventory():
     reference = {row["id"]: row for row in json.loads(INVENTORY.read_text())["rubrics"]}
-    native = [d for scenario in SCENARIOS for d in definitions(scenario, terminal_only=False)]
-    assert len(native) == len(reference) == 1281
+    native = [
+        d
+        for scenario in SCENARIOS
+        for d in definitions(scenario, terminal_only=False, rubric_version=1)
+    ]
+    assert len(native) == len(reference) == UPSTREAM_DEFINITIONS
     for definition in native:
         expected = reference[definition.slug]
         assert definition.rubric.name == expected["rubric_name"]
@@ -113,13 +125,14 @@ def test_rubric_manifest_matches_pinned_source_inventory():
         function = definition.rubric.evaluator_function
         source = definition.rubric.llm_prompt if function is None else inspect.getsource(function)
         assert hashlib.sha256(source.encode()).hexdigest() == expected["definition_sha256"]
-    selected = [d for scenario in SCENARIOS for d in definitions(scenario)]
-    assert len(selected) == 1230
-    assert sum(d.rubric.llm_prompt is not None for d in selected) == 876
+    selected = [d for scenario in SCENARIOS for d in definitions(scenario, rubric_version=1)]
+    assert len(selected) == UPSTREAM_TERMINAL
+    assert sum(d.rubric.llm_prompt is not None for d in selected) == UPSTREAM_TERMINAL_LLM
 
 
 @pytest.mark.asyncio
-async def test_every_terminal_callable_runs_against_frozen_native_projection():
+@pytest.mark.parametrize("rubric_version", [1, 2])
+async def test_every_terminal_callable_runs_against_frozen_native_projection(rubric_version):
     count = 0
     for scenario in SCENARIOS:
         state = new_episode(EpisodeConfig(scenario=scenario))
@@ -135,15 +148,19 @@ async def test_every_terminal_callable_runs_against_frozen_native_projection():
                 output=state.model_dump_json(), metadata={"snapshot_hash": snapshot_hash(state)}
             ),
         )
-        for definition in definitions(scenario):
+        for definition in definitions(scenario, rubric_version=rubric_version):
             if definition.rubric.evaluator_function:
                 result = await MAGCriterion(
-                    slug=definition.slug, scenario=scenario, model=MODEL
+                    slug=definition.slug,
+                    scenario=scenario,
+                    model=MODEL,
+                    rubric_version=rubric_version,
                 ).evaluate(context)
                 assert math.isfinite(result.score)
                 assert 0 <= result.score <= definition.rubric.max_score
+                assert result.metadata["rubric_version"] == rubric_version
                 count += 1
-    assert count == 354
+    assert count == TERMINAL_CALLABLE[rubric_version]
 
 
 def test_gateway_json_string_action_is_decoded_then_validated():

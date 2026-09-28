@@ -61,6 +61,6 @@ default, corrects them in `manager_gym/rubric_versions.py`.
 
 | Rubric | Issue | Affects |
 |---|---|---|
-| ICAAP `quality` / `seeking_sourcing` | Declares no `required_context`, so it never sees tool usage and always scores 0. | Utility |
-| Stakeholder `response_latency_adherence` | The function caps at 8, but `max_score` is 20. | Diagnostics |
-| Operational `agent_utilization_efficiency` | Description is copied from `deadtime_efficiency`. | Diagnostics |
+| ICAAP `quality` / `seeking_sourcing` | Counts web-search tool calls, which no MAG runner gives workers, without requesting tool usage, and scores a 0–1 fraction against a maximum of 3. It always scores 0. Version 2 drops it. | Utility |
+| Stakeholder `response_latency_adherence` | The function caps at 8, but `max_score` is 20. Version 2 sets the maximum to 8. | Diagnostics |
+| Operational `agent_utilization_efficiency` | Its description is copied from `deadtime_efficiency`, and it never requests the agent states it reads, so it reports "no agent state". Version 2 fixes both. | Diagnostics |

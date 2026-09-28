@@ -8,6 +8,7 @@ Build a sample per episode with ``make_manager_gym_sample`` and submit it throug
 from ergon_builtins.benchmarks.manager_gym.inference import InferenceProfile
 from ergon_builtins.benchmarks.manager_gym.manager import MAGManagerWorker
 from ergon_builtins.benchmarks.manager_gym.rubric import MAGRubric
+from ergon_builtins.benchmarks.manager_gym.rubric_versions import LATEST_RUBRIC_VERSION
 from ergon_builtins.benchmarks.manager_gym.sample import (
     make_manager_gym_sample,
     make_snapshot_reevaluation_sample,
@@ -26,6 +27,7 @@ from ergon_builtins.benchmarks.manager_gym.workers import (
 
 __all__ = [
     "BENCHMARK_VERSION",
+    "LATEST_RUBRIC_VERSION",
     "SCENARIOS",
     "EpisodeConfig",
     "EpisodeState",

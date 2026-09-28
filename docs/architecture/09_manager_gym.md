@@ -117,7 +117,9 @@ Kept from upstream, including known quirks:
 - Scenario factories, team and preference timelines, actor formulas and rubric definitions
   (hash-checked against an inventory taken at the pinned revision).
 - Manager, worker, estimator and judge prompts, input-resource listings, human execution notes
-  and communication tool replies, word for word (`prompts.py` marks each upstream template).
+  and communication tool replies, word for word. `prompts.py` marks each upstream template;
+  Ergon adds only the manager's scheduling rules, the decomposer's system prompt and goal line,
+  and the stakeholder's work persona.
 - Terminal rubric selection: preference rubrics declared `ON_COMPLETION` plus every
   diagnostic. `BOTH` cadence is not expanded (no registered rubric uses it).
 - The misunderstanding branch reports simulated duration and cost but does not add to the
@@ -144,10 +146,12 @@ Deliberate differences in native execution (`mag-native-v1`):
 Rubric versions (`MAGRubric(rubric_version=...)`, recorded in criterion metadata):
 
 - **Version 1** reproduces upstream scores.
-- **Version 2** (default) corrects three upstream rubric bugs listed in the vendored README:
-  ICAAP `seeking_sourcing` (it cannot observe tool use and always scores 0), stakeholder
-  `response_latency_adherence` (its maximum disagrees with its function), and operational
-  `agent_utilization_efficiency` (its description is copied from another rubric).
+- **Version 2** (default) corrects three upstream rubric bugs listed in the vendored README
+  (`manager_gym/rubric_versions.py` holds the corrections):
+  ICAAP `seeking_sourcing` is dropped, because it counts web-search calls no runner provides and
+  always scores 0; stakeholder `response_latency_adherence` gets the maximum its function
+  actually uses; operational `agent_utilization_efficiency` gets a correct description and the
+  agent states it reads. Only the first affects utility, and only for ICAAP.
 
 ## 8. Model calls and failures
 

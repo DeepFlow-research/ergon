@@ -43,6 +43,13 @@ async def main() -> None:
         type=int,
         help="Reasoning token cap for thinking models served by vLLM.",
     )
+    parser.add_argument(
+        "--rubric-version",
+        type=int,
+        choices=[1, 2],
+        default=2,
+        help="1 reproduces upstream scoring; 2 (default) applies the documented fixes.",
+    )
     args = parser.parse_args()
     scenarios = list(SCENARIOS) if args.all else args.scenario or [DEFAULT_SCENARIO]
     inference = InferenceProfile(thinking_token_budget=args.thinking_token_budget)
@@ -61,7 +68,7 @@ async def main() -> None:
         name=name,
         records=records,
         make_sample=lambda config: make_manager_gym_sample(
-            config, environment_name=name, model=args.model
+            config, environment_name=name, model=args.model, rubric_version=args.rubric_version
         ),
     )
     result = await Experiment(name=name, environments=[environment]).submit(k=len(records))

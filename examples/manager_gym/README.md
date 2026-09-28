@@ -46,6 +46,7 @@ options:
 | `--max-decisions` | Manager decisions per episode (default 50). |
 | `--seed` | Seed for the simulated humans and baselines. |
 | `--thinking-token-budget` | Reasoning cap for thinking models served by vLLM. |
+| `--rubric-version` | `2` (default) fixes three upstream rubric bugs; `1` reproduces upstream scoring. |
 
 `random` chooses a random action type and lets the model fill it in; `assign_all` makes one
 model-generated assignment of every task, then waits. All three policies share the same
@@ -60,7 +61,7 @@ incomplete (a null score) rather than zero.
 
 Rubric version 2 (the default) fixes three upstream rubric bugs listed in
 [the vendored README](../../ergon_builtins/ergon_builtins/benchmarks/manager_gym/_vendor/mag/README.md);
-pass `rubric_version=1` to `MAGRubric` to reproduce upstream scoring.
+`--rubric-version 1` reproduces upstream scoring. Every criterion records the version it used.
 
 To grade an exported snapshot again, for example with a different judge, submit it as a new
 sample linked to the original:

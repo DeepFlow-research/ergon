@@ -23,6 +23,13 @@ async def main() -> None:
         required=not os.environ.get("ERGON_MAG_MODEL"),
         help="Ergon model target for the LLM judge (default: $ERGON_MAG_MODEL).",
     )
+    parser.add_argument(
+        "--rubric-version",
+        type=int,
+        choices=[1, 2],
+        default=2,
+        help="1 reproduces upstream scoring; 2 (default) applies the documented fixes.",
+    )
     args = parser.parse_args()
     raw = json.loads(args.snapshot.read_text())
     state = EpisodeState.model_validate(raw)
@@ -33,7 +40,11 @@ async def main() -> None:
         )
     name = f"mag-reevaluation-{uuid4().hex[:8]}"
     sample = make_snapshot_reevaluation_sample(
-        state, source_sample_id=args.source_sample_id, environment_name=name, model=args.model
+        state,
+        source_sample_id=args.source_sample_id,
+        environment_name=name,
+        model=args.model,
+        rubric_version=args.rubric_version,
     )
     result = await Experiment(
         name=name,

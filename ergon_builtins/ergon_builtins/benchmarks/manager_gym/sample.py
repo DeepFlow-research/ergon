@@ -16,6 +16,10 @@ from ergon_builtins.benchmarks.manager_gym.constants import (
 from ergon_builtins.benchmarks.manager_gym.inference import InferenceProfile
 from ergon_builtins.benchmarks.manager_gym.manager import EpisodeTask, MAGManagerWorker
 from ergon_builtins.benchmarks.manager_gym.rubric import MAGRubric
+from ergon_builtins.benchmarks.manager_gym.rubric_versions import (
+    LATEST_RUBRIC_VERSION,
+    RubricVersion,
+)
 from ergon_builtins.benchmarks.manager_gym.state import (
     BENCHMARK_VERSION,
     SOURCE_REVISION,
@@ -28,18 +32,25 @@ from ergon_builtins.benchmarks.manager_gym.state import (
 from ergon_builtins.sandbox.e2b_sandbox import E2BSandbox
 
 
-def _source_metadata(inference: InferenceProfile, **extra: str) -> dict[str, JsonValue]:
+def _source_metadata(
+    inference: InferenceProfile, rubric_version: RubricVersion, **extra: str
+) -> dict[str, JsonValue]:
     return {
         "provider": PROVIDER,
         "benchmark_version": BENCHMARK_VERSION,
         "source_revision": SOURCE_REVISION,
+        "rubric_version": rubric_version,
         **extra,
         "inference_profile": inference.model_dump(mode="json"),
     }
 
 
 def make_manager_gym_sample(
-    config: EpisodeConfig, *, model: str, environment_name: str = "manager-gym"
+    config: EpisodeConfig,
+    *,
+    model: str,
+    environment_name: str = "manager-gym",
+    rubric_version: RubricVersion = LATEST_RUBRIC_VERSION,
 ) -> Sample:
     """Build the Ergon sample for one MAG episode.
 
@@ -47,6 +58,8 @@ def make_manager_gym_sample(
         config: Scenario, manager policy, seed and limits for the episode.
         model: Ergon model target used by every role and by the LLM judge.
         environment_name: Environment the sample is recorded under.
+        rubric_version: 1 reproduces upstream scoring; 2 applies the corrections in
+            ``rubric_versions.py``.
 
     Returns:
         A sample with a single manager task, graded by ``MAGRubric``.
@@ -58,14 +71,21 @@ def make_manager_gym_sample(
         task_payload=config,
         worker=MAGManagerWorker(name="MAG manager", actor_key=MANAGER_ACTOR_ID, model=model),
         sandbox=E2BSandbox(timeout_seconds=SANDBOX_TIMEOUT_SECONDS),
-        evaluators=(MAGRubric(name=RUBRIC_NAME, scenario=config.scenario, model=model),),
+        evaluators=(
+            MAGRubric(
+                name=RUBRIC_NAME,
+                scenario=config.scenario,
+                model=model,
+                rubric_version=rubric_version,
+            ),
+        ),
     )
     return Sample.from_tasks(
         name=f"{config.scenario}:{config.seed}",
         sample_key=f"{config.scenario}:{config.seed}",
         environment_name=environment_name,
         sample_ref=config.model_dump(mode="json"),
-        source_metadata=_source_metadata(config.inference),
+        source_metadata=_source_metadata(config.inference, rubric_version),
         tasks=[cast(Task, task)],
     )
 
@@ -92,6 +112,7 @@ def make_snapshot_reevaluation_sample(
     source_sample_id: UUID,
     environment_name: str,
     model: str,
+    rubric_version: RubricVersion = LATEST_RUBRIC_VERSION,
 ) -> Sample:
     """Build a sample that re-grades a frozen episode snapshot without re-running it.
 
@@ -100,6 +121,7 @@ def make_snapshot_reevaluation_sample(
         source_sample_id: The sample the snapshot came from.
         environment_name: Environment the new sample is recorded under.
         model: Ergon model target for the LLM judge.
+        rubric_version: Rubric version to grade under; see ``make_manager_gym_sample``.
 
     Returns:
         A sample whose single task replays the snapshot into ``MAGRubric``.
@@ -112,7 +134,11 @@ def make_snapshot_reevaluation_sample(
         task_payload=state,
         worker=MAGSnapshotWorker(name="Frozen MAG snapshot", model=model),
         sandbox=E2BSandbox(timeout_seconds=SANDBOX_TIMEOUT_SECONDS),
-        evaluators=(MAGRubric(name=RUBRIC_NAME, scenario=scenario, model=model),),
+        evaluators=(
+            MAGRubric(
+                name=RUBRIC_NAME, scenario=scenario, model=model, rubric_version=rubric_version
+            ),
+        ),
     )
     return Sample.from_tasks(
         name=f"Re-evaluate {scenario}:{source_sample_id}",
@@ -120,6 +146,7 @@ def make_snapshot_reevaluation_sample(
         environment_name=environment_name,
         source_metadata=_source_metadata(
             state.config.inference,
+            rubric_version,
             evaluation_of_sample=str(source_sample_id),
             snapshot_hash=snapshot_hash(state),
         ),

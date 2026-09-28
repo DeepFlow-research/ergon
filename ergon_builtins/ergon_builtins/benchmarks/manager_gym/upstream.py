@@ -57,6 +57,7 @@ from ._vendor.mag.manager_agent_gym.schemas.core.workflow import (
 from ._vendor.mag.manager_agent_gym.schemas.evaluation.success_criteria import (
     ValidationContext,
 )
+from ._vendor.mag.manager_agent_gym.schemas.preferences.evaluator import Evaluator
 from ._vendor.mag.manager_agent_gym.schemas.preferences.preference import (
     Preference,
     PreferenceWeights,
@@ -100,6 +101,7 @@ __all__ = [
     "AgentConfig",
     "AgentPublicState",
     "AgentToolUseEvent",
+    "Evaluator",
     "HumanAgentConfig",
     "Message",
     "MessageType",
