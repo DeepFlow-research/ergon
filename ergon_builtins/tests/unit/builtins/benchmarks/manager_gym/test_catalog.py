@@ -35,8 +35,7 @@ from ergon_builtins.benchmarks.manager_gym.state import (
     snapshot_hash,
 )
 
-ROOT = Path(__file__).resolve().parents[6]
-INVENTORY = ROOT / "docs/rfcs/active/2026-09-07-manager-gym-port/evidence/rubric-inventory.json"
+INVENTORY = Path(__file__).resolve().parent / "fixtures" / "rubric_inventory.json"
 
 
 def test_large_native_artifacts_do_not_expand_manager_or_source_judge_previews():
