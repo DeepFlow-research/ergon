@@ -3,24 +3,26 @@
 from collections.abc import AsyncGenerator
 from typing import ClassVar, cast
 from uuid import UUID
+
 from ergon_core.api import Sample, Task, Worker, WorkerContext, WorkerStreamItem
 from ergon_core.api.worker import WorkerOutput
-from ergon_builtins.sandbox.e2b_sandbox import E2BSandbox
+
 from ergon_builtins.benchmarks.manager_gym.inference import (
     INTERNAL_MODEL,
-    require_internal_model,
     inference_profile,
+    require_internal_model,
 )
 from ergon_builtins.benchmarks.manager_gym.manager import EpisodeTask, MAGManagerWorker
 from ergon_builtins.benchmarks.manager_gym.rubric import MAGRubric
 from ergon_builtins.benchmarks.manager_gym.state import (
+    BENCHMARK_VERSION,
+    SOURCE_REVISION,
     EpisodeConfig,
     EpisodeState,
     snapshot_hash,
-    BENCHMARK_VERSION,
-    SOURCE_REVISION,
 )
-from ergon_builtins.benchmarks.manager_gym.scenario_catalog import SCENARIOS
+from ergon_builtins.benchmarks.manager_gym.upstream import SCENARIOS
+from ergon_builtins.sandbox.e2b_sandbox import E2BSandbox
 
 
 def make_manager_gym_sample(

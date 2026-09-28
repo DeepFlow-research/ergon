@@ -5,11 +5,11 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlmodel import select, col
 from ergon_core.api.worker import WorkerContext
 from ergon_core.core.application.communication.models import CreateMessageRequest
 from ergon_core.core.application.communication.service import CommunicationService
 from ergon_core.core.persistence.telemetry.models import ThreadMessage
+from sqlmodel import col, select
 
 
 def preview(content: str, limit: int) -> str:

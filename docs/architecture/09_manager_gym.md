@@ -132,12 +132,13 @@ location and image digest are provenance, not proof of immutable weight bytes.
 
 Native storage and frozen snapshots retain complete resources and communication. Model prompts preserve source previews: 300 resource characters for manager/judge, 200 for AI/human work, and ten recent manager-visible messages clipped at 140 characters. Manager action briefs omit repeated payloads. The pinned LLM rubric path renders the no-scope workflow summary; callable rubrics receive complete requested context. Do not serialize the entire frozen context into every LLM criterion.
 
-Pinned source scoring/authoring functions retain their original catch-all
-fallback semantics. `pyproject.toml` exempts only those source files and the
-source-compatible random/bulk fallback from the relevant slopcop errors. Native
-manager, worker, transport, messaging, rubric adapter and core paths retain the
-normal lint rules. This preserves benchmark behavior rather than narrowing
-source exception handling to satisfy a style rule.
+Upstream MAG scenarios, schemas, evaluators and prompts are vendored
+byte-for-byte (apart from import paths) under `manager_gym/_vendor/mag`, and
+native code reaches them only through `manager_gym/upstream.py`. The vendored
+README explains the import rules, the shims and how to update the pin.
+`pyproject.toml` excludes that tree from ruff and slopcop so upstream scoring
+functions keep their catch-all fallbacks; native manager, worker, transport,
+messaging, rubric adapter and core paths keep the normal lint rules.
 
 ### Structured output and communication
 

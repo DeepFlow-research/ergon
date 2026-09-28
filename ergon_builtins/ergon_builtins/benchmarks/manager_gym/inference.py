@@ -6,6 +6,7 @@ from time import monotonic
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
+from ergon_core.core.shared.context_parts import ContextPartChunk, ProviderTokenUsage
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, ToolOutput, capture_run_messages
 from pydantic_ai.exceptions import AgentRunError, UnexpectedModelBehavior, UsageLimitExceeded
@@ -15,7 +16,6 @@ from pydantic_ai.usage import UsageLimits
 
 from ergon_builtins.common.llm_context.adapters.pydantic_ai import PydanticAITranscriptAdapter
 from ergon_builtins.llm.resolution import resolve_model_target
-from ergon_core.core.shared.context_parts import ContextPartChunk, ProviderTokenUsage
 
 INTERNAL_MODEL = (
     "openai-compatible:https://gateway.example.invalid/v1/models/qwen3-8-27b-28#qwen3-8-27b-28"

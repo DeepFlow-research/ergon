@@ -5,31 +5,30 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from sqlmodel import Session
-
-from ergon_core.api.worker import WorkerContext
-from ergon_core.core.persistence.graph.models import SampleGraphNode
-from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
-from ergon_core.core.application.communication import service as communication_module
-from ergon_core.core.application.runtime import task_inspection as inspection_module
-from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
-from ergon_core.core.application.resources.service import SampleResourceReadService
-from ergon_core.tests.unit.runtime.test_manager_gym_preport_proof import preport
-from ergon_core.tests.unit.runtime.test_spawn_dynamic_task import _SessionContext
-from ergon_builtins.benchmarks.manager_gym import manager
-from ergon_builtins.benchmarks.manager_gym import baselines
+from ergon_builtins.benchmarks.manager_gym import baselines, manager
 from ergon_builtins.benchmarks.manager_gym.actions import (
-    ManagerDecision,
     AssignTaskAction,
+    ManagerDecision,
     RemoveTaskAction,
 )
-from ergon_builtins.benchmarks.manager_gym.inference import InferenceResult, INTERNAL_MODEL
+from ergon_builtins.benchmarks.manager_gym.inference import INTERNAL_MODEL, InferenceResult
 from ergon_builtins.benchmarks.manager_gym.state import (
     all_tasks,
-    public_observation,
     project_native_state,
+    public_observation,
 )
-from ergon_builtins.benchmarks.manager_gym.source_types import Resource
+from ergon_builtins.benchmarks.manager_gym.upstream import Resource
+from ergon_core.api.worker import WorkerContext
+from ergon_core.core.application.communication import service as communication_module
+from ergon_core.core.application.resources.service import SampleResourceReadService
+from ergon_core.core.application.runtime import task_inspection as inspection_module
+from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
+from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
+from sqlmodel import Session
+
+from ergon_core.tests.unit.runtime.test_manager_gym_preport_proof import preport
+from ergon_core.tests.unit.runtime.test_spawn_dynamic_task import _SessionContext
 from tests.fixtures.mag_contract import contract_state
 
 ACTIONS = [

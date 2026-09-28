@@ -1,36 +1,36 @@
 """Authored work and frozen benchmark projections, never an execution queue."""
 
+import json
 from datetime import UTC, datetime
 from hashlib import sha256
-import json
 from typing import Any, Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from pydantic import BaseModel, Field
-from sqlmodel import Session, select, col
-
 from ergon_core.api.worker import WorkerContext
 from ergon_core.core.persistence.context.models import SampleContextEvent
+from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt, ThreadMessage
 from ergon_core.core.shared.context_parts import ToolResultPart
-from ergon_core.core.persistence.telemetry.models import ThreadMessage, SampleTaskAttempt
+from pydantic import BaseModel, Field
+from sqlmodel import Session, col, select
+
 from ergon_builtins.benchmarks.manager_gym.actions import ActionResult
-from ergon_builtins.benchmarks.manager_gym.scenario_catalog import SCENARIOS
-from ergon_builtins.benchmarks.manager_gym.scenarios.stakeholders import create_stakeholder_agent
-from ergon_builtins.benchmarks.manager_gym.source_types import (
+from ergon_builtins.benchmarks.manager_gym.upstream import (
+    SCENARIOS,
     AgentConfig,
+    AgentToolUseEvent,
     AIAgentConfig,
     HumanAgentConfig,
-    StakeholderConfig,
     Message,
     MessageType,
-    AgentToolUseEvent,
-    PreferenceWeights,
     Preference,
+    PreferenceWeights,
     PreferenceWeightUpdateRequest,
     Resource,
+    StakeholderConfig,
     Task,
     TaskStatus,
     Workflow,
+    create_stakeholder_agent,
 )
 
 SOURCE_REVISION = "3f7a5d4af1d31abaedbedd525a0090452926fef4"

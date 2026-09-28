@@ -8,20 +8,20 @@ from uuid import UUID
 from pydantic import BaseModel, Field, create_model, field_validator
 
 from ergon_builtins.benchmarks.manager_gym.actions import (
-    ManagerDecision,
+    AddTaskDependencyAction,
     AssignTaskAction,
     CreateTaskAction,
-    RemoveTaskAction,
-    RefineTaskAction,
-    AddTaskDependencyAction,
-    RemoveTaskDependencyAction,
     DecomposeTaskAction,
-    InspectTaskAction,
-    GetWorkflowStatusAction,
     GetAvailableAgentsAction,
     GetPendingTasksAction,
-    SendMessageAction,
+    GetWorkflowStatusAction,
+    InspectTaskAction,
+    ManagerDecision,
     NoOpAction,
+    RefineTaskAction,
+    RemoveTaskAction,
+    RemoveTaskDependencyAction,
+    SendMessageAction,
 )
 from ergon_builtins.benchmarks.manager_gym.inference import InferenceResult, infer
 from ergon_builtins.benchmarks.manager_gym.state import EpisodeState, all_tasks, public_observation

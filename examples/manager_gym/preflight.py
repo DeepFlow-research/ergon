@@ -7,35 +7,35 @@ The separate contract stage verifies E2B, scheduling, messaging and grading.
 
 import argparse
 import asyncio
-from datetime import UTC, datetime
 import json
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
 from ergon_builtins.benchmarks.manager_gym.actions import ManagerDecision
 from ergon_builtins.benchmarks.manager_gym.baselines import BulkDecision
 from ergon_builtins.benchmarks.manager_gym.inference import (
-    inference_profile,
     INTERNAL_MODEL,
     infer,
+    inference_profile,
     require_internal_model,
 )
 from ergon_builtins.benchmarks.manager_gym.manager import Decomposition
 from ergon_builtins.benchmarks.manager_gym.outputs import (
     AITaskOutput,
-    HumanWorkOutput,
     HumanTimeEstimation,
+    HumanWorkOutput,
 )
 from ergon_builtins.benchmarks.manager_gym.rubric import JudgeOutput, definitions
-from ergon_builtins.benchmarks.manager_gym.scenario_catalog import SCENARIOS
 from ergon_builtins.benchmarks.manager_gym.state import (
-    EpisodeConfig,
-    SOURCE_REVISION,
     BENCHMARK_VERSION,
-    new_episode,
+    SOURCE_REVISION,
+    EpisodeConfig,
     all_tasks,
+    new_episode,
 )
+from ergon_builtins.benchmarks.manager_gym.upstream import SCENARIOS
 
 
 async def main() -> None:

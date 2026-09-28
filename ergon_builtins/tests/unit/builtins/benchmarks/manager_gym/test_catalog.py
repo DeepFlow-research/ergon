@@ -1,9 +1,7 @@
 """Offline source-characterization and native snapshot contracts."""
 
-from ergon_core.api.criterion import CriterionOutcome
-from ergon_builtins.benchmarks.manager_gym.rubric import MAGRubric
-
 import hashlib
+import inspect
 import json
 import math
 from datetime import UTC, datetime
@@ -12,28 +10,32 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from ergon_core.api.criterion import CriterionContext
-from ergon_core.api.worker import WorkerOutput
-from ergon_core.test_support.task_factory import task_with_id
 from ergon_builtins.benchmarks.manager_gym.actions import ManagerDecision
 from ergon_builtins.benchmarks.manager_gym.inference import INTERNAL_MODEL, require_internal_model
-from ergon_builtins.benchmarks.manager_gym.rubric import definitions, MAGCriterion, normalize_score
+from ergon_builtins.benchmarks.manager_gym.rubric import (
+    MAGCriterion,
+    MAGRubric,
+    definitions,
+    normalize_score,
+)
 from ergon_builtins.benchmarks.manager_gym.sample import (
+    MAGSnapshotWorker,
     make_manager_gym_sample,
     make_snapshot_reevaluation_sample,
-    MAGSnapshotWorker,
 )
-from ergon_builtins.benchmarks.manager_gym.scenario_catalog import SCENARIOS
-from ergon_builtins.benchmarks.manager_gym.source_types import Resource
 from ergon_builtins.benchmarks.manager_gym.state import (
     EpisodeConfig,
     EpisodeState,
-    new_episode,
-    apply_timeline,
     all_tasks,
+    apply_timeline,
+    new_episode,
     public_observation,
     snapshot_hash,
 )
+from ergon_builtins.benchmarks.manager_gym.upstream import SCENARIOS, Resource
+from ergon_core.api.criterion import CriterionContext, CriterionOutcome
+from ergon_core.api.worker import WorkerOutput
+from ergon_core.test_support.task_factory import task_with_id
 
 INVENTORY = Path(__file__).resolve().parent / "fixtures" / "rubric_inventory.json"
 
@@ -107,11 +109,9 @@ def test_rubric_manifest_matches_pinned_source_inventory():
         expected = reference[definition.slug]
         assert definition.rubric.name == expected["rubric_name"]
         assert definition.rubric.max_score == expected["max_score"]
-        if definition.rubric.llm_prompt:
-            assert (
-                hashlib.sha256(definition.rubric.llm_prompt.encode()).hexdigest()
-                == expected["definition_sha256"]
-            )
+        function = definition.rubric.evaluator_function
+        source = definition.rubric.llm_prompt if function is None else inspect.getsource(function)
+        assert hashlib.sha256(source.encode()).hexdigest() == expected["definition_sha256"]
     selected = [d for scenario in SCENARIOS for d in definitions(scenario)]
     assert len(selected) == 1230
     assert sum(d.rubric.llm_prompt is not None for d in selected) == 876

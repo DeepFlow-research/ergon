@@ -1,8 +1,9 @@
 """Pinned MAG action fields; execution is implemented with native Ergon APIs."""
 
+import json
 from typing import Any, Literal
 from uuid import UUID
-import json
+
 from pydantic import BaseModel, Field, field_validator
 
 

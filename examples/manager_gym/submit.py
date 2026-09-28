@@ -9,11 +9,11 @@ import asyncio
 import json
 from uuid import uuid4
 
-from ergon_core.api import Environment, Experiment
 from ergon_builtins.benchmarks.manager_gym.inference import INTERNAL_MODEL
 from ergon_builtins.benchmarks.manager_gym.sample import make_manager_gym_sample
-from ergon_builtins.benchmarks.manager_gym.scenario_catalog import SCENARIOS
 from ergon_builtins.benchmarks.manager_gym.state import EpisodeConfig
+from ergon_builtins.benchmarks.manager_gym.upstream import SCENARIOS
+from ergon_core.api import Environment, Experiment
 
 
 async def main() -> None:

@@ -1,46 +1,42 @@
 """Native criteria over one frozen terminal snapshot, retaining MAG utility arithmetic."""
 
-from collections import defaultdict
-from collections.abc import Iterable
 import inspect
 import json
 import math
+from collections import defaultdict
+from collections.abc import Iterable
 from typing import Any, ClassVar, Literal, cast
-
-from pydantic import BaseModel, Field
-from pydantic_ai.exceptions import AgentRunError
 
 from ergon_core.api import Task
 from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome
 from ergon_core.api.criterion.score import ScoreScale
 from ergon_core.api.rubric import Evaluator
 from ergon_core.api.rubric.results import TaskEvaluationResult
-from ergon_builtins.benchmarks.manager_gym.definitions.common_evaluators import (
-    build_default_evaluators,
-)
-from ergon_builtins.benchmarks.manager_gym.definitions.scenario_constraints import (
-    build_constraints_for_scenario,
-)
+from pydantic import BaseModel, Field
+from pydantic_ai.exceptions import AgentRunError
+
 from ergon_builtins.benchmarks.manager_gym.inference import infer, model_settings
-from ergon_builtins.benchmarks.manager_gym.scenario_catalog import SCENARIOS
-from ergon_builtins.benchmarks.manager_gym.source_types import (
-    Workflow,
-    WorkflowRubric,
-    RunCondition,
-    ValidationContext,
-    SenderMessagesView,
-    ThreadMessagesView,
-    PreferenceWeights,
-    Preference,
-    AgentPublicState,
-)
+from ergon_builtins.benchmarks.manager_gym.prompts import judge_prompt
 from ergon_builtins.benchmarks.manager_gym.state import (
     EpisodeState,
-    all_tasks,
     actor_config,
+    all_tasks,
     snapshot_hash,
 )
-from ergon_builtins.benchmarks.manager_gym.prompts.judge import judge_prompt
+from ergon_builtins.benchmarks.manager_gym.upstream import (
+    SCENARIOS,
+    AgentPublicState,
+    Preference,
+    PreferenceWeights,
+    RunCondition,
+    SenderMessagesView,
+    ThreadMessagesView,
+    ValidationContext,
+    Workflow,
+    WorkflowRubric,
+    build_constraints_for_scenario,
+    build_default_evaluators,
+)
 
 
 class RubricDefinition(BaseModel):

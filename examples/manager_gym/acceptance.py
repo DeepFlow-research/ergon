@@ -7,43 +7,43 @@ This submits ordinary Ergon samples; Ergon owns all task execution and retries.
 
 import argparse
 import asyncio
-from datetime import UTC, datetime
 import gzip
-from hashlib import sha256
 import json
-from pathlib import Path
 import platform
+from datetime import UTC, datetime
+from hashlib import sha256
+from pathlib import Path
 from time import monotonic
 from uuid import UUID, uuid4
 
 from e2b import AsyncSandbox
 from e2b.exceptions import SandboxNotFoundException
-from sqlmodel import select
-
-from ergon_core.api import Environment, Experiment, Sample, Task
-from ergon_core.api.rubric.rubric import Rubric
-from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.graph.models import SampleGraphNode, SampleGraphEdge
-from ergon_core.core.persistence.context.models import SampleContextEvent
-from ergon_core.core.persistence.telemetry.models import (
-    SampleRecord,
-    SampleTaskAttempt,
-    SampleTaskEvaluation,
-    SampleResource,
-    ThreadMessage,
-    SandboxEvent,
-)
-from ergon_builtins.sandbox.e2b_sandbox import E2BSandbox
 from ergon_builtins.benchmarks.manager_gym.inference import INTERNAL_MODEL, require_internal_model
+from ergon_builtins.benchmarks.manager_gym.rubric import definitions
 from ergon_builtins.benchmarks.manager_gym.sample import make_manager_gym_sample
-from ergon_builtins.benchmarks.manager_gym.scenario_catalog import SCENARIOS
 from ergon_builtins.benchmarks.manager_gym.state import (
-    EpisodeConfig,
     BENCHMARK_VERSION,
     SOURCE_REVISION,
+    EpisodeConfig,
 )
-from ergon_builtins.benchmarks.manager_gym.rubric import definitions
-from tests.fixtures.mag_contract import MAGContractWorker, MAGContractCriterion
+from ergon_builtins.benchmarks.manager_gym.upstream import SCENARIOS
+from ergon_builtins.sandbox.e2b_sandbox import E2BSandbox
+from ergon_core.api import Environment, Experiment, Sample, Task
+from ergon_core.api.rubric.rubric import Rubric
+from ergon_core.core.persistence.context.models import SampleContextEvent
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.telemetry.models import (
+    SampleRecord,
+    SampleResource,
+    SampleTaskAttempt,
+    SampleTaskEvaluation,
+    SandboxEvent,
+    ThreadMessage,
+)
+from sqlmodel import select
+
+from tests.fixtures.mag_contract import MAGContractCriterion, MAGContractWorker
 
 PILOTS = (
     "legal_litigation_ediscovery",

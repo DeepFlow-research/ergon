@@ -1,38 +1,38 @@
 """Native MAG work roles, with human state derived from committed Ergon outputs."""
 
-from collections.abc import AsyncGenerator
 import json
-from dataclasses import dataclass
 import random
+from collections.abc import AsyncGenerator
+from dataclasses import dataclass
 from typing import Any, ClassVar
 from uuid import UUID, uuid5
-
-from pydantic import BaseModel, Field
-from sqlmodel import select
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
 from ergon_core.api.worker import WorkerOutput
 from ergon_core.core.application.communication.models import CreateMessageRequest
 from ergon_core.core.application.communication.service import CommunicationService
 from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
+from pydantic import BaseModel, Field
+from sqlmodel import select
+
 from ergon_builtins.benchmarks.manager_gym.communication import MAGCommunication
-from ergon_builtins.benchmarks.manager_gym.inference import infer, InferenceResult, ModelFailure
+from ergon_builtins.benchmarks.manager_gym.inference import InferenceResult, ModelFailure, infer
 from ergon_builtins.benchmarks.manager_gym.outputs import (
     AITaskOutput,
-    HumanWorkOutput,
     HumanTimeEstimation,
-)
-from ergon_builtins.benchmarks.manager_gym.prompts.ai_agent_prompts import AI_AGENT_TASK_TEMPLATE
-from ergon_builtins.benchmarks.manager_gym.prompts.human_agent_prompts import (
-    HUMAN_TASK_ASSIGNMENT_TEMPLATE,
-    HUMAN_SIMULATION_INSTRUCTIONS_TEMPLATE,
-)
-from ergon_builtins.benchmarks.manager_gym.source_types import (
-    Task as PlannedTask,
-    Resource,
-    HumanAgentConfig,
+    HumanWorkOutput,
 )
 from ergon_builtins.benchmarks.manager_gym.state import EpisodeConfig, actor_config
+from ergon_builtins.benchmarks.manager_gym.upstream import (
+    AI_AGENT_TASK_TEMPLATE,
+    HUMAN_SIMULATION_INSTRUCTIONS_TEMPLATE,
+    HUMAN_TASK_ASSIGNMENT_TEMPLATE,
+    HumanAgentConfig,
+    Resource,
+)
+from ergon_builtins.benchmarks.manager_gym.upstream import (
+    Task as PlannedTask,
+)
 
 
 class WorkPayload(BaseModel):

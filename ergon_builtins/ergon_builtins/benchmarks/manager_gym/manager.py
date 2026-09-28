@@ -1,70 +1,71 @@
 """MAG manager policy using native durable steps and the WorkerContext task facade."""
 
-from collections.abc import AsyncGenerator
-from datetime import UTC, datetime
 import json
 import random
+from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 from graphlib import TopologicalSorter
 from typing import ClassVar, cast
 from uuid import UUID, uuid5
 
-from pydantic import BaseModel, Field, field_validator
-
 from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
-from ergon_core.core.application.runtime.errors import GraphError
 from ergon_core.api.worker import WorkerOutput
 from ergon_core.core.application.communication.models import CreateMessageRequest, MessageResponse
 from ergon_core.core.application.communication.service import CommunicationService
+from ergon_core.core.application.runtime.errors import GraphError
 from ergon_core.core.shared.context_parts import ContextPartChunk, ToolResultPart
-from ergon_builtins.sandbox.e2b_sandbox import E2BSandbox
+from pydantic import BaseModel, Field, field_validator
+
 from ergon_builtins.benchmarks.manager_gym.actions import (
-    ManagerAction,
-    ManagerDecision,
     ActionResult,
+    AddTaskDependencyAction,
     AssignTaskAction,
     CreateTaskAction,
-    RemoveTaskAction,
-    RefineTaskAction,
-    AddTaskDependencyAction,
-    RemoveTaskDependencyAction,
-    InspectTaskAction,
     DecomposeTaskAction,
-    SendMessageAction,
+    InspectTaskAction,
+    ManagerAction,
+    ManagerDecision,
     NoOpAction,
+    RefineTaskAction,
+    RemoveTaskAction,
+    RemoveTaskDependencyAction,
+    SendMessageAction,
 )
-from ergon_builtins.benchmarks.manager_gym.inference import infer, InferenceResult
 from ergon_builtins.benchmarks.manager_gym.baselines import (
     BaselineInference,
     baseline_infer,
-    bulk_infer,
     bulk_assignments,
+    bulk_infer,
     random_schema,
 )
-from ergon_builtins.benchmarks.manager_gym.prompts.manager import (
-    STRUCTURED_MANAGER_SYSTEM_PROMPT_TEMPLATE,
-)
-from ergon_builtins.benchmarks.manager_gym.prompts.decomposition import TASK_DECOMPOSITION_PROMPT
-from ergon_builtins.benchmarks.manager_gym.source_types import Task as PlannedTask, TaskStatus
+from ergon_builtins.benchmarks.manager_gym.inference import InferenceResult, infer
 from ergon_builtins.benchmarks.manager_gym.state import (
+    BENCHMARK_VERSION,
+    SOURCE_REVISION,
     EpisodeConfig,
     EpisodeState,
     ScheduledMessage,
-    new_episode,
-    apply_timeline,
     all_tasks,
+    apply_timeline,
+    new_episode,
     project_native_state,
     public_observation,
     snapshot_hash,
-    BENCHMARK_VERSION,
-    SOURCE_REVISION,
 )
+from ergon_builtins.benchmarks.manager_gym.upstream import (
+    STRUCTURED_MANAGER_SYSTEM_PROMPT_TEMPLATE,
+    TASK_DECOMPOSITION_PROMPT,
+    TaskStatus,
+)
+from ergon_builtins.benchmarks.manager_gym.upstream import Task as PlannedTask
 from ergon_builtins.benchmarks.manager_gym.workers import (
-    WorkTask,
-    WorkPayload,
-    MAGWorkWorker,
     MAGHumanWorker,
     MAGStakeholderWorker,
+    MAGWorkWorker,
+    WorkPayload,
+    WorkTask,
 )
+from ergon_builtins.sandbox.e2b_sandbox import E2BSandbox
 
 
 class EpisodeTask(Task[EpisodeConfig]):

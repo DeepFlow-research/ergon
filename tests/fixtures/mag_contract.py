@@ -1,39 +1,39 @@
 """Scripted live composition contract; deliberately not an autonomous MAG score."""
 
+import json
 from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta
-import json
 from typing import ClassVar, cast
 from uuid import uuid5
-from pydantic import RootModel
 
-from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
-from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome
-from ergon_core.api.worker import WorkerOutput
-from ergon_builtins.sandbox.e2b_sandbox import E2BSandbox
 from ergon_builtins.benchmarks.manager_gym.actions import (
     AssignTaskAction,
+    DecomposeTaskAction,
     RefineTaskAction,
     RemoveTaskAction,
-    DecomposeTaskAction,
 )
 from ergon_builtins.benchmarks.manager_gym.manager import (
     assign,
+    decompose_work,
+    drain_admitted_work,
     refine_work,
     remove_work,
-    decompose_work,
     save_message,
-    drain_admitted_work,
 )
-from ergon_builtins.benchmarks.manager_gym.source_types import Task as PlannedTask
 from ergon_builtins.benchmarks.manager_gym.state import (
     EpisodeConfig,
     EpisodeState,
-    new_episode,
     apply_timeline,
+    new_episode,
     project_native_state,
     snapshot_hash,
 )
+from ergon_builtins.benchmarks.manager_gym.upstream import Task as PlannedTask
+from ergon_builtins.sandbox.e2b_sandbox import E2BSandbox
+from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
+from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome
+from ergon_core.api.worker import WorkerOutput
+from pydantic import RootModel
 
 CONTRACT_FILE = "/workspace/final_output/mag-contract.json"
 
