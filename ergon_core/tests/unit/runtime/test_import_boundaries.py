@@ -42,9 +42,8 @@ def test_persistent_component_catalog_model_is_deleted() -> None:
 
 
 def test_telemetry_models_import_before_run_resource_api() -> None:
-    from ergon_core.core.persistence.telemetry.models import SampleResource
-
     from ergon_core.core.application.resources import SampleResourceView
+    from ergon_core.core.persistence.telemetry.models import SampleResource
 
     assert SampleResource.__tablename__ == "sample_resources"
     assert SampleResourceView.__name__ == "SampleResourceView"

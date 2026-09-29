@@ -1,7 +1,7 @@
 """Application service for append-only worker context events.
 
 The service maintains per-execution sequence counters in memory. This is safe
-because each execution runs in a single Inngest invocation.
+when replayed chunks are checked against their persisted sequence before insertion.
 """
 
 import logging
@@ -9,6 +9,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from ergon_core.core.persistence.context.models import SampleContextEvent
 from ergon_core.core.shared.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
@@ -19,10 +20,13 @@ from ergon_core.core.shared.context_parts import (
     ToolResultPart,
     UserMessagePart,
 )
-from ergon_core.core.persistence.context.models import SampleContextEvent
 from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
+
+
+class ContextReplayMismatch(ValueError):
+    """A replay attempted to replace already committed context content."""
 
 
 class ContextEventService:
@@ -87,9 +91,33 @@ class ContextEventService:
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
         policy_version: str | None = None,
+        replay: bool = False,
     ) -> SampleContextEvent:
         """Enrich and persist one worker-emitted context stream chunk."""
         seq = self._next_sequence(execution_id)
+        if replay:
+            existing = session.exec(
+                select(SampleContextEvent).where(
+                    SampleContextEvent.task_attempt_id == execution_id,
+                    SampleContextEvent.sequence == seq,
+                )
+            ).first()
+            if existing is not None:
+                expected = chunk.model_dump(mode="json")
+                if any(
+                    existing.payload.get(key) != expected.get(key)
+                    for key in ("part", "token_ids", "logprobs", "provider_usage")
+                ):
+                    raise ContextReplayMismatch(
+                        f"Non-deterministic context replay at sequence {seq}"
+                    )
+                self._sequence_counters[execution_id] = seq + 1
+                turn_id = existing.payload.get("turn_id")
+                if isinstance(turn_id, str):
+                    self._active_turn_ids[execution_id] = turn_id
+                else:
+                    self._active_turn_ids.pop(execution_id, None)
+                return existing
         now = datetime.now(UTC)
         event_started_at = started_at or now
         event_completed_at = completed_at or now
@@ -122,7 +150,8 @@ class ContextEventService:
 
         for listener in self._listeners:
             try:
-                # TODO: the return of this function should probably be a DTO detailing which of the listeners were actuallly called and which ones failed
+                # TODO: return a DTO detailing which listeners were called and which
+                # ones failed.
                 await listener(event)
             except Exception:  # slopcop: ignore[no-broad-except]
                 logger.warning("Context event listener failed", exc_info=True)

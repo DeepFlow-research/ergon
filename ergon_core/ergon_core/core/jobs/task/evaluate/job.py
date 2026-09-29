@@ -30,7 +30,6 @@ from uuid import UUID
 
 from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.core.application.evaluation.service import EvaluationService
-from .contract import EvaluateTaskRunResult, TaskEvaluateRequest
 from ergon_core.core.application.events.service import get_dashboard_event_publisher
 from ergon_core.core.application.runtime.task_execution import TaskExecutionService
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
@@ -42,7 +41,8 @@ from ergon_core.core.infrastructure.tracing import (
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
 from ergon_core.core.views.dashboard_events.contracts import DashboardTaskEvaluationUpdatedEvent
-from ergon_core.core.views.samples.evaluation_mapping import build_dashboard_evaluation_dto
+
+from .contract import EvaluateTaskRunResult, TaskEvaluateRequest
 
 if TYPE_CHECKING:
     from ergon_core.api.rubric import Evaluator
@@ -166,9 +166,10 @@ async def _run_evaluation(
             task_id=view.task_id,
             binding_key=binding_key,
             exc=exc,
+            incomplete=evaluator.failure_policy == "incomplete",
         )
         return EvaluateTaskRunResult(
-            score=0.0,
+            score=None if evaluator.failure_policy == "incomplete" else 0.0,
             passed=False,
             evaluator_name=binding_key,
         )
@@ -185,14 +186,6 @@ async def _run_evaluation(
         DashboardTaskEvaluationUpdatedEvent(
             sample_id=sample_id,
             task_id=view.task_id,
-            evaluation=build_dashboard_evaluation_dto(
-                evaluation_id=persisted.evaluation_id,
-                sample_id=persisted.sample_id,
-                task_id=persisted.task_id,
-                total_score=persisted.total_score,
-                created_at=persisted.created_at,
-                summary=persisted.summary,
-            ),
         )
     )
 

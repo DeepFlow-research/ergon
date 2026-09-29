@@ -1,7 +1,6 @@
 from uuid import uuid4
 
 import pytest
-
 from ergon_core.api.worker.results import WorkerOutput
 from ergon_core.core.application.runtime.task_execution import TaskExecutionService
 

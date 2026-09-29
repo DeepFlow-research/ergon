@@ -1,5 +1,5 @@
-from uuid import uuid4
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 from ergon_core.core.jobs.resources.persist_outputs import composition as persist_outputs

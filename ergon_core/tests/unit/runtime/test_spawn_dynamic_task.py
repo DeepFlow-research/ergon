@@ -16,73 +16,22 @@ from uuid import UUID, uuid4
 import pytest
 from ergon_core.api.task import Task
 from ergon_core.api.worker.results import SpawnedTaskHandle
-from ergon_core.core.jobs.task.worker_execute.job import _StepAwareTaskManagementService
 from ergon_core.core.application.runtime import management as management_module
-from ergon_core.core.application.runtime.task_management import TaskManagementService
+from ergon_core.core.jobs.task.worker_execute.job import _StepAwareTaskManagementService
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
-from ergon_core.core.persistence.shared.enums import SampleStatus
-from ergon_core.core.persistence.telemetry.models import SampleRecord
-from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
-from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine, select
+from ergon_core.test_support.runtime_harness import (
+    SessionContext,
+    make_session,
+    seed_parent,
+    task_service,
+)
+from sqlmodel import Session, SQLModel, select
 
+from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-class _SessionContext:
-    """Context-manager wrapper that yields the wrapped session unchanged.
-
-    The test injects this in place of get_session() so the management
-    code's ``with get_session() as session:`` block reuses the same
-    in-memory SQLite session that the test seeds and inspects.
-    """
-
-    def __init__(self, session: Session) -> None:
-        self._session = session
-
-    def __enter__(self) -> Session:
-        return self._session
-
-    def __exit__(self, *args: object) -> None:
-        return None
-
-
-def _make_session() -> Session:
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    SQLModel.metadata.create_all(engine)
-    return Session(engine)
-
-
-def _seed_parent(session: Session, *, sample_id: UUID) -> SampleGraphNode:
-    session.add(
-        SampleRecord(
-            id=sample_id,
-            benchmark_type="test",
-            instance_key="sample-1",
-            worker_team_json={},
-            status=SampleStatus.EXECUTING,
-        )
-    )
-    parent = SampleGraphNode(
-        sample_id=sample_id,
-        instance_key="sample-1",
-        task_slug="parent",
-        description="Parent task",
-        status="RUNNING",
-        is_dynamic=False,
-        parent_task_id=None,
-        level=0,
-    )
-    session.add(parent)
-    session.commit()
-    return parent
 
 
 def _seed_other(session: Session, *, sample_id: UUID, slug: str) -> SampleGraphNode:
@@ -109,19 +58,6 @@ def _make_task() -> Task:
         worker=EchoWorker(name="echo", model="test:none"),
         sandbox=EchoSandbox(),
         evaluators=(),
-    )
-
-
-def _service(session: Session, monkeypatch: pytest.MonkeyPatch) -> TaskManagementService:
-    """Build a TaskManagementService that talks to the test session."""
-    monkeypatch.setattr(
-        management_module,
-        "get_session",
-        lambda: _SessionContext(session),
-    )
-    return TaskManagementService(
-        dashboard_emitter=SimpleNamespace(graph_mutation=AsyncMock()),
-        task_ready_dispatcher=AsyncMock(),
     )
 
 
@@ -159,10 +95,10 @@ async def test_spawn_dynamic_task_inserts_dynamic_node_with_task_json(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A single is_dynamic=True row is written with the full Task snapshot."""
-    session = _make_session()
+    session = make_session()
     sample_id = uuid4()
-    parent = _seed_parent(session, sample_id=sample_id)
-    svc = _service(session, monkeypatch)
+    parent = seed_parent(session, sample_id=sample_id)
+    svc = task_service(session, monkeypatch)
 
     nodes_before = session.exec(select(SampleGraphNode)).all()
     assert len(nodes_before) == 1  # only the parent
@@ -205,10 +141,10 @@ async def test_spawn_dynamic_task_does_not_require_definition_tables(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Dynamic spawn writes run graph state without definition persistence."""
-    session = _make_session()
+    session = make_session()
     sample_id = uuid4()
-    parent = _seed_parent(session, sample_id=sample_id)
-    svc = _service(session, monkeypatch)
+    parent = seed_parent(session, sample_id=sample_id)
+    svc = task_service(session, monkeypatch)
 
     assert "experiment_definition_tasks" not in SQLModel.metadata.tables
 
@@ -229,11 +165,11 @@ async def test_spawn_dynamic_task_creates_dependency_edge(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """depends_on=(other,) writes a sample_graph_edges row source=other, target=new."""
-    session = _make_session()
+    session = make_session()
     sample_id = uuid4()
-    parent = _seed_parent(session, sample_id=sample_id)
+    parent = seed_parent(session, sample_id=sample_id)
     other = _seed_other(session, sample_id=sample_id, slug="other")
-    svc = _service(session, monkeypatch)
+    svc = task_service(session, monkeypatch)
 
     handle = await svc.spawn_dynamic_task(
         sample_id=sample_id,
@@ -255,10 +191,10 @@ async def test_spawn_dynamic_task_handle_matches_inserted_row_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """SpawnedTaskHandle.task_id is the new task's task_id (UUID)."""
-    session = _make_session()
+    session = make_session()
     sample_id = uuid4()
-    parent = _seed_parent(session, sample_id=sample_id)
-    svc = _service(session, monkeypatch)
+    parent = seed_parent(session, sample_id=sample_id)
+    svc = task_service(session, monkeypatch)
 
     handle = await svc.spawn_dynamic_task(
         sample_id=sample_id,
@@ -286,11 +222,11 @@ async def test_step_aware_spawn_dynamic_task_is_replay_safe(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Repeated Inngest replay returns the memoized handle without duplicating DB rows/events."""
-    session = _make_session()
+    session = make_session()
     sample_id = uuid4()
-    parent = _seed_parent(session, sample_id=sample_id)
+    parent = seed_parent(session, sample_id=sample_id)
     _patch = monkeypatch.setattr
-    _patch(management_module, "get_session", lambda: _SessionContext(session))
+    _patch(management_module, "get_session", lambda: SessionContext(session))
     _patch(
         management_module,
         "get_dashboard_event_publisher",

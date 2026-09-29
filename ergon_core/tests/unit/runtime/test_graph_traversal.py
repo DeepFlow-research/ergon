@@ -1,7 +1,7 @@
 from uuid import UUID, uuid4
 
-from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.application.runtime.graph_traversal import descendant_ids, descendants
+from ergon_core.core.persistence.graph.models import SampleGraphNode
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 

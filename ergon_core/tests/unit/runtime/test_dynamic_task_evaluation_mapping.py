@@ -1,9 +1,9 @@
-from uuid import uuid4
 from types import SimpleNamespace
+from uuid import uuid4
 
+from ergon_core.core.jobs.task.evaluate.job import _evaluator_binding_key
 from ergon_core.core.persistence.telemetry.models import SampleTaskEvaluation
 from ergon_core.core.views.samples.snapshot import _task_keyed_evaluations
-from ergon_core.core.jobs.task.evaluate.job import _evaluator_binding_key
 
 
 def _summary_json() -> dict:

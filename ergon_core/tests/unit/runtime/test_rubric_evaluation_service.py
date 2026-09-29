@@ -2,14 +2,12 @@ from collections.abc import Iterable
 from uuid import uuid4
 
 import pytest
-
-from ergon_core.api.criterion import Criterion, CriterionContext
-from ergon_core.api.criterion import CriterionOutcome, ScoreScale
+from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome, ScoreScale
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.rubric import Evaluator, Rubric
 from ergon_core.api.rubric.results import TaskEvaluationResult
-from ergon_core.api.worker import WorkerOutput
 from ergon_core.api.task import Task
+from ergon_core.api.worker import WorkerOutput
 from ergon_core.core.application.evaluation.models import CriterionSpec
 from ergon_core.core.application.evaluation.service import (
     EvaluationService,

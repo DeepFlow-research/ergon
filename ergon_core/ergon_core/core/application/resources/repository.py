@@ -6,8 +6,7 @@ from ergon_core.api.errors import ContainmentViolation
 from ergon_core.core.application.resources.errors import SampleResourceNotFoundError
 from ergon_core.core.application.resources.models import SampleResourceView
 from ergon_core.core.persistence.graph.models import SampleGraphNode
-from ergon_core.core.persistence.telemetry.models import SampleResource
-from ergon_core.core.persistence.telemetry.models import SampleTaskAttempt
+from ergon_core.core.persistence.telemetry.models import SampleResource, SampleTaskAttempt
 from ergon_core.core.shared.json_types import JsonObject
 from sqlmodel import Session, select
 
@@ -74,6 +73,7 @@ class SampleResourceRepository:
         *,
         task_attempt_id: UUID,
         file_path: str,
+        kind: str | None = None,
     ) -> SampleResource | None:
         stmt = (
             select(SampleResource)
@@ -84,6 +84,8 @@ class SampleResourceRepository:
             .order_by(SampleResource.created_at.desc(), SampleResource.id.desc())
             .limit(1)
         )
+        if kind is not None:
+            stmt = stmt.where(SampleResource.kind == kind)
         return session.exec(stmt).first()
 
     def find_by_hash(
@@ -92,6 +94,7 @@ class SampleResourceRepository:
         *,
         task_attempt_id: UUID,
         content_hash: str,
+        kind: str | None = None,
     ) -> SampleResource | None:
         stmt = (
             select(SampleResource)
@@ -101,6 +104,8 @@ class SampleResourceRepository:
             )
             .limit(1)
         )
+        if kind is not None:
+            stmt = stmt.where(SampleResource.kind == kind)
         return session.exec(stmt).first()
 
     def append(  # slopcop: ignore[max-function-params]

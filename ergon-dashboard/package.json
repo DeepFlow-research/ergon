@@ -24,7 +24,7 @@
     "@types/dagre": "^0.7.53",
     "@xyflow/react": "^12.10.0",
     "dagre": "^0.8.5",
-    "inngest": "^3.49.3",
+    "inngest": "^3.54.1",
     "next": "14.2.35",
     "papaparse": "^5.5.3",
     "react": "^18",

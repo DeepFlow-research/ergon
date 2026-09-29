@@ -2,11 +2,11 @@
 
 from uuid import UUID
 
+from ergon_core.api.task import Task
 from ergon_core.core.application.events import TaskCancelledEvent
 from ergon_core.core.application.runtime.status import NodeStatus
 from ergon_core.core.persistence.shared.types import NodeId, SampleId
 from pydantic import BaseModel, Field
-
 
 # ── cancel_task ───────────────────────────────────────────────────────────
 
@@ -39,6 +39,8 @@ class RefineTaskCommand(BaseModel):
     sample_id: SampleId
     task_id: NodeId
     new_description: str = Field(min_length=1)
+    replacement: Task | None = None
+    depends_on: tuple[UUID, ...] | None = None
 
     model_config = {"frozen": True}
 

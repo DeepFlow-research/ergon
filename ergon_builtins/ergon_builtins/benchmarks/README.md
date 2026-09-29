@@ -13,6 +13,7 @@ commands).
 | SWE-Bench Verified | `ergon_builtins.environments.swebench_verified` | `make_swebench_worker` (ReAct) | `SWEBenchSandbox` |
 | ResearchRubrics | `ergon_builtins.environments.researchrubrics` | `make_research_worker` (ReAct) | `ResearchE2BSandbox` |
 | GDPEval | `ergon_builtins.environments.gdpeval` | `make_gdpeval_worker` (ReAct) | `GDPEvalSandbox` |
+| Manager Agent Gym | `ergon_builtins.benchmarks.manager_gym` | `make_manager_gym_sample` (manager + simulated team) | `E2BSandbox` |
 
 Adding a new environment = a new subdirectory containing:
 

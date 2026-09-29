@@ -11,16 +11,15 @@ from datetime import datetime
 from typing import Any, ClassVar
 from uuid import UUID
 
+from ergon_core.core.application.events.base import InngestEventContract
+from ergon_core.core.application.runtime.status import NodeStatus
+from ergon_core.core.application.samples.event_views import SampleRuntimeEventView
+from ergon_core.core.shared.context_parts import ContextEventType, ContextPartChunkLog
 from ergon_core.core.views.samples.models import (
     SampleCommunicationMessageDto,
     SampleCommunicationThreadDto,
     SampleSnapshotDto,
-    SampleTaskEvaluationDto,
 )
-from ergon_core.core.shared.context_parts import ContextEventType, ContextPartChunkLog
-from ergon_core.core.application.events.base import InngestEventContract
-from ergon_core.core.application.runtime.status import NodeStatus
-from ergon_core.core.application.samples.event_views import SampleRuntimeEventView
 from pydantic import Field
 
 # ---------------------------------------------------------------------------
@@ -71,13 +70,12 @@ class DashboardTaskStatusChangedEvent(InngestEventContract):
 
 
 class DashboardTaskEvaluationUpdatedEvent(InngestEventContract):
-    """Embeds the full SampleTaskEvaluationDto as ``evaluation``."""
+    """Invalidates the task's evaluation; the dashboard reads the persisted result."""
 
     name: ClassVar[str] = "dashboard/task.evaluation_updated"
 
     sample_id: UUID
     task_id: UUID
-    evaluation: SampleTaskEvaluationDto
 
 
 # ---------------------------------------------------------------------------

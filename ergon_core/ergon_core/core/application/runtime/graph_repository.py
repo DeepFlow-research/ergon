@@ -9,6 +9,7 @@ The repository does NOT validate status transitions or authorization.
 Those are the experiment layer's responsibility.
 """
 
+import asyncio
 import logging
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
@@ -16,35 +17,34 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID, uuid4
 
-from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
-from ergon_core.core.persistence.samples.models import (
-    SampleAnnotationEventRow,
-    SampleEdgeEventRow,
-    SampleEvaluatorEventRow,
-    SampleSandboxEventRow,
-    SampleStatusEventRow,
-    SampleTaskEventRow,
-    SampleWorkerEventRow,
-)
-from ergon_core.core.application.samples.events import (
-    SampleRuntimeEventAppender,
-    SampleRuntimeEventRow,
-)
-from ergon_core.core.application.runtime.status import TERMINAL_STATUSES
+from ergon_core.api.task import Task
+from ergon_core.core.application.runtime import status as graph_status
 from ergon_core.core.application.runtime.errors import (
     CycleError,
     DanglingEdgeError,
     EdgeNotFoundError,
     NodeNotFoundError,
 )
-from ergon_core.api.task import Task
 from ergon_core.core.application.runtime.models import (
     GraphEdgeDto,
     GraphNodeDto,
     MutationMeta,
     SampleGraphNodeView,
-    WorkflowGraphDto,
 )
+from ergon_core.core.application.runtime.status import TERMINAL_STATUSES
+from ergon_core.core.application.samples.events import (
+    SampleRuntimeEventAppender,
+    SampleRuntimeEventRow,
+)
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
+from ergon_core.core.persistence.samples.models import (
+    SampleEdgeEventRow,
+    SampleEvaluatorEventRow,
+    SampleSandboxEventRow,
+    SampleTaskEventRow,
+    SampleWorkerEventRow,
+)
+from ergon_core.core.persistence.shared.db import lock_sample_transaction
 from ergon_core.core.shared.utils import utcnow
 from sqlmodel import Session, select
 
@@ -79,6 +79,100 @@ class RuntimeGraphRepository:
         self, listener: Callable[[SampleRuntimeEventRow], Awaitable[None]]
     ) -> None:
         self._runtime_event_listeners.append(listener)
+
+    @staticmethod
+    async def lock_sample(session: Session, sample_id: UUID) -> None:
+        """Serialise graph transactions for one sample until the transaction ends.
+
+        One lock per sample keeps this simple; per-node locks would only pay off
+        under measured write contention. On PostgreSQL the blocking acquire runs in
+        a thread, so a waiter cannot freeze the event loop while the lock's owner
+        awaits a notification. Use ``session`` sequentially, never concurrently.
+        """
+        if session.get_bind().dialect.name == "postgresql":
+            await asyncio.to_thread(lock_sample_transaction, session, sample_id)
+        else:
+            lock_sample_transaction(session, sample_id)
+
+    def dependencies_complete(self, session: Session, sample_id: UUID, task_id: UUID) -> bool:
+        """Whether every prerequisite of ``task_id`` has completed."""
+        return all(
+            self.get_node(session, sample_id=sample_id, task_id=edge.source_task_id).status
+            == graph_status.COMPLETED
+            for edge in self.get_incoming_edges(session, sample_id=sample_id, task_id=task_id)
+        )
+
+    @staticmethod
+    def cancelled_for_invalidation(session: Session, sample_id: UUID, task_id: UUID) -> bool:
+        """Whether the task's latest status change cancelled it for downstream invalidation.
+
+        Such a task may be reactivated when its prerequisites change.
+        """
+        event = session.exec(
+            select(SampleTaskEventRow)
+            .where(
+                SampleTaskEventRow.sample_id == sample_id,
+                SampleTaskEventRow.task_id == task_id,
+                SampleTaskEventRow.event_type == "task.status_changed",
+            )
+            .order_by(SampleTaskEventRow.event_timestamp.desc(), SampleTaskEventRow.id.desc())
+        ).first()
+        return (
+            event is not None
+            and event.status == graph_status.CANCELLED
+            and event.payload_json.get("reason") == "downstream_invalidation"
+        )
+
+    async def replace_dependencies(
+        self,
+        session: Session,
+        *,
+        sample_id: UUID,
+        task_id: UUID,
+        depends_on: tuple[UUID, ...],
+        meta: MutationMeta,
+    ) -> None:
+        """Replace the task's incoming edges with edges from ``depends_on``, atomically.
+
+        Raises:
+            NodeNotFoundError: The task does not exist.
+            DanglingEdgeError: A prerequisite does not exist.
+            CycleError: A new edge would create a cycle.
+        """
+        await self.lock_sample(session, sample_id)
+        self._get_node_row(session, sample_id, task_id)
+        # Reject invalid replacements before appending or publishing removal WAL.
+        # Removing incoming edges cannot change reachability from this target.
+        for source in dict.fromkeys(depends_on):
+            self._require_node_exists(session, sample_id, source)
+            self._check_no_cycle(session, sample_id, source, task_id)
+        with session.begin_nested():
+            for edge in self.get_incoming_edges(session, sample_id=sample_id, task_id=task_id):
+                row = self._get_edge_row(session, sample_id, edge.id)
+                session.delete(row)
+                event = SampleRuntimeEventAppender(session).append_edge_event(
+                    SampleEdgeEventRow(
+                        sample_id=sample_id,
+                        edge_id=edge.id,
+                        source_task_id=edge.source_task_id,
+                        target_task_id=task_id,
+                        event_type="edge.removed",
+                        actor=meta.actor,
+                        edge_snapshot_json=_edge_payload(row),
+                        payload_json={"reason": meta.reason},
+                    )
+                )
+                await self._publish_runtime_event(event)
+            session.flush()
+            for source in dict.fromkeys(depends_on):
+                await self.add_edge(
+                    session,
+                    sample_id,
+                    source_task_id=source,
+                    target_task_id=task_id,
+                    status=graph_status.EDGE_PENDING,
+                    meta=meta,
+                )
 
     # ── Initialization ──────────────────────────────────────
 
@@ -218,6 +312,7 @@ class RuntimeGraphRepository:
         write a terminal status resolve to "first writer wins" without
         requiring distributed locks.
         """
+        await self.lock_sample(session, sample_id)
         node = self._get_node_row(session, sample_id, task_id)
 
         if only_if_not_terminal and node.status in TERMINAL_STATUSES:
@@ -265,10 +360,9 @@ class RuntimeGraphRepository:
         if field == "description":
             if value is None:
                 raise ValueError("description cannot be cleared")
-            old_value = node.description
             node.description = value
+            node.task_json = {**node.task_json, "description": value}
         else:
-            old_value = node.assigned_worker_slug
             node.assigned_worker_slug = value
         node.updated_at = utcnow()
         session.add(node)
@@ -408,10 +502,12 @@ class RuntimeGraphRepository:
         task_id: UUID,
     ) -> SampleGraphNode:
         row = session.exec(
-            select(SampleGraphNode).where(
+            select(SampleGraphNode)
+            .where(
                 SampleGraphNode.task_id == task_id,
                 SampleGraphNode.sample_id == sample_id,
             )
+            .execution_options(populate_existing=True)
         ).first()
         if row is None:
             raise NodeNotFoundError(task_id, sample_id=sample_id)

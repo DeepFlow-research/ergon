@@ -1,10 +1,10 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
+from ergon_core.core.application.runtime.task_execution_repository import TaskExecutionRepository
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord, SampleTaskAttempt
-from ergon_core.core.application.runtime.task_execution_repository import TaskExecutionRepository
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 

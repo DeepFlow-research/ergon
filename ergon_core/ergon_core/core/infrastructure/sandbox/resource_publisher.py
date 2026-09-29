@@ -9,7 +9,7 @@ import logging
 import os
 from pathlib import Path, PurePosixPath
 from typing import Any, ClassVar
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 from ergon_core.core.application.resources.models import SampleResourceView
@@ -123,9 +123,14 @@ class SandboxResourcePublisher:
         if path.exists():
             return path
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_bytes(content_bytes)
-        tmp.rename(path)  # atomic on POSIX
+        # Exclusive creation retains normal file/umask permissions: host-side
+        # artifact readers must still read a blob published by the API container.
+        temporary_path = path.with_name(f"{content_hash}.{uuid4().hex}.tmp")
+        with temporary_path.open("xb") as temporary:
+            temporary.write(content_bytes)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        temporary_path.replace(path)  # atomic, concurrent writers have distinct temp files
         return path
 
     def blob_path(self, content_hash: str) -> Path:

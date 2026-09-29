@@ -3,10 +3,6 @@
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlmodel import Session
-
-from pydantic import JsonValue
-
 from ergon_core.core.application.runtime import status as graph_status
 from ergon_core.core.application.samples.events import (
     SampleRuntimeEventAppender,
@@ -22,6 +18,8 @@ from ergon_core.core.persistence.samples.models import (
 )
 from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord
+from pydantic import JsonValue
+from sqlmodel import Session
 
 if TYPE_CHECKING:
     from ergon_core.api.experiment.sample import Sample
@@ -49,7 +47,7 @@ def materialize_sample(
         task_json = task.model_dump(mode="json")
         worker_snapshot = task.worker.model_dump(mode="json")
         sandbox_snapshot = task.sandbox.model_dump(mode="json")
-        worker_slug = task.worker.type_slug
+        worker_slug = task.worker.binding_key
         sandbox_type = _snapshot_type(
             sandbox_snapshot,
             fallback=_component_type_path(task.sandbox),

@@ -25,9 +25,9 @@ check() {
 
 # Postgres via docker exec (host may not have pg_isready installed).
 check "postgres"  "docker compose exec -T postgres pg_isready -U ergon > /dev/null 2>&1"
-check "inngest"   "curl -sf http://localhost:8289/v1/events/test > /dev/null 2>&1"
+check "inngest"   "curl -sf --connect-timeout 2 --max-time 5 http://localhost:8289/health > /dev/null 2>&1"
 # Wait for an application-level route so Uvicorn accepting a socket during
 # FastAPI lifespan startup does not race ahead of migrations/plugin setup.
-check "api"       "curl -sf --connect-timeout 2 http://localhost:9000/health > /dev/null 2>&1"
+check "api"       "curl -sf --connect-timeout 2 --max-time 5 http://localhost:9000/health > /dev/null 2>&1"
 
 echo "stack up"

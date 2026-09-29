@@ -3,13 +3,15 @@ from uuid import UUID
 from ergon_core.core.application.events.runtime import TaskReadyEvent, TaskStartedEvent
 from pydantic import BaseModel
 
+__all__ = ["TaskExecuteResult", "TaskReadyEvent", "TaskStartedEvent"]
+
 
 class TaskExecuteResult(BaseModel):
     model_config = {"frozen": True}
 
     sample_id: UUID
     task_id: UUID
-    execution_id: UUID
+    execution_id: UUID | None
     success: bool = False
     skipped: bool = False
     skip_reason: str | None = None

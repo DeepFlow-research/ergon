@@ -168,3 +168,10 @@ test("evaluationToViewModel summarizes composition and criterion display states"
     ],
   );
 });
+
+test("incomplete evaluations remain visible and do not become zero scores", () => {
+  const incomplete = { ...evaluation("root", []), normalizedScore: null, totalScore: null };
+  assert.equal(evaluationToRollup(incomplete)?.status, "errored");
+  assert.equal(evaluationToViewModel(incomplete)?.summary.scoreLabel, "Incomplete");
+  assert.equal(evaluationToViewModel(incomplete)?.composition.totalScoreLabel, "Incomplete");
+});

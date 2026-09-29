@@ -2,6 +2,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
+from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
 from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
 from ergon_core.core.persistence.shared.enums import (
     SampleResourceKind,
@@ -13,7 +14,6 @@ from ergon_core.core.persistence.telemetry.models import (
     SampleResource,
     SampleTaskAttempt,
 )
-from ergon_core.core.application.runtime.sample_lifecycle import WorkflowService
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 

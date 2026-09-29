@@ -4,12 +4,8 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from pydantic import ValidationError
-from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine
-
-from ergon_core.api.task import EmptyTaskPayload, Task
 from ergon_core.api.errors import ContainmentViolation
+from ergon_core.api.task import EmptyTaskPayload, Task
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import AwaitCompletionNotSupportedError, SpawnedTaskHandle
 from ergon_core.core.application.resources.models import SampleResourceView
@@ -20,9 +16,12 @@ from ergon_core.core.application.runtime.task_models import (
     RestartTaskCommand,
     SubtaskInfo,
 )
-from ergon_core.core.persistence.shared.enums import SampleResourceKind
-from ergon_core.core.persistence.shared.enums import SampleStatus, TaskExecutionStatus
 from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.shared.enums import (
+    SampleResourceKind,
+    SampleStatus,
+    TaskExecutionStatus,
+)
 from ergon_core.core.persistence.telemetry.models import (
     SampleRecord,
     SampleResource,
@@ -30,6 +29,9 @@ from ergon_core.core.persistence.telemetry.models import (
 )
 from ergon_core.core.shared.utils import utcnow
 from ergon_core.test_support import task_factory
+from pydantic import ValidationError
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine
 
 
 class _FacadeTask(Task[EmptyTaskPayload]):
@@ -406,5 +408,5 @@ def test_context_requires_facade_services_at_construction() -> None:
 
 @pytest.mark.asyncio
 async def test_spawned_task_handle_wait_has_public_deferred_error() -> None:
-    with pytest.raises(AwaitCompletionNotSupportedError, match="deferred in v2"):
+    with pytest.raises(AwaitCompletionNotSupportedError, match="bound to a WorkerContext"):
         await SpawnedTaskHandle(task_id=uuid4()).wait()

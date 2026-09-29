@@ -6,12 +6,12 @@ from uuid import UUID
 import inngest
 from ergon_core.core.application.events import SampleCancelledEvent, SampleCleanupEvent
 from ergon_core.core.application.samples.events import SampleRuntimeEventAppender
-from ergon_core.core.shared.json_types import JsonObject
+from ergon_core.core.infrastructure.inngest.client import inngest_client
 from ergon_core.core.persistence.samples.models import SampleStatusEventRow
-from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.db import get_session, lock_sample_transaction
 from ergon_core.core.persistence.shared.enums import TERMINAL_SAMPLE_STATUSES, SampleStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord
-from ergon_core.core.infrastructure.inngest.client import inngest_client
+from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.shared.settings import settings
 from ergon_core.core.shared.utils import utcnow
 
@@ -35,6 +35,7 @@ def _checkpoint_metadata() -> JsonObject:
 def cancel_sample(sample_id: UUID) -> SampleRecord:
     """Cancel a sample: mark CANCELLED in PG, kill Inngest functions, trigger cleanup."""
     with get_session() as session:
+        lock_sample_transaction(session, sample_id)
         sample = session.get(SampleRecord, sample_id)
         if sample is None:
             raise ValueError(f"Sample {sample_id} not found")

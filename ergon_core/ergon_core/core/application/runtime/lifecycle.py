@@ -7,12 +7,12 @@ state.
 
 from uuid import UUID
 
-from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.application.runtime import status as graph_status
-from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
-from ergon_core.core.application.runtime.models import MutationMeta
 from ergon_core.core.application.runtime.graph_lookup import GraphNodeLookup
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime.models import MutationMeta
+from ergon_core.core.persistence.graph.models import SampleGraphEdge, SampleGraphNode
+from ergon_core.core.shared.json_types import JsonObject
 from sqlmodel import Session, select
 
 _PROPAGATION_META = MutationMeta(actor="system:propagation")
@@ -165,7 +165,8 @@ async def mark_task_failed_by_node(
     )
 
 
-# TODO: as per the experiments design comment, feels like alot of this would benefit from being a service or repository method?
+# TODO: as per the experiments design comment, much of this may belong in a service or
+# repository method.
 async def _block_successors_bfs(
     session: Session,
     sample_id: UUID,
@@ -249,6 +250,7 @@ async def on_task_completed_or_failed(
     graph_repo: RuntimeGraphRepository,
 ) -> list[UUID]:
     """Handle a task reaching COMPLETED, FAILED, or CANCELLED."""
+    await graph_repo.lock_sample(session, sample_id)
     is_success = terminal_status == graph_status.COMPLETED
 
     outgoing = list(
@@ -300,7 +302,11 @@ async def on_task_completed_or_failed(
         status = candidate_node.status
         is_managed_subtask = candidate_node.parent_task_id is not None
         is_pending = status == graph_status.PENDING
-        is_reactivatable_cancelled = status == graph_status.CANCELLED and is_managed_subtask
+        is_reactivatable_cancelled = (
+            status == graph_status.CANCELLED
+            and is_managed_subtask
+            and graph_repo.cancelled_for_invalidation(session, sample_id, candidate_id)
+        )
 
         if not (is_pending or is_reactivatable_cancelled):
             continue

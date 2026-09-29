@@ -3,6 +3,8 @@ from uuid import UUID
 from ergon_core.core.application.events.runtime import SampleCancelledEvent, SampleCleanupEvent
 from pydantic import BaseModel
 
+__all__ = ["SampleCancelledEvent", "SampleCleanupEvent", "SampleCleanupResult"]
+
 
 class SampleCleanupResult(BaseModel):
     model_config = {"frozen": True}
@@ -11,4 +13,5 @@ class SampleCleanupResult(BaseModel):
     status: str | None = None
     sandbox_terminated: bool = False
     sandbox_id: str | None = None
+    sandbox_ids: tuple[str, ...] = ()
     error: str | None = None

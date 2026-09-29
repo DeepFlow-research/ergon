@@ -6,10 +6,11 @@ the full schema, then delegates to Alembic for migration execution.
 
 from logging.config import fileConfig
 
+# Imported for their side effect of registering every table on SQLModel.metadata.
 import ergon_core.core.persistence.experiments.models
 import ergon_core.core.persistence.graph.models
 import ergon_core.core.persistence.samples.models
-import ergon_core.core.persistence.telemetry.models
+import ergon_core.core.persistence.telemetry.models  # noqa: F401
 from alembic import context
 from ergon_core.core.shared.settings import Settings
 from sqlalchemy import engine_from_config, pool
@@ -18,7 +19,7 @@ from sqlmodel import SQLModel
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = SQLModel.metadata
 

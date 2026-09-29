@@ -1,12 +1,13 @@
 """E2B runtime adapter for public ``Sandbox`` implementations."""
 
+import asyncio
 from collections.abc import Sequence
 from shlex import quote
 from typing import Any
 
+import httpx
 from e2b import SandboxNotFoundException, TimeoutException
 from e2b_code_interpreter import AsyncSandbox
-
 from ergon_core.api.sandbox.runtime import CommandResult, SandboxRuntime
 from ergon_core.core.shared.settings import settings
 
@@ -67,10 +68,19 @@ class E2BSandboxRuntime(SandboxRuntime):
         )
 
     async def write_file(self, path: str, content: bytes) -> None:
-        await self._sandbox.files.write(path, content)
+        for attempt in range(3):
+            try:
+                await self._sandbox.files.write(path, content)
+                return
+            except httpx.ReadError:
+                # E2B overwrites this path with identical bytes. Retrying a lost
+                # upload response is safe; replaying the worker or commands is not.
+                if attempt == 2:
+                    raise
+                await asyncio.sleep(2**attempt)
 
     async def read_file(self, path: str) -> bytes:
-        return await self._sandbox.files.read(path)
+        return await self._sandbox.files.read(path, format="bytes")
 
     async def list_files(self, path: str) -> list[str]:
         result = await self._sandbox.commands.run(
@@ -85,7 +95,9 @@ class E2BSandboxRuntime(SandboxRuntime):
         await self._sandbox.kill()
 
     async def close_local(self) -> None:
-        await self._sandbox.close()
+        # E2B's async handle owns no client connection to close. Remote lifetime
+        # belongs to close()/the terminal cleanup job; detach must not kill it.
+        return None
 
 
 def _ensure_e2b_api_key() -> None:

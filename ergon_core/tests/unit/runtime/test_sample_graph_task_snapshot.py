@@ -11,17 +11,17 @@ from uuid import UUID, uuid4
 
 import pytest
 from ergon_core.api import Sample
-from ergon_core.core.application.runtime.models import MutationMeta
+from ergon_core.api.task import Task
 from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime.models import MutationMeta
 from ergon_core.core.application.samples.materialization import materialize_sample
 from ergon_core.core.persistence.graph.models import SampleGraphNode
 from ergon_core.core.persistence.shared.enums import SampleStatus
 from ergon_core.core.persistence.telemetry.models import SampleRecord
+from ergon_core.test_support.task_factory import TestSandbox, TestWorker
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
-from ergon_core.api.task import Task
-from ergon_core.test_support.task_factory import TestSandbox, TestWorker
 
 
 class _EmptyPayload(BaseModel):

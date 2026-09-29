@@ -26,21 +26,22 @@ from uuid import UUID
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
 from ergon_core.api.worker import WorkerOutput
-from ergon_core.core.persistence.graph.models import SampleGraphNode
-from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.infrastructure.sandbox.instrumentation import InstrumentedSandbox
 from ergon_core.core.application.communication.models import CreateMessageRequest
 from ergon_core.core.application.communication.service import (
     communication_service,
 )
+from ergon_core.core.infrastructure.sandbox.instrumentation import InstrumentedSandbox
+from ergon_core.core.persistence.graph.models import SampleGraphNode
+from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.shared.settings import settings
+from sqlmodel import select
+
 from tests.fixtures.smoke_components.sandbox import SmokeSandboxManager
 from tests.fixtures.smoke_components.smoke_base.metrics import smoke_assistant_chunk
 from tests.fixtures.smoke_components.smoke_base.subworker import (
     SmokeSubworker,
     SubworkerResult,
 )
-from sqlmodel import select
 
 
 class BaseSmokeLeafWorker(Worker):
@@ -61,6 +62,7 @@ class BaseSmokeLeafWorker(Worker):
         *,
         name: str,
         model: str | None,
+        actor_key: str | None = None,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
         # PR 5 converted Worker to a Pydantic BaseModel — `metadata` is
@@ -68,7 +70,12 @@ class BaseSmokeLeafWorker(Worker):
         # `default_factory=dict`. Convert the nullable sentinel
         # into ``{}`` so callers that still pass ``metadata=None``
         # (e.g. smoke unit tests) keep working.
-        super().__init__(name=name, model=model, metadata=dict(metadata) if metadata else {})
+        super().__init__(
+            name=name,
+            model=model,
+            actor_key=actor_key,
+            metadata=dict(metadata) if metadata else {},
+        )
         self._last_result: SubworkerResult | None = None
 
     async def execute(
@@ -76,7 +83,7 @@ class BaseSmokeLeafWorker(Worker):
         task: Task,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[WorkerStreamItem, None]:
+    ) -> AsyncGenerator[WorkerStreamItem]:
         task_hex = context.task_id.hex[:8] if context.task_id else "unknown"
 
         # --- Turn 1: attaching + starting ---------------------------------

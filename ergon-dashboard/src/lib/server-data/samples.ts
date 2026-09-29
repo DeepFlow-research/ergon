@@ -6,6 +6,7 @@ import {
   parseSampleSnapshot,
   type SampleSnapshot,
   type SampleEventsView,
+  type SampleTaskEvaluation,
 } from "@/lib/contracts/rest";
 import { buildSampleState, type SampleDashboardState } from "@/lib/sample-state/dashboard";
 import { fetchErgonApi } from "@/lib/serverApi";
@@ -130,6 +131,24 @@ export async function loadSampleEvents(sampleId: string): Promise<ServerDataResu
   } catch (error) {
     return backendUnavailable(`Ergon API is unavailable while loading events for sample ${sampleId}.`, error);
   }
+}
+
+export async function loadSampleTaskEvaluation(
+  sampleId: string,
+  taskId: string,
+): Promise<ServerDataResult<SampleTaskEvaluation>> {
+  const snapshot = await loadSampleSnapshot(sampleId);
+  if (!snapshot.ok) return snapshot;
+  const evaluation = snapshot.data.evaluationsByTask[taskId];
+  if (!evaluation) {
+    return {
+      ok: false,
+      status: 404,
+      source: "backend",
+      body: { detail: `Evaluation for task ${taskId} is not available.` },
+    };
+  }
+  return { ...snapshot, data: evaluation };
 }
 
 export async function loadSampleState(sampleId: string): Promise<ServerDataResult<SampleDashboardState>> {

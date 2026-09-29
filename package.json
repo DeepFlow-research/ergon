@@ -2,8 +2,8 @@
   "name": "ergon",
   "private": true,
   "scripts": {
-    "check:be:lint": "uv run ruff check ergon_core ergon_builtins ergon_cli ergon_infra ergon_ingestion tests",
-    "check:be:fmt": "uv run ruff format --check ergon_core ergon_builtins ergon_cli ergon_infra ergon_ingestion tests",
+    "check:be:lint": "uv run ruff check ergon_core ergon_builtins ergon_cli ergon_infra ergon_ingestion tests examples scripts",
+    "check:be:fmt": "uv run ruff format --check ergon_core ergon_builtins ergon_cli ergon_infra ergon_ingestion tests examples scripts",
     "check:be:type": "uv run ty check ergon_core/ergon_core ergon_builtins/ergon_builtins ergon_cli/ergon_cli ergon_infra ergon_ingestion/ergon_ingestion",
     "check:be:slopcop": "uv run slopcop --warn-only ergon_core/ergon_core ergon_builtins/ergon_builtins ergon_cli/ergon_cli ergon_infra ergon_ingestion/ergon_ingestion",
     "check:be:suppression-budget": "uv run python -m ergon_core.core.application.testing.suppression_budget",

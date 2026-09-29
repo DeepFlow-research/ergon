@@ -99,7 +99,7 @@ Dashboard delivery hangs off state mutation (see `05_dashboard.md`); it is not a
 
 1. **All state writes go through `WorkflowGraphRepository`.** Every node or edge transition is paired with a `RunGraphMutation` row in the same transaction, so the log is a complete replay. Enforced by convention and by the repository refusing a write without `MutationMeta`. Raw `session.add(RunGraphNode(...))` on live state is an anti-pattern (see Section 6).
 
-2. **Terminal statuses are terminal.** `COMPLETED`, `FAILED`, and `CANCELLED` are absorbing. The one deliberate exception is re-activating a `CANCELLED` managed subtask (`parent_node_id is not None`) when its dependencies re-satisfy — see the `is_reactivatable_cancelled` guard in `ergon_core/core/runtime/execution/propagation.py:546-583`. New exceptions must live in that guard, not in an ad-hoc branch.
+2. **Terminal statuses are terminal unless an explicit native operation permits reactivation.** Dependency propagation may reactivate a managed child cancelled by `downstream_invalidation`, identified from its latest typed graph mutation. A manager's explicit cancellation stays cancelled when a prerequisite completes. Explicit `restart_task` remains a separate operation. The current owners are `core/application/runtime/lifecycle.py` and `graph_repository.py`.
 
 3. **Side-effectful tasks do not retry.** `task-execute` and `worker-execute` carry `retries=0` because they create sandboxes, call provider APIs, and write execution rows — replaying those would duplicate side effects and desynchronize the mutation log from Inngest's durable position. Orchestration and cleanup functions that are idempotent (`task-propagate`, `workflow-complete`, `cleanup-cancelled-task`) carry modest retries (1 or 3). Retry policy is owned by the decorator, never by inner code; do not wrap a worker call in a retry loop.
 
@@ -114,6 +114,34 @@ Dashboard delivery hangs off state mutation (see `05_dashboard.md`); it is not a
 8. **Workflow finalization is replay-safe.** `workflow-complete` and `workflow-failed` re-read the current `SampleRecord` and evaluation rows each invocation; repeated delivery writes the same terminal status with the same completion timestamp logic. `sample-cleanup` checks the status before overwriting.
 
 ### 4.1 Known limits
+
+Graph mutation, task claim and explicit sample cancellation share a PostgreSQL
+transaction advisory lock keyed by sample UUID. Graph acquisition runs off the
+event loop so a lock waiter cannot freeze the coroutine holding it. The lock
+does not touch the sample row: evaluation summaries and other telemetry can
+commit while a graph operation awaits a notification. Commit/rollback releases
+the lock; SQLite keeps its existing transaction behavior.
+PostgreSQL Sessions use SQLAlchemy `NullPool`: the synchronous queue-pool checkout
+otherwise blocks the async event loop when lock waiters occupy its connections.
+PostgreSQL supplies the connection ceiling, which has been exercised with two
+concurrent Manager Gym episodes. Higher concurrency requires async database Sessions or
+a measured database connection budget, not an unbounded runtime claim. A duplicate or stale ready event is skipped before
+creating an attempt when the task is no longer pending/ready or prerequisites
+are incomplete. Late-created dependents of already-completed work are
+dispatched by the existing task service. Pending executable/dependency edits
+validate identity, references and cycles before mutation and readiness checks.
+
+Worker continuation uses the existing Inngest steps, not an extra scheduler.
+Step-aware spawn/refine/cancel/restart memoize results; expected rejected edits
+are checkpointed as typed errors and raised outside the step boundary so a
+manager can respond. Context replay reuses matching persisted chunks and fails
+on a mismatch. Bounded waits inspect persisted attempts as well as terminal
+events, including failures/cancellations that have no completion event.
+`worker_execute/composition.py` supplies the existing resource/blob owner to
+`WorkerContext.run_step`: Inngest retains compact references and sample resources
+retain typed results, with byte-count/hash verification on replay. The normal
+resource export includes these `.checkpoints/` artifacts; keep the blob volume
+with database and workflow state during restarts.
 
 - **Static-sibling failure auto-cancels today.** When a static task (no `parent_node_id`) fails, `propagation.on_task_completed_or_failed` marks its siblings CANCELLED (`execution/propagation.py:515-526`). The intended fractal-OS semantic is that static siblings stay PENDING so a higher-level manager can adapt — matching managed-subtask behavior. Changing this also requires teaching `is_workflow_complete_v2` to terminate on blocked-by-failed chains, otherwise workflows hang. Tracked in `docs/rfcs/active/2026-04-17-static-sibling-failure-semantics.md`.
 - **Cancellation cleanup is still being consolidated.** `cleanup-cancelled-task` releases a sandbox when the cleanup service can identify one, but cancel payloads still do not carry first-class sandbox/benchmark identity. PR11 should finish this handoff so cancellation cleanup no longer depends on execution-row lookup.
@@ -170,3 +198,7 @@ A brief index of where runtime functions live. The architectural claims above st
 | Runtime event contracts | `core/application/events/runtime.py` |
 | State-machine core | `runtime/execution/propagation.py` |
 | Services | `core/application/**` |
+
+## Cancellation of invoked workers
+
+Invoked workers carry the same native sample/task cancellation matchers as task execution. Dynamic spawning rejects terminal parents or samples under the sample lock; task preparation rejects terminal samples. Late success/failure finalization cannot overwrite a cancelled attempt. Existing children may continue after successful parent completion.

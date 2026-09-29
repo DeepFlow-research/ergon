@@ -190,6 +190,12 @@ evaluation, loading, empty, or error behavior.
 
 ## 7. CI workflow
 
+Integration and smoke jobs share `ci/wait_for_stack.sh` for bounded service
+readiness. It checks PostgreSQL, Inngest's `/health` endpoint and the Ergon API's
+`/health` endpoint, and fails if a service stays unavailable. Looking up an event
+ID is not a readiness probe. Function execution is verified by the subsequent
+integration and smoke tests.
+
 [`.github/workflows/e2e-benchmarks.yml`](../../.github/workflows/e2e-benchmarks.yml):
 
 - Trigger: `pull_request` + `workflow_dispatch`.

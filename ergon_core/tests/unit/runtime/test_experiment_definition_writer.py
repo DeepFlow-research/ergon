@@ -2,16 +2,16 @@ from typing import ClassVar
 from uuid import uuid4
 
 import pytest
-
 from ergon_builtins.agents.react.worker import ReActWorker
 from ergon_builtins.benchmarks.minif2f.prompts import MINIF2F_SYSTEM_PROMPT
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
+from ergon_builtins.benchmarks.minif2f.sandbox import LeanSandbox
 from ergon_builtins.benchmarks.minif2f.task import MiniF2FTask
 from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FTaskPayload
-from ergon_builtins.benchmarks.minif2f.sandbox import LeanSandbox
 from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
-from ergon_core.api.task import Task
 from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome
+from ergon_core.api.task import Task
+
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
 
 

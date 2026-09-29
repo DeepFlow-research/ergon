@@ -2,8 +2,8 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
-from sqlmodel import SQLModel, Session, create_engine
-
+from ergon_core.core.application.samples.events import SampleRuntimeEventAppender
+from ergon_core.core.application.samples.state import reconstruct_sample_runtime_state_at
 from ergon_core.core.persistence.samples.models import (
     SampleAnnotationEventRow,
     SampleEdgeEventRow,
@@ -14,8 +14,7 @@ from ergon_core.core.persistence.samples.models import (
     SampleWorkerEventRow,
 )
 from ergon_core.core.persistence.telemetry.models import SampleRecord
-from ergon_core.core.application.samples.events import SampleRuntimeEventAppender
-from ergon_core.core.application.samples.state import reconstruct_sample_runtime_state_at
+from sqlmodel import Session, SQLModel, create_engine
 
 _REGISTERED_TABLE_MODELS = (SampleRecord,)
 

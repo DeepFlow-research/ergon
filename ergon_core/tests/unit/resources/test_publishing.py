@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-
 from ergon_core.core.persistence.shared.enums import SampleResourceKind
 
 
@@ -46,12 +45,14 @@ class _Repository:
         self.prior_by_hash = prior_by_hash
         self.appended: list[dict] = []
 
-    def latest_by_path(self, _session, *, task_attempt_id, file_path):
+    def latest_by_path(self, _session, *, task_attempt_id, file_path, kind):
         del task_attempt_id, file_path
+        assert kind == SampleResourceKind.REPORT.value
         return self.prior_by_path
 
-    def find_by_hash(self, _session, *, task_attempt_id, content_hash):
+    def find_by_hash(self, _session, *, task_attempt_id, content_hash, kind):
         del task_attempt_id, content_hash
+        assert kind == SampleResourceKind.REPORT.value
         return self.prior_by_hash
 
     def append(self, _session, **kwargs):

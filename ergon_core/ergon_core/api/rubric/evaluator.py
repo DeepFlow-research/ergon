@@ -2,21 +2,20 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable
-from typing import Any, ClassVar, cast
-
-from pydantic import BaseModel, ConfigDict, Field, model_serializer
+from typing import Any, ClassVar, Literal, cast
 
 from ergon_core.api._serialization import (
     TaskDefinitionJson,
     import_component_subclass,
     inject_type_discriminator,
 )
-from ergon_core.api.task import Task
 from ergon_core.api.criterion.criterion import Criterion
 from ergon_core.api.criterion.outcome import CriterionOutcome
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.rubric.results import TaskEvaluationResult
+from ergon_core.api.task import Task
 from ergon_core.core.infrastructure.dependencies import check_packages
+from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
 
 class Evaluator(BaseModel, ABC):
@@ -43,6 +42,7 @@ class Evaluator(BaseModel, ABC):
     install_hint: ClassVar[str | None] = None
 
     name: str
+    failure_policy: Literal["zero", "incomplete"] = "zero"
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @abstractmethod

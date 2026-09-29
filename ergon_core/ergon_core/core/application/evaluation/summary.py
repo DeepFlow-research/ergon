@@ -7,9 +7,8 @@ use this model — no untyped dict access.
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
-
 from ergon_core.api.criterion import CriterionEvidence
+from pydantic import BaseModel, Field, model_validator
 
 EvalCriterionStatus = Literal["passed", "failed", "errored", "skipped"]
 
@@ -38,6 +37,7 @@ class CriterionOutcomeEntry(BaseModel):
     evaluated_resource_ids: list[str] = Field(default_factory=list)
     observation: CriterionEvidence | None = None
     error: dict | None = None
+    metadata: dict = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
@@ -56,7 +56,7 @@ class EvaluationSummary(BaseModel):
 
     evaluator_name: str
     max_score: float = 1.0
-    normalized_score: float = 0.0
+    normalized_score: float | None = 0.0
     stages_evaluated: int = 0
     stages_passed: int = 0
     failed_gate: str | None = None

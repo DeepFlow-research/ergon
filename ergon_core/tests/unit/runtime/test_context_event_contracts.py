@@ -1,12 +1,12 @@
 from uuid import uuid4
 
 from ergon_core.core.persistence.context.models import SampleContextEvent
-from ergon_core.core.views.samples.models import SampleContextEventDto
+from ergon_core.core.shared.context_parts import AssistantTextPart, ContextPartChunkLog
 from ergon_core.core.views.dashboard_events.context_events import (
     context_event_to_dashboard_event,
 )
 from ergon_core.core.views.dashboard_events.contracts import DashboardContextEventEvent
-from ergon_core.core.shared.context_parts import AssistantTextPart, ContextPartChunkLog
+from ergon_core.core.views.samples.models import SampleContextEventDto
 
 
 def test_rest_and_dashboard_context_events_share_typed_payload_shape() -> None:

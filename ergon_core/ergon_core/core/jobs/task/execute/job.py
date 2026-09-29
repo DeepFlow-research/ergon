@@ -47,13 +47,30 @@ would kill the sandbox before `persist_outputs` could upload artifacts.
 """
 
 import logging
-import traceback
 from datetime import UTC, datetime
 from functools import partial
 from typing import Any
 from uuid import UUID
 
-from .contract import TaskExecuteResult, TaskReadyEvent
+from ergon_core.core.application.runtime.orchestration import (
+    FailTaskExecutionCommand,
+    FinalizeTaskExecutionCommand,
+    PreparedTaskExecution,
+    PrepareTaskExecutionCommand,
+)
+from ergon_core.core.application.runtime.task_execution import TaskExecutionService
+from ergon_core.core.infrastructure.inngest.errors import (
+    ContractViolationError,
+    NonRetriableError,
+    execution_error_details,
+)
+from ergon_core.core.infrastructure.tracing import (
+    CompletedSpan,
+    get_trace_sink,
+    task_execute_context,
+    truncate_text,
+)
+from ergon_core.core.jobs._events import send_job_event
 from ergon_core.core.jobs.resources.persist_outputs.contract import (
     PersistOutputsRequest,
     PersistOutputsResult,
@@ -65,24 +82,11 @@ from ergon_core.core.jobs.task.worker_execute.contract import (
     WorkerExecuteRequest,
     WorkerExecuteResult,
 )
-from ergon_core.core.application.runtime.task_execution import TaskExecutionService
-from ergon_core.core.application.runtime.orchestration import (
-    FailTaskExecutionCommand,
-    FinalizeTaskExecutionCommand,
-    PreparedTaskExecution,
-    PrepareTaskExecutionCommand,
-)
-from ergon_core.core.infrastructure.inngest.errors import ContractViolationError, NonRetriableError
-from ergon_core.core.jobs._events import send_job_event
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import SampleRecord
-from ergon_core.core.infrastructure.tracing import (
-    CompletedSpan,
-    get_trace_sink,
-    task_execute_context,
-    truncate_text,
-)
 from ergon_core.core.shared.utils import require_not_none
+
+from .contract import TaskExecuteResult, TaskReadyEvent
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +153,7 @@ async def _invoke_worker_execute(
         data=WorkerExecuteRequest(
             sample_id=payload.sample_id,
             task_id=payload.task_id,
-            execution_id=prepared.execution_id,
+            execution_id=require_not_none(prepared.execution_id, "Task execution was not claimed"),
             sandbox_id=sandbox_result.sandbox_id,
             task_slug=prepared.task_slug,
             task_description=prepared.task_description,
@@ -189,6 +193,8 @@ async def _fan_out_evaluators(
     Evaluator count comes from the object-bound ``task.evaluators`` tuple.
     """
 
+    if prepared.execution_id is None:
+        raise ValueError("Cannot evaluate an unclaimed task")
     with get_session() as session:
         view = await svc.load_task_view(
             session,
@@ -229,7 +235,7 @@ async def _invoke_persist_outputs(
         data=PersistOutputsRequest(
             sample_id=payload.sample_id,
             task_id=payload.task_id,
-            execution_id=prepared.execution_id,
+            execution_id=require_not_none(prepared.execution_id, "Task execution was not claimed"),
             sandbox_id=sandbox_result.sandbox_id,
             output_dir=sandbox_result.output_dir,
             benchmark_type=prepared.benchmark_type,
@@ -248,7 +254,7 @@ async def _emit_task_completed(
         TaskCompletedEvent(
             sample_id=payload.sample_id,
             task_id=payload.task_id,
-            execution_id=prepared.execution_id,
+            execution_id=require_not_none(prepared.execution_id, "Task execution was not claimed"),
             sandbox_id=sandbox_id,
         ).model_dump(mode="json"),
     )
@@ -265,7 +271,7 @@ async def _emit_task_failed(
         TaskFailedEvent(
             sample_id=payload.sample_id,
             task_id=payload.task_id,
-            execution_id=prepared.execution_id,
+            execution_id=require_not_none(prepared.execution_id, "Task execution was not claimed"),
             error=error_message,
             sandbox_id=sandbox_id,
         ).model_dump(mode="json"),
@@ -302,12 +308,17 @@ async def run_execute_task_job(
         prepared = await _prepare_execution(ctx, svc, payload)
 
         if prepared.skipped:
-            raise ContractViolationError(
-                "Skipped task execution cannot emit task/completed without a real sandbox_id. "
-                "Introduce a first-class task/skipped event before supporting skipped tasks.",
+            # A stale/duplicate ready event did not create an attempt. Leave the
+            # real task state and its eventual terminal events to the owner.
+            return TaskExecuteResult(
                 sample_id=payload.sample_id,
                 task_id=payload.task_id,
+                execution_id=None,
+                skipped=True,
+                skip_reason=prepared.skip_reason,
             )
+        if prepared.execution_id is None:
+            raise ContractViolationError("Claimed task has no execution identity")
 
         sandbox_result = await _invoke_sandbox_setup(ctx, payload, prepared, sandbox_setup_function)
         if not sandbox_result.sandbox_id:
@@ -329,7 +340,9 @@ async def run_execute_task_job(
             error_msg = worker_result.error or "Worker execution failed"
             await svc.finalize_failure(
                 FailTaskExecutionCommand(
-                    execution_id=prepared.execution_id,
+                    execution_id=require_not_none(
+                        prepared.execution_id, "Task execution was not claimed"
+                    ),
                     sample_id=payload.sample_id,
                     task_id=payload.task_id,
                     error_message=error_msg,
@@ -340,7 +353,9 @@ async def run_execute_task_job(
             return TaskExecuteResult(
                 sample_id=payload.sample_id,
                 task_id=payload.task_id,
-                execution_id=prepared.execution_id,
+                execution_id=require_not_none(
+                    prepared.execution_id, "Task execution was not claimed"
+                ),
                 success=False,
                 error=error_msg,
             )
@@ -358,7 +373,9 @@ async def run_execute_task_job(
 
         await svc.finalize_success(
             FinalizeTaskExecutionCommand(
-                execution_id=prepared.execution_id,
+                execution_id=require_not_none(
+                    prepared.execution_id, "Task execution was not claimed"
+                ),
                 final_assistant_message=worker_result.final_assistant_message,
             )
         )
@@ -399,13 +416,14 @@ async def run_execute_task_job(
         return TaskExecuteResult(
             sample_id=payload.sample_id,
             task_id=payload.task_id,
-            execution_id=prepared.execution_id,
+            execution_id=require_not_none(prepared.execution_id, "Task execution was not claimed"),
             success=True,
             outputs_count=persist_result.outputs_count,
         )
 
     except Exception as exc:  # slopcop: ignore[no-broad-except]
-        error_msg = str(exc)
+        error_details = execution_error_details(exc, phase="task_execute")
+        error_msg = str(error_details["message"])
         logger.exception("task-execute failed task_id=%s: %s", payload.task_id, error_msg)
 
         if prepared is not None:
@@ -413,18 +431,16 @@ async def run_execute_task_job(
             # and a full TaskFailedEvent to emit.
             await svc.finalize_failure(
                 FailTaskExecutionCommand(
-                    execution_id=prepared.execution_id,
+                    execution_id=require_not_none(
+                        prepared.execution_id, "Task execution was not claimed"
+                    ),
                     sample_id=payload.sample_id,
                     task_id=payload.task_id,
                     error_message=error_msg,
-                    error_json={
-                        "message": error_msg,
-                        "exception_type": type(exc).__name__,
-                        "phase": "task_execute",
-                        "stack": "".join(
-                            traceback.format_exception(type(exc), exc, exc.__traceback__)
-                        ),
-                        "context": {
+                    error_json=execution_error_details(
+                        exc,
+                        phase="task_execute",
+                        context={
                             "task_slug": str(prepared.task_slug),
                             "assigned_worker_slug": str(prepared.assigned_worker_slug),
                             "worker_type": str(prepared.worker_type),
@@ -432,7 +448,7 @@ async def run_execute_task_job(
                             "task_id": str(prepared.task_id),
                             "execution_id": str(prepared.execution_id),
                         },
-                    },
+                    ),
                 )
             )
 

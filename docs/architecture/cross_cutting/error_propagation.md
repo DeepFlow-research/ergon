@@ -40,6 +40,25 @@ downward along parent->subtask links" invariant.
 
 ## Current behavior (as of 2026-04-17)
 
+**Evaluator failure policy.** `zero` preserves historical behavior; `incomplete` persists a null
+normalized score plus failure metadata through jobs, storage, REST/events and
+dashboard selectors. MAG opts into incomplete: missing criteria, snapshot
+mismatch, exhausted judges, infrastructure errors or execution deadlines cannot
+become a numeric utility. Invalid manager actions, policy-cancelled dependencies
+and bounded worker-model failures remain benchmark outcomes. Work roles return
+existing `WorkerOutput(success=False)` values with typed model-failure metadata;
+their observed transcript and usage are retained. Native tasks and samples keep
+their Failed status. A completed manager can still produce a complete benchmark
+evaluation over those failed-work outcomes. Task inspection returns retained
+outputs for failed as well as completed tasks, without changing propagation. Source random/bulk manager baselines retain their
+documented model-error fallback with the error recorded in the action result.
+
+Expected native mutation rejections survive workflow checkpointing as typed
+errors; a manager can record a failed action and continue. Replay mismatches
+in previously persisted context raise instead of being silently ignored. An
+exception before a model checkpoint may still lose that call's transcript and
+usage; this is a capture limitation, not proof no model work occurred.
+
 1. Task COMPLETED, dependents with all deps satisfied -> PENDING.
    Correct.
 2. Task FAILED or CANCELLED, MANAGED subtask dependents
@@ -184,3 +203,26 @@ Three movements to keep straight:
   behavior. When the RFC lands, flip those tests; audit for tests that
   implicitly depend on auto-cancel as a shortcut to reach workflow
   terminal.
+
+## Cancellation is terminal
+
+A late worker response must not overwrite a cancelled attempt with success or failure. Invoked workers stop on task/sample cancellation, and terminal samples cannot admit or claim new work. The sample cleanup job covers attempts whose per-task cleanup handler was interrupted by sample cancellation.
+
+## Failure detection after descendant blocking
+
+Task failure propagation and containment-descendant blocking handle the same event independently. If failure propagation checks first, pending descendants prevent workflow finalization. After blocking descendants, the existing descendant job now invokes the existing failure-propagation job in a durable step. That job rechecks the graph and emits the ordinary `workflow/failed` event. Running descendants still keep the workflow open. This closes the ordering race without changing scheduling or adding a benchmark-owned finalizer.
+
+## Evaluation diagnostics
+
+Alembic preserves existing application loggers when configuring migration logging,
+so startup and migration inspection do not disable native evaluator tracebacks.
+MAG judge exceptions include their criterion identity before the native evaluator
+records an incomplete result. A validation or transport exception does not become
+a numeric zero score.
+
+Worker and task execution use the existing Inngest error adapter to preserve an
+exhausted step's original exception name and stack. Inngest's `StepError` wraps
+these values; formatting only the wrapper loses them. Native `error_json` retains
+the original type, original and replay tracebacks, and existing task context.
+An empty message falls back to the exception name. This changes diagnostics only:
+failure status, retry policy, scheduling and scoring remain unchanged.

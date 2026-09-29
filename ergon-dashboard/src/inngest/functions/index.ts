@@ -25,6 +25,7 @@ import {
   parseDashboardTaskEvaluationUpdatedData,
   parseDashboardThreadMessageCreatedData,
   parseDashboardWorkflowStartedData,
+  type DashboardTaskEvaluationUpdatedData,
 } from "@/lib/contracts/events";
 import {
   DashboardResourcePublishedEventSchema,
@@ -33,7 +34,9 @@ import {
   DashboardSandboxCreatedEventSchema,
   DashboardTaskStatusChangedEventSchema,
   DashboardWorkflowCompletedEventSchema,
+  DashboardTaskEvaluationUpdatedEventSchema,
 } from "@/generated/events";
+import { loadSampleTaskEvaluation } from "@/lib/server-data/samples";
 import {
   ResourceState,
   SandboxCommandState,
@@ -153,7 +156,16 @@ const onTaskEvaluationUpdated = inngest.createFunction(
   { id: "dashboard-task-evaluation-updated" },
   { event: "dashboard/task.evaluation_updated" },
   async ({ event }) => {
-    const payload = parseDashboardTaskEvaluationUpdatedData(event.data);
+    let payload: DashboardTaskEvaluationUpdatedData;
+    if ("evaluation" in event.data) {
+      // Accept events from backends deployed before reference notifications.
+      payload = parseDashboardTaskEvaluationUpdatedData(event.data);
+    } else {
+      const notification = DashboardTaskEvaluationUpdatedEventSchema.parse(event.data);
+      const result = await loadSampleTaskEvaluation(notification.sample_id, notification.task_id);
+      if (!result.ok) throw new Error(`Evaluation refresh failed: HTTP ${result.status}`);
+      payload = { ...notification, evaluation: result.data };
+    }
     store.upsertEvaluation(payload.sample_id, payload.task_id, payload.evaluation);
     broadcastTaskEvaluation(payload);
     return { success: true };

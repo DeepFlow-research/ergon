@@ -93,10 +93,29 @@ ContextEventRepository listener           --> dashboard/context_event
                                               Socket.io room run:<id>
 ```
 
-The broader set of `DashboardEmitter` methods exists for the target
-pipeline shape but has no live call sites yet; see Follow-ups.
+Other `DashboardEmitter` surfaces have differing rollout coverage; see Follow-ups.
+Task evaluation updates are wired from the native evaluation job after persistence.
+They carry only `sample_id` and `task_id`: complete judge inputs can exceed the
+Inngest event size limit. The dashboard handler reloads the latest task evaluation
+through the existing sample snapshot reader, updates its store, and broadcasts the
+complete evaluation over Socket.io. Failed or missing reads throw for normal
+Inngest retry. Judge inputs, scores and feedback are never truncated to fit an event.
+
+Deploy the updated dashboard before or alongside a backend using these notifications.
+The handler also accepts legacy events containing an embedded `evaluation`. The
+browser Socket contract and REST snapshot contract remain unchanged. Inngest SDK
+3.54.1 is pinned because the current development engine rejects the older SDK's
+registration; no server compatibility gate is bypassed.
 
 ## 4. Invariants
+
+An evaluator summary with `normalized_score: null` is incomplete, not an empty
+or zero-scoring evaluation. REST and event schemas preserve nullable totals;
+evaluation selectors expose the error state and display “Incomplete”. A
+container rollup that includes such an evaluation remains null instead of
+silently averaging only numeric children. Existing numerical summaries retain
+their normal behavior. Raw criterion metadata remains available for benchmark
+utility recomputation.
 
 - The dashboard is event-driven end-to-end for the surfaces that are
   wired. No polling from the backend. No SSE.
@@ -173,6 +192,12 @@ references.
   dashboard surfaces listed above.
 
 ## 8. Follow-ups
+
+The Manager Gym acceptance overlay (`tests/real_llm/manager_gym/compose.acceptance.yml`)
+runs `pnpm start` with `NODE_ENV=production` after building the dashboard image. The
+normal development command writes TypeScript declarations and can fail against a Linux
+source bind mount owned by a different UID; the compiled bundle runs as the image's
+unprivileged user without making source files writable or running the server as root.
 
 Known limitations tracked as bugs or RFCs:
 

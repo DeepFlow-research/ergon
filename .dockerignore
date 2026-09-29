@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+.venv
+**/__pycache__
+**/.pytest_cache
+**/node_modules
+**/.next
+data
+docs
+.agents
+.codex

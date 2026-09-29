@@ -1,0 +1,8 @@
+# Reuse the normal stack with stable API and built dashboard processes on Linux.
+services:
+  api:
+    command: uvicorn ergon_cli.api_app:app --host 0.0.0.0 --port 9000 --timeout-graceful-shutdown 5
+  dashboard:
+    environment:
+      NODE_ENV: production
+    command: pnpm start

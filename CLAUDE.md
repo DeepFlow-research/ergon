@@ -42,8 +42,8 @@ Individual backend scripts: `check:be:lint`, `check:be:fmt`, `check:be:type`, `c
 Ruff autofix:
 
 ```bash
-uv run ruff check --fix ergon_core ergon_builtins ergon_cli ergon_infra tests
-uv run ruff format ergon_core ergon_builtins ergon_cli ergon_infra tests
+uv run ruff check --fix ergon_core ergon_builtins ergon_cli ergon_infra tests examples scripts
+uv run ruff format ergon_core ergon_builtins ergon_cli ergon_infra tests examples scripts
 ```
 
 ## Local stack and tests

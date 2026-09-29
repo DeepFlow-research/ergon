@@ -2,22 +2,21 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Callable
-from typing import TYPE_CHECKING, Any, ClassVar, cast
-
-from pydantic import BaseModel, ConfigDict, Field, model_serializer
+from typing import Any, ClassVar, cast
 
 from ergon_core.api._serialization import (
     TaskDefinitionJson,
     import_component_subclass,
     inject_type_discriminator,
 )
-from ergon_core.api.task import Task
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.sandbox.sandbox import Sandbox
+from ergon_core.api.task import Task
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import WorkerOutput
-from ergon_core.core.shared.context_parts import ContextPartChunk
 from ergon_core.core.infrastructure.dependencies import check_packages
+from ergon_core.core.shared.context_parts import ContextPartChunk
+from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
 WorkerStreamItem = ContextPartChunk | WorkerOutput
 
@@ -56,6 +55,19 @@ class Worker(BaseModel, ABC):
     requires_sandbox: ClassVar[type[Sandbox]] = Sandbox
 
     name: str
+    actor_key: str | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "Optional stable person/policy identity within a sample; distinct from the "
+            "executable Worker type."
+        ),
+    )
+
+    @property
+    def binding_key(self) -> str:
+        return self.actor_key or self.type_slug
+
     # `model` is required (no default) — defaults hide sizing decisions
     # per RFC 2026-04-22. Subclasses that want a fixed model should set
     # it on the subclass, not on the base.
@@ -63,12 +75,12 @@ class Worker(BaseModel, ABC):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @abstractmethod
-    async def execute(
+    def execute(
         self,
         task: Task,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[WorkerStreamItem, None]:
+    ) -> AsyncGenerator[WorkerStreamItem]:
         """Run the worker, yielding context chunks and a terminal ``WorkerOutput``."""
         raise NotImplementedError
 

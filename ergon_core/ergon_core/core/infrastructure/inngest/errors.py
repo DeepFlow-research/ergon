@@ -1,13 +1,36 @@
-"""Non-retryable Inngest errors for the Ergon runtime."""
+"""Inngest error types and durable failure details for the Ergon runtime."""
 
 import logging
+import traceback
 from uuid import UUID
 
 import inngest
+from ergon_core.core.shared.json_types import JsonObject
 
 logger = logging.getLogger("ergon.infrastructure.inngest")
 
 NonRetriableError = inngest.NonRetriableError
+
+
+def execution_error_details(
+    error: Exception, *, phase: str, context: JsonObject | None = None
+) -> JsonObject:
+    """Retain the original failure when Inngest replays an exhausted step."""
+    exception_type = type(error).__name__
+    stack = "".join(traceback.format_exception(error))
+    details = dict(context or {})
+    if isinstance(error, inngest.StepError):
+        details["workflow_error_type"] = exception_type
+        exception_type = error.name
+        if error.stack:
+            stack = f"{error.stack}\nWorkflow replay:\n{stack}"
+    return {
+        "message": str(error) or exception_type,
+        "exception_type": exception_type,
+        "phase": phase,
+        "stack": stack,
+        "context": details,
+    }
 
 
 class ErgonNonRetriableError(inngest.NonRetriableError):
